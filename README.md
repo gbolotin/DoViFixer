@@ -1,5 +1,7 @@
 # DoViFixer
 
+[GPL-3.0 license](LICENSE)
+
 Native Windows .NET 10 console workflows for inspecting Dolby Vision MKVs, converting Profile 7 to Profile 8.1 or HDR10, and backing up/restoring enhancement layers. The shared Domain, Application and Infrastructure projects are ready for a later WPF presentation layer.
 
 ## Build and run
