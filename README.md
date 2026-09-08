@@ -69,6 +69,8 @@ Batch failures are reported per file and do not stop subsequent files. Ctrl+C st
 
 Settings live in `%LOCALAPPDATA%\DoViFixer\settings.json`. Writes are atomic and serialized across processes. `settings tool`, `settings reset-tool`, and `settings temp` persist changes. Command-line `--temp`/`--output` overrides are operation-local. `DoViFixer__DataDirectory` can select an isolated data location for testing. Registration itself does not create that location.
 
+To run from any directory, run `.\DoViFixer.Console.exe settings add-to-path` from the application folder once. This adds that folder to your user PATH without administrator rights, preserves existing entries, and avoids duplicates. It also updates the running app's PATH. Reopen your terminal (and its host app if needed), then use `DoViFixer.Console --help` from any directory. Keep the executable and its supporting files in the registered folder. This command does not change the system PATH or install native dependencies.
+
 `update-check` reports the latest **upstream dovi_convert** release against the reviewed 8.2.0 baseline. There is no configured DoViFixer release feed or automatic self-update.
 
 Exit codes: `0` success, `1` failure/partial batch, `2` invalid arguments, `3` unmet dependencies, `4` declined/no selected work, `130` cancellation.

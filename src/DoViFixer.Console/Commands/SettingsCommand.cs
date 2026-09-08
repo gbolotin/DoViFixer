@@ -1,3 +1,4 @@
+using DoViFixer.Application.Abstractions;
 using DoViFixer.Application.Backup;
 using DoViFixer.Application.Cleanup;
 using DoViFixer.Application.Conversion;
@@ -15,13 +16,19 @@ using DoViFixer.Domain.Conversion;
 
 namespace DoViFixer.Console.Commands;
 
-public sealed class SettingsCommand(SettingsService settings, ConsoleRenderer renderer) : IConsoleCommand
+public sealed class SettingsCommand(SettingsService settings, IUserPathRegistration userPath, ConsoleRenderer renderer) : IConsoleCommand
 {
     public bool Handles(string command) => command == "settings";
     public async Task<int> ExecuteAsync(CommandLine command, CancellationToken cancellationToken)
     {
         switch (command.Arguments[0])
         {
+            case "add-to-path":
+                string directory = AppContext.BaseDirectory;
+                bool added = userPath.AddDirectory(directory, cancellationToken);
+                renderer.Write(added ? $"Added to user PATH: {directory}" : $"Already in user PATH: {directory}");
+                renderer.Write("Applied to this process. Reopen your terminal (and its host app if needed), then run DoViFixer.Console --help.");
+                break;
             case "show":
                 renderer.Json(await settings.ReadAsync(cancellationToken));
                 break;

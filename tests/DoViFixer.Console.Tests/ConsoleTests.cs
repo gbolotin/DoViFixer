@@ -21,6 +21,8 @@ public sealed class ConsoleTests
     [DataRow(new[] { "cleanup", "--yes" })]
     [DataRow(new[] { "scan", "-r", "-1" })]
     [DataRow(new[] { "dependencies", "check", "--repair" })]
+    [DataRow(new[] { "settings", "add-to-path", "extra" })]
+    [DataRow(new[] { "settings", "add-to-path", "--json" })]
     public void InvalidArgumentsFailWithoutStartingHost(string[] args) => Assert.ThrowsExactly<ArgumentException>(() => CommandLine.Parse(args));
 
     [TestMethod]
@@ -29,6 +31,16 @@ public sealed class ConsoleTests
         var command = CommandLine.Parse(new[] { "convert", "movie.mkv", "--yes", "--backup" });
         Assert.IsTrue(command.Has("yes"));
         Assert.IsFalse(command.Has("install-dependencies"));
+    }
+
+    [TestMethod]
+    public void AddToPathParsesWithoutEnvironmentChanges()
+    {
+        string? saved = Environment.GetEnvironmentVariable("Path", EnvironmentVariableTarget.User);
+        var command = CommandLine.Parse(new[] { "settings", "add-to-path" });
+        Assert.AreEqual("settings", command.Command);
+        Assert.AreEqual("add-to-path", command.Arguments.Single());
+        Assert.AreEqual(saved, Environment.GetEnvironmentVariable("Path", EnvironmentVariableTarget.User));
     }
 
     [TestMethod]

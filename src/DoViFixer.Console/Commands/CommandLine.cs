@@ -89,7 +89,7 @@ public sealed record CommandLine(string Command, IReadOnlyList<string> Arguments
                 Arguments.Skip(1).All(a => Enum.TryParse<NativeTool>(a, true, out var tool) && Enum.IsDefined(tool)),
             "settings" => Arguments.Count >= 1 && (Arguments[0] switch
             {
-                "show" => Arguments.Count == 1,
+                "show" or "add-to-path" => Arguments.Count == 1,
                 "temp" => Arguments.Count == 2,
                 "tool" => Arguments.Count == 3 && Enum.TryParse<NativeTool>(Arguments[1], true, out var tool) && Enum.IsDefined(tool),
                 "reset-tool" => Arguments.Count == 2 && Enum.TryParse<NativeTool>(Arguments[1], true, out var tool) && Enum.IsDefined(tool),

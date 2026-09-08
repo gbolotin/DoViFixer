@@ -86,6 +86,32 @@ public sealed class InfrastructureTests
     }
 
     [TestMethod]
+    public void UserPathAppendPreservesEntriesAndAvoidsEquivalentDuplicates()
+    {
+        string app = Path.Combine(directory, "App Folder");
+        string original = @"%SystemRoot%\System32;C:\Other";
+        Assert.AreEqual(original + ";" + app, UserPathRegistration.AppendDirectory(original, app));
+        Assert.AreEqual(app, UserPathRegistration.AppendDirectory(null, app));
+        Assert.AreEqual(original + ";" + app, UserPathRegistration.AppendDirectory(original + ";", app));
+        string duplicate = original + ";\"" + app.ToUpperInvariant() + "\\\";C:\\Keep";
+        Assert.AreEqual(duplicate, UserPathRegistration.AppendDirectory(duplicate, app));
+        string variable = @"%SystemRoot%\System32;C:\Keep";
+        Assert.AreEqual(variable, UserPathRegistration.AppendDirectory(variable,
+            Path.Combine(Environment.GetEnvironmentVariable("SystemRoot")!, "System32")));
+    }
+
+    [TestMethod]
+    public void UserPathCancellationDoesNotChangeEnvironment()
+    {
+        var registration = new UserPathRegistration(NullLogger<UserPathRegistration>.Instance);
+        string? saved = Environment.GetEnvironmentVariable("Path", EnvironmentVariableTarget.User);
+        string? process = Environment.GetEnvironmentVariable("Path");
+        Assert.ThrowsExactly<OperationCanceledException>(() => registration.AddDirectory(directory, new CancellationToken(true)));
+        Assert.AreEqual(saved, Environment.GetEnvironmentVariable("Path", EnvironmentVariableTarget.User));
+        Assert.AreEqual(process, Environment.GetEnvironmentVariable("Path"));
+    }
+
+    [TestMethod]
     public async Task ArchiveRoundTripsAndLegacyNeedsExplicitChoice()
     {
         var factory = new TemporaryWorkspaceFactory(files, NullLogger<TemporaryWorkspaceFactory>.Instance);

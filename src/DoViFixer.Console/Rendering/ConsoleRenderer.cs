@@ -29,10 +29,14 @@ public sealed class ConsoleRenderer : IProgress<OperationProgress>
         settings show [--json]
         settings tool <Tool> <absolute-executable-path>
         settings reset-tool <Tool>
-        settings temp <existing-directory>
+        settings temp <directory>
+        settings add-to-path
         update-check [--json]
 
         Tool names: FFmpeg, FFprobe, MkvMerge, MkvExtract, MediaInfo, DoviTool.
+        settings temp creates missing directories and checks write access.
+        settings add-to-path adds this app folder to user PATH; no administrator rights needed.
+        Reopen your terminal after adding to PATH. Keep the app in that folder.
         -r defaults to depth 5; omitted paths use the current directory.
         Media commands support --install-dependencies as separate installation consent.
         --yes approves the displayed media plan, never software installation by itself.
