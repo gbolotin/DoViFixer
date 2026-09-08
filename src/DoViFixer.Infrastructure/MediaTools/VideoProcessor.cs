@@ -8,24 +8,28 @@ using DoViFixer.Application.Operations;
 using DoViFixer.Domain.Conversion;
 using DoViFixer.Domain.Media;
 using DoViFixer.Infrastructure.MediaTools.Processes;
+using Microsoft.Extensions.Logging;
 
 namespace DoViFixer.Infrastructure.MediaTools;
 
-internal sealed class VideoProcessor(IToolCatalog tools, IProcessRunner processes, TimeProvider time) : IVideoProcessor
+internal sealed class VideoProcessor(IToolCatalog tools, IProcessRunner processes, TimeProvider time, ILogger<VideoProcessor> logger) : IVideoProcessor
 {
     public async Task ConvertAsync(MediaInfo media, ConversionTarget target, ITemporaryWorkspace workspace, string stagedOutput,
         IProgress<OperationProgress>? progress, Guid operationId, CancellationToken cancellationToken)
     {
         progress?.Report(new(operationId, "Extracting video", media.Source.Path));
+        logger.LogDebug("Stage {Stage}", "Extracting video");
         string raw = workspace.File("convert-input.hevc");
         string processed = workspace.File("converted.hevc");
         await ExtractVideoAsync(media, raw, cancellationToken);
         progress?.Report(new(operationId, "Converting metadata", media.Source.Path));
+        logger.LogDebug("Stage {Stage}", "Converting metadata");
         await RunDoviAsync(target == ConversionTarget.Profile81
             ? new[] { "-m", "2", "convert", "--discard", raw, "-o", processed }
             : new[] { "remove", raw, "-o", processed }, cancellationToken);
         File.Delete(raw);
         progress?.Report(new(operationId, "Remuxing", media.Source.Path));
+        logger.LogDebug("Stage {Stage}", "Remuxing");
         await RemuxAsync(media, processed, stagedOutput, workspace, cancellationToken);
     }
 

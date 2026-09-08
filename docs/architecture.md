@@ -186,6 +186,14 @@ WPF ConversionViewModel ---+             |
 
 Define interfaces at real external boundaries, such as `IMediaProbe`, `IVideoProcessor`, `IBackupArchiveStore`, `ITemporaryWorkspaceFactory` and `IOutputPublisher`. Keep native command construction and process-runner abstractions internal to Infrastructure when the application does not need them. Use `ILogger<T>` and `TimeProvider` where suitable instead of introducing redundant wrappers.
 
+### Logging
+
+Application and Infrastructure services use Microsoft `ILogger<T>` with structured message templates. `Application/Operations/OperationLog` defines history/audit event conventions and wraps operations with per-call scopes, monotonic elapsed timing, terminal status, and exception capture. It does not own a logger, access files, or create shared mutable operation state. Domain has no logging dependency.
+
+The console's composition root configures Serilog through the existing Generic Host; the host owns and disposes the provider. It keeps the static Serilog logger untouched and does not build another service provider. The future WPF composition root should use the same event conventions and an owned Serilog provider in its Prism container. Presentation logs the plan actually shown and the approval method; application services log execution outcomes. Infrastructure logs native processes, retry/cleanup diagnostics, and settings changes after atomic publication while holding the settings writer lock.
+
+Separate rolling JSON Lines sinks store operation history, audit, and diagnostics. Stable `LogKind` properties route history/audit independently of the diagnostic sink's minimum level. Session, command, batch, operation, plan, and native invocation IDs support correlation; failed batch items retain their exceptions while subsequent items continue. Logging neither authorizes execution nor changes verification rules. See the README for file locations, retention, configuration, and incident investigation.
+
 ## Upstream feature mapping
 
 | Upstream capability | Application responsibility | Infrastructure responsibility |

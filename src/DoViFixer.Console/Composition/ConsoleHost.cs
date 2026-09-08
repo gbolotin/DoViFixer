@@ -6,6 +6,7 @@ using DoViFixer.Infrastructure;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Hosting;
 using Microsoft.Extensions.Logging;
+using Serilog;
 
 namespace DoViFixer.Console.Composition;
 
@@ -16,9 +17,8 @@ public static class ConsoleHost
         var builder = Host.CreateApplicationBuilder(new HostApplicationBuilderSettings { Args = [] });
         builder.ConfigureContainer(new DefaultServiceProviderFactory(new ServiceProviderOptions { ValidateOnBuild = true, ValidateScopes = true }));
         builder.Logging.ClearProviders();
-        builder.Logging.AddSimpleConsole(options => options.SingleLine = true);
-        builder.Logging.AddFilter("Microsoft.Hosting.Lifetime", LogLevel.Warning);
-        builder.Services.Configure<Microsoft.Extensions.Logging.Console.ConsoleLoggerOptions>(o => o.LogToStandardErrorThreshold = LogLevel.Trace);
+        builder.Services.AddSerilog((_, logging) => LoggingConfiguration.Configure(logging, builder.Configuration),
+            preserveStaticLogger: true);
         builder.Services.AddDoViFixerApplication();
         builder.Services.AddDoViFixerInfrastructure(builder.Configuration);
         builder.Services.AddTransient<ConsoleRenderer>();

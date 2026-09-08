@@ -17,6 +17,7 @@ internal sealed class TemporaryWorkspaceFactory(IFileOperations files, ILogger<T
         files.EnsureAvailableSpace(root, requiredBytes);
         string path = Path.Combine(root, "DoViFixer-" + Guid.NewGuid().ToString("N"));
         Directory.CreateDirectory(path);
+        logger.LogDebug("Created workspace {Directory}; required space {RequiredBytes}", path, requiredBytes);
         return ValueTask.FromResult<ITemporaryWorkspace>(new Workspace(path, logger));
     }
 
@@ -39,6 +40,7 @@ internal sealed class TemporaryWorkspaceFactory(IFileOperations files, ILogger<T
                 if (Directory.Exists(path))
                 {
                     Directory.Delete(path, recursive: true);
+                    logger.LogDebug("Removed workspace {Directory}", path);
                 }
             }
             catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)

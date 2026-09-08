@@ -162,8 +162,8 @@ public sealed class InfrastructureTests
     public async Task ConcurrentSettingsUpdatesDoNotLoseOtherToolPaths()
     {
         var options = new StorageOptions(Path.Combine(directory, "settings"));
-        var a = new SettingsStore(options);
-        var b = new SettingsStore(options);
+        var a = new SettingsStore(options, NullLogger<SettingsStore>.Instance);
+        var b = new SettingsStore(options, NullLogger<SettingsStore>.Instance);
         await Task.WhenAll(a.UpdateAsync(s => s with { ToolPaths = s.ToolPaths.SetItem(NativeTool.MkvMerge, "A") }, default),
             b.UpdateAsync(s => s with { ToolPaths = s.ToolPaths.SetItem(NativeTool.DoviTool, "B") }, default));
         var settings = await a.ReadAsync(default);
@@ -202,10 +202,10 @@ public sealed class InfrastructureTests
     public async Task InvalidConfiguredToolDoesNotFallBackToInstalledCopy()
     {
         var storage = new StorageOptions(directory);
-        var settings = new SettingsStore(storage);
+        var settings = new SettingsStore(storage, NullLogger<SettingsStore>.Instance);
         await settings.UpdateAsync(s => s with { ToolPaths = s.ToolPaths.SetItem(NativeTool.MkvMerge, Path.Combine(directory, "missing.exe")) }, default);
         var runner = new FakeProcessRunner();
-        var detector = new DependencyDetector(settings, storage, runner);
+        var detector = new DependencyDetector(settings, storage, runner, NullLogger<DependencyDetector>.Instance);
         var report = await detector.DetectAsync(new[] { NativeTool.MkvMerge }, default);
         Assert.AreEqual(DependencyState.Unusable, report.Tools[0].State);
         Assert.AreEqual(0, runner.Calls);
@@ -217,7 +217,7 @@ public sealed class InfrastructureTests
         string console = Path.Combine(directory, "tool.exe");
         await File.WriteAllTextAsync(console, "fake console executable");
         var runner = new FakeProcessRunner { Output = "mkvmerge v79.0.0" };
-        var detector = new DependencyDetector(new SettingsStore(new(directory)), new(directory), runner);
+        var detector = new DependencyDetector(new SettingsStore(new(directory), NullLogger<SettingsStore>.Instance), new(directory), runner, NullLogger<DependencyDetector>.Instance);
         Assert.AreEqual(DependencyState.Incompatible, (await detector.ValidatePathAsync(NativeTool.MkvMerge, console, default)).State);
         runner.Output = "MediaInfo Graphical interface v26.05";
         Assert.AreEqual(DependencyState.Unusable, (await detector.ValidatePathAsync(NativeTool.MediaInfo, console, default)).State);
@@ -241,7 +241,7 @@ public sealed class InfrastructureTests
     public async Task InstallationPlanHasVerifiedSourceAndRequiresRepairChoice()
     {
         using var http = new HttpClient();
-        var installer = new DependencyInstaller(new(directory), new FakeProcessRunner(), http);
+        var installer = new DependencyInstaller(new(directory), new FakeProcessRunner(), http, NullLogger<DependencyInstaller>.Instance);
         var missing = new DependencyReport(new[] { new DependencyStatus(NativeTool.DoviTool, DependencyState.Missing, null, null, "missing") });
         var plan = await installer.PrepareAsync(missing, false, default);
         Assert.AreEqual(1, plan.Items.Count);

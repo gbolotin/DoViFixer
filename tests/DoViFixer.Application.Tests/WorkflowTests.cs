@@ -7,6 +7,7 @@ using DoViFixer.Domain.Analysis;
 using DoViFixer.Domain.Conversion;
 using DoViFixer.Domain.Media;
 using Microsoft.VisualStudio.TestTools.UnitTesting;
+using Microsoft.Extensions.Logging.Abstractions;
 
 namespace DoViFixer.Application.Tests;
 
@@ -48,13 +49,18 @@ public sealed class WorkflowTests
     public async Task BatchContinuesAndDisposesAfterVerificationFailure()
     {
         var runtime = new Runtime();
-        var batch = new BatchConversionService(runtime.Conversion());
+        var batch = new BatchConversionService(runtime.Conversion(), NullLogger<BatchConversionService>.Instance);
         var result = await batch.ExecuteAsync(new[] { Plan("bad.mkv"), Plan("good.mkv") }, null, default);
         Assert.AreEqual(OperationStatus.Partial, result.Status);
         Assert.AreEqual(2, runtime.ConvertCalls);
         Assert.AreEqual(1, runtime.Published);
         Assert.AreEqual(6, runtime.Disposed);
         Assert.AreEqual(0, runtime.Deleted);
+        Assert.IsTrue(runtime.ConversionLog.Entries.Any(e => e.Exception is InvalidDataException));
+        var published = runtime.ConversionLog.Entries.Where(e => Equals(e.Properties.GetValueOrDefault("Action"), "PublishConversion")).ToArray();
+        Assert.AreEqual(1, published.Length);
+        Assert.AreEqual(Plan("good.mkv").Output, published[0].Properties["Target"]);
+        Assert.AreEqual(1, runtime.ConversionLog.Entries.Count(e => Equals(e.Properties.GetValueOrDefault("Outcome"), "Failed") && e.Properties.ContainsKey("ElapsedMilliseconds")));
     }
 
     [TestMethod]
@@ -63,6 +69,8 @@ public sealed class WorkflowTests
         var runtime = new Runtime { Changed = true };
         await Assert.ThrowsExactlyAsync<IOException>(() => runtime.Conversion().ExecuteAsync(Plan("good.mkv"), null, default));
         Assert.AreEqual(0, runtime.ConvertCalls);
+        Assert.IsTrue(runtime.ConversionLog.Entries.Any(e => e.Exception is IOException && Equals(e.Properties.GetValueOrDefault("Outcome"), "Failed")));
+        Assert.IsFalse(runtime.ConversionLog.Entries.Any(e => Equals(e.Properties.GetValueOrDefault("LogKind"), "Audit")));
     }
 
     [TestMethod]
@@ -70,11 +78,13 @@ public sealed class WorkflowTests
     {
         using var cancellation = new CancellationTokenSource();
         var runtime = new Runtime { CancelDuringConversion = cancellation };
-        var result = await new BatchConversionService(runtime.Conversion()).ExecuteAsync(new[] { Plan("good.mkv"), Plan("next.mkv") }, null, cancellation.Token);
+        var result = await new BatchConversionService(runtime.Conversion(), NullLogger<BatchConversionService>.Instance).ExecuteAsync(new[] { Plan("good.mkv"), Plan("next.mkv") }, null, cancellation.Token);
         Assert.AreEqual(OperationStatus.Cancelled, result.Status);
         Assert.AreEqual(1, runtime.ConvertCalls);
         Assert.AreEqual(3, runtime.Disposed);
         Assert.AreEqual(0, runtime.Published);
+        Assert.IsTrue(runtime.ConversionLog.Entries.Any(e => Equals(e.Properties.GetValueOrDefault("Outcome"), "Cancelled")));
+        Assert.IsFalse(runtime.ConversionLog.Entries.Any(e => Equals(e.Properties.GetValueOrDefault("Outcome"), "Completed")));
     }
 
     private static ConversionPlan Plan(string name)
@@ -96,8 +106,9 @@ public sealed class WorkflowTests
         public int InstallCalls, ConvertCalls, Published, Disposed, Deleted;
         public UserSettings Settings { get; private set; } = new();
         private readonly Dictionary<NativeTool, string> catalog = new();
-        public DependencyService Dependencies() => new(this, this, this, this);
-        public ConversionService Conversion() => new(Dependencies(), this, this, this, this, this, this);
+        public DependencyService Dependencies() => new(this, this, this, this, NullLogger<DependencyService>.Instance);
+        public ConversionService Conversion() => new(Dependencies(), this, this, this, this, this, this, ConversionLog);
+        public RecordingLogger<ConversionService> ConversionLog { get; } = new();
         public Task<DependencyReport> DetectAsync(IReadOnlyList<NativeTool> tools, CancellationToken cancellationToken) =>
             Task.FromResult(new DependencyReport(tools.Select(t => new DependencyStatus(t, Ready ? DependencyState.Ready : DependencyState.Missing,
                 Ready ? "ready-" + t : null, Ready ? "1" : null, "fixture")).ToArray()));

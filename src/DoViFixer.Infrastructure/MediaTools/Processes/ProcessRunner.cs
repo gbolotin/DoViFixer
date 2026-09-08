@@ -15,6 +15,30 @@ internal sealed class ProcessRunner(ILogger<ProcessRunner> logger) : IProcessRun
 {
     public async Task<ProcessResult> RunAsync(ProcessRequest request, CancellationToken cancellationToken)
     {
+        using var scope = logger.BeginScope(new Dictionary<string, object>
+        {
+            ["ToolInvocationId"] = Guid.NewGuid(), ["Tool"] = Path.GetFileName(request.Executable), ["ToolPath"] = request.Executable
+        });
+        long started = Stopwatch.GetTimestamp();
+        logger.LogDebug("Starting native tool with arguments {Arguments}; working directory {WorkingDirectory}; timeout {Timeout}",
+            request.Arguments, request.WorkingDirectory ?? Environment.CurrentDirectory, request.Timeout ?? TimeSpan.FromHours(24));
+        try
+        {
+            var result = await RunCoreAsync(request, cancellationToken);
+            logger.LogDebug("Native tool completed with {ExitCode} after {ElapsedMilliseconds} ms", result.ExitCode, Stopwatch.GetElapsedTime(started).TotalMilliseconds);
+            return result;
+        }
+        catch (Exception ex)
+        {
+            // Detection may intentionally try an absent executable; the owning workflow decides whether this is an error.
+            logger.LogDebug(ex, "Native tool stopped after {ElapsedMilliseconds} ms; cancellation requested {CancellationRequested}",
+                Stopwatch.GetElapsedTime(started).TotalMilliseconds, cancellationToken.IsCancellationRequested);
+            throw;
+        }
+    }
+
+    private async Task<ProcessResult> RunCoreAsync(ProcessRequest request, CancellationToken cancellationToken)
+    {
         cancellationToken.ThrowIfCancellationRequested();
         var start = new ProcessStartInfo(request.Executable)
         {
@@ -53,10 +77,13 @@ internal sealed class ProcessRunner(ILogger<ProcessRunner> logger) : IProcessRun
             }
             await process.WaitForExitAsync(CancellationToken.None);
             await Task.WhenAll(stdout, stderr);
+            logger.LogDebug("Native tool interrupted; stdout tail {OutputTail}; stderr tail {ErrorTail}", Tail(await stdout), Tail(await stderr));
             cancellationToken.ThrowIfCancellationRequested();
             throw new TimeoutException($"{Path.GetFileName(request.Executable)} exceeded its {request.Timeout ?? TimeSpan.FromHours(24)} time limit.");
         }
         var result = new ProcessResult(process.ExitCode, await stdout, await stderr);
+        logger.LogDebug("Native tool exit {ExitCode}; stdout characters {OutputLength}, tail {OutputTail}; stderr characters {ErrorLength}, tail {ErrorTail}",
+            result.ExitCode, result.Output.Length, Tail(result.Output), result.Error.Length, Tail(result.Error));
         if (result.ExitCode != 0 && !(request.AllowWarnings && result.ExitCode == 1) && !(request.AcceptedExitCodes?.Contains(result.ExitCode) ?? false))
         {
             throw new IOException($"{Path.GetFileName(request.Executable)} exited {result.ExitCode}: {Tail(result.Error + result.Output)}");

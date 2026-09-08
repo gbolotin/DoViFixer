@@ -16,6 +16,7 @@ internal sealed class OutputPublisher(ILogger<OutputPublisher> logger) : IOutput
         // Unique directory on the destination volume reserves ownership of the partial output.
         string directory = Path.Combine(Path.GetDirectoryName(full)!, ".dovifixer-" + Guid.NewGuid().ToString("N"));
         Directory.CreateDirectory(directory);
+        logger.LogDebug("Staging {Output} in {Directory}", full, directory);
         return new StagedOutput(full, directory, logger);
     }
 
@@ -35,10 +36,12 @@ internal sealed class OutputPublisher(ILogger<OutputPublisher> logger) : IOutput
                 try
                 {
                     File.Move(Path, destination, overwrite: false);
+                    logger.LogDebug("Published output {Output}", destination);
                     return;
                 }
                 catch (IOException ex) when ((ex.HResult & 0xFFFF) is 32 or 33 && attempt < 8)
                 {
+                    logger.LogDebug(ex, "Publication lock on {Output}; retry {Attempt}", destination, attempt + 1);
                     await Task.Delay(250, cancellationToken);
                 }
             }

@@ -73,6 +73,45 @@ Settings live in `%LOCALAPPDATA%\DoViFixer\settings.json`. Writes are atomic and
 
 Exit codes: `0` success, `1` failure/partial batch, `2` invalid arguments, `3` unmet dependencies, `4` declined/no selected work, `130` cancellation.
 
+## Logging and operation history
+
+Serilog writes local, structured JSON Lines logs to `%LOCALAPPDATA%\DoViFixer\Logs` (or `Logs` under `DoViFixer__DataDirectory`). Each line is a complete JSON event with its timestamp, level, rendered message, structured properties, and full exception when present.
+
+| File | Contents | Default retention |
+| --- | --- | --- |
+| `history-YYYYMMDD.jsonl` | Command and media-operation starts, completion/failure/cancellation, elapsed time, and per-file conversion results | 90 files |
+| `audit-YYYYMMDD.jsonl` | Presented plans, approval/decline and approval method, published outputs, backup deletion, package installation, and persisted settings changes with previous/new values | 90 files |
+| `diagnostic-YYYYMMDD.jsonl` | Debug and higher events, including history/audit, stack traces, analysis decisions, tool paths/versions/arguments/exit codes/timing, bounded stdout/stderr tails, workspace lifecycle, and publication retries | 14 files |
+
+Files roll daily and at 10 MiB; size rolls add a sequence suffix. Retention is a **file count**, not a number of days. History and audit remain enabled when diagnostic verbosity is reduced. Warnings/errors go to stderr; progress and command results remain under the console renderer, including valid `--json` stdout. File writes are unbuffered at the Serilog sink, and host disposal closes the logger. Concurrent processes use shared file access.
+
+Every event carries `SessionId`, `ProcessId`, application version, Windows user name, and machine name. Commands add `CommandId`; workflows add `OperationId`, operation name, and input. Conversion batches add `BatchId`, and native invocations add `ToolInvocationId`. Plan IDs tie approvals to exact prepared inputs/outputs and execution. An inspection nested inside planning gets its own operation ID while retaining the command ID. An operation with only a `Started` record may have been interrupted or lost its terminal record; it does not prove completion.
+
+Configuration uses the Generic Host configuration sources (`appsettings.json` or environment variables):
+
+| Configuration key under `DoViFixer:Logging` | Default |
+| --- | --- |
+| `Directory` | `Logs` under the data directory |
+| `DiagnosticLevel` | `Debug` (`Verbose`, `Debug`, `Information`, `Warning`, `Error`, `Fatal`) |
+| `FileSizeLimitBytes` | `10485760` |
+| `DiagnosticRetainedFiles` | `14` |
+| `HistoryRetainedFiles` | `90` |
+| `AuditRetainedFiles` | `90` |
+
+For example, `DoViFixer__Logging__DiagnosticLevel=Information` reduces diagnostic detail on the next launch. Values must be valid levels or positive integers. An unusable log directory fails startup before command execution; later Serilog write failures are reported to stderr. Help and invalid command-line arguments do not initialize logging or create files.
+
+To inspect failed operations in PowerShell:
+
+```powershell
+$logs = Join-Path $env:LOCALAPPDATA 'DoViFixer\Logs'
+Get-Content (Join-Path $logs 'history-*.jsonl') |
+    ConvertFrom-Json |
+    Where-Object { $_.Properties.Outcome -in 'Failed', 'Partial' } |
+    Select-Object Timestamp, RenderedMessage, Properties
+```
+
+For a bug report, find the failed event's `SessionId`, then collect matching events from the diagnostic files along with the command, expected behavior, and actual result. Logs can include local paths, user/machine names, and native-tool arguments; review them before sharing. Logging makes no automatic uploads. Audit records are ordinary local files subject to retention, not a tamper-proof ledger or a substitute for media verification.
+
 ## Tests
 
 ```powershell

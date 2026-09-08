@@ -3,13 +3,24 @@ using DoViFixer.Application.Dependencies;
 using DoViFixer.Domain.Analysis;
 using DoViFixer.Domain.Conversion;
 using DoViFixer.Domain.Media;
+using DoViFixer.Application.Operations;
+using Microsoft.Extensions.Logging;
 
 namespace DoViFixer.Application.Inspection;
 
 public sealed class InspectionService(DependencyService dependencies, IMediaProbe probe,
-    ITemporaryWorkspaceFactory workspaces, ISettingsStore settings, IFileOperations files)
+    ITemporaryWorkspaceFactory workspaces, ISettingsStore settings, IFileOperations files, ILogger<InspectionService> logger)
 {
-    public async Task<MediaAnalysis> InspectAsync(string path, AnalysisMethod method, string? temporaryDirectory, CancellationToken cancellationToken)
+    public Task<MediaAnalysis> InspectAsync(string path, AnalysisMethod method, string? temporaryDirectory, CancellationToken cancellationToken) =>
+        OperationLog.RunAsync(logger, "Inspect", Guid.NewGuid(), path, async () =>
+        {
+            var analysis = await InspectCoreAsync(path, method, temporaryDirectory, cancellationToken);
+            logger.LogInformation("Analysis {Profile} {Verdict}; method {Method}; frames {Frames}; {Reason}",
+                analysis.Media.Profile, analysis.Verdict, analysis.Evidence.Method, analysis.Evidence.Frames, analysis.Reason);
+            return analysis;
+        }, cancellationToken, result => result.Verdict == AnalysisVerdict.AnalysisFailed ? OperationStatus.Failed : OperationStatus.Completed);
+
+    private async Task<MediaAnalysis> InspectCoreAsync(string path, AnalysisMethod method, string? temporaryDirectory, CancellationToken cancellationToken)
     {
         await dependencies.RequireAsync(DependencyRequirements.Analysis, cancellationToken);
         await using var lease = await files.AcquireReadLeaseAsync(files.Identify(path), cancellationToken);

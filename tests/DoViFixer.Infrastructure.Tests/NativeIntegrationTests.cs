@@ -81,7 +81,7 @@ public sealed class NativeIntegrationTests
             """;
         var media = MediaMetadataParser.Parse(files.Identify(input), identification.Output, mi);
         await using var sourceLease = await files.AcquireReadLeaseAsync(media.Source, default);
-        var processor = new VideoProcessor(tools, runner, TimeProvider.System);
+        var processor = new VideoProcessor(tools, runner, TimeProvider.System, NullLogger<VideoProcessor>.Instance);
         var manifest = await processor.ExtractBackupAsync(media, workspace, default);
         string archive = workspace.File("fixture.dovi");
         var archiveStore = new BackupArchiveStore();
@@ -147,7 +147,7 @@ public sealed class NativeIntegrationTests
             [hdrOutput] = mi.Replace("Dolby Vision", "SMPTE ST 2086").Replace("dvhe.07.06", "")
         };
         var metadataRunner = new FixtureMediaInfoRunner(runner, mediaInfoFixtures);
-        var probe = new MediaProbe(tools, metadataRunner, files);
+        var probe = new MediaProbe(tools, metadataRunner, files, NullLogger<MediaProbe>.Instance);
         var verifier = new MediaVerifier(probe, processor, tools, metadataRunner);
         foreach (var (targetPath, targetProfile, sourceMedia) in new[]
         {

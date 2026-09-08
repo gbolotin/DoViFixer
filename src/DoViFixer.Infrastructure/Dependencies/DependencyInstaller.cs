@@ -7,10 +7,11 @@ using DoViFixer.Application.Operations;
 using DoViFixer.Infrastructure.Configuration;
 using DoViFixer.Infrastructure.FileSystem;
 using DoViFixer.Infrastructure.MediaTools.Processes;
+using Microsoft.Extensions.Logging;
 
 namespace DoViFixer.Infrastructure.Dependencies;
 
-internal sealed class DependencyInstaller(StorageOptions storage, IProcessRunner processes, HttpClient http) : IDependencyInstaller
+internal sealed class DependencyInstaller(StorageOptions storage, IProcessRunner processes, HttpClient http, ILogger<DependencyInstaller> logger) : IDependencyInstaller
 {
     public async Task<InstallationPlan> PrepareAsync(DependencyReport report, bool allowRepair, CancellationToken cancellationToken)
     {
@@ -57,6 +58,7 @@ internal sealed class DependencyInstaller(StorageOptions storage, IProcessRunner
             progress?.Report(new(approvedPlan.Id, $"Installing {item.Id} {item.Version}"));
             try
             {
+                OperationLog.Audit(logger, "InstallPackage", item.Id, "Started", approvedPlan.Id);
                 if (item.Provider == InstallationProvider.WinGet)
                 {
                     if (!await PackageAvailableAsync(package, cancellationToken))
@@ -72,13 +74,17 @@ internal sealed class DependencyInstaller(StorageOptions storage, IProcessRunner
                     await InstallZipAsync(item, cancellationToken);
                 }
                 results.Add(new(item.Id, true, "Installation finished; independent executable validation follows."));
+                OperationLog.Audit(logger, "InstallPackage", item.Id, "CompletedPendingValidation", approvedPlan.Id);
             }
             catch (OperationCanceledException)
             {
+                OperationLog.Audit(logger, "InstallPackage", item.Id, "CancelledChangesMayRemain", approvedPlan.Id);
                 throw new OperationCanceledException("Installation cancelled. Partial package-manager changes may remain; run dependencies check before retrying.", cancellationToken);
             }
             catch (Exception ex)
             {
+                logger.LogError(ex, "Installation failed for {Package}", item.Id);
+                OperationLog.Audit(logger, "InstallPackage", item.Id, "Failed", approvedPlan.Id);
                 results.Add(new(item.Id, false, ex.Message + " Use the official source shown in the plan, then configure the executable path."));
             }
         }

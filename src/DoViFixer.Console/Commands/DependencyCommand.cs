@@ -70,9 +70,10 @@ public sealed class DependencyCommand(DependencyService dependencies, ConsoleRen
         }
         foreach (var item in plan.Items)
         {
+            interaction.RecordPlan(plan.Id, "InstallDependency", item);
             renderer.Write($"Install {item.Id} {item.Version} ({string.Join(", ", item.Tools)})\nProvider: {item.Provider}; source: {item.Source}\nDestination: {item.Destination}\nScope: {item.Scope}; elevation: {(item.RequiresElevation ? "required" : "not required")}\nSHA-256: {item.Sha256}");
         }
-        if (plan.Items.Count == 0 || !await interaction.ConfirmAsync("Install this exact dependency plan?", approved, cancellationToken))
+        if (plan.Items.Count == 0 || !await interaction.ConfirmAsync("Install this exact dependency plan?", approved, cancellationToken, plan.Id))
         {
             renderer.Write("Dependencies remain unmet. Configure official CLI paths with 'settings tool' or retry dependencies install.");
             return false;

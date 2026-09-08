@@ -29,6 +29,11 @@ public sealed class ConversionCommand(ConversionPlanner planner, BatchConversion
         }
         foreach (var plan in planned.Plans)
         {
+            interaction.RecordPlan(plan.Id, "Convert", new
+            {
+                plan.Analysis.Media.Source, plan.Output, plan.Archive, plan.Target, plan.ScratchBytes,
+                plan.TemporaryDirectory, plan.Decision, request.ForceComplex, request.IncludeSimple
+            });
             renderer.Write($"Input: {plan.Analysis.Media.Source.Path}\nOutput: {plan.Output}\nTarget: {plan.Target}; scratch estimate: {plan.ScratchBytes:N0} bytes\n{plan.Decision}\nOriginal retained.");
             if (plan.Archive is not null)
             {

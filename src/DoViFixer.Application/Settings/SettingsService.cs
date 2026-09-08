@@ -1,9 +1,11 @@
 using DoViFixer.Application.Abstractions;
 using DoViFixer.Application.Dependencies;
+using DoViFixer.Application.Operations;
+using Microsoft.Extensions.Logging;
 
 namespace DoViFixer.Application.Settings;
 
-public sealed class SettingsService(ISettingsStore store, IDependencyDetector detector, IToolCatalog catalog, IFileOperations files)
+public sealed class SettingsService(ISettingsStore store, IDependencyDetector detector, IToolCatalog catalog, IFileOperations files, ILogger<SettingsService> logger)
 {
     public Task<UserSettings> ReadAsync(CancellationToken cancellationToken) => store.ReadAsync(cancellationToken);
     public async Task SetToolAsync(NativeTool tool, string path, CancellationToken cancellationToken)
@@ -15,16 +17,20 @@ public sealed class SettingsService(ISettingsStore store, IDependencyDetector de
         }
         await store.UpdateAsync(s => s with { ToolPaths = s.ToolPaths.SetItem(tool, status.Path) }, cancellationToken);
         catalog.Refresh(new[] { status });
+        using var scope = logger.BeginScope(new Dictionary<string, object> { ["Tool"] = tool.ToString(), ["ToolVersion"] = status.Version ?? "unknown" });
+        OperationLog.Audit(logger, "SetToolPath", status.Path, "Completed");
     }
     public async Task ResetToolAsync(NativeTool tool, CancellationToken cancellationToken)
     {
         await store.UpdateAsync(s => s with { ToolPaths = s.ToolPaths.Remove(tool) }, cancellationToken);
         catalog.Refresh(new[] { new DependencyStatus(tool, DependencyState.Missing, null, null, "Path reset; re-detection required.") });
+        OperationLog.Audit(logger, "ResetToolPath", tool.ToString(), "Completed");
     }
-    public Task SetTemporaryDirectoryAsync(string path, CancellationToken cancellationToken)
+    public async Task SetTemporaryDirectoryAsync(string path, CancellationToken cancellationToken)
     {
         string full = Path.GetFullPath(path);
         files.EnsureAvailableSpace(full, 0);
-        return store.UpdateAsync(s => s with { TemporaryDirectory = full }, cancellationToken);
+        await store.UpdateAsync(s => s with { TemporaryDirectory = full }, cancellationToken);
+        OperationLog.Audit(logger, "SetTemporaryDirectory", full, "Completed");
     }
 }

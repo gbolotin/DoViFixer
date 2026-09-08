@@ -3,10 +3,11 @@ using DoViFixer.Application.Abstractions;
 using DoViFixer.Application.Dependencies;
 using DoViFixer.Infrastructure.Configuration;
 using DoViFixer.Infrastructure.MediaTools.Processes;
+using Microsoft.Extensions.Logging;
 
 namespace DoViFixer.Infrastructure.Dependencies;
 
-internal sealed class DependencyDetector(ISettingsStore settings, StorageOptions storage, IProcessRunner processes) : IDependencyDetector
+internal sealed class DependencyDetector(ISettingsStore settings, StorageOptions storage, IProcessRunner processes, ILogger<DependencyDetector> logger) : IDependencyDetector
 {
     public async Task<DependencyReport> DetectAsync(IReadOnlyList<NativeTool> tools, CancellationToken cancellationToken)
     {
@@ -87,6 +88,7 @@ internal sealed class DependencyDetector(ISettingsStore settings, StorageOptions
         }
         catch (Exception ex) when (ex is not OperationCanceledException)
         {
+            logger.LogDebug(ex, "Dependency validation failed for {Tool} at {ToolPath}", tool, path);
             return new(tool, DependencyState.Unusable, path, null, ex.Message);
         }
     }

@@ -25,12 +25,13 @@ public sealed class ArchiveCommand(BackupService backup, RestoreService restore,
         {
             case "backup":
                 var backupPlan = await backup.PlanAsync(input, command.Value("output"), command.Value("temp"), cancellationToken);
+                interaction.RecordPlan(backupPlan.Id, "Backup", new { backupPlan.Media.Source, backupPlan.Output, backupPlan.TemporaryDirectory, backupPlan.ScratchBytes });
                 renderer.Write($"Backup: {backupPlan.Media.Source.Path}\nArchive: {backupPlan.Output}\nScratch estimate: {backupPlan.ScratchBytes:N0} bytes. Original retained.");
                 if (command.Has("plan"))
                 {
                     return 0;
                 }
-                if (!await interaction.ConfirmAsync("Create this archive?", command.Has("yes"), cancellationToken))
+                if (!await interaction.ConfirmAsync("Create this archive?", command.Has("yes"), cancellationToken, backupPlan.Id))
                 {
                     return 4;
                 }
@@ -38,6 +39,7 @@ public sealed class ArchiveCommand(BackupService backup, RestoreService restore,
                 return 0;
             case "restore":
                 var restorePlan = await restore.PlanAsync(input, command.Arguments[1], command.Value("output"), command.Value("temp"), command.Has("allow-legacy-archive"), cancellationToken);
+                interaction.RecordPlan(restorePlan.Id, "Restore", new { restorePlan.Media.Source, restorePlan.Archive, restorePlan.Output, restorePlan.TemporaryDirectory, restorePlan.ScratchBytes, restorePlan.AllowLegacy });
                 renderer.Write($"Base: {restorePlan.Media.Source.Path}\nArchive: {restorePlan.Archive.Path}\nOutput: {restorePlan.Output}\nScratch estimate: {restorePlan.ScratchBytes:N0} bytes. Original retained.");
                 if (restorePlan.AllowLegacy)
                 {
@@ -47,7 +49,7 @@ public sealed class ArchiveCommand(BackupService backup, RestoreService restore,
                 {
                     return 0;
                 }
-                if (!await interaction.ConfirmAsync("Restore this file?", command.Has("yes"), cancellationToken))
+                if (!await interaction.ConfirmAsync("Restore this file?", command.Has("yes"), cancellationToken, restorePlan.Id))
                 {
                     return 4;
                 }

@@ -27,6 +27,7 @@ public sealed class CleanupCommand(CleanupService cleanup, ConsoleRenderer rende
                 var cleanupPlan = cleanup.Plan(input, command.Depth);
                 foreach (var file in cleanupPlan.Files)
                 {
+                    interaction.RecordPlan(cleanupPlan.Id, "DeleteBackup", file);
                     renderer.Write($"{file.Path} ({file.Length:N0} bytes)");
                 }
                 renderer.Write($"{cleanupPlan.Files.Count} backup(s) selected.");

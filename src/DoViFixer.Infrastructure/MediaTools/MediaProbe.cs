@@ -5,10 +5,11 @@ using DoViFixer.Domain.Analysis;
 using DoViFixer.Domain.Media;
 using DoViFixer.Infrastructure.MediaTools.DoviTool;
 using DoViFixer.Infrastructure.MediaTools.Processes;
+using Microsoft.Extensions.Logging;
 
 namespace DoViFixer.Infrastructure.MediaTools;
 
-internal sealed class MediaProbe(IToolCatalog tools, IProcessRunner processes, IFileOperations files) : IMediaProbe
+internal sealed class MediaProbe(IToolCatalog tools, IProcessRunner processes, IFileOperations files, ILogger<MediaProbe> logger) : IMediaProbe
 {
     public async Task<MediaInfo> ProbeAsync(string path, CancellationToken cancellationToken)
     {
@@ -48,6 +49,7 @@ internal sealed class MediaProbe(IToolCatalog tools, IProcessRunner processes, I
                 }
                 catch (Exception ex) when (ex is IOException or InvalidDataException or System.Text.Json.JsonException)
                 {
+                    logger.LogDebug(ex, "RPU sample {SampleIndex} failed for {Input}", i, media.Source.Path);
                     // Missing sample coverage remains Unknown; never turn a failed probe into complex FEL.
                 }
                 finally
@@ -61,6 +63,7 @@ internal sealed class MediaProbe(IToolCatalog tools, IProcessRunner processes, I
         }
         catch (Exception ex) when (ex is not OperationCanceledException)
         {
+            logger.LogError(ex, "RPU analysis failed for {Input}; method {Method}", media.Source.Path, method);
             return new(method, EnhancementLayer.Unknown, 0, null, 0, 1, ex.Message);
         }
     }

@@ -2,6 +2,7 @@ using System.Text.Json;
 using System.Text.Json.Serialization;
 using DoViFixer.Application.Abstractions;
 using DoViFixer.Application.Settings;
+using Microsoft.Extensions.Logging;
 
 namespace DoViFixer.Infrastructure.Configuration;
 
@@ -11,7 +12,7 @@ public sealed record StorageOptions(string RootDirectory)
     public string ToolsDirectory => Path.Combine(RootDirectory, "tools");
 }
 
-internal sealed class SettingsStore(StorageOptions options) : ISettingsStore
+internal sealed class SettingsStore(StorageOptions options, ILogger<SettingsStore> logger) : ISettingsStore
 {
     private static readonly JsonSerializerOptions json = new()
     {
@@ -35,7 +36,8 @@ internal sealed class SettingsStore(StorageOptions options) : ISettingsStore
         Directory.CreateDirectory(options.RootDirectory);
         // File-share lock serializes writers across both future UIs and processes.
         await using var lease = await LockAsync(cancellationToken);
-        var updated = update(await ReadAsync(cancellationToken));
+        var previous = await ReadAsync(cancellationToken);
+        var updated = update(previous);
         string temporary = options.SettingsPath + "." + Guid.NewGuid().ToString("N") + ".tmp";
         try
         {
@@ -46,6 +48,22 @@ internal sealed class SettingsStore(StorageOptions options) : ISettingsStore
                 stream.Flush(flushToDisk: true);
             }
             File.Move(temporary, options.SettingsPath, overwrite: true);
+            using var audit = logger.BeginScope(new Dictionary<string, object> { ["LogKind"] = "Audit" });
+            if (previous.TemporaryDirectory != updated.TemporaryDirectory)
+            {
+                logger.LogInformation("Setting {Setting} changed from {PreviousValue} to {NewValue} in {SettingsPath}",
+                    "TemporaryDirectory", previous.TemporaryDirectory, updated.TemporaryDirectory, options.SettingsPath);
+            }
+            foreach (var tool in previous.ToolPaths.Keys.Union(updated.ToolPaths.Keys))
+            {
+                string? before = previous.ToolPaths.GetValueOrDefault(tool);
+                string? after = updated.ToolPaths.GetValueOrDefault(tool);
+                if (before != after)
+                {
+                    logger.LogInformation("Setting {Setting} changed from {PreviousValue} to {NewValue} in {SettingsPath}",
+                        "ToolPaths." + tool, before, after, options.SettingsPath);
+                }
+            }
         }
         finally
         {
