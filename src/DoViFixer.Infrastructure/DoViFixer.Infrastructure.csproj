@@ -1,0 +1,10 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup><TargetFramework>net10.0-windows</TargetFramework></PropertyGroup>
+  <ItemGroup>
+    <ProjectReference Include="../DoViFixer.Application/DoViFixer.Application.csproj" />
+    <ProjectReference Include="../DoViFixer.Domain/DoViFixer.Domain.csproj" />
+    <PackageReference Include="Microsoft.Extensions.DependencyInjection.Abstractions" />
+    <PackageReference Include="Microsoft.Extensions.Configuration.Abstractions" />
+  </ItemGroup>
+  <ItemGroup><InternalsVisibleTo Include="DoViFixer.Infrastructure.Tests" /></ItemGroup>
+</Project>

@@ -1,0 +1,10 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup><TargetFramework>net10.0-windows</TargetFramework><IsTestProject>true</IsTestProject><IsPackable>false</IsPackable></PropertyGroup>
+  <ItemGroup>
+    <PackageReference Include="Microsoft.NET.Test.Sdk" />
+    <PackageReference Include="MSTest.TestAdapter" />
+    <PackageReference Include="MSTest.TestFramework" />
+    <ProjectReference Include="../../src/DoViFixer.Infrastructure/DoViFixer.Infrastructure.csproj" />
+  </ItemGroup>
+  <ItemGroup><None Update="Fixtures/**" CopyToOutputDirectory="PreserveNewest" /></ItemGroup>
+</Project>
