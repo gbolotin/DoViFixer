@@ -4,6 +4,8 @@
 
 Native Windows .NET 10 console workflows for inspecting Dolby Vision MKVs, converting Profile 7 to Profile 8.1 or HDR10, and backing up/restoring enhancement layers. The shared Domain, Application and Infrastructure projects are ready for a later WPF presentation layer.
 
+DoViFixer is a native Windows .NET implementation inspired by [dovi_convert](https://github.com/cryptochrome/dovi_convert), adapting its Dolby Vision workflows for a shared console and future WPF architecture.
+
 ## Build and run
 
 Requires the .NET 10 SDK; `global.json` pins 10.0.400. NuGet versions are centralized in `Directory.Packages.props`.
