@@ -11,6 +11,7 @@ public interface IFileOperations
     FileIdentity Identify(string path);
     string PrepareOutputPath(string input, string? outputDirectory, string suffix);
     void EnsureAvailableSpace(string directory, long requiredBytes);
+    void EnsureWritableDirectory(string directory);
     ValueTask<IAsyncDisposable> AcquireReadLeaseAsync(FileIdentity identity, CancellationToken cancellationToken);
     Task DeleteAsync(FileIdentity identity, CancellationToken cancellationToken);
 }

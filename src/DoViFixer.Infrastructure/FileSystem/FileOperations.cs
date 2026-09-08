@@ -68,6 +68,19 @@ internal sealed class FileOperations : IFileOperations, IFileDiscovery
         return output;
     }
 
+    public void EnsureWritableDirectory(string directory)
+    {
+        string full = Path.GetFullPath(directory);
+        RejectReparsePoints(full);
+        Directory.CreateDirectory(full);
+        RejectReparsePoints(full);
+        string probe = Path.Combine(full, $".dovifixer-write-test-{Guid.NewGuid():N}");
+        using var stream = new FileStream(probe, FileMode.CreateNew, FileAccess.Write, FileShare.None,
+            1, FileOptions.DeleteOnClose);
+        stream.WriteByte(0);
+        stream.Flush();
+    }
+
     public void EnsureAvailableSpace(string directory, long requiredBytes)
     {
         if (requiredBytes < 0)

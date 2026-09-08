@@ -3,6 +3,7 @@ using System.Text;
 using System.Text.Json;
 using DoViFixer.Application.Abstractions;
 using DoViFixer.Application.Dependencies;
+using DoViFixer.Application.Settings;
 using DoViFixer.Domain.Analysis;
 using DoViFixer.Domain.Media;
 using DoViFixer.Infrastructure.Archives;
@@ -38,6 +39,50 @@ public sealed class InfrastructureTests
         {
             Directory.Delete(directory, true);
         }
+    }
+
+    [TestMethod]
+    public async Task TemporaryDirectorySettingCreatesMissingParentsAndPreservesExistingContents()
+    {
+        var service = CreateSettingsService();
+        string path = Path.Combine(directory, "missing", "scratch");
+        await service.SetTemporaryDirectoryAsync(path, default);
+        Assert.IsTrue(Directory.Exists(path));
+        Assert.AreEqual(Path.GetFullPath(path), (await service.ReadAsync(default)).TemporaryDirectory);
+        Assert.AreEqual(0, Directory.GetFileSystemEntries(path).Length);
+
+        string existing = Path.Combine(path, "keep.txt");
+        await File.WriteAllTextAsync(existing, "keep");
+        await service.SetTemporaryDirectoryAsync(path, default);
+        Assert.AreEqual("keep", await File.ReadAllTextAsync(existing));
+        Assert.AreEqual(1, Directory.GetFileSystemEntries(path).Length);
+    }
+
+    [TestMethod]
+    public async Task InvalidOrCancelledTemporaryDirectorySettingPreservesSavedValue()
+    {
+        var service = CreateSettingsService();
+        await service.SetTemporaryDirectoryAsync(directory, default);
+        string file = Path.Combine(directory, "file.txt");
+        await File.WriteAllTextAsync(file, "keep");
+        await Assert.ThrowsExactlyAsync<IOException>(() => service.SetTemporaryDirectoryAsync(file, default));
+        Assert.AreEqual(directory, (await service.ReadAsync(default)).TemporaryDirectory);
+        Assert.AreEqual("keep", await File.ReadAllTextAsync(file));
+
+        string cancelled = Path.Combine(directory, "cancelled");
+        await Assert.ThrowsExactlyAsync<OperationCanceledException>(() =>
+            service.SetTemporaryDirectoryAsync(cancelled, new CancellationToken(true)));
+        Assert.IsFalse(Directory.Exists(cancelled));
+        Assert.AreEqual(directory, (await service.ReadAsync(default)).TemporaryDirectory);
+    }
+
+    private SettingsService CreateSettingsService()
+    {
+        var options = new StorageOptions(Path.Combine(directory, "settings"));
+        var store = new SettingsStore(options, NullLogger<SettingsStore>.Instance);
+        var processes = new ProcessRunner(NullLogger<ProcessRunner>.Instance);
+        var detector = new DependencyDetector(store, options, processes, NullLogger<DependencyDetector>.Instance);
+        return new SettingsService(store, detector, new ToolCatalog(), files, NullLogger<SettingsService>.Instance);
     }
 
     [TestMethod]

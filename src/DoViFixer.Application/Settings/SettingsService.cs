@@ -28,7 +28,9 @@ public sealed class SettingsService(ISettingsStore store, IDependencyDetector de
     }
     public async Task SetTemporaryDirectoryAsync(string path, CancellationToken cancellationToken)
     {
+        cancellationToken.ThrowIfCancellationRequested();
         string full = Path.GetFullPath(path);
+        files.EnsureWritableDirectory(full);
         files.EnsureAvailableSpace(full, 0);
         await store.UpdateAsync(s => s with { TemporaryDirectory = full }, cancellationToken);
         OperationLog.Audit(logger, "SetTemporaryDirectory", full, "Completed");

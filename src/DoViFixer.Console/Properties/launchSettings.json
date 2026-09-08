@@ -1,0 +1,27 @@
+{
+  "profiles": {
+    "DoViFixer.Console": {
+      "commandName": "Project"
+    },
+    "settings show": {
+      "commandName": "Project",
+      "commandLineArgs": "settings show"
+    },
+    "settings temp ": {
+      "commandName": "Project",
+      "commandLineArgs": "settings temp %TEMP%\\DoViFixed\\TempDirectory"
+    },
+    "scan": {
+      "commandName": "Project",
+      "commandLineArgs": "scan\r\n"
+    },
+    "update-check ": {
+      "commandName": "Project",
+      "commandLineArgs": "update-check"
+    },
+    "dependencies check": {
+      "commandName": "Project",
+      "commandLineArgs": "dependencies check"
+    }
+  }
+}

@@ -137,6 +137,7 @@ public sealed class WorkflowTests
         public FileIdentity Identify(string path) => throw new NotSupportedException();
         public string PrepareOutputPath(string input, string? outputDirectory, string suffix) => throw new NotSupportedException();
         public void EnsureAvailableSpace(string directory, long requiredBytes) { }
+        public void EnsureWritableDirectory(string directory) { }
         public ValueTask<IAsyncDisposable> AcquireReadLeaseAsync(FileIdentity identity, CancellationToken cancellationToken)
         {
             if (Changed)
