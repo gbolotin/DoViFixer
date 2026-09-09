@@ -8,6 +8,26 @@ public sealed class ConsoleRenderer : IProgress<OperationProgress>
 {
     private static readonly JsonSerializerOptions json = new() { WriteIndented = true, Converters = { new JsonStringEnumConverter() } };
     public void Write(string message) => System.Console.WriteLine(message);
+    public void Write(string message, ConsoleColor? color)
+    {
+        if (color is null || System.Console.IsOutputRedirected ||
+            !string.IsNullOrEmpty(Environment.GetEnvironmentVariable("NO_COLOR")) ||
+            Environment.GetEnvironmentVariable("TERM") == "dumb")
+        {
+            Write(message);
+            return;
+        }
+        var previous = System.Console.ForegroundColor;
+        try
+        {
+            System.Console.ForegroundColor = color.Value;
+            Write(message);
+        }
+        finally
+        {
+            System.Console.ForegroundColor = previous;
+        }
+    }
     public void Json<T>(T value) => Write(JsonSerializer.Serialize(value, json));
     public void Report(OperationProgress value) => System.Console.Error.WriteLine($"{value.Stage}{(value.File is null ? "" : $": {value.File}")}");
     public void Result(FileResult result) => Write($"{result.Status.ToString().ToUpperInvariant()}: {result.Input}\n  {result.Message}{(result.Output is null ? "" : $"\n  Output: {result.Output}")}");
@@ -16,7 +36,7 @@ public sealed class ConsoleRenderer : IProgress<OperationProgress>
         DoViFixer 0.1.0 — native Windows Dolby Vision tools
 
         dependencies check [Tool ...] [--json]
-        dependencies install [Tool ...] [--repair] [--yes]
+        dependencies install [Tool ...] [--yes]
         scan [file-or-directory] [-r [depth]] [--candidates-only] [--json]
         inspect <file.mkv> [--json]
         convert [file-or-directory] [-r [depth]] [--hdr10] [--include-simple]
@@ -39,6 +59,8 @@ public sealed class ConsoleRenderer : IProgress<OperationProgress>
         Reopen your terminal after adding to PATH. Keep the app in that folder.
         -r defaults to depth 5; omitted paths use the current directory.
         Media commands support --install-dependencies as separate installation consent.
+        Installation plans include missing, unusable and incompatible tools; validated paths are saved after approval.
+        dependencies install still accepts --repair for compatibility; it is no longer required.
         --yes approves the displayed media plan, never software installation by itself.
         --plan performs analysis and shows exact outputs without conversion.
         Originals are always retained; outputs are never overwritten.

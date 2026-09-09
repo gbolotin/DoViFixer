@@ -6,12 +6,12 @@ namespace DoViFixer.Application.Abstractions;
 
 public interface IDependencyDetector
 {
-    Task<DependencyReport> DetectAsync(IReadOnlyList<NativeTool> tools, CancellationToken cancellationToken);
+    Task<DependencyReport> DetectAsync(IReadOnlyList<NativeTool> tools, CancellationToken cancellationToken, bool skipConfiguredPaths = false);
     Task<DependencyStatus> ValidatePathAsync(NativeTool tool, string path, CancellationToken cancellationToken);
 }
 public interface IDependencyInstaller
 {
-    Task<InstallationPlan> PrepareAsync(DependencyReport report, bool allowRepair, CancellationToken cancellationToken);
+    Task<InstallationPlan> PrepareAsync(DependencyReport report, CancellationToken cancellationToken);
     Task<IReadOnlyList<InstallationOutcome>> InstallAsync(InstallationPlan approvedPlan,
         IProgress<OperationProgress>? progress, CancellationToken cancellationToken);
 }

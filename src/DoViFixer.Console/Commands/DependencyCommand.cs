@@ -37,7 +37,7 @@ public sealed class DependencyCommand(DependencyService dependencies, ConsoleRen
             renderer.Write("Missing requirements. Run 'dependencies install', or explicitly use --install-dependencies.");
             return false;
         }
-        var plan = await dependencies.PrepareAsync(report, false, cancellationToken);
+        var plan = await dependencies.PrepareAsync(report, cancellationToken);
         return await InstallAsync(plan, explicitInstall, cancellationToken);
     }
 
@@ -57,7 +57,7 @@ public sealed class DependencyCommand(DependencyService dependencies, ConsoleRen
         {
             return report.Ready ? 0 : 3;
         }
-        var plan = await dependencies.PrepareAsync(report, command.Has("repair"), cancellationToken);
+        var plan = await dependencies.PrepareAsync(report, cancellationToken);
         await InstallAsync(plan, command.Has("yes"), cancellationToken);
         return (await dependencies.CheckAsync(requested, cancellationToken)).Ready ? 0 : 3;
     }
@@ -70,6 +70,11 @@ public sealed class DependencyCommand(DependencyService dependencies, ConsoleRen
         }
         foreach (var item in plan.Items)
         {
+            foreach (var replacement in (plan.Replacements ?? []).Where(t => item.Tools.Contains(t.Tool)))
+            {
+                renderer.Write($"{replacement.Tool}: {replacement.State} at {replacement.Path ?? "unknown path"}. {replacement.Diagnostic}");
+                renderer.Write($"After validation, DoViFixer will save and use the replacement CLI from {item.Destination}. The existing executable will not be removed.");
+            }
             interaction.RecordPlan(plan.Id, "InstallDependency", item);
             renderer.Write($"Install {item.Id} {item.Version} ({string.Join(", ", item.Tools)})\nProvider: {item.Provider}; source: {item.Source}\nDestination: {item.Destination}\nScope: {item.Scope}; elevation: {(item.RequiresElevation ? "required" : "not required")}\nSHA-256: {item.Sha256}");
         }

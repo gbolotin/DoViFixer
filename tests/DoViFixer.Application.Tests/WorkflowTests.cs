@@ -3,6 +3,8 @@ using DoViFixer.Application.Conversion;
 using DoViFixer.Application.Dependencies;
 using DoViFixer.Application.Operations;
 using DoViFixer.Application.Settings;
+using DoViFixer.Application.Scanning;
+using DoViFixer.Application.Inspection;
 using DoViFixer.Domain.Analysis;
 using DoViFixer.Domain.Conversion;
 using DoViFixer.Domain.Media;
@@ -14,6 +16,27 @@ namespace DoViFixer.Application.Tests;
 [TestClass]
 public sealed class WorkflowTests
 {
+    [TestMethod]
+    public async Task ScanReportsEachSuccessOrFailureBeforeStartingNextFile()
+    {
+        var runtime = new Runtime();
+        var inspection = new InspectionService(runtime.Dependencies(), runtime, runtime, runtime, runtime, NullLogger<InspectionService>.Instance);
+        var service = new ScanService(runtime, inspection, NullLogger<ScanService>.Instance);
+        var reported = new List<ScanItem>();
+        var results = await service.ScanAsync("fixture", 0, null, null, default, new InlineScanProgress(item =>
+        {
+            reported.Add(item);
+            Assert.AreEqual(reported.Count, runtime.ProbeCalls, "Result must be delivered before the next probe starts.");
+        }));
+        CollectionAssert.AreEqual(results.ToArray(), reported.ToArray());
+        Assert.IsNotNull(reported[0].Error);
+        Assert.AreEqual(AnalysisVerdict.Mel, reported[1].Analysis!.Verdict);
+    }
+
+    private sealed class InlineScanProgress(Action<ScanItem> report) : IProgress<ScanItem>
+    {
+        public void Report(ScanItem value) => report(value);
+    }
     [TestMethod]
     public async Task DependencyCheckDoesNotInstallAndMissingBlocksExecution()
     {
@@ -34,6 +57,27 @@ public sealed class WorkflowTests
         Assert.AreEqual(1, runtime.InstallCalls);
         Assert.AreEqual(6, runtime.Settings.ToolPaths.Count);
         Assert.AreEqual("ready-DoviTool", runtime.GetPath(NativeTool.DoviTool));
+    }
+
+    [TestMethod]
+    [DataRow(true)]
+    [DataRow(false)]
+    public async Task ReplacementPathIsSavedOnlyAfterSuccessfulValidation(bool valid)
+    {
+        var runtime = new Runtime { InstallationMakesReady = valid };
+        await runtime.UpdateAsync(s => s with { ToolPaths = s.ToolPaths
+            .SetItem(NativeTool.MediaInfo, "invalid-gui.exe")
+            .SetItem(NativeTool.FFmpeg, "working-ffmpeg.exe") }, default);
+        var plan = new InstallationPlan(Guid.NewGuid(), new[] { new InstallationItem("mediainfo", "1", InstallationProvider.VerifiedZip,
+            "https://example.test", "test", "user", false, new[] { NativeTool.MediaInfo }) }, []);
+        await runtime.Dependencies().InstallAsync(plan, null, default);
+        Assert.AreEqual(valid ? "ready-MediaInfo" : "invalid-gui.exe", runtime.Settings.ToolPaths[NativeTool.MediaInfo]);
+        Assert.AreEqual("working-ffmpeg.exe", runtime.Settings.ToolPaths[NativeTool.FFmpeg]);
+        Assert.AreEqual("invalid-gui.exe", runtime.ConfiguredPathDuringRediscovery);
+        if (valid)
+        {
+            Assert.AreEqual("ready-MediaInfo", runtime.GetPath(NativeTool.MediaInfo));
+        }
     }
 
     [TestMethod]
@@ -96,24 +140,51 @@ public sealed class WorkflowTests
         return new(Guid.NewGuid(), analysis, ConversionTarget.Profile81, path + ".dv81.mkv", null, null, 10000, "MEL");
     }
 
-    private sealed class Runtime : IDependencyDetector, IDependencyInstaller, ISettingsStore, IToolCatalog, IFileOperations,
+    private sealed class Runtime : IDependencyDetector, IDependencyInstaller, ISettingsStore, IToolCatalog, IFileOperations, IFileDiscovery, IMediaProbe,
         ITemporaryWorkspaceFactory, IVideoProcessor, IMediaVerifier, IOutputPublisher, IBackupArchiveStore
     {
         public bool Ready { get; set; } = true;
         public bool Changed { get; set; }
         public bool InstallationMakesReady { get; set; } = true;
+        public string? ConfiguredPathDuringRediscovery { get; private set; }
         public CancellationTokenSource? CancelDuringConversion { get; set; }
         public int InstallCalls, ConvertCalls, Published, Disposed, Deleted;
+        public int ProbeCalls;
+        public IReadOnlyList<string> Discover(string input, int recursiveDepth, bool cleanup = false) => new[] { "bad.mkv", "good.mkv" };
+        public Task<MediaInfo> ProbeAsync(string path, CancellationToken cancellationToken)
+        {
+            ProbeCalls++;
+            if (path == "bad.mkv")
+            {
+                throw new IOException("Unreadable fixture");
+            }
+            return Task.FromResult(Plan(path).Analysis.Media);
+        }
+        public Task<RpuEvidence> AnalyzeAsync(MediaInfo media, AnalysisMethod method, ITemporaryWorkspace workspace, CancellationToken cancellationToken) =>
+            Task.FromResult(new RpuEvidence(method, EnhancementLayer.Mel, 24, null, 10, 10));
         public UserSettings Settings { get; private set; } = new();
         private readonly Dictionary<NativeTool, string> catalog = new();
         public DependencyService Dependencies() => new(this, this, this, this, NullLogger<DependencyService>.Instance);
         public ConversionService Conversion() => new(Dependencies(), this, this, this, this, this, this, ConversionLog);
         public RecordingLogger<ConversionService> ConversionLog { get; } = new();
-        public Task<DependencyReport> DetectAsync(IReadOnlyList<NativeTool> tools, CancellationToken cancellationToken) =>
-            Task.FromResult(new DependencyReport(tools.Select(t => new DependencyStatus(t, Ready ? DependencyState.Ready : DependencyState.Missing,
-                Ready ? "ready-" + t : null, Ready ? "1" : null, "fixture")).ToArray()));
+        public Task<DependencyReport> DetectAsync(IReadOnlyList<NativeTool> tools, CancellationToken cancellationToken, bool skipConfiguredPaths = false)
+        {
+            if (skipConfiguredPaths)
+            {
+                ConfiguredPathDuringRediscovery = Settings.ToolPaths.GetValueOrDefault(NativeTool.MediaInfo);
+            }
+            return Task.FromResult(new DependencyReport(tools.Select(t =>
+            {
+                if (!skipConfiguredPaths && Settings.ToolPaths.TryGetValue(t, out string? path))
+                {
+                    return new DependencyStatus(t, path.StartsWith("invalid", StringComparison.Ordinal) ? DependencyState.Unusable : DependencyState.Ready, path, "1", "configured");
+                }
+                return new DependencyStatus(t, Ready ? DependencyState.Ready : DependencyState.Missing,
+                    Ready ? "ready-" + t : null, Ready ? "1" : null, "fixture");
+            }).ToArray()));
+        }
         public Task<DependencyStatus> ValidatePathAsync(NativeTool tool, string path, CancellationToken cancellationToken) => throw new NotSupportedException();
-        public Task<InstallationPlan> PrepareAsync(DependencyReport report, bool allowRepair, CancellationToken cancellationToken) => throw new NotSupportedException();
+        public Task<InstallationPlan> PrepareAsync(DependencyReport report, CancellationToken cancellationToken) => throw new NotSupportedException();
         public Task<IReadOnlyList<InstallationOutcome>> InstallAsync(InstallationPlan approvedPlan, IProgress<OperationProgress>? progress, CancellationToken cancellationToken)
         {
             InstallCalls++;
@@ -134,7 +205,7 @@ public sealed class WorkflowTests
                 catalog[status.Tool] = status.Path!;
             }
         }
-        public FileIdentity Identify(string path) => throw new NotSupportedException();
+        public FileIdentity Identify(string path) => Plan(path).Analysis.Media.Source;
         public string PrepareOutputPath(string input, string? outputDirectory, string suffix) => throw new NotSupportedException();
         public void EnsureAvailableSpace(string directory, long requiredBytes) { }
         public void EnsureWritableDirectory(string directory) { }

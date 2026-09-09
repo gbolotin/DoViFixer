@@ -280,6 +280,14 @@ public sealed class InfrastructureTests
         var report = await detector.DetectAsync(new[] { NativeTool.MkvMerge }, default);
         Assert.AreEqual(DependencyState.Unusable, report.Tools[0].State);
         Assert.AreEqual(0, runner.Calls);
+        string installed = Path.Combine(storage.ToolsDirectory, "mkvmerge.exe");
+        Directory.CreateDirectory(storage.ToolsDirectory);
+        await File.WriteAllTextAsync(installed, "fixture executable");
+        runner.Output = "mkvmerge v100.0.0";
+        var rediscovered = await detector.DetectAsync(new[] { NativeTool.MkvMerge }, default, skipConfiguredPaths: true);
+        Assert.AreEqual(DependencyState.Ready, rediscovered.Tools[0].State);
+        Assert.AreEqual(installed, rediscovered.Tools[0].Path);
+        Assert.AreEqual(Path.Combine(directory, "missing.exe"), (await settings.ReadAsync(default)).ToolPaths[NativeTool.MkvMerge]);
     }
 
     [TestMethod]
@@ -309,22 +317,54 @@ public sealed class InfrastructureTests
     }
 
     [TestMethod]
-    public async Task InstallationPlanHasVerifiedSourceAndRequiresRepairChoice()
+    [DataRow(DependencyState.Unusable)]
+    [DataRow(DependencyState.Incompatible)]
+    public async Task InstallationPlanIncludesReplacementsWithVerifiedSources(DependencyState state)
     {
         using var http = new HttpClient();
         var installer = new DependencyInstaller(new(directory), new FakeProcessRunner(), http, NullLogger<DependencyInstaller>.Instance);
         var missing = new DependencyReport(new[] { new DependencyStatus(NativeTool.DoviTool, DependencyState.Missing, null, null, "missing") });
-        var plan = await installer.PrepareAsync(missing, false, default);
+        var plan = await installer.PrepareAsync(missing, default);
         Assert.AreEqual(1, plan.Items.Count);
         Assert.AreEqual(InstallationProvider.VerifiedZip, plan.Items[0].Provider);
         Assert.AreEqual(64, plan.Items[0].Sha256!.Length);
         Assert.IsFalse(plan.Items[0].RequiresElevation);
-        var invalid = new DependencyReport(new[] { new DependencyStatus(NativeTool.DoviTool, DependencyState.Unusable, "invalid", null, "bad path") });
-        var repair = await installer.PrepareAsync(invalid, false, default);
-        Assert.AreEqual(0, repair.Items.Count);
-        Assert.AreEqual(1, repair.Unavailable.Count);
+        var invalid = new DependencyReport(new[] { new DependencyStatus(NativeTool.DoviTool, state, "invalid", null, "bad path"),
+            new DependencyStatus(NativeTool.MediaInfo, DependencyState.Missing, null, null, "missing"),
+            new DependencyStatus(NativeTool.FFmpeg, DependencyState.Ready, "working", "9", "ready") });
+        var repair = await installer.PrepareAsync(invalid, default);
+        Assert.AreEqual(2, repair.Items.Count);
+        Assert.AreEqual(0, repair.Unavailable.Count);
+        Assert.AreEqual(invalid.Tools[0], repair.Replacements!.Single());
+        Assert.IsFalse(repair.Items.Any(i => i.Tools.Contains(NativeTool.FFmpeg)));
         var modified = plan with { Items = new[] { plan.Items[0] with { Source = "https://example.invalid/unapproved.zip" } } };
         await Assert.ThrowsExactlyAsync<InvalidOperationException>(() => installer.InstallAsync(modified, null, default));
+    }
+
+    [TestMethod]
+    [DataRow("dvhe.07 / ", DolbyVisionProfile.Profile7)]
+    [DataRow("dvhe.07.06", DolbyVisionProfile.Profile7)]
+    [DataRow("dvh1.07", DolbyVisionProfile.Profile7)]
+    [DataRow("dvhe.05", DolbyVisionProfile.Profile5)]
+    [DataRow("dvhe.08", DolbyVisionProfile.Profile81)]
+    [DataRow("dvhe.070", DolbyVisionProfile.Unknown)]
+    [DataRow("dvhe.07.invalid", DolbyVisionProfile.Unknown)]
+    [DataRow("", DolbyVisionProfile.Unknown)]
+    public async Task MetadataParserAcceptsSeparateAndCombinedProfileLevels(string profile, DolbyVisionProfile expected)
+    {
+        string mkv = await File.ReadAllTextAsync(Path.Combine(AppContext.BaseDirectory, "Fixtures", "mkvmerge.json"));
+        string mi = JsonSerializer.Serialize(new
+        {
+            media = new { track = new[] { new Dictionary<string, string>
+            {
+                ["@type"] = "Video", ["Format"] = "HEVC",
+                ["HDR_Format"] = "Dolby Vision / SMPTE ST 2086",
+                ["HDR_Format_Profile"] = profile, ["HDR_Format_Level"] = "06 / ",
+                ["HDR_Format_Compatibility"] = "Blu-ray / HDR10"
+            } } }
+        });
+        var result = MediaMetadataParser.Parse(new("fixture.mkv", 1000, DateTime.UnixEpoch), mkv, mi);
+        Assert.AreEqual(expected, result.Profile);
     }
 
     [TestMethod]

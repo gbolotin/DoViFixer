@@ -13,18 +13,13 @@ namespace DoViFixer.Infrastructure.Dependencies;
 
 internal sealed class DependencyInstaller(StorageOptions storage, IProcessRunner processes, HttpClient http, ILogger<DependencyInstaller> logger) : IDependencyInstaller
 {
-    public async Task<InstallationPlan> PrepareAsync(DependencyReport report, bool allowRepair, CancellationToken cancellationToken)
+    public async Task<InstallationPlan> PrepareAsync(DependencyReport report, CancellationToken cancellationToken)
     {
         var unavailable = new List<string>();
         var items = new List<InstallationItem>();
         bool winget = await WinGetAvailableAsync(cancellationToken);
         foreach (var status in report.Tools.Where(t => t.State != DependencyState.Ready))
         {
-            if (status.State != DependencyState.Missing && !allowRepair)
-            {
-                unavailable.Add($"{status.Tool}: explicit --repair is required to replace an incompatible or unusable configured tool. {status.Diagnostic}");
-                continue;
-            }
             var package = InstallationCatalog.Packages.SingleOrDefault(p => p.Tools.Contains(status.Tool));
             if (package is null)
             {
@@ -38,7 +33,9 @@ internal sealed class DependencyInstaller(StorageOptions storage, IProcessRunner
             bool useWinGet = winget && package.WinGet && await PackageAvailableAsync(package, cancellationToken);
             items.Add(InstallationCatalog.Item(package, storage, useWinGet));
         }
-        return new(Guid.NewGuid(), items.AsReadOnly(), unavailable.AsReadOnly());
+        var replacements = report.Tools.Where(t => t.State is DependencyState.Incompatible or DependencyState.Unusable
+            && items.Any(i => i.Tools.Contains(t.Tool))).ToArray();
+        return new(Guid.NewGuid(), items.AsReadOnly(), unavailable.AsReadOnly(), replacements);
     }
 
     public async Task<IReadOnlyList<InstallationOutcome>> InstallAsync(InstallationPlan approvedPlan,

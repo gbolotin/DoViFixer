@@ -9,19 +9,19 @@ namespace DoViFixer.Infrastructure.Dependencies;
 
 internal sealed class DependencyDetector(ISettingsStore settings, StorageOptions storage, IProcessRunner processes, ILogger<DependencyDetector> logger) : IDependencyDetector
 {
-    public async Task<DependencyReport> DetectAsync(IReadOnlyList<NativeTool> tools, CancellationToken cancellationToken)
+    public async Task<DependencyReport> DetectAsync(IReadOnlyList<NativeTool> tools, CancellationToken cancellationToken, bool skipConfiguredPaths = false)
     {
         var snapshot = await settings.ReadAsync(cancellationToken);
         var results = new List<DependencyStatus>();
         foreach (var tool in tools.Distinct())
         {
             cancellationToken.ThrowIfCancellationRequested();
-            if (snapshot.ToolPaths.TryGetValue(tool, out string? configured))
+            if (!skipConfiguredPaths && snapshot.ToolPaths.TryGetValue(tool, out string? configured))
             {
                 var result = await ValidatePathAsync(tool, configured, cancellationToken);
                 results.Add(result.State == DependencyState.Ready ? result : result with
                 {
-                    Diagnostic = $"Configured path is invalid: {configured}. {result.Diagnostic} Use 'settings tool' or explicitly approve 'dependencies install --repair'."
+                    Diagnostic = $"Configured path is invalid: {configured}. {result.Diagnostic} Use 'settings tool' or approve the plan from 'dependencies install'."
                 });
                 continue;
             }

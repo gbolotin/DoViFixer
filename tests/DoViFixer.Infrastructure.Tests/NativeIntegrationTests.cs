@@ -19,6 +19,34 @@ public sealed class NativeIntegrationTests
 {
     [TestMethod]
     [TestCategory("NativeIntegration")]
+    public async Task NativeMetadataRecognizesProfile7Directory()
+    {
+        string? directory = Environment.GetEnvironmentVariable("DOVIFIXER_TEST_PROFILE7_DIRECTORY");
+        string? mediaInfo = Environment.GetEnvironmentVariable("DOVIFIXER_TEST_MEDIAINFO");
+        string? mkvMerge = Environment.GetEnvironmentVariable("DOVIFIXER_TEST_MKVMERGE");
+        if (directory is null || mediaInfo is null || mkvMerge is null)
+        {
+            Assert.Inconclusive("Set PROFILE7_DIRECTORY, MEDIAINFO and MKVMERGE with the DOVIFIXER_TEST_ prefix to opt in to metadata-only validation.");
+        }
+        var catalog = new ToolCatalog();
+        catalog.Refresh(new[]
+        {
+            new DependencyStatus(NativeTool.MediaInfo, DependencyState.Ready, mediaInfo, "test", "explicit test tool"),
+            new DependencyStatus(NativeTool.MkvMerge, DependencyState.Ready, mkvMerge, "test", "explicit test tool")
+        });
+        var probe = new MediaProbe(catalog, new ProcessRunner(NullLogger<ProcessRunner>.Instance),
+            new FileOperations(), NullLogger<MediaProbe>.Instance);
+        string[] paths = Directory.GetFiles(directory, "*.mkv");
+        Assert.IsTrue(paths.Length > 0);
+        foreach (string path in paths)
+        {
+            var media = await probe.ProbeAsync(path, default);
+            Assert.AreEqual(DolbyVisionProfile.Profile7, media.Profile, path);
+        }
+    }
+
+    [TestMethod]
+    [TestCategory("NativeIntegration")]
     [DataRow(false)]
     [DataRow(true)]
     public async Task NativeFixtureConvertsBacksUpAndRestoresWithIdenticalBaseAndEnhancementPayloads(bool includeMetadata)

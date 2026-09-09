@@ -22,6 +22,10 @@
     "dependencies check": {
       "commandName": "Project",
       "commandLineArgs": "dependencies check"
+    },
+    "add-to-path": {
+      "commandName": "Project",
+      "commandLineArgs": "settings add-to-path"
     }
   }
 }

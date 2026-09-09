@@ -11,7 +11,8 @@ public sealed record DependencyReport(IReadOnlyList<DependencyStatus> Tools)
 public sealed record InstallationItem(string Id, string Version, InstallationProvider Provider,
     string Source, string Destination, string Scope, bool RequiresElevation,
     IReadOnlyList<NativeTool> Tools, string? Sha256 = null);
-public sealed record InstallationPlan(Guid Id, IReadOnlyList<InstallationItem> Items, IReadOnlyList<string> Unavailable);
+public sealed record InstallationPlan(Guid Id, IReadOnlyList<InstallationItem> Items, IReadOnlyList<string> Unavailable,
+    IReadOnlyList<DependencyStatus>? Replacements = null);
 public sealed record InstallationOutcome(string Id, bool Succeeded, string Message);
 public sealed record DependencyInstallationResult(IReadOnlyList<InstallationOutcome> Outcomes, DependencyReport Report);
 

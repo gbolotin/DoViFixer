@@ -24,7 +24,8 @@ public sealed class MediaReadCommand(ScanService scan, InspectionService inspect
         switch (command.Command)
         {
             case "scan":
-                var results = await scan.ScanAsync(input, command.Depth, command.Value("temp"), renderer, cancellationToken);
+                var scanRenderer = command.Has("json") ? null : new ScanRenderer(renderer, command.Has("candidates-only"));
+                var results = await scan.ScanAsync(input, command.Depth, command.Value("temp"), renderer, cancellationToken, scanRenderer);
                 var visible = command.Has("candidates-only") ? results.Where(r => r.Analysis?.Verdict is AnalysisVerdict.Mel or AnalysisVerdict.SimpleFel).ToArray() : results;
                 if (command.Has("json"))
                 {
@@ -32,11 +33,7 @@ public sealed class MediaReadCommand(ScanService scan, InspectionService inspect
                 }
                 else
                 {
-                    foreach (var item in visible)
-                    {
-                        renderer.Write($"{item.Path}\n  {(item.Error is null ? $"{item.Analysis!.Media.Profile}; {item.Analysis.Verdict}: {item.Analysis.Reason}" : "FAILED: " + item.Error)}");
-                    }
-                    renderer.Write($"Scanned {results.Count} file(s); {results.Count(r => r.Error is not null)} failed.");
+                    scanRenderer!.Summary(results);
                 }
                 return results.Any(r => r.Error is not null || r.Analysis?.Verdict == AnalysisVerdict.AnalysisFailed) ? 1 : 0;
             case "inspect":

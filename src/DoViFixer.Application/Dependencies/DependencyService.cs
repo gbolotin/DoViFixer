@@ -30,8 +30,8 @@ public sealed class DependencyService(IDependencyDetector detector, IDependencyI
         }
     }
 
-    public Task<InstallationPlan> PrepareAsync(DependencyReport report, bool allowRepair, CancellationToken cancellationToken)
-        => installer.PrepareAsync(report, allowRepair, cancellationToken);
+    public Task<InstallationPlan> PrepareAsync(DependencyReport report, CancellationToken cancellationToken)
+        => installer.PrepareAsync(report, cancellationToken);
 
     public Task<DependencyInstallationResult> InstallAsync(InstallationPlan approvedPlan,
         IProgress<OperationProgress>? progress, CancellationToken cancellationToken) =>
@@ -50,14 +50,16 @@ public sealed class DependencyService(IDependencyDetector detector, IDependencyI
             OperationLog.Audit(logger, "InstallDependency", outcome.Id, outcome.Succeeded ? "InstalledPendingValidation" : "Failed", approvedPlan.Id);
             logger.LogInformation("Installer result {Package}: {Succeeded}; {Reason}", outcome.Id, outcome.Succeeded, outcome.Message);
         }
-        // Remove only explicitly approved replacement paths before independently rediscovering tools.
+        // Rediscover approved tools without changing saved paths until validation succeeds.
         var preserved = before.Tools.Where(t => t.State == DependencyState.Ready && t.Path is not null).ToArray();
         var successful = approvedPlan.Items.Where(i => outcomes.Any(o => o.Id == i.Id && o.Succeeded)).SelectMany(i => i.Tools)
             .Except(preserved.Select(t => t.Tool)).ToArray();
+        var discovered = await detector.DetectAsync(successful, cancellationToken, skipConfiguredPaths: true);
+        var validated = discovered.Tools.Where(t => t.State == DependencyState.Ready && t.Path is not null).ToArray();
         await settings.UpdateAsync(s => s with
         {
-            ToolPaths = s.ToolPaths.RemoveRange(successful).SetItems(preserved
-                .Where(t => !s.ToolPaths.ContainsKey(t.Tool)).Select(t => KeyValuePair.Create(t.Tool, t.Path!)))
+            ToolPaths = s.ToolPaths.SetItems(preserved.Concat(validated)
+                .Select(t => KeyValuePair.Create(t.Tool, t.Path!)))
         }, cancellationToken);
         var report = await CheckAsync(DependencyRequirements.All, cancellationToken);
         var ready = report.Tools.Where(t => t.State == DependencyState.Ready && t.Path is not null).ToArray();

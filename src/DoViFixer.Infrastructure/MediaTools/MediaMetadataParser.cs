@@ -40,7 +40,9 @@ internal static class MediaMetadataParser
             throw new InvalidDataException("MediaInfo returned no video metadata.");
         }
         string hdr = Text(miVideo, "HDR_Format") + " " + Text(miVideo, "HDR_Format_Profile") + " " + Text(miVideo, "CodecID");
-        var match = Regex.Match(hdr, @"(?i)dv(?:he|h1)\.(\d{2})\.\d{2}");
+        // MediaInfo can return the level separately (dvhe.07 + HDR_Format_Level),
+        // or include it in the profile string (dvhe.07.06).
+        var match = Regex.Match(hdr, @"(?i)\bdv(?:he|h1)\.(\d{2})(?:\.\d{2})?(?=$|[\s/])");
         var profile = !hdr.Contains("Dolby Vision", StringComparison.OrdinalIgnoreCase) && !match.Success ? DolbyVisionProfile.None
             : match.Success ? match.Groups[1].Value switch
             {
