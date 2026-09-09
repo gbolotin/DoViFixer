@@ -21,7 +21,8 @@ public static class ConsoleHost
             preserveStaticLogger: true);
         builder.Services.AddDoViFixerApplication();
         builder.Services.AddDoViFixerInfrastructure(builder.Configuration);
-        builder.Services.AddTransient<ConsoleRenderer>();
+        // All commands share one terminal; the renderer serializes its progress state.
+        builder.Services.AddSingleton<ConsoleRenderer>();
         builder.Services.AddTransient<ConsoleInteraction>();
         builder.Services.AddTransient<CommandDispatcher>();
         builder.Services.AddTransient<DependencyCommand>();

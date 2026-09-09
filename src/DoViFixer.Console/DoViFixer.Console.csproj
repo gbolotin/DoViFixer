@@ -12,4 +12,5 @@
     <PackageReference Include="Serilog.Sinks.File" />
     <PackageReference Include="Serilog.Sinks.Console" />
   </ItemGroup>
+  <ItemGroup><InternalsVisibleTo Include="DoViFixer.Console.Tests" /></ItemGroup>
 </Project>

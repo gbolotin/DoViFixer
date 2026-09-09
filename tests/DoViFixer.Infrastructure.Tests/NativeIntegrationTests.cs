@@ -120,7 +120,13 @@ public sealed class NativeIntegrationTests
         var archiveStore = new BackupArchiveStore();
         await archiveStore.WriteAsync(archive, manifest, workspace, default);
         string output = workspace.File("converted.partial");
-        await processor.ConvertAsync(media, ConversionTarget.Profile81, workspace, output, null, Guid.NewGuid(), default);
+        var progress = new RecordingProgress();
+        await processor.ConvertAsync(media, ConversionTarget.Profile81, workspace, output, progress, Guid.NewGuid(), default);
+        foreach (string stage in new[] { "Extracting video", "Remuxing" })
+        {
+            Assert.IsTrue(progress.Values.Any(p => p.Stage == stage && p.Percent is >= 0 and < 100), stage + " native progress");
+            Assert.IsTrue(progress.Values.Any(p => p.Stage == stage && p.Percent == 100), stage + " completion");
+        }
         Assert.IsTrue(new FileInfo(output).Length > 0);
         var convertedIdentification = await runner.RunAsync(new(tools.GetPath(NativeTool.MkvMerge), new[] { "-J", output }), default);
         using (var a = JsonDocument.Parse(identification.Output))
@@ -199,5 +205,10 @@ public sealed class NativeIntegrationTests
     {
         public Task<ProcessResult> RunAsync(ProcessRequest request, CancellationToken cancellationToken) => request.Executable == "fixture-mediainfo"
             ? Task.FromResult(new ProcessResult(0, fixtures[request.Arguments[^1]], "")) : native.RunAsync(request, cancellationToken);
+    }
+    private sealed class RecordingProgress : IProgress<DoViFixer.Application.Operations.OperationProgress>
+    {
+        public List<DoViFixer.Application.Operations.OperationProgress> Values { get; } = [];
+        public void Report(DoViFixer.Application.Operations.OperationProgress value) => Values.Add(value);
     }
 }

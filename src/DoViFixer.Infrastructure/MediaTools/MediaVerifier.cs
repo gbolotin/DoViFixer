@@ -1,3 +1,4 @@
+using DoViFixer.Application.Operations;
 using System.Globalization;
 using System.Text.Json;
 using System.Xml.Linq;
@@ -11,15 +12,22 @@ namespace DoViFixer.Infrastructure.MediaTools;
 internal sealed class MediaVerifier(MediaProbe probe, VideoProcessor processor, IToolCatalog tools, IProcessRunner processes) : IMediaVerifier
 {
     public async Task<IReadOnlyList<string>> VerifyAsync(MediaInfo source, string output, DolbyVisionProfile expectedProfile,
-        ITemporaryWorkspace workspace, CancellationToken cancellationToken)
+        ITemporaryWorkspace workspace, CancellationToken cancellationToken, IProgress<OperationProgress>? progress = null, Guid operationId = default)
     {
+        int completed = 0;
+        // Checkpoints represent completed checks, not elapsed time. Reserve completion for the caller.
+        int total = source.Tracks.Count + 9;
+        void ReportCheckpoint() => progress?.Report(new(operationId, "Verifying", source.Source.Path, 100.0 * completed++ / total));
+        ReportCheckpoint();
         var target = await probe.ProbeAsync(output, cancellationToken);
         var failures = CompareMetadata(source, target, expectedProfile).ToList();
+        ReportCheckpoint();
         long outputFrames = await probe.CountFramesAsync(output, cancellationToken);
         if (await probe.CountFramesAsync(source.Source.Path, cancellationToken) != outputFrames)
         {
             failures.Add("Video packet/frame count changed.");
         }
+        ReportCheckpoint();
         if (failures.Count != 0)
         {
             return failures;
@@ -27,6 +35,7 @@ internal sealed class MediaVerifier(MediaProbe probe, VideoProcessor processor, 
         // Verify all retained track payloads and packet timestamps, including subtitles.
         for (int i = 0; i < source.Tracks.Count; i++)
         {
+            ReportCheckpoint();
             var original = source.Tracks[i];
             var converted = target.Tracks[i];
             string before = workspace.File("verify-before.bin");
@@ -51,8 +60,11 @@ internal sealed class MediaVerifier(MediaProbe probe, VideoProcessor processor, 
             File.Delete(before);
             File.Delete(after);
         }
+        ReportCheckpoint();
         string beforeBase = await CleanBaseAsync(source, workspace, "before", cancellationToken);
+        ReportCheckpoint();
         await VerifyRpuAsync(target, expectedProfile, outputFrames, workspace, failures, cancellationToken);
+        ReportCheckpoint();
         string afterBase = await CleanBaseAsync(target, workspace, "after", cancellationToken);
         if (await VideoProcessor.HashAsync(beforeBase, cancellationToken) != await VideoProcessor.HashAsync(afterBase, cancellationToken))
         {
@@ -60,8 +72,11 @@ internal sealed class MediaVerifier(MediaProbe probe, VideoProcessor processor, 
         }
         File.Delete(beforeBase);
         File.Delete(afterBase);
+        ReportCheckpoint();
         await VerifyAttachmentsAsync(source, target, workspace, failures, cancellationToken);
+        ReportCheckpoint();
         await VerifyXmlAsync(source, target, "chapters", workspace, failures, cancellationToken);
+        ReportCheckpoint();
         await VerifyXmlAsync(source, target, "tags", workspace, failures, cancellationToken);
         return failures;
     }

@@ -119,11 +119,12 @@ public sealed class ConversionService(DependencyService dependencies, IFileOpera
             progress?.Report(new(approvedPlan.Id, "Verifying", media.Source.Path));
             logger.LogDebug("Stage {Stage}", "Verifying");
             var findings = await verifier.VerifyAsync(media, staged.Path,
-                approvedPlan.Target == ConversionTarget.Profile81 ? DolbyVisionProfile.Profile81 : DolbyVisionProfile.None, workspace, cancellationToken);
+                approvedPlan.Target == ConversionTarget.Profile81 ? DolbyVisionProfile.Profile81 : DolbyVisionProfile.None, workspace, cancellationToken, progress, approvedPlan.Id);
             if (findings.Count > 0)
             {
                 throw new InvalidDataException("Verification failed: " + string.Join("; ", findings));
             }
+            progress?.Report(new(approvedPlan.Id, "Verifying", media.Source.Path, 100));
             await staged.PublishAsync(cancellationToken);
             OperationLog.Audit(logger, "PublishConversion", approvedPlan.Output, "Completed", approvedPlan.Id);
             return new(media.Source.Path, OperationStatus.Completed, approvedPlan.Output, "Verified output published. Original retained." + archiveNote);

@@ -270,7 +270,7 @@ public sealed class WorkflowTests
             cancellationToken.ThrowIfCancellationRequested();
             return Task.CompletedTask;
         }
-        public Task<IReadOnlyList<string>> VerifyAsync(MediaInfo source, string output, DolbyVisionProfile expectedProfile, ITemporaryWorkspace workspace, CancellationToken cancellationToken) =>
+        public Task<IReadOnlyList<string>> VerifyAsync(MediaInfo source, string output, DolbyVisionProfile expectedProfile, ITemporaryWorkspace workspace, CancellationToken cancellationToken, IProgress<OperationProgress>? progress = null, Guid operationId = default) =>
             Task.FromResult<IReadOnlyList<string>>(source.Source.Path.Contains("bad", StringComparison.Ordinal) ? new[] { "invalid frame count" } : []);
         public Task<ArchiveManifest> ExtractBackupAsync(MediaInfo media, ITemporaryWorkspace workspace, CancellationToken cancellationToken) => throw new NotSupportedException();
         public Task RestoreAsync(MediaInfo media, ArchiveManifest? manifest, ITemporaryWorkspace workspace, string stagedOutput, CancellationToken cancellationToken) => throw new NotSupportedException();

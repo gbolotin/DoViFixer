@@ -319,3 +319,7 @@ The complete upstream documentation inventory contains these 14 pages:
 14. [update-check](https://docs.doviconvert.com/command-reference/update-check)
 
 The source review also used the [repository](https://github.com/cryptochrome/dovi_convert), [changelog](https://github.com/cryptochrome/dovi_convert/blob/main/CHANGELOG.md), and [roadmap](https://github.com/cryptochrome/dovi_convert/blob/main/ROADMAP.md).
+
+### Console conversion progress
+
+Conversion reports through IProgress<OperationProgress>. Extraction and remuxing read MKVToolNix GUI progress records as stdout arrives; 100 percent is reported only after a successful process exit. Verification percentages count completed checks rather than elapsed time. Metadata conversion stays indeterminate while dovi_tool runs and reports completion after success. Interactive stderr updates each stage in place, truncating long paths to the terminal width; redirected stderr prints only stage starts and completions. The singleton console renderer serializes shared terminal state and ends pending lines before results or disposal.

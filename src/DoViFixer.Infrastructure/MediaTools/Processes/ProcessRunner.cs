@@ -5,7 +5,8 @@ using Microsoft.Extensions.Logging;
 namespace DoViFixer.Infrastructure.MediaTools.Processes;
 
 internal sealed record ProcessRequest(string Executable, IReadOnlyList<string> Arguments,
-    string? WorkingDirectory = null, TimeSpan? Timeout = null, bool AllowWarnings = false, IReadOnlyList<int>? AcceptedExitCodes = null);
+    string? WorkingDirectory = null, TimeSpan? Timeout = null, bool AllowWarnings = false, IReadOnlyList<int>? AcceptedExitCodes = null,
+    Action<string>? OutputLine = null);
 internal sealed record ProcessResult(int ExitCode, string Output, string Error);
 internal interface IProcessRunner
 {
@@ -63,7 +64,7 @@ internal sealed class ProcessRunner(ILogger<ProcessRunner> logger) : IProcessRun
             throw new IOException($"Could not start {request.Executable}.");
         }
         process.StandardInput.Close();
-        var stdout = DrainAsync(process.StandardOutput);
+        var stdout = DrainAsync(process.StandardOutput, request.OutputLine);
         var stderr = DrainAsync(process.StandardError);
         try
         {
@@ -95,18 +96,42 @@ internal sealed class ProcessRunner(ILogger<ProcessRunner> logger) : IProcessRun
         return result;
     }
 
-    private static async Task<string> DrainAsync(StreamReader reader)
+    internal static async Task<string> DrainAsync(StreamReader reader, Action<string>? outputLine = null)
     {
         const int limit = 16 * 1024 * 1024;
         var builder = new StringBuilder();
         var buffer = new char[8192];
         bool truncated = false;
+        var line = new StringBuilder();
         int read;
         while ((read = await reader.ReadAsync(buffer)) > 0)
         {
             int retained = Math.Min(read, limit - builder.Length);
             builder.Append(buffer, 0, retained);
             truncated |= retained < read;
+            if (outputLine is not null)
+            {
+                for (int i = 0; i < read; i++)
+                {
+                    char character = buffer[i];
+                    if (character is '\r' or '\n')
+                    {
+                        if (line.Length > 0)
+                        {
+                            outputLine(line.ToString());
+                            line.Clear();
+                        }
+                    }
+                    else if (line.Length < limit)
+                    {
+                        line.Append(character);
+                    }
+                }
+            }
+        }
+        if (line.Length > 0)
+        {
+            outputLine?.Invoke(line.ToString());
         }
         if (truncated)
         {

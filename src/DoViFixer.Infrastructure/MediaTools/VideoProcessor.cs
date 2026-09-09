@@ -21,16 +21,19 @@ internal sealed class VideoProcessor(IToolCatalog tools, IProcessRunner processe
         logger.LogDebug("Stage {Stage}", "Extracting video");
         string raw = workspace.File("convert-input.hevc");
         string processed = workspace.File("converted.hevc");
-        await ExtractVideoAsync(media, raw, cancellationToken);
+        await ExtractVideoAsync(media, raw, cancellationToken, new MkvProgress(progress, operationId, "Extracting video", media.Source.Path).Report);
+        progress?.Report(new(operationId, "Extracting video", media.Source.Path, 100));
         progress?.Report(new(operationId, "Converting metadata", media.Source.Path));
         logger.LogDebug("Stage {Stage}", "Converting metadata");
         await RunDoviAsync(target == ConversionTarget.Profile81
             ? new[] { "-m", "2", "convert", "--discard", raw, "-o", processed }
             : new[] { "remove", raw, "-o", processed }, cancellationToken);
+        progress?.Report(new(operationId, "Converting metadata", media.Source.Path, 100));
         File.Delete(raw);
         progress?.Report(new(operationId, "Remuxing", media.Source.Path));
         logger.LogDebug("Stage {Stage}", "Remuxing");
-        await RemuxAsync(media, processed, stagedOutput, workspace, cancellationToken);
+        await RemuxAsync(media, processed, stagedOutput, workspace, cancellationToken, new MkvProgress(progress, operationId, "Remuxing", media.Source.Path).Report);
+        progress?.Report(new(operationId, "Remuxing", media.Source.Path, 100));
     }
 
     public async Task<ArchiveManifest> ExtractBackupAsync(MediaInfo media, ITemporaryWorkspace workspace, CancellationToken cancellationToken)
@@ -75,13 +78,13 @@ internal sealed class VideoProcessor(IToolCatalog tools, IProcessRunner processe
         await RemuxAsync(media, restored, stagedOutput, workspace, cancellationToken);
     }
 
-    internal Task ExtractVideoAsync(MediaInfo media, string output, CancellationToken cancellationToken) =>
-        processes.RunAsync(new(tools.GetPath(NativeTool.MkvExtract), new[] { media.Source.Path, "tracks", $"{media.VideoTrackId}:{output}" }, AllowWarnings: true), cancellationToken);
+    internal Task ExtractVideoAsync(MediaInfo media, string output, CancellationToken cancellationToken, Action<string>? outputLine = null) =>
+        processes.RunAsync(new(tools.GetPath(NativeTool.MkvExtract), new[] { "--gui-mode", media.Source.Path, "tracks", $"{media.VideoTrackId}:{output}" }, AllowWarnings: true, OutputLine: outputLine), cancellationToken);
 
     internal Task RunDoviAsync(string[] arguments, CancellationToken cancellationToken) =>
         processes.RunAsync(new(tools.GetPath(NativeTool.DoviTool), arguments), cancellationToken);
 
-    private async Task RemuxAsync(MediaInfo media, string video, string output, ITemporaryWorkspace workspace, CancellationToken cancellationToken)
+    private async Task RemuxAsync(MediaInfo media, string video, string output, ITemporaryWorkspace workspace, CancellationToken cancellationToken, Action<string>? outputLine = null)
     {
         string timestamps = workspace.File("source-video-timestamps.txt");
         await processes.RunAsync(new(tools.GetPath(NativeTool.MkvExtract), new[] { media.Source.Path, "timestamps_v2", $"{media.VideoTrackId}:{timestamps}" }, AllowWarnings: true), cancellationToken);
@@ -89,7 +92,7 @@ internal sealed class VideoProcessor(IToolCatalog tools, IProcessRunner processe
         using var identification = JsonDocument.Parse(media.IdentificationJson);
         var videoProperties = identification.RootElement.GetProperty("tracks").EnumerateArray()
             .Single(t => t.GetProperty("id").GetInt32() == media.VideoTrackId).GetProperty("properties");
-        var arguments = new List<string> { "--disable-track-statistics-tags", "-o", output, "--track-order",
+        var arguments = new List<string> { "--gui-mode", "--disable-track-statistics-tags", "-o", output, "--track-order",
             string.Join(",", media.Tracks.Select(t => t.Type == "video" ? "1:0" : $"0:{t.Id}")), "--no-video", media.Source.Path,
             "--timestamps", $"0:{timestamps}", "--language", $"0:{original.Language}", "--track-name", $"0:{original.Name}",
             "--default-track-flag", $"0:{(original.Default ? 1 : 0)}", "--forced-display-flag", $"0:{(original.Forced ? 1 : 0)}" };
@@ -105,7 +108,7 @@ internal sealed class VideoProcessor(IToolCatalog tools, IProcessRunner processe
             arguments.AddRange(new[] { "--tags", $"0:{videoTagsPath}" });
         }
         arguments.Add(video);
-        await processes.RunAsync(new(tools.GetPath(NativeTool.MkvMerge), arguments, AllowWarnings: true), cancellationToken);
+        await processes.RunAsync(new(tools.GetPath(NativeTool.MkvMerge), arguments, AllowWarnings: true, OutputLine: outputLine), cancellationToken);
     }
 
     internal static async Task<string> HashAsync(string path, CancellationToken cancellationToken)

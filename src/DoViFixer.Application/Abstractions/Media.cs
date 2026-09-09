@@ -20,7 +20,7 @@ public interface IVideoProcessor
 public interface IMediaVerifier
 {
     Task<IReadOnlyList<string>> VerifyAsync(MediaInfo source, string output, DolbyVisionProfile expectedProfile,
-        ITemporaryWorkspace workspace, CancellationToken cancellationToken);
+        ITemporaryWorkspace workspace, CancellationToken cancellationToken, IProgress<OperationProgress>? progress = null, Guid operationId = default);
 }
 public sealed record ArchiveManifest(int FormatVersion, string SourceName, string BaseLayerSha256, string EnhancementLayerSha256,
     long EnhancementLayerLength, long? FrameCount, DateTimeOffset CreatedAt);
