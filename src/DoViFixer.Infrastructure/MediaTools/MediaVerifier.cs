@@ -127,9 +127,13 @@ internal sealed class MediaVerifier(MediaProbe probe, VideoProcessor processor, 
         {
             var a = pair.First;
             var b = pair.Second;
-            if (a.Type != b.Type || a.Codec != b.Codec || a.Language != b.Language || a.Name != b.Name || a.Default != b.Default || a.Forced != b.Forced)
+            if (a.Type != b.Type || a.Codec != b.Codec || a.Name != b.Name || a.Default != b.Default || a.Forced != b.Forced)
             {
                 failures.Add($"Track {a.Id} metadata or order changed.");
+            }
+            if (!TrackLanguage.Equivalent(a.Language, b.Language))
+            {
+                failures.Add($"Track {a.Id} language changed: '{a.Language}' -> '{b.Language}'.");
             }
         }
         using var sourceJson = JsonDocument.Parse(source.IdentificationJson);

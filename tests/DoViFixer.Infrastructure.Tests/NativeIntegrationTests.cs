@@ -72,8 +72,13 @@ public sealed class NativeIntegrationTests
         string rawFixture = Path.Combine(AppContext.BaseDirectory, "Fixtures", "regular_start_code_4_muxed_el.hevc");
         string profile7 = workspace.File("profile7.hevc");
         await runner.RunAsync(new(tools.GetPath(NativeTool.DoviTool), new[] { "-m", "1", "convert", rawFixture, "-o", profile7 }), default);
-        var muxArguments = new List<string> { "-o", input, "--display-dimensions", "0:512x144",
+        var muxArguments = new List<string> { "-o", input, "--language", "0:eng", "--display-dimensions", "0:512x144",
             "--original-flag", "0:1", "--color-primaries", "0:9", "--color-transfer-characteristics", "0:16", "--max-content-light", "0:1000" };
+        if (!includeMetadata)
+        {
+            // Exercise legacy track language tags without altering chapter/tag XML fixtures.
+            muxArguments.Insert(0, "--disable-language-ietf");
+        }
         if (includeMetadata)
         {
             string tags = workspace.File("input-video-tags.xml");

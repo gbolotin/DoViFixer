@@ -14,6 +14,30 @@ namespace DoViFixer.Console.Tests;
 public sealed class ConsoleTests
 {
     [TestMethod]
+    public async Task FelPromptsRememberSeparateAnswersForEachCategory()
+    {
+        var questions = new List<string>();
+        var approval = new DoViFixer.Console.Interaction.FelConversionApproval(new(), (question, yes, token, id) =>
+        {
+            Assert.IsFalse(yes);
+            questions.Add(question);
+            return Task.FromResult(question.Contains("Complex FEL", StringComparison.Ordinal));
+        });
+        var media = new DoViFixer.Domain.Media.MediaInfo(new("fixture.mkv", 1000, DateTime.UnixEpoch),
+            DoViFixer.Domain.Media.DolbyVisionProfile.Profile7, "HEVC", 0, 1920, 1080, 24, 24, 1, 1000, null, [], 0, 0, "", "{}");
+        var analysis = new DoViFixer.Domain.Analysis.MediaAnalysis(media,
+            new(DoViFixer.Domain.Analysis.AnalysisMethod.FullRpu, DoViFixer.Domain.Media.EnhancementLayer.Fel, 24, 1000, 1, 1),
+            DoViFixer.Domain.Analysis.AnalysisVerdict.SimpleFel, "Metadata heuristic");
+        Assert.IsFalse(await approval.ConfirmAsync(analysis, default));
+        Assert.IsFalse(await approval.ConfirmAsync(analysis, default));
+        analysis = analysis with { Verdict = DoViFixer.Domain.Analysis.AnalysisVerdict.ComplexFel };
+        Assert.IsTrue(await approval.ConfirmAsync(analysis, default));
+        Assert.IsTrue(await approval.ConfirmAsync(analysis, default));
+        Assert.AreEqual(2, questions.Count);
+        StringAssert.Contains(questions[1], "picture data will be lost");
+    }
+
+    [TestMethod]
     [DataRow(new[] { "convert", "movie.mkv", "--unknown" })]
     [DataRow(new[] { "scan", "movie.mkv", "--yes" })]
     [DataRow(new[] { "convert", "--output" })]

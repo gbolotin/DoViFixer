@@ -22,7 +22,10 @@ public sealed class ConversionCommand(ConversionPlanner planner, BatchConversion
     {
         var request = new ConversionRequest(command.Arguments.FirstOrDefault() ?? Environment.CurrentDirectory, command.Depth, command.Has("hdr10") ? ConversionTarget.Hdr10 : ConversionTarget.Profile81,
             command.Value("output"), command.Value("temp"), command.Has("include-simple"), command.Has("force"), command.Has("backup"));
-        var planned = await planner.PlanAsync(request, renderer, cancellationToken);
+        var felApproval = new FelConversionApproval(renderer, interaction.ConfirmAsync);
+        var planned = await planner.PlanAsync(request, renderer, cancellationToken,
+            !command.Has("yes") && !command.Has("plan") && interaction.IsInteractive
+                ? felApproval.ConfirmAsync : null);
         foreach (var skipped in planned.Skipped)
         {
             renderer.Result(skipped);

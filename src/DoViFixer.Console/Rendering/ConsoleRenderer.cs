@@ -65,6 +65,8 @@ public sealed class ConsoleRenderer : IProgress<OperationProgress>
         --plan performs analysis and shows exact outputs without conversion.
         Originals are always retained; outputs are never overwritten.
         --force permits detected complex FEL only; failed/unknown analysis stays blocked.
+        Interactive convert asks separately to include Simple FEL and Complex FEL when flags are absent.
+        Declining skips that FEL type; MEL continues. --yes and --plan keep flag-based selection.
         Cleanup lists .dovi and .bak.dovi_convert files; deletion is permanent and opt-in.
         --safe is accepted for convert/inspect; disk extraction is always used.
         Scan/inspect also accept --temp. Use -- before filenames beginning with a dash.

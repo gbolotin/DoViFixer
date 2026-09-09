@@ -398,6 +398,40 @@ public sealed class InfrastructureTests
         }
     }
 
+    [TestMethod]
+    [DataRow("eng", "en", true)]
+    [DataRow("ENG", "en", true)]
+    [DataRow("fre", "fr", true)]
+    [DataRow("fra", "fr", true)]
+    [DataRow("ger", "de", true)]
+    [DataRow("eng-US", "en-us", true)]
+    [DataRow("en-US", "en-GB", false)]
+    [DataRow("eng", "en-US", false)]
+    [DataRow("eng", "de", false)]
+    [DataRow("und", "en", false)]
+    [DataRow("und", "und", true)]
+    [DataRow("xyz", "abc", false)]
+    [DataRow("zh-Hant", "zh-Hans", false)]
+    public async Task MetadataVerificationComparesEquivalentLanguageCodes(string original, string remuxed, bool equivalent)
+    {
+        string mkv = await File.ReadAllTextAsync(Path.Combine(AppContext.BaseDirectory, "Fixtures", "mkvmerge.json"));
+        const string mi = """
+            {"media":{"track":[{"@type":"Video","Format":"HEVC","Width":"256","Height":"144",
+             "Duration":"1","HDR_Format":"Dolby Vision","HDR_Format_Profile":"dvhe.07"}]}}
+            """;
+        var source = MediaMetadataParser.Parse(new("fixture.mkv", 1000, DateTime.UnixEpoch), mkv, mi);
+        source = source with { Tracks = source.Tracks.Select(t => t with { Language = original }).ToArray() };
+        var target = source with { Tracks = source.Tracks.Select(t => t with { Language = remuxed }).ToArray() };
+        var failures = MediaVerifier.CompareMetadata(source, target, DolbyVisionProfile.Profile7);
+        Assert.AreEqual(equivalent ? 0 : source.Tracks.Count, failures.Count);
+        if (!equivalent)
+        {
+            Assert.IsTrue(failures.All(f => f.Contains($"'{original}' -> '{remuxed}'", StringComparison.Ordinal)));
+        }
+        var renamed = target with { Tracks = target.Tracks.Select(t => t with { Name = t.Name + " changed" }).ToArray() };
+        Assert.IsTrue(MediaVerifier.CompareMetadata(source, renamed, DolbyVisionProfile.Profile7).Any(f => f.Contains("metadata or order", StringComparison.Ordinal)));
+    }
+
     private sealed class FakeProcessRunner : IProcessRunner
     {
         public int Calls;

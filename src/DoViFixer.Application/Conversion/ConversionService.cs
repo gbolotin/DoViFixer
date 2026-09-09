@@ -20,15 +20,17 @@ public sealed class ConversionPlanner(IFileDiscovery discovery, IFileOperations 
     InspectionService inspection, ISettingsStore settings, ILogger<ConversionPlanner> logger)
 {
     public Task<ConversionPlanningResult> PlanAsync(ConversionRequest request,
-        IProgress<OperationProgress>? progress, CancellationToken cancellationToken) =>
+        IProgress<OperationProgress>? progress, CancellationToken cancellationToken,
+        Func<MediaAnalysis, CancellationToken, Task<bool>>? approveFel = null) =>
         OperationLog.RunAsync(logger, "PlanConversion", Guid.NewGuid(), request.Input,
-            () => PlanCoreAsync(request, progress, cancellationToken), cancellationToken,
+            () => PlanCoreAsync(request, progress, cancellationToken, approveFel), cancellationToken,
             result => result.Skipped.Any(f => f.Status == OperationStatus.Failed)
                 ? (result.Plans.Count > 0 ? OperationStatus.Partial : OperationStatus.Failed)
                 : (result.Plans.Count > 0 ? OperationStatus.Completed : OperationStatus.Skipped));
 
     private async Task<ConversionPlanningResult> PlanCoreAsync(ConversionRequest request,
-        IProgress<OperationProgress>? progress, CancellationToken cancellationToken)
+        IProgress<OperationProgress>? progress, CancellationToken cancellationToken,
+        Func<MediaAnalysis, CancellationToken, Task<bool>>? approveFel)
     {
         var plans = new List<ConversionPlan>();
         var skipped = new List<FileResult>();
@@ -42,6 +44,13 @@ public sealed class ConversionPlanner(IFileDiscovery discovery, IFileOperations 
                 progress?.Report(new(Guid.Empty, "Planning", path));
                 var analysis = await inspection.InspectAsync(path, AnalysisMethod.FullRpu, request.TemporaryDirectory, cancellationToken);
                 var decision = ConversionPolicy.Evaluate(analysis, request.IncludeSimple, request.ForceComplex);
+                if (!decision.Allowed && approveFel is not null &&
+                    analysis.Verdict is AnalysisVerdict.SimpleFel or AnalysisVerdict.ComplexFel &&
+                    ConversionPolicy.Evaluate(analysis, true, true).Allowed &&
+                    await approveFel(analysis, cancellationToken))
+                {
+                    decision = ConversionPolicy.Evaluate(analysis, true, true);
+                }
                 if (!decision.Allowed)
                 {
                     skipped.Add(new(path, OperationStatus.Skipped, null, decision.Reason));
@@ -121,7 +130,7 @@ public sealed class ConversionService(DependencyService dependencies, IFileOpera
         }
         catch (Exception ex) when (ex is not OperationCanceledException)
         {
-            logger.LogError(ex, "Conversion failed; retained archive {Archive}", approvedPlan.Archive);
+            logger.LogError(ex, "Conversion failed: {Reason}{ArchiveNote}", ex.Message, archiveNote);
             return new(media.Source.Path, OperationStatus.Failed, null, ex.Message + archiveNote);
         }
     }

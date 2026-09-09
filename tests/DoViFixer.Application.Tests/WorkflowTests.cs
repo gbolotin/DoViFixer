@@ -17,6 +17,38 @@ namespace DoViFixer.Application.Tests;
 public sealed class WorkflowTests
 {
     [TestMethod]
+    [DataRow(true)]
+    [DataRow(false)]
+    public async Task FelApprovalControlsEligibilityAndKeepsMel(bool approved)
+    {
+        var runtime = new Runtime { PlanningFixtures = true };
+        var inspection = new InspectionService(runtime.Dependencies(), runtime, runtime, runtime, runtime, NullLogger<InspectionService>.Instance);
+        var planner = new ConversionPlanner(runtime, runtime, inspection, runtime, NullLogger<ConversionPlanner>.Instance);
+        var prompted = new List<AnalysisVerdict>();
+        var result = await planner.PlanAsync(new("fixture"), null, default, (analysis, token) =>
+        {
+            prompted.Add(analysis.Verdict);
+            return Task.FromResult(approved);
+        });
+        CollectionAssert.AreEqual(new[] { AnalysisVerdict.SimpleFel, AnalysisVerdict.ComplexFel }, prompted);
+        Assert.AreEqual(approved ? 3 : 1, result.Plans.Count);
+        Assert.IsTrue(result.Plans.Any(p => p.Analysis.Verdict == AnalysisVerdict.Mel));
+        Assert.AreEqual(approved ? 1 : 3, result.Skipped.Count);
+        Assert.AreEqual(0, runtime.ConvertCalls);
+    }
+
+    [TestMethod]
+    public async Task PlanningWithoutApprovalRetainsFlagBasedEligibility()
+    {
+        var runtime = new Runtime { PlanningFixtures = true };
+        var inspection = new InspectionService(runtime.Dependencies(), runtime, runtime, runtime, runtime, NullLogger<InspectionService>.Instance);
+        var planner = new ConversionPlanner(runtime, runtime, inspection, runtime, NullLogger<ConversionPlanner>.Instance);
+        Assert.AreEqual(1, (await planner.PlanAsync(new("fixture"), null, default)).Plans.Count);
+        Assert.AreEqual(3, (await planner.PlanAsync(new("fixture", IncludeSimple: true, ForceComplex: true), null, default,
+            (_, _) => throw new AssertFailedException("Explicit flags must not prompt."))).Plans.Count);
+    }
+
+    [TestMethod]
     public async Task ScanReportsEachSuccessOrFailureBeforeStartingNextFile()
     {
         var runtime = new Runtime();
@@ -150,7 +182,9 @@ public sealed class WorkflowTests
         public CancellationTokenSource? CancelDuringConversion { get; set; }
         public int InstallCalls, ConvertCalls, Published, Disposed, Deleted;
         public int ProbeCalls;
-        public IReadOnlyList<string> Discover(string input, int recursiveDepth, bool cleanup = false) => new[] { "bad.mkv", "good.mkv" };
+        public bool PlanningFixtures { get; init; }
+        public IReadOnlyList<string> Discover(string input, int recursiveDepth, bool cleanup = false) => PlanningFixtures
+            ? new[] { "simple.mkv", "complex.mkv", "unknown.mkv", "good.mkv" } : new[] { "bad.mkv", "good.mkv" };
         public Task<MediaInfo> ProbeAsync(string path, CancellationToken cancellationToken)
         {
             ProbeCalls++;
@@ -158,10 +192,14 @@ public sealed class WorkflowTests
             {
                 throw new IOException("Unreadable fixture");
             }
-            return Task.FromResult(Plan(path).Analysis.Media);
+            return Task.FromResult(Plan(path).Analysis.Media with { MaxCll = 1000 });
         }
         public Task<RpuEvidence> AnalyzeAsync(MediaInfo media, AnalysisMethod method, ITemporaryWorkspace workspace, CancellationToken cancellationToken) =>
-            Task.FromResult(new RpuEvidence(method, EnhancementLayer.Mel, 24, null, 10, 10));
+            Task.FromResult(PlanningFixtures && !media.Source.Path.EndsWith("good.mkv", StringComparison.Ordinal)
+                ? new RpuEvidence(method, EnhancementLayer.Fel, 24,
+                    media.Source.Path.EndsWith("unknown.mkv", StringComparison.Ordinal) ? null :
+                    media.Source.Path.EndsWith("complex.mkv", StringComparison.Ordinal) ? 1200 : 1000, 10, 10)
+                : new RpuEvidence(method, EnhancementLayer.Mel, 24, null, 10, 10));
         public UserSettings Settings { get; private set; } = new();
         private readonly Dictionary<NativeTool, string> catalog = new();
         public DependencyService Dependencies() => new(this, this, this, this, NullLogger<DependencyService>.Instance);
@@ -206,7 +244,7 @@ public sealed class WorkflowTests
             }
         }
         public FileIdentity Identify(string path) => Plan(path).Analysis.Media.Source;
-        public string PrepareOutputPath(string input, string? outputDirectory, string suffix) => throw new NotSupportedException();
+        public string PrepareOutputPath(string input, string? outputDirectory, string suffix) => Path.GetFullPath(input + suffix);
         public void EnsureAvailableSpace(string directory, long requiredBytes) { }
         public void EnsureWritableDirectory(string directory) { }
         public ValueTask<IAsyncDisposable> AcquireReadLeaseAsync(FileIdentity identity, CancellationToken cancellationToken)
