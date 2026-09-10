@@ -10,7 +10,7 @@ public sealed record CommandLine(string Command, IReadOnlyList<string> Arguments
 
     public static CommandLine Parse(string[] args)
     {
-        if (args.Length == 0 || args[0] is "help" or "--help" or "-h")
+        if (args.Length == 0 || args[0] is "help" or "--help" or "-help" or "-h")
         {
             return new("help", [], new Dictionary<string, string?>());
         }

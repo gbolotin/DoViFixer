@@ -25,7 +25,8 @@ public static class Program
         }
         if (command.Command == "help")
         {
-            System.Console.WriteLine(ConsoleRenderer.Help);
+            using var renderer = new ConsoleRenderer();
+            new HelpRenderer(renderer).Write();
             return 0;
         }
         Serilog.Debugging.SelfLog.Enable(TextWriter.Synchronized(System.Console.Error));
