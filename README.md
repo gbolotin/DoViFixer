@@ -41,9 +41,12 @@ Full RPU inspection results can serve later scans and conversion planning. A sam
 
 [Deep Inspection](docs/deep-inspection.md) (`inspect --deep`) compares every decoded HDR10 base-layer frame with its RPU L1 brightness metadata. It reports possible FEL brightness expansion without relying on static MaxCLL; full decoding is slower than regular inspection.
 
+`scan --inspect-simple` finishes scanning, then deep-inspects every Simple FEL candidate automatically. It uses the same decoded-frame analysis as `inspect --deep`, updates final verdicts, and retains the initial analysis in JSON. Inspection failures are reported while remaining candidates continue. This optional second pass can take a long time and requires scratch disk space; it performs no conversion. Ordinary scans remain unchanged.
+
 ```powershell
 # Read-only metadata/RPU analysis (temporary extraction is cleaned up).
 dotnet run --project src/DoViFixer.Console -- scan 'E:\Movies' -r 3
+dotnet run --project src/DoViFixer.Console -- scan 'E:\Movies' -r 3 --inspect-simple
 dotnet run --project src/DoViFixer.Console -- inspect 'E:\Movies\Movie.mkv' --json
 dotnet run --project src/DoViFixer.Console -- inspect 'E:\Movies\Movie.mkv' --deep --json
 
@@ -61,7 +64,7 @@ dotnet run --project src/DoViFixer.Console -- cleanup 'E:\Movies' -r
 dotnet run --project src/DoViFixer.Console -- cleanup 'E:\Movies\Movie.dovi' --delete-backups
 ```
 
-Conversion accepts multiple files/directories, renames each original to `<filename>.bak.dovi_convert`, and publishes the converted MKV using its original filename (or that filename under `--output`). Existing backups and unrelated outputs are never overwritten. `--delete` removes only that original backup after successful verification and publication; `.dovi` archives remain. On failure or cancellation before publication, the original filename is restored automatically. If recovery is blocked by a collision or access failure, the backup is retained and its path is reported. Backup and restore outputs use `.dovi` and `.restored.mkv`. Cleanup remains a separate command with exact approval; unattended cleanup requires `--delete-backups --yes`.
+Conversion accepts multiple files/directories and keeps each original at its exact existing path, unchanged. Converted files are published beside their originals as `<stem> - DV P8.1.mkv` (or `<stem> - HDR10.mkv` with `--hdr10`). `--output` selects another output directory while retaining the suffix. No movie subfolders are created and existing outputs are never overwritten. This preserves seeding paths and allows Plex to group matching movies in the same library; suffixes are not displayed as Plex version labels. `--backup` additionally creates an enhancement-layer `.dovi` archive. Explicit `--delete` retains the replacement workflow: rename the original to `<filename>.bak.dovi_convert`, publish using its original filename, and delete only the original backup after verification and publication. Failed/cancelled replacement restores the original path; blocked recovery reports the retained backup. Default conversion never renames or deletes the original. Backup and restore outputs use `.dovi` and `.restored.mkv`. Cleanup remains a separate command with exact approval; unattended cleanup requires `--delete-backups --yes`.
 
 Scan samples ten positions; inspect and conversion planning analyze the full RPU stream. MEL is eligible. Interactive conversion prepares eligible MEL, Simple FEL, and Complex FEL plans and displays output and backup details before asking for approval. Each category receives one execution confirmation covering all its planned files; there is no additional batch confirmation. Answering no skips that category while approved categories continue. FEL confirmations warn that enhancement-layer picture data will be lost. With `--yes`, `--plan`, or redirected input, the existing flag-based selection applies: Simple FEL requires `--include-simple`; detected complex FEL requires `--force`. Unknown/failed analysis remains blocked even with `--force`. Missing MaxCLL stays unknown in the metadata modes; `inspect --deep` uses measured frame luminance instead. L1-versus-MaxCLL classification is a metadata heuristic, not a base-layer frame measurement or playback guarantee.
 

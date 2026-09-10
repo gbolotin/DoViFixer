@@ -124,7 +124,8 @@ public sealed class ConsoleRenderer : IProgress<OperationProgress>, IDisposable
 
         dependencies check [Tool ...] [--json]
         dependencies install [Tool ...] [--yes]
-        scan [file-or-directory] [-r [depth]] [--candidates-only] [--json]
+        scan [file-or-directory] [-r [depth]] [--inspect-simple] [--candidates-only] [--json]
+          --inspect-simple deep-inspects every Simple FEL candidate after scanning (slow).
         inspect <file.mkv> [--deep] [--json]
           --deep decodes every base-layer frame and compares its luminance with RPU L1 (slow).
         convert [files-or-directories...] [-r [depth]] [--hdr10] [--include-simple]
@@ -151,8 +152,8 @@ public sealed class ConsoleRenderer : IProgress<OperationProgress>, IDisposable
         dependencies install still accepts --repair for compatibility; it is no longer required.
         --yes approves the displayed media plan, never software installation by itself.
         --plan performs analysis and shows exact outputs without conversion.
-        Conversion renames originals to .bak.dovi_convert and reuses the MKV filename.
-        --delete removes that original backup only after verified publication. Existing backups/outputs are never overwritten.
+        Conversion keeps originals unchanged and writes " - DV P8.1.mkv" (or " - HDR10.mkv") beside them.
+        --delete uses replacement: rename original to .bak.dovi_convert, reuse its filename, then delete the backup after verification.
         --force permits detected complex FEL only; failed/unknown analysis stays blocked.
         Interactive convert shows all plans, then asks once per MEL, Simple FEL, or Complex FEL category to execute.
         Declining skips that category; approved categories continue. --yes and --plan keep flag-based selection.

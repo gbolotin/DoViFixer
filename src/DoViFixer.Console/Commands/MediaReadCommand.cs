@@ -24,9 +24,13 @@ public sealed class MediaReadCommand(ScanService scan, InspectionService inspect
         switch (command.Command)
         {
             case "scan":
+                if (command.Has("inspect-simple") && !command.Has("json"))
+                {
+                    renderer.Write("After scanning, Simple FEL candidates will receive deep inspection of every base-layer frame. This may take a long time and requires temporary disk space.");
+                }
                 var scanRenderer = command.Has("json") ? null : new ScanRenderer(renderer, command.Has("candidates-only"));
-                var results = await scan.ScanAsync(input, command.Depth, command.Value("temp"), renderer, cancellationToken, scanRenderer);
-                var visible = command.Has("candidates-only") ? results.Where(r => r.Analysis?.Verdict is AnalysisVerdict.Mel or AnalysisVerdict.SimpleFel).ToArray() : results;
+                var results = await scan.ScanAsync(input, command.Depth, command.Value("temp"), renderer, cancellationToken, scanRenderer, command.Has("inspect-simple"));
+                var visible = command.Has("candidates-only") ? results.Where(r => r.InitialAnalysis is not null || r.Error is not null || r.Analysis?.Verdict is AnalysisVerdict.Mel or AnalysisVerdict.SimpleFel or AnalysisVerdict.AnalysisFailed).ToArray() : results;
                 if (command.Has("json"))
                 {
                     renderer.Json(visible);

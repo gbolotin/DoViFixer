@@ -1,7 +1,11 @@
 # Deep Inspection
 
 Run `inspect <file.mkv> --deep`, optionally with `--json` and `--temp <directory>`.
-Regular inspection still uses the full RPU / static MaxCLL heuristic; scan and conversion planning keep their existing behavior.
+Regular inspection still uses the full RPU / static MaxCLL heuristic; ordinary scan and conversion planning keep their existing behavior.
+
+Use `scan <directory> -r --inspect-simple` to finish the sampled scan first, then automatically run the equivalent of `inspect --deep` on each Simple FEL candidate in scan order. This is opt-in and uses decoded-frame inspection, rather than regular `inspect`'s full-RPU metadata heuristic. MEL, Complex FEL, Unknown and failed scan results are not selected. An existing valid deep-inspection cache entry can be reused.
+
+Each updated result includes its initial analysis and final evidence. Failures are reported while remaining candidates continue; cancellation stops the batch. `--json` emits one final result per file. `--candidates-only` retains auto-inspected candidates even if reclassified or failed, so changed verdicts remain visible. `--temp` selects scratch storage for both stages. No conversion is performed, and conversion planning retains its existing full-RPU policy.
 
 Deep Inspection extracts the complete RPU and demuxes the HDR10 base layer. FFmpeg decodes every base-layer frame at its original resolution. Explicit PQ, BT.2020 non-constant-luminance and limited/full-range signaling are required. Missing signaling, filters, L1 metadata, decoding errors or mismatched frame counts produce a failed analysis rather than falling back to MaxCLL.
 

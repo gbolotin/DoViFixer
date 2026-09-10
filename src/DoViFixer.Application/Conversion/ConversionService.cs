@@ -73,10 +73,13 @@ public sealed class ConversionPlanner(IFileDiscovery discovery, IFileOperations 
                     OperationLog.Result(logger, skipped[^1]);
                     continue;
                 }
-                string output = files.PrepareOutputPath(path, request.OutputDirectory, Path.GetExtension(path), allowInput: true);
-                string originalBackup = files.PrepareOutputPath(path, null, Path.GetExtension(path) + ".bak.dovi_convert");
+                string suffix = request.DeleteBackup ? Path.GetExtension(path)
+                    : request.Target == ConversionTarget.Profile81 ? " - DV P8.1.mkv" : " - HDR10.mkv";
+                string output = files.PrepareOutputPath(path, request.OutputDirectory, suffix, allowInput: request.DeleteBackup);
+                string? originalBackup = request.DeleteBackup
+                    ? files.PrepareOutputPath(path, null, Path.GetExtension(path) + ".bak.dovi_convert") : null;
                 string? archive = request.CreateBackup ? files.PrepareOutputPath(path, request.OutputDirectory, ".dovi") : null;
-                if (!outputs.Add(output) || !outputs.Add(originalBackup) || (archive is not null && !outputs.Add(archive)))
+                if (!outputs.Add(output) || (originalBackup is not null && !outputs.Add(originalBackup)) || (archive is not null && !outputs.Add(archive)))
                 {
                     throw new IOException("Multiple inputs resolve to the same output. Use separate output directories.");
                 }
@@ -118,9 +121,17 @@ public sealed class ConversionService(DependencyService dependencies, IFileOpera
         files.EnsureAvailableSpace(Path.GetDirectoryName(approvedPlan.Output)!, checked(media.Source.Length * 2 + (1L << 30)));
         await using var workspace = await workspaces.CreateAsync(approvedPlan.ScratchBytes, approvedPlan.TemporaryDirectory, cancellationToken);
         cancellationToken.ThrowIfCancellationRequested();
-        var backupIdentity = files.RenameOriginal(media.Source);
-        OperationLog.Audit(logger, "RenameOriginal", backupIdentity.Path, "Completed", approvedPlan.Id);
-        media = media with { Source = backupIdentity };
+        if (!approvedPlan.DeleteBackup && string.Equals(Path.GetFullPath(approvedPlan.Output), media.Source.Path, StringComparison.OrdinalIgnoreCase))
+        {
+            throw new IOException("Keeping the original requires a separate output path.");
+        }
+        var backupIdentity = media.Source;
+        if (approvedPlan.DeleteBackup)
+        {
+            backupIdentity = files.RenameOriginal(media.Source);
+            OperationLog.Audit(logger, "RenameOriginal", backupIdentity.Path, "Completed", approvedPlan.Id);
+            media = media with { Source = backupIdentity };
+        }
         string archiveNote = "";
         bool published = false;
         try
@@ -185,7 +196,7 @@ public sealed class ConversionService(DependencyService dependencies, IFileOpera
                     $"Conversion verified and published. Original backup cleanup did not complete: {ex.Message} Original retained at {backupIdentity.Path}." + archiveNote);
             }
             string recovery = $" Original retained at {backupIdentity.Path}.";
-            if (!published)
+            if (approvedPlan.DeleteBackup)
             {
                 try
                 {

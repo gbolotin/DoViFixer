@@ -37,7 +37,7 @@ public sealed class ConversionCommand(ConversionPlanner planner, BatchConversion
                 plan.Analysis.Media.Source, plan.Output, plan.Archive, plan.Target, plan.ScratchBytes,
                 plan.TemporaryDirectory, plan.Decision, plan.Safe, plan.DeleteBackup, request.ForceComplex, request.IncludeSimple
             });
-            renderer.Write($"Input: {plan.Analysis.Media.Source.Path}\nOutput: {plan.Output}\nTarget: {plan.Target}; scratch estimate: {ConsoleRenderer.FormatSize(plan.ScratchBytes)}\n{plan.Decision}\nOriginal backup: {plan.Analysis.Media.Source.Path}.bak.dovi_convert\n{(plan.DeleteBackup ? "Delete original backup after verified publication." : "Keep original backup.")}");
+            renderer.Write($"Input: {plan.Analysis.Media.Source.Path}\nOutput: {plan.Output}\nTarget: {plan.Target}; scratch estimate: {ConsoleRenderer.FormatSize(plan.ScratchBytes)}\n{plan.Decision}\n{(plan.DeleteBackup ? $"Original backup: {plan.Analysis.Media.Source.Path}.bak.dovi_convert\nDelete original backup after verified publication." : "Keep original unchanged at its existing path.")}");
             if (plan.Archive is not null)
             {
                 renderer.Write($"Enhancement archive: {plan.Archive}");

@@ -83,11 +83,14 @@ public sealed class NativeIntegrationTests
         var service = new ConversionService(dependencies, files, factory, processor, verifier,
             new OutputPublisher(NullLogger<OutputPublisher>.Instance), new BackupArchiveStore(), NullLogger<ConversionService>.Instance);
         var analysis = MediaClassifier.Classify(copy, await probe.AnalyzeAsync(copy, AnalysisMethod.FullRpu, workspace, default));
-        var result = await service.ExecuteAsync(new(Guid.NewGuid(), analysis, ConversionTarget.Profile81, input, null,
+        string converted = files.PrepareOutputPath(input, null, " - DV P8.1.mkv");
+        var result = await service.ExecuteAsync(new(Guid.NewGuid(), analysis, ConversionTarget.Profile81, converted, null,
             workspace.DirectoryPath, ConversionPolicy.RequiredScratchBytes(copy.Source.Length), "explicit native test", Safe: safe), null, default);
         Assert.AreEqual(OperationStatus.Completed, result.Status, result.Message);
         Assert.IsTrue(File.Exists(input));
-        Assert.AreEqual(copy.Source.Length, new FileInfo(input + ".bak.dovi_convert").Length);
+        Assert.IsTrue(File.Exists(converted));
+        Assert.AreEqual(copy.Source, files.Identify(input));
+        Assert.IsFalse(File.Exists(input + ".bak.dovi_convert"));
         Assert.AreEqual(media.Source, files.Identify(source));
     }
 
@@ -292,12 +295,20 @@ public sealed class NativeIntegrationTests
             var sourceMedia = media with { Source = files.Identify(serviceInput) };
             var analysis = MediaClassifier.Classify(sourceMedia, new(AnalysisMethod.FullRpu, EnhancementLayer.Mel, 259, null, 1, 1));
             string serviceArchive = Path.ChangeExtension(serviceInput, ".dovi");
-            var result = await service.ExecuteAsync(new(Guid.NewGuid(), analysis, target, serviceInput, serviceArchive,
+            string serviceOutput = safe ? files.PrepareOutputPath(serviceInput, null,
+                target == ConversionTarget.Profile81 ? " - DV P8.1.mkv" : " - HDR10.mkv") : serviceInput;
+            var result = await service.ExecuteAsync(new(Guid.NewGuid(), analysis, target, serviceOutput, serviceArchive,
                 workspace.DirectoryPath, 16 * 1024 * 1024, "fixture", Safe: safe, DeleteBackup: !safe), null, default);
             Assert.AreEqual(OperationStatus.Completed, result.Status, result.Message);
             Assert.IsTrue(File.Exists(serviceInput));
             Assert.IsTrue(File.Exists(serviceArchive));
-            Assert.AreEqual(safe, File.Exists(serviceInput + ".bak.dovi_convert"));
+            Assert.IsTrue(File.Exists(serviceOutput));
+            Assert.IsFalse(File.Exists(serviceInput + ".bak.dovi_convert"));
+            if (safe)
+            {
+                Assert.AreEqual(sourceMedia.Source, files.Identify(serviceInput));
+                CollectionAssert.AreEqual(await File.ReadAllBytesAsync(input), await File.ReadAllBytesAsync(serviceInput));
+            }
         }
     }
 

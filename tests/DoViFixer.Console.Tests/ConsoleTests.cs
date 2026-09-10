@@ -14,6 +14,34 @@ namespace DoViFixer.Console.Tests;
 public sealed class ConsoleTests
 {
     [TestMethod]
+    public void InspectSimpleIsAnOptInScanOption()
+    {
+        var command = CommandLine.Parse(["scan", "movies", "--inspect-simple", "-r", "--json", "--temp", "scratch"]);
+        Assert.IsTrue(command.Has("inspect-simple"));
+        Assert.AreEqual(5, command.Depth);
+        Assert.AreEqual("scratch", command.Value("temp"));
+        Assert.IsFalse(CommandLine.Parse(["scan"]).Has("inspect-simple"));
+        Assert.ThrowsExactly<ArgumentException>(() => CommandLine.Parse(["inspect", "movie.mkv", "--inspect-simple"]));
+        Assert.ThrowsExactly<ArgumentException>(() => CommandLine.Parse(["convert", "movie.mkv", "--inspect-simple"]));
+    }
+
+    [TestMethod]
+    public void AutoInspectionRenderingShowsMeasuredEvidenceAndReclassification()
+    {
+        var initial = CreatePlan(DoViFixer.Domain.Analysis.AnalysisVerdict.SimpleFel).Analysis;
+        var final = initial with
+        {
+            Verdict = DoViFixer.Domain.Analysis.AnalysisVerdict.ComplexFel,
+            Evidence = initial.Evidence with { Method = DoViFixer.Domain.Analysis.AnalysisMethod.DeepInspection },
+            Reason = "Measured expansion in 3 frames"
+        };
+        string text = DoViFixer.Console.Rendering.ScanRenderer.Format(new("movie.mkv", final, null, initial));
+        StringAssert.Contains(text, "Auto-inspected: Simple FEL -> Complex FEL");
+        StringAssert.Contains(text, "Measured expansion in 3 frames");
+        Assert.IsFalse(text.Contains("MaxCLL", StringComparison.Ordinal));
+    }
+
+    [TestMethod]
     public void DeepInspectionIsAnInspectOnlyOption()
     {
         var command = CommandLine.Parse(["inspect", "movie.mkv", "--deep", "--json"]);

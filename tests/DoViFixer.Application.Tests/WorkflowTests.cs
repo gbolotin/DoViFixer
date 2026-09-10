@@ -17,6 +17,55 @@ namespace DoViFixer.Application.Tests;
 public sealed class WorkflowTests
 {
     [TestMethod]
+    [DataRow(false, false)]
+    [DataRow(true, false)]
+    [DataRow(true, true)]
+    public async Task AutoInspectionSelectsSimpleAfterScanAndContinuesAfterFailure(bool enabled, bool fail)
+    {
+        var runtime = new Runtime { PlanningFixtures = true, ScanFiles = ["simple.mkv", "next.mkv", "complex.mkv", "unknown.mkv", "good.mkv"], FailDeep = fail };
+        var inspection = new InspectionService(runtime.Dependencies(), runtime, runtime, runtime, runtime,
+            NullLogger<InspectionService>.Instance, new MemoryCache());
+        var reported = new List<ScanItem>();
+        var results = await new ScanService(runtime, inspection, NullLogger<ScanService>.Instance)
+            .ScanAsync("fixture", 0, "scratch", null, default, new InlineScanProgress(item =>
+            {
+                reported.Add(item);
+                if (item.InitialAnalysis is not null)
+                {
+                    Assert.AreEqual(5, runtime.ProbeCalls, "All files must be scanned first.");
+                }
+            }), enabled);
+        Assert.AreEqual(enabled ? 7 : 5, runtime.AnalyzeCalls);
+        Assert.AreEqual(enabled ? 7 : 5, reported.Count);
+        Assert.AreEqual(5, results.Count);
+        Assert.AreEqual(enabled ? AnalysisMethod.DeepInspection : AnalysisMethod.SampledRpu, results[1].Analysis!.Evidence.Method);
+        Assert.AreEqual(enabled ? AnalysisVerdict.ComplexFel : AnalysisVerdict.SimpleFel, results[1].Analysis!.Verdict);
+        Assert.AreEqual(enabled ? AnalysisVerdict.SimpleFel : (AnalysisVerdict?)null, results[1].InitialAnalysis?.Verdict);
+        Assert.AreEqual(fail, results[0].Error is not null);
+        Assert.IsTrue(results.Skip(2).All(r => r.InitialAnalysis is null));
+        Assert.AreEqual(0, runtime.ConvertCalls + runtime.Deleted + runtime.InstallCalls);
+    }
+
+    [TestMethod]
+    public async Task AutoInspectionCancellationStopsBeforeNextCandidate()
+    {
+        using var cancellation = new CancellationTokenSource();
+        var runtime = new Runtime { PlanningFixtures = true, ScanFiles = ["simple.mkv", "next.mkv"] };
+        var inspection = new InspectionService(runtime.Dependencies(), runtime, runtime, runtime, runtime,
+            NullLogger<InspectionService>.Instance, new MemoryCache());
+        await Assert.ThrowsExactlyAsync<OperationCanceledException>(() =>
+            new ScanService(runtime, inspection, NullLogger<ScanService>.Instance)
+                .ScanAsync("fixture", 0, null, null, cancellation.Token, new InlineScanProgress(item =>
+                {
+                    if (item.InitialAnalysis is not null)
+                    {
+                        cancellation.Cancel();
+                    }
+                }), true));
+        Assert.AreEqual(3, runtime.AnalyzeCalls);
+    }
+
+    [TestMethod]
     public async Task ScanMetadataIsReusedButConversionStillRequiresFullEvidence()
     {
         var runtime = new Runtime();
@@ -183,9 +232,11 @@ public sealed class WorkflowTests
     public async Task ChangedSourceStopsBeforeProcessing()
     {
         var runtime = new Runtime { Changed = true };
-        await Assert.ThrowsExactlyAsync<IOException>(() => runtime.Conversion().ExecuteAsync(Plan("good.mkv"), null, default));
+        var result = await runtime.Conversion().ExecuteAsync(Plan("good.mkv"), null, default);
+        Assert.AreEqual(OperationStatus.Failed, result.Status);
         Assert.AreEqual(0, runtime.ConvertCalls);
-        Assert.IsTrue(runtime.ConversionLog.Entries.Any(e => e.Exception is IOException && Equals(e.Properties.GetValueOrDefault("Outcome"), "Failed")));
+        Assert.IsTrue(runtime.ConversionLog.Entries.Any(e => e.Exception is IOException));
+        Assert.IsTrue(runtime.ConversionLog.Entries.Any(e => Equals(e.Properties.GetValueOrDefault("Outcome"), "Failed")));
         Assert.IsFalse(runtime.ConversionLog.Entries.Any(e => Equals(e.Properties.GetValueOrDefault("LogKind"), "Audit")));
     }
 
@@ -200,8 +251,9 @@ public sealed class WorkflowTests
         Assert.AreEqual(3, runtime.Disposed);
         Assert.AreEqual(0, runtime.Published);
         Assert.IsTrue(runtime.ConversionLog.Entries.Any(e => Equals(e.Properties.GetValueOrDefault("Outcome"), "Cancelled")));
-        Assert.AreEqual(1, runtime.Restored);
-        StringAssert.Contains(result.Files[0].Message, "Original restored");
+        Assert.AreEqual(0, runtime.Restored);
+        Assert.AreEqual(0, runtime.Renamed);
+        StringAssert.Contains(result.Files[0].Message, "Original retained");
         Assert.IsFalse(runtime.ConversionLog.Entries.Any(e => Equals(e.Properties.GetValueOrDefault("Outcome"), "Completed") && e.Properties.ContainsKey("ElapsedMilliseconds")));
     }
 
@@ -216,6 +268,48 @@ public sealed class WorkflowTests
         Assert.AreEqual(1, runtime.Published);
         Assert.AreEqual(6, runtime.Disposed);
         Assert.IsTrue(runtime.ConversionLog.Entries.Any(e => Equals(e.Properties.GetValueOrDefault("Action"), "DeleteOriginalBackup")));
+    }
+
+    [TestMethod]
+    [DataRow(ConversionTarget.Profile81, " - DV P8.1.mkv")]
+    [DataRow(ConversionTarget.Hdr10, " - HDR10.mkv")]
+    public async Task DefaultPlansKeepOriginalAndUseTargetSuffix(ConversionTarget target, string suffix)
+    {
+        var runtime = new Runtime { PlanningFixtures = true };
+        var inspection = new InspectionService(runtime.Dependencies(), runtime, runtime, runtime, runtime, NullLogger<InspectionService>.Instance, new MemoryCache());
+        var planner = new ConversionPlanner(runtime, runtime, inspection, runtime, NullLogger<ConversionPlanner>.Instance);
+        foreach (string? directory in new string?[] { null, Path.GetFullPath("converted") })
+        {
+            var result = await planner.PlanAsync(new("fixture", Target: target, OutputDirectory: directory), null, default);
+            var plan = result.Plans.Single();
+            Assert.AreEqual(Path.Combine(directory ?? Path.GetDirectoryName(plan.Analysis.Media.Source.Path)!, "good" + suffix), plan.Output);
+            Assert.IsFalse(plan.DeleteBackup);
+        }
+    }
+
+    [TestMethod]
+    public async Task DefaultConversionNeverRenamesOrDeletesOriginal()
+    {
+        var runtime = new Runtime();
+        var result = await runtime.Conversion().ExecuteAsync(Plan("good.mkv"), null, default);
+        Assert.AreEqual(OperationStatus.Completed, result.Status);
+        Assert.AreEqual(1, runtime.Published);
+        Assert.AreEqual(0, runtime.Renamed);
+        Assert.AreEqual(0, runtime.Restored);
+        Assert.AreEqual(0, runtime.Deleted);
+        StringAssert.Contains(result.Message, "Original retained at " + Plan("good.mkv").Analysis.Media.Source.Path + ".");
+    }
+
+    [TestMethod]
+    public async Task DefaultFailureNeedsNoOriginalRecovery()
+    {
+        var runtime = new Runtime();
+        var result = await runtime.Conversion().ExecuteAsync(Plan("bad.mkv"), null, default);
+        Assert.AreEqual(OperationStatus.Failed, result.Status);
+        Assert.AreEqual(0, runtime.Published);
+        Assert.AreEqual(0, runtime.Renamed);
+        Assert.AreEqual(0, runtime.Restored);
+        Assert.AreEqual(0, runtime.Deleted);
     }
 
     [TestMethod]
@@ -274,7 +368,7 @@ public sealed class WorkflowTests
     public async Task RecoveryFailureReportsBackupLocationAndPreservesOriginalError()
     {
         var runtime = new Runtime { FailRecovery = true };
-        var result = await runtime.Conversion().ExecuteAsync(Plan("bad.mkv"), null, default);
+        var result = await runtime.Conversion().ExecuteAsync(Plan("bad.mkv") with { DeleteBackup = true }, null, default);
         Assert.AreEqual(OperationStatus.Failed, result.Status);
         StringAssert.Contains(result.Message, "invalid frame count");
         StringAssert.Contains(result.Message, "bad.mkv.bak.dovi_convert");
@@ -303,13 +397,15 @@ public sealed class WorkflowTests
         public CancellationTokenSource? CancelDuringConversion { get; set; }
         public int InstallCalls, ConvertCalls, Published, Disposed, Deleted;
         public int ProbeCalls, AnalyzeCalls;
-        public int Restored;
+        public int Restored, Renamed;
         public bool FailRecovery { get; init; }
         public bool FailFirstVerification { get; init; }
         public List<bool> SafeModes { get; } = new();
         public bool PlanningFixtures { get; init; }
-        public IReadOnlyList<string> Discover(string input, int recursiveDepth, bool cleanup = false) => PlanningFixtures
-            ? new[] { "simple.mkv", "complex.mkv", "unknown.mkv", "good.mkv" } : new[] { "bad.mkv", "good.mkv" };
+        public string[]? ScanFiles { get; init; }
+        public bool FailDeep { get; init; }
+        public IReadOnlyList<string> Discover(string input, int recursiveDepth, bool cleanup = false) => ScanFiles ?? (PlanningFixtures
+            ? new[] { "simple.mkv", "complex.mkv", "unknown.mkv", "good.mkv" } : new[] { "bad.mkv", "good.mkv" });
         public Task<MediaInfo> ProbeAsync(string path, CancellationToken cancellationToken)
         {
             ProbeCalls++;
@@ -322,6 +418,15 @@ public sealed class WorkflowTests
         public Task<RpuEvidence> AnalyzeAsync(MediaInfo media, AnalysisMethod method, ITemporaryWorkspace workspace, CancellationToken cancellationToken)
         {
             AnalyzeCalls++;
+            if (method == AnalysisMethod.DeepInspection)
+            {
+                if (FailDeep && media.Source.Path.EndsWith("simple.mkv", StringComparison.Ordinal))
+                {
+                    throw new IOException("Decode failed");
+                }
+                return Task.FromResult(new RpuEvidence(method, EnhancementLayer.Fel, 24, 1000, 1, 1,
+                    Brightness: new(24, 1, 800, 200, 0)));
+            }
             return Task.FromResult(PlanningFixtures && !media.Source.Path.EndsWith("good.mkv", StringComparison.Ordinal)
                 ? new RpuEvidence(method, EnhancementLayer.Fel, 24,
                     media.Source.Path.EndsWith("unknown.mkv", StringComparison.Ordinal) ? null :
@@ -373,6 +478,7 @@ public sealed class WorkflowTests
         }
         public FileIdentity RenameOriginal(FileIdentity identity)
         {
+            Renamed++;
             if (Changed) { throw new IOException("changed"); }
             return identity with { Path = identity.Path + ".bak.dovi_convert" };
         }
@@ -387,7 +493,8 @@ public sealed class WorkflowTests
             }
             Restored++;
         }
-        public string PrepareOutputPath(string input, string? outputDirectory, string suffix, bool allowInput = false) => Path.GetFullPath(input + suffix);
+        public string PrepareOutputPath(string input, string? outputDirectory, string suffix, bool allowInput = false) =>
+            Path.Combine(outputDirectory ?? Path.GetDirectoryName(Path.GetFullPath(input))!, Path.GetFileNameWithoutExtension(input) + suffix);
         public void EnsureAvailableSpace(string directory, long requiredBytes) { }
         public void EnsureWritableDirectory(string directory) { }
         public ValueTask<IAsyncDisposable> AcquireReadLeaseAsync(FileIdentity identity, CancellationToken cancellationToken)
