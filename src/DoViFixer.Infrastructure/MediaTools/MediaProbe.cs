@@ -23,13 +23,21 @@ internal sealed class MediaProbe(IToolCatalog tools, IProcessRunner processes, I
     {
         try
         {
-            if (method == AnalysisMethod.FullRpu)
+            if (method is AnalysisMethod.FullRpu or AnalysisMethod.DeepInspection)
             {
                 string raw = workspace.File("inspection.hevc");
                 await processes.RunAsync(new(tools.GetPath(NativeTool.MkvExtract), new[] { media.Source.Path, "tracks", $"{media.VideoTrackId}:{raw}" }, AllowWarnings: true), cancellationToken);
                 var evidence = await AnalyzeRawAsync(raw, method, workspace, cancellationToken);
                 long frames = await CountFramesAsync(media.Source.Path, cancellationToken);
-                return evidence.Frames == frames ? evidence : evidence with { Error = $"Full RPU count {evidence.Frames} differs from video packet count {frames}." };
+                if (evidence.Frames != frames)
+                {
+                    return evidence with { Error = $"Full RPU count {evidence.Frames} differs from video packet count {frames}." };
+                }
+                if (method == AnalysisMethod.DeepInspection)
+                {
+                    return await AnalyzeBrightnessAsync(raw, workspace, cancellationToken);
+                }
+                return evidence;
             }
             if (media.DurationSeconds is null or <= 0)
             {
@@ -66,6 +74,27 @@ internal sealed class MediaProbe(IToolCatalog tools, IProcessRunner processes, I
             logger.LogError(ex, "RPU analysis failed for {Input}; method {Method}", media.Source.Path, method);
             return new(method, EnhancementLayer.Unknown, 0, null, 0, 1, ex.Message);
         }
+    }
+
+    private async Task<RpuEvidence> AnalyzeBrightnessAsync(string raw, ITemporaryWorkspace workspace, CancellationToken cancellationToken)
+    {
+        string baseLayer = workspace.File("inspection-bl.hevc");
+        string enhancementLayer = workspace.File("inspection-el.hevc");
+        logger.LogInformation("Deep inspection: extracting the HDR10 base layer");
+        await processes.RunAsync(new(tools.GetPath(NativeTool.DoviTool),
+            new[] { "demux", "-i", raw, "-b", baseLayer, "-e", enhancementLayer }), cancellationToken);
+        File.Delete(enhancementLayer);
+        // Require explicit HDR10 signaling; never guess range or apply a PQ transform to SDR.
+        var color = await processes.RunAsync(new(tools.GetPath(NativeTool.FFprobe), new[] { "-v", "error", "-select_streams", "v:0",
+            "-show_entries", "stream=color_transfer,color_primaries,color_space,color_range", "-of", "json", baseLayer }), cancellationToken);
+        string range = DeepInspectionParser.ReadHdr10Range(color.Output);
+        logger.LogInformation("Deep inspection: decoding every base-layer frame for luminance measurement");
+        await processes.RunAsync(new(tools.GetPath(NativeTool.FFmpeg), new[] { "-nostdin", "-v", "error", "-xerror", "-err_detect", "explode",
+            "-i", baseLayer, "-map", "0:v:0", "-an", "-sn", "-dn", "-vf", DeepInspectionParser.Filter(range),
+            "-fps_mode", "passthrough", "-f", "null", "-" }, workspace.DirectoryPath), cancellationToken);
+        await using var rpu = File.OpenRead(workspace.File("rpu.json"));
+        using var peaks = File.OpenText(workspace.File("brightness.txt"));
+        return await DeepInspectionParser.CompareAsync(rpu, peaks, cancellationToken);
     }
 
     private async Task<RpuEvidence> AnalyzeRawAsync(string raw, AnalysisMethod method, ITemporaryWorkspace workspace, CancellationToken cancellationToken)

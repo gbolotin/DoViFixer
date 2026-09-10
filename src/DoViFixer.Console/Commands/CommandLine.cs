@@ -18,7 +18,7 @@ public sealed record CommandLine(string Command, IReadOnlyList<string> Arguments
         string[] allowed = command switch
         {
             "scan" => ["recursive", "temp", "candidates-only", "json", "install-dependencies"],
-            "inspect" => ["temp", "json", "install-dependencies", "safe"],
+            "inspect" => ["temp", "json", "install-dependencies", "safe", "deep"],
             "convert" => ["recursive", "temp", "output", "hdr10", "include-simple", "force", "backup", "delete", "yes", "plan", "safe", "install-dependencies"],
             "backup" => ["temp", "output", "yes", "plan", "install-dependencies"],
             "restore" => ["temp", "output", "yes", "plan", "allow-legacy-archive", "source", "install-dependencies"],

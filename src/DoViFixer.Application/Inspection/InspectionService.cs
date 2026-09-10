@@ -30,7 +30,7 @@ public sealed class InspectionService(DependencyService dependencies, IMediaProb
             return MediaClassifier.Classify(media, new(AnalysisMethod.MetadataOnly, EnhancementLayer.Unknown, 0, null, 0, 0));
         }
         var snapshot = await settings.ReadAsync(cancellationToken);
-        long space = method == AnalysisMethod.FullRpu ? ConversionPolicy.RequiredScratchBytes(media.Source.Length) : 1L << 30;
+        long space = method is AnalysisMethod.FullRpu or AnalysisMethod.DeepInspection ? ConversionPolicy.RequiredScratchBytes(media.Source.Length) : 1L << 30;
         await using var workspace = await workspaces.CreateAsync(space, temporaryDirectory ?? snapshot.TemporaryDirectory, cancellationToken);
         var evidence = await probe.AnalyzeAsync(media, method, workspace, cancellationToken);
         return MediaClassifier.Classify(media, evidence);

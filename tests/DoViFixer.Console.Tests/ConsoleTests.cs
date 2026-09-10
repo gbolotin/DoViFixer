@@ -14,6 +14,16 @@ namespace DoViFixer.Console.Tests;
 public sealed class ConsoleTests
 {
     [TestMethod]
+    public void DeepInspectionIsAnInspectOnlyOption()
+    {
+        var command = CommandLine.Parse(["inspect", "movie.mkv", "--deep", "--json"]);
+        Assert.IsTrue(command.Has("deep"));
+        Assert.IsTrue(command.Has("json"));
+        Assert.ThrowsExactly<ArgumentException>(() => CommandLine.Parse(["scan", "--deep"]));
+        Assert.ThrowsExactly<ArgumentException>(() => CommandLine.Parse(["convert", "movie.mkv", "--deep"]));
+    }
+
+    [TestMethod]
     public async Task SingleFelPlanNeedsOnlyOneExecutionApproval()
     {
         var plan = CreatePlan(DoViFixer.Domain.Analysis.AnalysisVerdict.SimpleFel);

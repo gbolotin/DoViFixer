@@ -37,7 +37,11 @@ public sealed class MediaReadCommand(ScanService scan, InspectionService inspect
                 }
                 return results.Any(r => r.Error is not null || r.Analysis?.Verdict == AnalysisVerdict.AnalysisFailed) ? 1 : 0;
             case "inspect":
-                var analysis = await inspection.InspectAsync(input, AnalysisMethod.FullRpu, command.Value("temp"), cancellationToken);
+                if (command.Has("deep") && !command.Has("json"))
+                {
+                    renderer.Write("Deep inspection decodes every HDR10 base-layer frame and may take a long time.");
+                }
+                var analysis = await inspection.InspectAsync(input, command.Has("deep") ? AnalysisMethod.DeepInspection : AnalysisMethod.FullRpu, command.Value("temp"), cancellationToken);
                 if (command.Has("json"))
                 {
                     renderer.Json(analysis);

@@ -6,10 +6,12 @@ namespace DoViFixer.Infrastructure.MediaTools.DoviTool;
 
 internal static class RpuParser
 {
-    internal static async Task<RpuEvidence> ParseAsync(Stream stream, AnalysisMethod method, CancellationToken cancellationToken)
+    internal static async Task<RpuEvidence> ParseAsync(Stream stream, AnalysisMethod method, CancellationToken cancellationToken,
+        Action<long, int?>? framePeak = null)
     {
         long frames = 0;
         int? maxPq = null;
+        int? frameMaxPq = null;
         var layers = new HashSet<string>(StringComparer.Ordinal);
         bool unknownLayer = false;
         // dovi_tool exports a top-level RPU array; materialize at most one frame at a time.
@@ -22,7 +24,9 @@ internal static class RpuParser
             }
             frames++;
             unknownLayer |= !frame.TryGetProperty("el_type", out var frameLayer) || frameLayer.GetString() is not ("MEL" or "FEL");
+            frameMaxPq = null;
             Visit(frame, false);
+            framePeak?.Invoke(frames - 1, frameMaxPq);
         }
         var layer = unknownLayer ? EnhancementLayer.Unknown : layers.SetEquals(new[] { "MEL" }) ? EnhancementLayer.Mel
             : layers.Contains("FEL") ? EnhancementLayer.Fel : EnhancementLayer.Unknown;
@@ -46,6 +50,7 @@ internal static class RpuParser
                             throw new InvalidDataException("L1 max_pq is outside its 12-bit range.");
                         }
                         maxPq = Math.Max(maxPq ?? 0, value);
+                        frameMaxPq = Math.Max(frameMaxPq ?? 0, value);
                     }
                     Visit(property.Value, level1 || property.Name.Equals("Level1", StringComparison.OrdinalIgnoreCase));
                 }

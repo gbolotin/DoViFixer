@@ -125,7 +125,8 @@ public sealed class ConsoleRenderer : IProgress<OperationProgress>, IDisposable
         dependencies check [Tool ...] [--json]
         dependencies install [Tool ...] [--yes]
         scan [file-or-directory] [-r [depth]] [--candidates-only] [--json]
-        inspect <file.mkv> [--json]
+        inspect <file.mkv> [--deep] [--json]
+          --deep decodes every base-layer frame and compares its luminance with RPU L1 (slow).
         convert [files-or-directories...] [-r [depth]] [--hdr10] [--include-simple]
                 [--force] [--backup] [--delete] [--safe] [--output directory] [--temp directory]
                 [--plan | --yes]

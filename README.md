@@ -35,10 +35,13 @@ The maintained x64 catalog uses per-user portable ZIPs, prefers a matching WinGe
 
 ## Media commands
 
+[Deep Inspection](docs/deep-inspection.md) (`inspect --deep`) compares every decoded HDR10 base-layer frame with its RPU L1 brightness metadata. It reports possible FEL brightness expansion without relying on static MaxCLL; full decoding is slower than regular inspection.
+
 ```powershell
 # Read-only metadata/RPU analysis (temporary extraction is cleaned up).
 dotnet run --project src/DoViFixer.Console -- scan 'E:\Movies' -r 3
 dotnet run --project src/DoViFixer.Console -- inspect 'E:\Movies\Movie.mkv' --json
+dotnet run --project src/DoViFixer.Console -- inspect 'E:\Movies\Movie.mkv' --deep --json
 
 # Plan exact inputs/outputs first; output directories are created when needed.
 dotnet run --project src/DoViFixer.Console -- convert 'E:\Movies' -r --plan
@@ -56,7 +59,7 @@ dotnet run --project src/DoViFixer.Console -- cleanup 'E:\Movies\Movie.dovi' --d
 
 Conversion accepts multiple files/directories, renames each original to `<filename>.bak.dovi_convert`, and publishes the converted MKV using its original filename (or that filename under `--output`). Existing backups and unrelated outputs are never overwritten. `--delete` removes only that original backup after successful verification and publication; `.dovi` archives remain. On failure or cancellation before publication, the original filename is restored automatically. If recovery is blocked by a collision or access failure, the backup is retained and its path is reported. Backup and restore outputs use `.dovi` and `.restored.mkv`. Cleanup remains a separate command with exact approval; unattended cleanup requires `--delete-backups --yes`.
 
-Scan samples ten positions; inspect and conversion planning analyze the full RPU stream. MEL is eligible. Interactive conversion prepares eligible MEL, Simple FEL, and Complex FEL plans and displays output and backup details before asking for approval. Each category receives one execution confirmation covering all its planned files; there is no additional batch confirmation. Answering no skips that category while approved categories continue. FEL confirmations warn that enhancement-layer picture data will be lost. With `--yes`, `--plan`, or redirected input, the existing flag-based selection applies: Simple FEL requires `--include-simple`; detected complex FEL requires `--force`. Unknown/failed analysis remains blocked even with `--force`. Missing MaxCLL stays unknown. L1-versus-MaxCLL classification is a metadata heuristic, not a base-layer frame measurement or playback guarantee.
+Scan samples ten positions; inspect and conversion planning analyze the full RPU stream. MEL is eligible. Interactive conversion prepares eligible MEL, Simple FEL, and Complex FEL plans and displays output and backup details before asking for approval. Each category receives one execution confirmation covering all its planned files; there is no additional batch confirmation. Answering no skips that category while approved categories continue. FEL confirmations warn that enhancement-layer picture data will be lost. With `--yes`, `--plan`, or redirected input, the existing flag-based selection applies: Simple FEL requires `--include-simple`; detected complex FEL requires `--force`. Unknown/failed analysis remains blocked even with `--force`. Missing MaxCLL stays unknown in the metadata modes; `inspect --deep` uses measured frame luminance instead. L1-versus-MaxCLL classification is a metadata heuristic, not a base-layer frame measurement or playback guarantee.
 
 Conversion streams FFmpeg output directly to dovi_tool by default and retries with disk extraction on streaming or verification failure. `--safe` forces disk extraction. Full inspection, archive operations and output verification still use disk, so streaming does not remove the scratch-space requirement. Workspaces are owned per operation. Estimates are deliberately conservative: full inspection/conversion/backup currently reserve eight input sizes plus 1 GiB, with an additional archive allowance for restoration. Destination capacity is checked independently. This trades additional free-space requirements for room for extraction, RPU JSON, payload verification and publication; actual disk usage is usually lower.
 
