@@ -35,6 +35,10 @@ The maintained x64 catalog uses per-user portable ZIPs, prefers a matching WinGe
 
 ## Media commands
 
+Successful `scan` and `inspect` results persist in `%LOCALAPPDATA%\DoViFixer\cache\analysis` (or under the configured `DoViFixer:DataDirectory`). Cache hits skip native analysis and temporary extraction. Entries are checked against the absolute source path, byte length, modification time, analysis method, and cache format/algorithm version. Missing, changed, unreadable, or corrupt entries are analyzed again; failed or incomplete results are not cached. Source read leases and conversion verification still apply.
+
+Full RPU inspection results can serve later scans and conversion planning. A sampled scan can supply cached probe metadata for conversion, but conversion still completes full RPU analysis once. Deep inspection results are reused only for deep inspection; other workflows may reuse their probe metadata. Delete the `cache\analysis` directory while DoViFixer is idle to force fresh analysis, including after native-tool changes. Identity checks do not detect content edits that preserve both file size and modification time.
+
 [Deep Inspection](docs/deep-inspection.md) (`inspect --deep`) compares every decoded HDR10 base-layer frame with its RPU L1 brightness metadata. It reports possible FEL brightness expansion without relying on static MaxCLL; full decoding is slower than regular inspection.
 
 ```powershell

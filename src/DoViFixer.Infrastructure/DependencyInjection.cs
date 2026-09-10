@@ -22,6 +22,7 @@ public static class DependencyInjection
         services.AddSingleton(new StorageOptions(Path.GetFullPath(root)));
         services.TryAddSingleton(TimeProvider.System);
         services.AddSingleton<ISettingsStore, SettingsStore>();
+        services.AddTransient<IAnalysisCache, AnalysisCache>();
         services.AddTransient<IUserPathRegistration, UserPathRegistration>();
         services.AddSingleton<IToolCatalog, ToolCatalog>();
         services.AddSingleton(_ =>

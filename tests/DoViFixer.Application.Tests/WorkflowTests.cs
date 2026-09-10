@@ -17,12 +17,52 @@ namespace DoViFixer.Application.Tests;
 public sealed class WorkflowTests
 {
     [TestMethod]
+    public async Task ScanMetadataIsReusedButConversionStillRequiresFullEvidence()
+    {
+        var runtime = new Runtime();
+        var cache = new MemoryCache();
+        var inspection = new InspectionService(runtime.Dependencies(), runtime, runtime, runtime, runtime,
+            NullLogger<InspectionService>.Instance, cache);
+        await inspection.InspectAsync("good.mkv", AnalysisMethod.SampledRpu, null, default);
+        var planner = new ConversionPlanner(runtime, runtime, inspection, runtime, NullLogger<ConversionPlanner>.Instance);
+        var result = await planner.PlanAsync(new("fixture"), null, default);
+        Assert.AreEqual(AnalysisMethod.FullRpu, result.Plans.Single().Analysis.Evidence.Method);
+        Assert.AreEqual(2, runtime.AnalyzeCalls);
+        Assert.AreEqual(2, runtime.ProbeCalls, "Only the initial scan and unreadable file should be probed.");
+        runtime.Ready = false;
+        await inspection.InspectAsync("good.mkv", AnalysisMethod.FullRpu, null, default);
+        await inspection.InspectAsync("good.mkv", AnalysisMethod.SampledRpu, null, default);
+        Assert.AreEqual(2, runtime.AnalyzeCalls);
+        await Assert.ThrowsExactlyAsync<DependencyNotReadyException>(() =>
+            inspection.InspectAsync("good.mkv", AnalysisMethod.DeepInspection, null, default));
+        using var cancelled = new CancellationTokenSource();
+        cancelled.Cancel();
+        await Assert.ThrowsExactlyAsync<OperationCanceledException>(() =>
+            inspection.InspectAsync("good.mkv", AnalysisMethod.FullRpu, null, cancelled.Token));
+    }
+
+    private sealed class MemoryCache : IAnalysisCache
+    {
+        private readonly Dictionary<(FileIdentity, AnalysisMethod), MediaAnalysis> entries = new();
+        public Task<MediaAnalysis?> ReadAsync(FileIdentity source, AnalysisMethod method, CancellationToken cancellationToken) =>
+            Task.FromResult(entries.GetValueOrDefault((source, method)));
+        public Task WriteAsync(MediaAnalysis analysis, CancellationToken cancellationToken)
+        {
+            if (analysis.Verdict is not (AnalysisVerdict.Unknown or AnalysisVerdict.AnalysisFailed))
+            {
+                entries[(analysis.Media.Source, analysis.Evidence.Method)] = analysis;
+            }
+            return Task.CompletedTask;
+        }
+    }
+
+    [TestMethod]
     [DataRow(true)]
     [DataRow(false)]
     public async Task FelApprovalControlsEligibilityAndKeepsMel(bool approved)
     {
         var runtime = new Runtime { PlanningFixtures = true };
-        var inspection = new InspectionService(runtime.Dependencies(), runtime, runtime, runtime, runtime, NullLogger<InspectionService>.Instance);
+        var inspection = new InspectionService(runtime.Dependencies(), runtime, runtime, runtime, runtime, NullLogger<InspectionService>.Instance, new MemoryCache());
         var planner = new ConversionPlanner(runtime, runtime, inspection, runtime, NullLogger<ConversionPlanner>.Instance);
         var prompted = new List<AnalysisVerdict>();
         var result = await planner.PlanAsync(new("fixture"), null, default, (analysis, token) =>
@@ -41,7 +81,7 @@ public sealed class WorkflowTests
     public async Task PlanningWithoutApprovalRetainsFlagBasedEligibility()
     {
         var runtime = new Runtime { PlanningFixtures = true };
-        var inspection = new InspectionService(runtime.Dependencies(), runtime, runtime, runtime, runtime, NullLogger<InspectionService>.Instance);
+        var inspection = new InspectionService(runtime.Dependencies(), runtime, runtime, runtime, runtime, NullLogger<InspectionService>.Instance, new MemoryCache());
         var planner = new ConversionPlanner(runtime, runtime, inspection, runtime, NullLogger<ConversionPlanner>.Instance);
         Assert.AreEqual(1, (await planner.PlanAsync(new("fixture"), null, default)).Plans.Count);
         Assert.AreEqual(3, (await planner.PlanAsync(new("fixture", IncludeSimple: true, ForceComplex: true), null, default,
@@ -52,7 +92,7 @@ public sealed class WorkflowTests
     public async Task ScanReportsEachSuccessOrFailureBeforeStartingNextFile()
     {
         var runtime = new Runtime();
-        var inspection = new InspectionService(runtime.Dependencies(), runtime, runtime, runtime, runtime, NullLogger<InspectionService>.Instance);
+        var inspection = new InspectionService(runtime.Dependencies(), runtime, runtime, runtime, runtime, NullLogger<InspectionService>.Instance, new MemoryCache());
         var service = new ScanService(runtime, inspection, NullLogger<ScanService>.Instance);
         var reported = new List<ScanItem>();
         var results = await service.ScanAsync("fixture", 0, null, null, default, new InlineScanProgress(item =>
@@ -182,7 +222,7 @@ public sealed class WorkflowTests
     public async Task OverlappingInputsArePlannedOnce()
     {
         var runtime = new Runtime { PlanningFixtures = true };
-        var inspection = new InspectionService(runtime.Dependencies(), runtime, runtime, runtime, runtime, NullLogger<InspectionService>.Instance);
+        var inspection = new InspectionService(runtime.Dependencies(), runtime, runtime, runtime, runtime, NullLogger<InspectionService>.Instance, new MemoryCache());
         var planner = new ConversionPlanner(runtime, runtime, inspection, runtime, NullLogger<ConversionPlanner>.Instance);
         var result = await planner.PlanAsync(new("fixture", AdditionalInputs: ["fixture"], Safe: true, DeleteBackup: true), null, default);
         Assert.AreEqual(4, runtime.ProbeCalls);
@@ -262,7 +302,7 @@ public sealed class WorkflowTests
         public string? ConfiguredPathDuringRediscovery { get; private set; }
         public CancellationTokenSource? CancelDuringConversion { get; set; }
         public int InstallCalls, ConvertCalls, Published, Disposed, Deleted;
-        public int ProbeCalls;
+        public int ProbeCalls, AnalyzeCalls;
         public int Restored;
         public bool FailRecovery { get; init; }
         public bool FailFirstVerification { get; init; }
@@ -273,18 +313,21 @@ public sealed class WorkflowTests
         public Task<MediaInfo> ProbeAsync(string path, CancellationToken cancellationToken)
         {
             ProbeCalls++;
-            if (path == "bad.mkv")
+            if (Path.GetFileName(path) == "bad.mkv")
             {
                 throw new IOException("Unreadable fixture");
             }
             return Task.FromResult(Plan(path).Analysis.Media with { MaxCll = 1000 });
         }
-        public Task<RpuEvidence> AnalyzeAsync(MediaInfo media, AnalysisMethod method, ITemporaryWorkspace workspace, CancellationToken cancellationToken) =>
-            Task.FromResult(PlanningFixtures && !media.Source.Path.EndsWith("good.mkv", StringComparison.Ordinal)
+        public Task<RpuEvidence> AnalyzeAsync(MediaInfo media, AnalysisMethod method, ITemporaryWorkspace workspace, CancellationToken cancellationToken)
+        {
+            AnalyzeCalls++;
+            return Task.FromResult(PlanningFixtures && !media.Source.Path.EndsWith("good.mkv", StringComparison.Ordinal)
                 ? new RpuEvidence(method, EnhancementLayer.Fel, 24,
                     media.Source.Path.EndsWith("unknown.mkv", StringComparison.Ordinal) ? null :
                     media.Source.Path.EndsWith("complex.mkv", StringComparison.Ordinal) ? 1200 : 1000, 10, 10)
                 : new RpuEvidence(method, EnhancementLayer.Mel, 24, null, 10, 10));
+        }
         public UserSettings Settings { get; private set; } = new();
         private readonly Dictionary<NativeTool, string> catalog = new();
         public DependencyService Dependencies() => new(this, this, this, this, NullLogger<DependencyService>.Instance);
