@@ -6,6 +6,15 @@ namespace DoViFixer.Console.Rendering;
 
 public sealed class ConsoleRenderer : IProgress<OperationProgress>, IDisposable
 {
+    internal static string FormatSize(long bytes) => bytes switch
+    {
+        >= 1_000_000_000_000 => $"{bytes / 1_000_000_000_000m:N2} TB",
+        >= 1_000_000_000 => $"{bytes / 1_000_000_000m:N2} GB",
+        >= 1_000_000 => $"{bytes / 1_000_000m:N2} MB",
+        1 => "1 byte",
+        _ => $"{bytes:N0} bytes"
+    };
+
     private readonly TextWriter progressOutput;
     private readonly bool interactive;
     private readonly Func<int> getWidth;
@@ -117,11 +126,11 @@ public sealed class ConsoleRenderer : IProgress<OperationProgress>, IDisposable
         dependencies install [Tool ...] [--yes]
         scan [file-or-directory] [-r [depth]] [--candidates-only] [--json]
         inspect <file.mkv> [--json]
-        convert [file-or-directory] [-r [depth]] [--hdr10] [--include-simple]
-                [--force] [--backup] [--output directory] [--temp directory]
+        convert [files-or-directories...] [-r [depth]] [--hdr10] [--include-simple]
+                [--force] [--backup] [--delete] [--safe] [--output directory] [--temp directory]
                 [--plan | --yes]
         backup <file.mkv> [--output directory] [--temp directory] [--plan | --yes]
-        restore <base.mkv> <archive.dovi> [--allow-legacy-archive]
+        restore <base.mkv> [--source <archive.dovi>]
                 [--output directory] [--temp directory] [--plan | --yes]
         cleanup [file-or-directory] [-r [depth]] [--delete-backups [--yes]]
         settings show [--json]
@@ -141,12 +150,14 @@ public sealed class ConsoleRenderer : IProgress<OperationProgress>, IDisposable
         dependencies install still accepts --repair for compatibility; it is no longer required.
         --yes approves the displayed media plan, never software installation by itself.
         --plan performs analysis and shows exact outputs without conversion.
-        Originals are always retained; outputs are never overwritten.
+        Conversion renames originals to .bak.dovi_convert and reuses the MKV filename.
+        --delete removes that original backup only after verified publication. Existing backups/outputs are never overwritten.
         --force permits detected complex FEL only; failed/unknown analysis stays blocked.
-        Interactive convert asks separately to include Simple FEL and Complex FEL when flags are absent.
-        Declining skips that FEL type; MEL continues. --yes and --plan keep flag-based selection.
+        Interactive convert shows all plans, then asks once per MEL, Simple FEL, or Complex FEL category to execute.
+        Declining skips that category; approved categories continue. --yes and --plan keep flag-based selection.
         Cleanup lists .dovi and .bak.dovi_convert files; deletion is permanent and opt-in.
-        --safe is accepted for convert/inspect; disk extraction is always used.
+        Conversion streams by default with disk fallback; --safe forces disk extraction.
+        Restore finds the adjacent .dovi archive; EL-only upstream archives are accepted.
         Scan/inspect also accept --temp. Use -- before filenames beginning with a dash.
         update-check reports upstream dovi_convert releases; no DoViFixer release feed exists yet.
         Exit codes: 0 success, 1 failure/partial, 2 arguments, 3 dependencies,

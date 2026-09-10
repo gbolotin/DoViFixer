@@ -9,7 +9,9 @@ public interface IFileDiscovery
 public interface IFileOperations
 {
     FileIdentity Identify(string path);
-    string PrepareOutputPath(string input, string? outputDirectory, string suffix);
+    string PrepareOutputPath(string input, string? outputDirectory, string suffix, bool allowInput = false);
+    FileIdentity RenameOriginal(FileIdentity identity);
+    void RestoreOriginal(FileIdentity backupIdentity, string originalPath);
     void EnsureAvailableSpace(string directory, long requiredBytes);
     void EnsureWritableDirectory(string directory);
     ValueTask<IAsyncDisposable> AcquireReadLeaseAsync(FileIdentity identity, CancellationToken cancellationToken);

@@ -11,9 +11,10 @@ namespace DoViFixer.Application.Conversion;
 
 public sealed record ConversionRequest(string Input, int RecursiveDepth = 0, ConversionTarget Target = ConversionTarget.Profile81,
     string? OutputDirectory = null, string? TemporaryDirectory = null, bool IncludeSimple = false,
-    bool ForceComplex = false, bool CreateBackup = false);
+    bool ForceComplex = false, bool CreateBackup = false, bool Safe = false, bool DeleteBackup = false,
+    IReadOnlyList<string>? AdditionalInputs = null);
 public sealed record ConversionPlan(Guid Id, MediaAnalysis Analysis, ConversionTarget Target, string Output,
-    string? Archive, string? TemporaryDirectory, long ScratchBytes, string Decision);
+    string? Archive, string? TemporaryDirectory, long ScratchBytes, string Decision, bool Safe = false, bool DeleteBackup = false);
 public sealed record ConversionPlanningResult(IReadOnlyList<ConversionPlan> Plans, IReadOnlyList<FileResult> Skipped);
 
 public sealed class ConversionPlanner(IFileDiscovery discovery, IFileOperations files,
@@ -36,7 +37,22 @@ public sealed class ConversionPlanner(IFileDiscovery discovery, IFileOperations 
         var skipped = new List<FileResult>();
         var outputs = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
         var snapshot = await settings.ReadAsync(cancellationToken);
-        foreach (string path in discovery.Discover(request.Input, request.RecursiveDepth))
+        var inputs = new[] { request.Input }.Concat(request.AdditionalInputs ?? []);
+        var paths = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+        foreach (string input in inputs)
+        {
+            cancellationToken.ThrowIfCancellationRequested();
+            try
+            {
+                paths.UnionWith(discovery.Discover(input, request.RecursiveDepth));
+            }
+            catch (Exception ex) when (ex is IOException or UnauthorizedAccessException or ArgumentException)
+            {
+                skipped.Add(new(input, OperationStatus.Failed, null, ex.Message));
+                OperationLog.Result(logger, skipped[^1]);
+            }
+        }
+        foreach (string path in paths)
         {
             cancellationToken.ThrowIfCancellationRequested();
             try
@@ -57,15 +73,16 @@ public sealed class ConversionPlanner(IFileDiscovery discovery, IFileOperations 
                     OperationLog.Result(logger, skipped[^1]);
                     continue;
                 }
-                string output = files.PrepareOutputPath(path, request.OutputDirectory, request.Target == ConversionTarget.Profile81 ? ".dv81.mkv" : ".hdr10.mkv");
+                string output = files.PrepareOutputPath(path, request.OutputDirectory, Path.GetExtension(path), allowInput: true);
+                string originalBackup = files.PrepareOutputPath(path, null, Path.GetExtension(path) + ".bak.dovi_convert");
                 string? archive = request.CreateBackup ? files.PrepareOutputPath(path, request.OutputDirectory, ".dovi") : null;
-                if (!outputs.Add(output) || (archive is not null && !outputs.Add(archive)))
+                if (!outputs.Add(output) || !outputs.Add(originalBackup) || (archive is not null && !outputs.Add(archive)))
                 {
                     throw new IOException("Multiple inputs resolve to the same output. Use separate output directories.");
                 }
                 long scratch = ConversionPolicy.RequiredScratchBytes(analysis.Media.Source.Length);
                 plans.Add(new(Guid.NewGuid(), analysis, request.Target, output, archive,
-                    request.TemporaryDirectory ?? snapshot.TemporaryDirectory, scratch, decision.Reason));
+                    request.TemporaryDirectory ?? snapshot.TemporaryDirectory, scratch, decision.Reason, request.Safe, request.DeleteBackup));
                 logger.LogInformation("Prepared plan {PlanId}: {Input} to {Output}; target {Target}; archive {Archive}; scratch {ScratchBytes}; force {ForceComplex}; include simple {IncludeSimple}; {Decision}",
                     plans[^1].Id, path, output, request.Target, archive, scratch, request.ForceComplex, request.IncludeSimple, decision.Reason);
             }
@@ -98,41 +115,94 @@ public sealed class ConversionService(DependencyService dependencies, IFileOpera
         logger.LogInformation("Executing plan {PlanId}: target {Target}; output {Output}; archive {Archive}; scratch {ScratchBytes}; temporary directory {TemporaryDirectory}; {Decision}",
             approvedPlan.Id, approvedPlan.Target, approvedPlan.Output, approvedPlan.Archive, approvedPlan.ScratchBytes, approvedPlan.TemporaryDirectory, approvedPlan.Decision);
         await dependencies.RequireAsync(DependencyRequirements.All, cancellationToken);
-        await using var lease = await files.AcquireReadLeaseAsync(media.Source, cancellationToken);
         files.EnsureAvailableSpace(Path.GetDirectoryName(approvedPlan.Output)!, checked(media.Source.Length * 2 + (1L << 30)));
         await using var workspace = await workspaces.CreateAsync(approvedPlan.ScratchBytes, approvedPlan.TemporaryDirectory, cancellationToken);
-        await using var staged = publisher.Stage(approvedPlan.Output);
+        cancellationToken.ThrowIfCancellationRequested();
+        var backupIdentity = files.RenameOriginal(media.Source);
+        OperationLog.Audit(logger, "RenameOriginal", backupIdentity.Path, "Completed", approvedPlan.Id);
+        media = media with { Source = backupIdentity };
         string archiveNote = "";
-        if (approvedPlan.Archive is not null)
-        {
-            await using var stagedArchive = publisher.Stage(approvedPlan.Archive);
-            progress?.Report(new(approvedPlan.Id, "Backing up enhancement layer", media.Source.Path));
-            var manifest = await processor.ExtractBackupAsync(media, workspace, cancellationToken);
-            await archives.WriteAsync(stagedArchive.Path, manifest, workspace, cancellationToken);
-            await stagedArchive.PublishAsync(cancellationToken);
-            OperationLog.Audit(logger, "PublishBackup", approvedPlan.Archive, "Completed", approvedPlan.Id);
-            archiveNote = $" Verified archive retained at {approvedPlan.Archive}.";
-        }
+        bool published = false;
         try
         {
-            await processor.ConvertAsync(media, approvedPlan.Target, workspace, staged.Path, progress, approvedPlan.Id, cancellationToken);
-            progress?.Report(new(approvedPlan.Id, "Verifying", media.Source.Path));
-            logger.LogDebug("Stage {Stage}", "Verifying");
-            var findings = await verifier.VerifyAsync(media, staged.Path,
-                approvedPlan.Target == ConversionTarget.Profile81 ? DolbyVisionProfile.Profile81 : DolbyVisionProfile.None, workspace, cancellationToken, progress, approvedPlan.Id);
-            if (findings.Count > 0)
+            await using (var lease = await files.AcquireReadLeaseAsync(media.Source, cancellationToken))
             {
-                throw new InvalidDataException("Verification failed: " + string.Join("; ", findings));
+                if (approvedPlan.Archive is not null)
+                {
+                    await using var stagedArchive = publisher.Stage(approvedPlan.Archive);
+                    progress?.Report(new(approvedPlan.Id, "Backing up enhancement layer", media.Source.Path));
+                    var manifest = await processor.ExtractBackupAsync(media, workspace, cancellationToken);
+                    manifest = manifest with { SourceName = Path.GetFileName(approvedPlan.Analysis.Media.Source.Path) };
+                    await archives.WriteAsync(stagedArchive.Path, manifest, workspace, cancellationToken);
+                    await stagedArchive.PublishAsync(cancellationToken);
+                    OperationLog.Audit(logger, "PublishBackup", approvedPlan.Archive, "Completed", approvedPlan.Id);
+                    archiveNote = $" Verified archive retained at {approvedPlan.Archive}.";
+                }
+                for (int attempt = 0; ; attempt++)
+                {
+                    await using var staged = publisher.Stage(approvedPlan.Output);
+                    bool safe = approvedPlan.Safe || attempt > 0;
+                    try
+                    {
+                        await processor.ConvertAsync(media, approvedPlan.Target, workspace, staged.Path, progress, approvedPlan.Id, cancellationToken, safe);
+                        progress?.Report(new(approvedPlan.Id, "Verifying", media.Source.Path));
+                        var findings = await verifier.VerifyAsync(media, staged.Path,
+                            approvedPlan.Target == ConversionTarget.Profile81 ? DolbyVisionProfile.Profile81 : DolbyVisionProfile.None,
+                            workspace, cancellationToken, progress, approvedPlan.Id);
+                        if (findings.Count > 0)
+                        {
+                            throw new InvalidDataException("Verification failed: " + string.Join("; ", findings));
+                        }
+                    }
+                    catch (Exception ex) when (!safe && ex is (IOException or InvalidDataException))
+                    {
+                        cancellationToken.ThrowIfCancellationRequested();
+                        logger.LogWarning(ex, "Standard conversion failed verification or processing; retrying in safe mode");
+                        progress?.Report(new(approvedPlan.Id, "Retrying with safe disk extraction", media.Source.Path));
+                        continue;
+                    }
+                    progress?.Report(new(approvedPlan.Id, "Verifying", media.Source.Path, 100));
+                    await staged.PublishAsync(cancellationToken);
+                    published = true;
+                    OperationLog.Audit(logger, "PublishConversion", approvedPlan.Output, "Completed", approvedPlan.Id);
+                    break;
+                }
             }
-            progress?.Report(new(approvedPlan.Id, "Verifying", media.Source.Path, 100));
-            await staged.PublishAsync(cancellationToken);
-            OperationLog.Audit(logger, "PublishConversion", approvedPlan.Output, "Completed", approvedPlan.Id);
-            return new(media.Source.Path, OperationStatus.Completed, approvedPlan.Output, "Verified output published. Original retained." + archiveNote);
+            if (approvedPlan.DeleteBackup)
+            {
+                await files.DeleteAsync(backupIdentity, cancellationToken);
+                OperationLog.Audit(logger, "DeleteOriginalBackup", backupIdentity.Path, "Completed", approvedPlan.Id);
+            }
+            return new(approvedPlan.Analysis.Media.Source.Path, OperationStatus.Completed, approvedPlan.Output,
+                "Verified output published. " + (approvedPlan.DeleteBackup ? "Original backup deleted." : $"Original retained at {backupIdentity.Path}.") + archiveNote);
         }
-        catch (Exception ex) when (ex is not OperationCanceledException)
+        catch (Exception ex)
         {
+            if (published)
+            {
+                logger.LogWarning(ex, "Conversion verified and published, but original backup cleanup did not complete: {BackupPath}", backupIdentity.Path);
+                return new(approvedPlan.Analysis.Media.Source.Path, OperationStatus.Partial, approvedPlan.Output,
+                    $"Conversion verified and published. Original backup cleanup did not complete: {ex.Message} Original retained at {backupIdentity.Path}." + archiveNote);
+            }
+            string recovery = $" Original retained at {backupIdentity.Path}.";
+            if (!published)
+            {
+                try
+                {
+                    files.RestoreOriginal(backupIdentity, approvedPlan.Analysis.Media.Source.Path);
+                    recovery = $" Original restored to {approvedPlan.Analysis.Media.Source.Path}.";
+                    OperationLog.Audit(logger, "RestoreOriginal", approvedPlan.Analysis.Media.Source.Path, "Completed", approvedPlan.Id);
+                }
+                catch (Exception recoveryException)
+                {
+                    recovery += $" Automatic recovery failed: {recoveryException.Message}";
+                    logger.LogError(recoveryException, "Could not restore original from {BackupPath}", backupIdentity.Path);
+                }
+            }
             logger.LogError(ex, "Conversion failed: {Reason}{ArchiveNote}", ex.Message, archiveNote);
-            return new(media.Source.Path, OperationStatus.Failed, null, ex.Message + archiveNote);
+            return new(approvedPlan.Analysis.Media.Source.Path,
+                ex is OperationCanceledException ? OperationStatus.Cancelled : OperationStatus.Failed,
+                published ? approvedPlan.Output : null, ex.Message + recovery + archiveNote);
         }
     }
 }
@@ -158,6 +228,10 @@ public sealed class BatchConversionService(ConversionService conversion, ILogger
             {
                 cancellationToken.ThrowIfCancellationRequested();
                 results.Add(await conversion.ExecuteAsync(plan, progress, cancellationToken));
+                if (results[^1].Status == OperationStatus.Cancelled)
+                {
+                    break;
+                }
             }
             catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
             {

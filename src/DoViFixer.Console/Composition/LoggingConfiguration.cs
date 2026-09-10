@@ -1,4 +1,5 @@
 using Microsoft.Extensions.Configuration;
+using DoViFixer.Console.Rendering;
 using Serilog;
 using Serilog.Events;
 using Serilog.Formatting.Json;
@@ -43,8 +44,8 @@ public static class LoggingConfiguration
             .WriteTo.Logger(audit => audit.Filter.ByIncludingOnly(e => IsKind(e, "Audit"))
                 .WriteTo.File(json, Path.Combine(directory, "audit-.jsonl"), rollingInterval: RollingInterval.Day,
                     fileSizeLimitBytes: fileSize, rollOnFileSizeLimit: true, retainedFileCountLimit: auditFiles, shared: true))
-            .WriteTo.Console(restrictedToMinimumLevel: LogEventLevel.Warning, standardErrorFromLevel: LogEventLevel.Verbose,
-                outputTemplate: "[{Timestamp:HH:mm:ss} {Level:u3}] {Message:lj}{NewLine}");
+            .WriteTo.Console(new ConsoleLogFormatter(), restrictedToMinimumLevel: LogEventLevel.Warning,
+                standardErrorFromLevel: LogEventLevel.Verbose);
     }
 
     private static bool IsKind(LogEvent entry, string kind) =>

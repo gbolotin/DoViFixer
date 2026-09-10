@@ -13,7 +13,7 @@ public interface IMediaProbe
 public interface IVideoProcessor
 {
     Task ConvertAsync(MediaInfo media, ConversionTarget target, ITemporaryWorkspace workspace, string stagedOutput,
-        IProgress<OperationProgress>? progress, Guid operationId, CancellationToken cancellationToken);
+        IProgress<OperationProgress>? progress, Guid operationId, CancellationToken cancellationToken, bool safe = false);
     Task<ArchiveManifest> ExtractBackupAsync(MediaInfo media, ITemporaryWorkspace workspace, CancellationToken cancellationToken);
     Task RestoreAsync(MediaInfo media, ArchiveManifest? manifest, ITemporaryWorkspace workspace, string stagedOutput, CancellationToken cancellationToken);
 }

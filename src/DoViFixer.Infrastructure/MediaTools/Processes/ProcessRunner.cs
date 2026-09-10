@@ -11,6 +11,7 @@ internal sealed record ProcessResult(int ExitCode, string Output, string Error);
 internal interface IProcessRunner
 {
     Task<ProcessResult> RunAsync(ProcessRequest request, CancellationToken cancellationToken);
+    Task PipeAsync(ProcessRequest producer, ProcessRequest consumer, CancellationToken cancellationToken);
 }
 internal sealed class ProcessRunner(ILogger<ProcessRunner> logger) : IProcessRunner
 {
@@ -36,6 +37,89 @@ internal sealed class ProcessRunner(ILogger<ProcessRunner> logger) : IProcessRun
                 Stopwatch.GetElapsedTime(started).TotalMilliseconds, cancellationToken.IsCancellationRequested);
             throw;
         }
+    }
+
+    public async Task PipeAsync(ProcessRequest producer, ProcessRequest consumer, CancellationToken cancellationToken)
+    {
+        using var timeout = new CancellationTokenSource(TimeSpan.FromHours(24));
+        using var linked = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken, timeout.Token);
+        using var source = CreatePipelineProcess(producer);
+        using var target = CreatePipelineProcess(consumer);
+        bool sourceStarted = false, targetStarted = false;
+        Task<string>? sourceError = null, targetError = null, targetOutput = null;
+        Task? copy = null;
+        try
+        {
+            linked.Token.ThrowIfCancellationRequested();
+            logger.LogDebug("Starting pipeline {Producer} {ProducerArguments} -> {Consumer} {ConsumerArguments}",
+                producer.Executable, producer.Arguments, consumer.Executable, consumer.Arguments);
+            targetStarted = target.Start();
+            if (!targetStarted) { throw new IOException("Could not start pipeline consumer."); }
+            targetError = DrainAsync(target.StandardError);
+            targetOutput = DrainAsync(target.StandardOutput, consumer.OutputLine);
+            sourceStarted = source.Start();
+            if (!sourceStarted) { throw new IOException("Could not start pipeline producer."); }
+            source.StandardInput.Close();
+            sourceError = DrainAsync(source.StandardError);
+            copy = CopyAsync();
+            await Task.WhenAll(copy, source.WaitForExitAsync(linked.Token), target.WaitForExitAsync(linked.Token));
+            string error = await sourceError + await targetError;
+            await targetOutput;
+            if (source.ExitCode != 0 || target.ExitCode != 0)
+            {
+                throw new IOException($"Streaming failed: producer exit {source.ExitCode}, consumer exit {target.ExitCode}: {Tail(error)}");
+            }
+        }
+        catch (OperationCanceledException) when (!cancellationToken.IsCancellationRequested && timeout.IsCancellationRequested)
+        {
+            throw new TimeoutException("Streaming conversion exceeded its time limit.");
+        }
+        finally
+        {
+            linked.Cancel();
+            if (sourceStarted && !source.HasExited) { source.Kill(entireProcessTree: true); }
+            if (targetStarted && !target.HasExited) { target.Kill(entireProcessTree: true); }
+            if (sourceStarted) { await source.WaitForExitAsync(CancellationToken.None); }
+            if (targetStarted) { await target.WaitForExitAsync(CancellationToken.None); }
+            foreach (Task? task in new Task?[] { copy, sourceError, targetError, targetOutput })
+            {
+                if (task is not null)
+                {
+                    try { await task; }
+                    catch (Exception ex) { logger.LogDebug(ex, "Pipeline stream ended during cleanup"); }
+                }
+            }
+        }
+
+        async Task CopyAsync()
+        {
+            try
+            {
+                await source.StandardOutput.BaseStream.CopyToAsync(target.StandardInput.BaseStream, linked.Token);
+            }
+            catch
+            {
+                linked.Cancel();
+                throw;
+            }
+            finally
+            {
+                target.StandardInput.Close();
+            }
+        }
+    }
+
+    private static Process CreatePipelineProcess(ProcessRequest request)
+    {
+        var start = new ProcessStartInfo(request.Executable)
+        {
+            UseShellExecute = false, CreateNoWindow = true,
+            RedirectStandardInput = true, RedirectStandardOutput = true, RedirectStandardError = true,
+            StandardErrorEncoding = Encoding.UTF8,
+            WorkingDirectory = request.WorkingDirectory ?? Environment.CurrentDirectory
+        };
+        foreach (string argument in request.Arguments) { start.ArgumentList.Add(argument); }
+        return new Process { StartInfo = start };
     }
 
     private async Task<ProcessResult> RunCoreAsync(ProcessRequest request, CancellationToken cancellationToken)

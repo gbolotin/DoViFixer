@@ -160,7 +160,86 @@ public sealed class WorkflowTests
         Assert.AreEqual(3, runtime.Disposed);
         Assert.AreEqual(0, runtime.Published);
         Assert.IsTrue(runtime.ConversionLog.Entries.Any(e => Equals(e.Properties.GetValueOrDefault("Outcome"), "Cancelled")));
-        Assert.IsFalse(runtime.ConversionLog.Entries.Any(e => Equals(e.Properties.GetValueOrDefault("Outcome"), "Completed")));
+        Assert.AreEqual(1, runtime.Restored);
+        StringAssert.Contains(result.Files[0].Message, "Original restored");
+        Assert.IsFalse(runtime.ConversionLog.Entries.Any(e => Equals(e.Properties.GetValueOrDefault("Outcome"), "Completed") && e.Properties.ContainsKey("ElapsedMilliseconds")));
+    }
+
+    [TestMethod]
+    public async Task DeleteBackupRunsOnlyAfterVerifiedPublication()
+    {
+        var runtime = new Runtime();
+        var result = await new BatchConversionService(runtime.Conversion(), NullLogger<BatchConversionService>.Instance)
+            .ExecuteAsync([Plan("bad.mkv") with { DeleteBackup = true }, Plan("good.mkv") with { DeleteBackup = true }], null, default);
+        Assert.AreEqual(OperationStatus.Partial, result.Status);
+        Assert.AreEqual(1, runtime.Deleted);
+        Assert.AreEqual(1, runtime.Published);
+        Assert.AreEqual(6, runtime.Disposed);
+        Assert.IsTrue(runtime.ConversionLog.Entries.Any(e => Equals(e.Properties.GetValueOrDefault("Action"), "DeleteOriginalBackup")));
+    }
+
+    [TestMethod]
+    public async Task OverlappingInputsArePlannedOnce()
+    {
+        var runtime = new Runtime { PlanningFixtures = true };
+        var inspection = new InspectionService(runtime.Dependencies(), runtime, runtime, runtime, runtime, NullLogger<InspectionService>.Instance);
+        var planner = new ConversionPlanner(runtime, runtime, inspection, runtime, NullLogger<ConversionPlanner>.Instance);
+        var result = await planner.PlanAsync(new("fixture", AdditionalInputs: ["fixture"], Safe: true, DeleteBackup: true), null, default);
+        Assert.AreEqual(4, runtime.ProbeCalls);
+        Assert.AreEqual(1, result.Plans.Count);
+        Assert.IsTrue(result.Plans[0].Safe && result.Plans[0].DeleteBackup);
+    }
+
+    [TestMethod]
+    [DataRow(false)]
+    [DataRow(true)]
+    public async Task CleanupFailureAfterPublicationIsPartialAndKeepsVerifiedOutput(bool cancelled)
+    {
+        var runtime = new Runtime { FailDeletion = true, CancelDeletion = cancelled };
+        var plan = Plan("good.mkv") with { DeleteBackup = true };
+        var result = await runtime.Conversion().ExecuteAsync(plan, null, default);
+        Assert.AreEqual(OperationStatus.Partial, result.Status);
+        Assert.AreEqual(plan.Output, result.Output);
+        Assert.AreEqual(1, runtime.Published);
+        Assert.AreEqual(0, runtime.Restored);
+        StringAssert.Contains(result.Message, "Conversion verified and published");
+        StringAssert.Contains(result.Message, "good.mkv.bak.dovi_convert");
+        Assert.AreEqual(OperationStatus.Partial, new BatchResult([result]).Status);
+    }
+
+    [TestMethod]
+    public async Task VerificationFailureRetriesOnceWithSafeModeBeforeDeleting()
+    {
+        var runtime = new Runtime { FailFirstVerification = true };
+        var result = await runtime.Conversion().ExecuteAsync(Plan("good.mkv") with { Safe = false, DeleteBackup = true }, null, default);
+        Assert.AreEqual(OperationStatus.Completed, result.Status);
+        CollectionAssert.AreEqual(new[] { false, true }, runtime.SafeModes);
+        Assert.AreEqual(1, runtime.Published);
+        Assert.AreEqual(1, runtime.Deleted);
+    }
+
+    [TestMethod]
+    public async Task FailedSafeRetryNeverPublishesOrDeletes()
+    {
+        var runtime = new Runtime();
+        var result = await runtime.Conversion().ExecuteAsync(Plan("bad.mkv") with { Safe = false, DeleteBackup = true }, null, default);
+        Assert.AreEqual(OperationStatus.Failed, result.Status);
+        CollectionAssert.AreEqual(new[] { false, true }, runtime.SafeModes);
+        Assert.AreEqual(0, runtime.Published);
+        Assert.AreEqual(0, runtime.Deleted);
+        Assert.AreEqual(1, runtime.Restored);
+    }
+
+    [TestMethod]
+    public async Task RecoveryFailureReportsBackupLocationAndPreservesOriginalError()
+    {
+        var runtime = new Runtime { FailRecovery = true };
+        var result = await runtime.Conversion().ExecuteAsync(Plan("bad.mkv"), null, default);
+        Assert.AreEqual(OperationStatus.Failed, result.Status);
+        StringAssert.Contains(result.Message, "invalid frame count");
+        StringAssert.Contains(result.Message, "bad.mkv.bak.dovi_convert");
+        StringAssert.Contains(result.Message, "Automatic recovery failed");
+        Assert.AreEqual(0, runtime.Deleted);
     }
 
     private static ConversionPlan Plan(string name)
@@ -169,19 +248,25 @@ public sealed class WorkflowTests
         var media = new MediaInfo(new(path, 1000, DateTime.UnixEpoch), DolbyVisionProfile.Profile7, "HEVC", 0, 1920, 1080, 24, 24, 1,
             0, null, new[] { new MediaTrack(0, "video", "HEVC", "und", "", true, false, "1") }, 0, 0, "", "{}");
         var analysis = MediaClassifier.Classify(media, new(AnalysisMethod.FullRpu, EnhancementLayer.Mel, 24, null, 1, 1));
-        return new(Guid.NewGuid(), analysis, ConversionTarget.Profile81, path + ".dv81.mkv", null, null, 10000, "MEL");
+        return new(Guid.NewGuid(), analysis, ConversionTarget.Profile81, path + ".dv81.mkv", null, null, 10000, "MEL", Safe: true);
     }
 
     private sealed class Runtime : IDependencyDetector, IDependencyInstaller, ISettingsStore, IToolCatalog, IFileOperations, IFileDiscovery, IMediaProbe,
         ITemporaryWorkspaceFactory, IVideoProcessor, IMediaVerifier, IOutputPublisher, IBackupArchiveStore
     {
         public bool Ready { get; set; } = true;
+        public bool FailDeletion { get; init; }
+        public bool CancelDeletion { get; init; }
         public bool Changed { get; set; }
         public bool InstallationMakesReady { get; set; } = true;
         public string? ConfiguredPathDuringRediscovery { get; private set; }
         public CancellationTokenSource? CancelDuringConversion { get; set; }
         public int InstallCalls, ConvertCalls, Published, Disposed, Deleted;
         public int ProbeCalls;
+        public int Restored;
+        public bool FailRecovery { get; init; }
+        public bool FailFirstVerification { get; init; }
+        public List<bool> SafeModes { get; } = new();
         public bool PlanningFixtures { get; init; }
         public IReadOnlyList<string> Discover(string input, int recursiveDepth, bool cleanup = false) => PlanningFixtures
             ? new[] { "simple.mkv", "complex.mkv", "unknown.mkv", "good.mkv" } : new[] { "bad.mkv", "good.mkv" };
@@ -243,8 +328,23 @@ public sealed class WorkflowTests
                 catalog[status.Tool] = status.Path!;
             }
         }
+        public FileIdentity RenameOriginal(FileIdentity identity)
+        {
+            if (Changed) { throw new IOException("changed"); }
+            return identity with { Path = identity.Path + ".bak.dovi_convert" };
+        }
         public FileIdentity Identify(string path) => Plan(path).Analysis.Media.Source;
-        public string PrepareOutputPath(string input, string? outputDirectory, string suffix) => Path.GetFullPath(input + suffix);
+        public void RestoreOriginal(FileIdentity backupIdentity, string originalPath)
+        {
+            Assert.AreEqual(0, Published);
+            Assert.AreEqual(originalPath + ".bak.dovi_convert", backupIdentity.Path);
+            if (FailRecovery)
+            {
+                throw new IOException("Destination exists");
+            }
+            Restored++;
+        }
+        public string PrepareOutputPath(string input, string? outputDirectory, string suffix, bool allowInput = false) => Path.GetFullPath(input + suffix);
         public void EnsureAvailableSpace(string directory, long requiredBytes) { }
         public void EnsureWritableDirectory(string directory) { }
         public ValueTask<IAsyncDisposable> AcquireReadLeaseAsync(FileIdentity identity, CancellationToken cancellationToken)
@@ -257,21 +357,32 @@ public sealed class WorkflowTests
         }
         public Task DeleteAsync(FileIdentity identity, CancellationToken cancellationToken)
         {
+            Assert.AreEqual(1, Published, "Deletion must follow successful publication.");
+            Assert.IsTrue(identity.Path.EndsWith(".bak.dovi_convert", StringComparison.Ordinal));
+            if (FailDeletion)
+            {
+                if (CancelDeletion)
+                {
+                    throw new OperationCanceledException();
+                }
+                throw new IOException("Deletion failed");
+            }
             Deleted++;
             return Task.CompletedTask;
         }
         public ValueTask<ITemporaryWorkspace> CreateAsync(long requiredBytes, string? directory, CancellationToken cancellationToken) => ValueTask.FromResult<ITemporaryWorkspace>(new Owned(this));
         public IStagedOutput Stage(string destination) => new Owned(this);
         public Task ConvertAsync(MediaInfo media, ConversionTarget target, ITemporaryWorkspace workspace, string stagedOutput,
-            IProgress<OperationProgress>? progress, Guid operationId, CancellationToken cancellationToken)
+            IProgress<OperationProgress>? progress, Guid operationId, CancellationToken cancellationToken, bool safe = false)
         {
             ConvertCalls++;
+            SafeModes.Add(safe);
             CancelDuringConversion?.Cancel();
             cancellationToken.ThrowIfCancellationRequested();
             return Task.CompletedTask;
         }
         public Task<IReadOnlyList<string>> VerifyAsync(MediaInfo source, string output, DolbyVisionProfile expectedProfile, ITemporaryWorkspace workspace, CancellationToken cancellationToken, IProgress<OperationProgress>? progress = null, Guid operationId = default) =>
-            Task.FromResult<IReadOnlyList<string>>(source.Source.Path.Contains("bad", StringComparison.Ordinal) ? new[] { "invalid frame count" } : []);
+            Task.FromResult<IReadOnlyList<string>>((source.Source.Path.Contains("bad", StringComparison.Ordinal) || (FailFirstVerification && ConvertCalls == 1)) ? new[] { "invalid frame count" } : []);
         public Task<ArchiveManifest> ExtractBackupAsync(MediaInfo media, ITemporaryWorkspace workspace, CancellationToken cancellationToken) => throw new NotSupportedException();
         public Task RestoreAsync(MediaInfo media, ArchiveManifest? manifest, ITemporaryWorkspace workspace, string stagedOutput, CancellationToken cancellationToken) => throw new NotSupportedException();
         public Task WriteAsync(string stagedArchive, ArchiveManifest manifest, ITemporaryWorkspace workspace, CancellationToken cancellationToken) => throw new NotSupportedException();

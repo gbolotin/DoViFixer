@@ -8,6 +8,6 @@ public sealed record BatchResult(IReadOnlyList<FileResult> Files)
     public OperationStatus Status => Files.Count == 0 ? OperationStatus.Skipped
         : Files.Any(f => f.Status == OperationStatus.Cancelled) ? OperationStatus.Cancelled
         : Files.All(f => f.Status == OperationStatus.Completed) ? OperationStatus.Completed
-        : Files.Any(f => f.Status == OperationStatus.Completed) ? OperationStatus.Partial : OperationStatus.Failed;
+        : Files.Any(f => f.Status is OperationStatus.Completed or OperationStatus.Partial) ? OperationStatus.Partial : OperationStatus.Failed;
 }
 public sealed class DependencyNotReadyException(string message) : InvalidOperationException(message);

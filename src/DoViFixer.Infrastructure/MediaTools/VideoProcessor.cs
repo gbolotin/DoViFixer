@@ -15,21 +15,44 @@ namespace DoViFixer.Infrastructure.MediaTools;
 internal sealed class VideoProcessor(IToolCatalog tools, IProcessRunner processes, TimeProvider time, ILogger<VideoProcessor> logger) : IVideoProcessor
 {
     public async Task ConvertAsync(MediaInfo media, ConversionTarget target, ITemporaryWorkspace workspace, string stagedOutput,
-        IProgress<OperationProgress>? progress, Guid operationId, CancellationToken cancellationToken)
+        IProgress<OperationProgress>? progress, Guid operationId, CancellationToken cancellationToken, bool safe = false)
     {
-        progress?.Report(new(operationId, "Extracting video", media.Source.Path));
-        logger.LogDebug("Stage {Stage}", "Extracting video");
         string raw = workspace.File("convert-input.hevc");
         string processed = workspace.File("converted.hevc");
-        await ExtractVideoAsync(media, raw, cancellationToken, new MkvProgress(progress, operationId, "Extracting video", media.Source.Path).Report);
-        progress?.Report(new(operationId, "Extracting video", media.Source.Path, 100));
-        progress?.Report(new(operationId, "Converting metadata", media.Source.Path));
-        logger.LogDebug("Stage {Stage}", "Converting metadata");
-        await RunDoviAsync(target == ConversionTarget.Profile81
-            ? new[] { "-m", "2", "convert", "--discard", raw, "-o", processed }
-            : new[] { "remove", raw, "-o", processed }, cancellationToken);
-        progress?.Report(new(operationId, "Converting metadata", media.Source.Path, 100));
-        File.Delete(raw);
+        File.Delete(processed);
+        if (!safe)
+        {
+            try
+            {
+                progress?.Report(new(operationId, "Streaming conversion", media.Source.Path));
+                await processes.PipeAsync(new(tools.GetPath(NativeTool.FFmpeg), new[]
+                {
+                    "-nostdin", "-v", "error", "-i", media.Source.Path, "-map", "0:v:0", "-c:v", "copy",
+                    "-an", "-sn", "-dn", "-bsf:v", "hevc_mp4toannexb", "-f", "hevc", "-"
+                }), new(tools.GetPath(NativeTool.DoviTool), ConversionArguments("-")), cancellationToken);
+            }
+            catch (Exception ex) when (ex is IOException or TimeoutException)
+            {
+                cancellationToken.ThrowIfCancellationRequested();
+                logger.LogWarning(ex, "Streaming failed; retrying with disk extraction");
+                progress?.Report(new(operationId, "Retrying with safe disk extraction", media.Source.Path));
+                File.Delete(processed);
+                safe = true;
+            }
+        }
+        if (safe)
+        {
+            progress?.Report(new(operationId, "Extracting video", media.Source.Path));
+            await ExtractVideoAsync(media, raw, cancellationToken, new MkvProgress(progress, operationId, "Extracting video", media.Source.Path).Report);
+            progress?.Report(new(operationId, "Extracting video", media.Source.Path, 100));
+            progress?.Report(new(operationId, "Converting metadata", media.Source.Path));
+            await RunDoviAsync(ConversionArguments(raw), cancellationToken);
+            File.Delete(raw);
+            progress?.Report(new(operationId, "Converting metadata", media.Source.Path, 100));
+        }
+        string[] ConversionArguments(string input) => target == ConversionTarget.Profile81
+            ? new[] { "-m", "2", "convert", "--discard", input, "-o", processed }
+            : new[] { "remove", input, "-o", processed };
         progress?.Report(new(operationId, "Remuxing", media.Source.Path));
         logger.LogDebug("Stage {Stage}", "Remuxing");
         await RemuxAsync(media, processed, stagedOutput, workspace, cancellationToken, new MkvProgress(progress, operationId, "Remuxing", media.Source.Path).Report);
@@ -92,20 +115,39 @@ internal sealed class VideoProcessor(IToolCatalog tools, IProcessRunner processe
         using var identification = JsonDocument.Parse(media.IdentificationJson);
         var videoProperties = identification.RootElement.GetProperty("tracks").EnumerateArray()
             .Single(t => t.GetProperty("id").GetInt32() == media.VideoTrackId).GetProperty("properties");
-        var arguments = new List<string> { "--gui-mode", "--disable-track-statistics-tags", "-o", output, "--track-order",
-            string.Join(",", media.Tracks.Select(t => t.Type == "video" ? "1:0" : $"0:{t.Id}")), "--no-video", media.Source.Path,
-            "--timestamps", $"0:{timestamps}", "--language", $"0:{original.Language}", "--track-name", $"0:{original.Name}",
-            "--default-track-flag", $"0:{(original.Default ? 1 : 0)}", "--forced-display-flag", $"0:{(original.Forced ? 1 : 0)}" };
-        MkvVideoMetadata.AppendOptions(videoProperties, arguments);
         string tags = workspace.File("source-tags.xml");
         await processes.RunAsync(new(tools.GetPath(NativeTool.MkvExtract), new[] { media.Source.Path, "tags", tags }, AllowWarnings: true), cancellationToken);
         var document = File.Exists(tags) && new FileInfo(tags).Length > 0 ? XDocument.Load(tags) : new XDocument();
-        var videoTags = document.Root?.Elements("Tag").Where(t => t.Element("Targets")?.Elements("TrackUID").Any(u => u.Value == original.Uid) == true).ToArray() ?? [];
-        if (videoTags.Length > 0)
+        // Preserve descriptive tags explicitly: MakeMKV lists SOURCE_ID as a statistic,
+        // so mkvmerge's automatic statistics handling can discard or rewrite it.
+        foreach (var simple in document.Descendants("Simple").Where(s =>
+            s.Element("Name")?.Value is "BPS" or "DURATION" or "NUMBER_OF_FRAMES" or "NUMBER_OF_BYTES" ||
+            (s.Element("Name")?.Value.StartsWith("_STATISTICS_", StringComparison.Ordinal) ?? false)).ToArray())
         {
-            string videoTagsPath = workspace.File("video-tags.xml");
-            new XDocument(new XElement("Tags", videoTags.Select(t => new XElement(t)))).Save(videoTagsPath);
-            arguments.AddRange(new[] { "--tags", $"0:{videoTagsPath}" });
+            simple.Remove();
+        }
+        // Microsecond timecodes avoid millisecond rounding of high-rate TrueHD packets.
+        var arguments = new List<string> { "--gui-mode", "--disable-track-statistics-tags", "--timestamp-scale", "1000", "-o", output, "--track-order",
+            string.Join(",", media.Tracks.Select(t => t.Type == "video" ? "1:0" : $"0:{t.Id}")), "--no-video", "--no-track-tags" };
+        foreach (var track in media.Tracks.Where(t => t.Type != "video"))
+        {
+            AppendTags(track, track.Id);
+        }
+        arguments.Add(media.Source.Path);
+        arguments.AddRange(new[] { "--timestamps", $"0:{timestamps}", "--language", $"0:{original.Language}", "--track-name", $"0:{original.Name}",
+            "--default-track-flag", $"0:{(original.Default ? 1 : 0)}", "--forced-display-flag", $"0:{(original.Forced ? 1 : 0)}" });
+        MkvVideoMetadata.AppendOptions(videoProperties, arguments);
+        AppendTags(original, 0);
+        void AppendTags(MediaTrack track, int inputId)
+        {
+            var trackTags = document.Root?.Elements("Tag").Where(t => t.Elements("Simple").Any() &&
+                t.Element("Targets")?.Elements("TrackUID").Any(u => u.Value == track.Uid) == true).ToArray() ?? [];
+            if (trackTags.Length > 0)
+            {
+                string path = workspace.File($"track-{track.Id}-tags.xml");
+                new XDocument(new XElement("Tags", trackTags.Select(t => new XElement(t)))).Save(path);
+                arguments.AddRange(new[] { "--tags", $"{inputId}:{path}" });
+            }
         }
         arguments.Add(video);
         await processes.RunAsync(new(tools.GetPath(NativeTool.MkvMerge), arguments, AllowWarnings: true, OutputLine: outputLine), cancellationToken);

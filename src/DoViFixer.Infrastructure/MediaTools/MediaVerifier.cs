@@ -229,6 +229,7 @@ internal sealed class MediaVerifier(MediaProbe probe, VideoProcessor processor, 
                 {
                     tag.Remove();
                 }
+                CanonicalizeTags(document);
                 return string.Join("\n", (document.Root?.Elements() ?? []).Select(e => e.ToString(SaveOptions.DisableFormatting)).Order(StringComparer.Ordinal));
             }
             return document.Root?.ToString(SaveOptions.DisableFormatting) ?? "";
@@ -241,6 +242,35 @@ internal sealed class MediaVerifier(MediaProbe probe, VideoProcessor processor, 
 
     private Task ExtractAsync(string source, string mode, string destination, CancellationToken cancellationToken) =>
         processes.RunAsync(new(tools.GetPath(NativeTool.MkvExtract), new[] { source, mode, destination }, AllowWarnings: true), cancellationToken);
+
+    internal static void CanonicalizeTags(XDocument document)
+    {
+        foreach (var simple in document.Descendants("Simple"))
+        {
+            var ietf = simple.Element("TagLanguageIETF");
+            if (ietf is not null)
+            {
+                try
+                {
+                    // Only ignore a redundant primary-language annotation; retain regional variants.
+                    if (!ietf.Value.Contains('-') && CultureInfo.GetCultureInfo(ietf.Value).ThreeLetterISOLanguageName ==
+                        (simple.Element("TagLanguage")?.Value ?? "und"))
+                    {
+                        ietf.Remove();
+                    }
+                }
+                catch (CultureNotFoundException)
+                {
+                    // Unknown language tags must still compare exactly.
+                }
+            }
+        }
+        foreach (var element in document.Descendants().Reverse().Where(e => e.HasElements).ToArray())
+        {
+            element.ReplaceNodes(element.Elements().OrderBy(e => e.Name.ToString(), StringComparer.Ordinal)
+                .ThenBy(e => e.ToString(SaveOptions.DisableFormatting), StringComparer.Ordinal).ToArray());
+        }
+    }
 
     internal static async Task<bool> TimestampsMatchAsync(string before, string after, CancellationToken cancellationToken)
     {

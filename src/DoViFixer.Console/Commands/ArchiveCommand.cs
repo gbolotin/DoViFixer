@@ -26,7 +26,7 @@ public sealed class ArchiveCommand(BackupService backup, RestoreService restore,
             case "backup":
                 var backupPlan = await backup.PlanAsync(input, command.Value("output"), command.Value("temp"), cancellationToken);
                 interaction.RecordPlan(backupPlan.Id, "Backup", new { backupPlan.Media.Source, backupPlan.Output, backupPlan.TemporaryDirectory, backupPlan.ScratchBytes });
-                renderer.Write($"Backup: {backupPlan.Media.Source.Path}\nArchive: {backupPlan.Output}\nScratch estimate: {backupPlan.ScratchBytes:N0} bytes. Original retained.");
+                renderer.Write($"Backup: {backupPlan.Media.Source.Path}\nArchive: {backupPlan.Output}\nScratch estimate: {ConsoleRenderer.FormatSize(backupPlan.ScratchBytes)}. Original retained.");
                 if (command.Has("plan"))
                 {
                     return 0;
@@ -38,12 +38,12 @@ public sealed class ArchiveCommand(BackupService backup, RestoreService restore,
                 renderer.Result(await backup.ExecuteAsync(backupPlan, renderer, cancellationToken));
                 return 0;
             case "restore":
-                var restorePlan = await restore.PlanAsync(input, command.Arguments[1], command.Value("output"), command.Value("temp"), command.Has("allow-legacy-archive"), cancellationToken);
+                var restorePlan = await restore.PlanAsync(input, command.Value("source") ?? command.Arguments.ElementAtOrDefault(1) ?? Path.ChangeExtension(input, ".dovi"), command.Value("output"), command.Value("temp"), true, cancellationToken);
                 interaction.RecordPlan(restorePlan.Id, "Restore", new { restorePlan.Media.Source, restorePlan.Archive, restorePlan.Output, restorePlan.TemporaryDirectory, restorePlan.ScratchBytes, restorePlan.AllowLegacy });
-                renderer.Write($"Base: {restorePlan.Media.Source.Path}\nArchive: {restorePlan.Archive.Path}\nOutput: {restorePlan.Output}\nScratch estimate: {restorePlan.ScratchBytes:N0} bytes. Original retained.");
+                renderer.Write($"Base: {restorePlan.Media.Source.Path}\nArchive: {restorePlan.Archive.Path}\nOutput: {restorePlan.Output}\nScratch estimate: {ConsoleRenderer.FormatSize(restorePlan.ScratchBytes)}. Original retained.");
                 if (restorePlan.AllowLegacy)
                 {
-                    renderer.Write("Legacy archives are allowed: source pairing cannot be verified without a manifest.");
+                    renderer.Write("Upstream EL-only archives are supported; source pairing cannot be verified without a manifest.");
                 }
                 if (command.Has("plan"))
                 {

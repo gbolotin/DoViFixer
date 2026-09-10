@@ -19,9 +19,9 @@ public sealed record CommandLine(string Command, IReadOnlyList<string> Arguments
         {
             "scan" => ["recursive", "temp", "candidates-only", "json", "install-dependencies"],
             "inspect" => ["temp", "json", "install-dependencies", "safe"],
-            "convert" => ["recursive", "temp", "output", "hdr10", "include-simple", "force", "backup", "yes", "plan", "safe", "install-dependencies"],
+            "convert" => ["recursive", "temp", "output", "hdr10", "include-simple", "force", "backup", "delete", "yes", "plan", "safe", "install-dependencies"],
             "backup" => ["temp", "output", "yes", "plan", "install-dependencies"],
-            "restore" => ["temp", "output", "yes", "plan", "allow-legacy-archive", "install-dependencies"],
+            "restore" => ["temp", "output", "yes", "plan", "allow-legacy-archive", "source", "install-dependencies"],
             "cleanup" => ["recursive", "delete-backups", "yes"],
             "dependencies" => ["yes", "repair", "json"],
             "settings" => ["json"],
@@ -50,11 +50,11 @@ public sealed record CommandLine(string Command, IReadOnlyList<string> Arguments
                 throw new ArgumentException($"Unknown, duplicate or inapplicable option '{argument}' for {command}.");
             }
             string? value = null;
-            if (name is "temp" or "output")
+            if (name is "temp" or "output" or "source")
             {
                 if (++i >= args.Length || args[i].StartsWith('-'))
                 {
-                    throw new ArgumentException($"{argument} requires a directory path.");
+                    throw new ArgumentException($"{argument} requires a path.");
                 }
                 value = args[i];
             }
@@ -81,9 +81,10 @@ public sealed record CommandLine(string Command, IReadOnlyList<string> Arguments
     {
         bool countValid = Command switch
         {
-            "scan" or "convert" or "cleanup" => Arguments.Count <= 1,
+            "scan" or "cleanup" => Arguments.Count <= 1,
+            "convert" => true,
             "inspect" or "backup" => Arguments.Count == 1,
-            "restore" => Arguments.Count == 2,
+            "restore" => Arguments.Count is 1 or 2 && !(Arguments.Count == 2 && Has("source")),
             "update-check" => Arguments.Count == 0,
             "dependencies" => Arguments.Count >= 1 && Arguments[0] is "check" or "install" &&
                 Arguments.Skip(1).All(a => Enum.TryParse<NativeTool>(a, true, out var tool) && Enum.IsDefined(tool)),

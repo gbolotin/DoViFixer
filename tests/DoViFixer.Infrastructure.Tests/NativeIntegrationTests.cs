@@ -1,3 +1,6 @@
+using DoViFixer.Application.Conversion;
+using DoViFixer.Application.Operations;
+using DoViFixer.Domain.Analysis;
 using System.Text.Json;
 using DoViFixer.Application.Abstractions;
 using DoViFixer.Application.Dependencies;
@@ -17,6 +20,77 @@ namespace DoViFixer.Infrastructure.Tests;
 [TestClass]
 public sealed class NativeIntegrationTests
 {
+    [TestMethod]
+    [TestCategory("NativeIntegration")]
+    public async Task ExplicitDirectorySupportsHandleBoundBackupDeletion()
+    {
+        string? directory = Environment.GetEnvironmentVariable("DOVIFIXER_TEST_DELETE_DIRECTORY");
+        if (directory is null)
+        {
+            Assert.Inconclusive("Set DOVIFIXER_TEST_DELETE_DIRECTORY to test deletion of one newly created disposable file.");
+        }
+        string path = Path.Combine(directory, $".dovifixer-delete-test-{Guid.NewGuid():N}.bak.dovi_convert");
+        await using (var stream = new FileStream(path, FileMode.CreateNew, FileAccess.Write, FileShare.None))
+        {
+            await stream.WriteAsync("DoViFixer disposable deletion test"u8.ToArray());
+        }
+        try
+        {
+            var files = new FileOperations();
+            await files.DeleteAsync(files.Identify(path), default);
+            Assert.IsFalse(File.Exists(path), path);
+        }
+        finally
+        {
+            File.Delete(path);
+        }
+    }
+
+    [TestMethod]
+    [TestCategory("NativeIntegration")]
+    [DataRow(false)]
+    [DataRow(true)]
+    public async Task ExplicitSourceConvertsAndVerifiesWithoutRenamingOriginal(bool safe)
+    {
+        string? source = Environment.GetEnvironmentVariable("DOVIFIXER_TEST_SOURCE");
+        if (source is null)
+        {
+            Assert.Inconclusive("Set DOVIFIXER_TEST_SOURCE to opt in to conversion of a read-only source into a temporary workspace.");
+        }
+        var tools = new ToolCatalog();
+        foreach (var tool in DependencyRequirements.All)
+        {
+            string? path = Environment.GetEnvironmentVariable("DOVIFIXER_TEST_" + tool.ToString().ToUpperInvariant());
+            if (path is null || !File.Exists(path))
+            {
+                Assert.Inconclusive($"Set DOVIFIXER_TEST_{tool.ToString().ToUpperInvariant()} to an installed executable.");
+            }
+            tools.Refresh([new(tool, DependencyState.Ready, path, "test", "explicit test tool")]);
+        }
+        var files = new FileOperations();
+        var runner = new ProcessRunner(NullLogger<ProcessRunner>.Instance);
+        var probe = new MediaProbe(tools, runner, files, NullLogger<MediaProbe>.Instance);
+        var processor = new VideoProcessor(tools, runner, TimeProvider.System, NullLogger<VideoProcessor>.Instance);
+        var media = await probe.ProbeAsync(source, default);
+        await using var lease = await files.AcquireReadLeaseAsync(media.Source, default);
+        var factory = new TemporaryWorkspaceFactory(files, NullLogger<TemporaryWorkspaceFactory>.Instance);
+        await using var workspace = await factory.CreateAsync(ConversionPolicy.RequiredScratchBytes(media.Source.Length), null, default);
+        string input = workspace.File("copy.mkv");
+        File.Copy(source, input);
+        var copy = media with { Source = files.Identify(input) };
+        var verifier = new MediaVerifier(probe, processor, tools, runner);
+        var dependencies = new DependencyService(new ReadyDetector(tools), null!, null!, tools, NullLogger<DependencyService>.Instance);
+        var service = new ConversionService(dependencies, files, factory, processor, verifier,
+            new OutputPublisher(NullLogger<OutputPublisher>.Instance), new BackupArchiveStore(), NullLogger<ConversionService>.Instance);
+        var analysis = MediaClassifier.Classify(copy, await probe.AnalyzeAsync(copy, AnalysisMethod.FullRpu, workspace, default));
+        var result = await service.ExecuteAsync(new(Guid.NewGuid(), analysis, ConversionTarget.Profile81, input, null,
+            workspace.DirectoryPath, ConversionPolicy.RequiredScratchBytes(copy.Source.Length), "explicit native test", Safe: safe), null, default);
+        Assert.AreEqual(OperationStatus.Completed, result.Status, result.Message);
+        Assert.IsTrue(File.Exists(input));
+        Assert.AreEqual(copy.Source.Length, new FileInfo(input + ".bak.dovi_convert").Length);
+        Assert.AreEqual(media.Source, files.Identify(source));
+    }
+
     [TestMethod]
     [TestCategory("NativeIntegration")]
     public async Task NativeMetadataRecognizesProfile7Directory()
@@ -47,12 +121,14 @@ public sealed class NativeIntegrationTests
 
     [TestMethod]
     [TestCategory("NativeIntegration")]
-    [DataRow(false)]
-    [DataRow(true)]
-    public async Task NativeFixtureConvertsBacksUpAndRestoresWithIdenticalBaseAndEnhancementPayloads(bool includeMetadata)
+    [DataRow(false, false, false)]
+    [DataRow(true, false, false)]
+    [DataRow(true, true, false)]
+    [DataRow(true, false, true)]
+    public async Task NativeFixtureConvertsBacksUpAndRestoresWithIdenticalBaseAndEnhancementPayloads(bool includeMetadata, bool safe, bool failStreaming)
     {
         var toolPaths = new Dictionary<NativeTool, string>();
-        foreach (var tool in new[] { NativeTool.MkvMerge, NativeTool.MkvExtract, NativeTool.DoviTool, NativeTool.FFprobe })
+        foreach (var tool in new[] { NativeTool.MkvMerge, NativeTool.MkvExtract, NativeTool.DoviTool, NativeTool.FFprobe, NativeTool.FFmpeg })
         {
             string? path = Environment.GetEnvironmentVariable("DOVIFIXER_TEST_" + tool.ToString().ToUpperInvariant());
             if (path is null || !File.Exists(path))
@@ -114,15 +190,15 @@ public sealed class NativeIntegrationTests
             """;
         var media = MediaMetadataParser.Parse(files.Identify(input), identification.Output, mi);
         await using var sourceLease = await files.AcquireReadLeaseAsync(media.Source, default);
-        var processor = new VideoProcessor(tools, runner, TimeProvider.System, NullLogger<VideoProcessor>.Instance);
+        var processor = new VideoProcessor(tools, failStreaming ? new FailingPipelineRunner(runner) : runner, TimeProvider.System, NullLogger<VideoProcessor>.Instance);
         var manifest = await processor.ExtractBackupAsync(media, workspace, default);
         string archive = workspace.File("fixture.dovi");
         var archiveStore = new BackupArchiveStore();
         await archiveStore.WriteAsync(archive, manifest, workspace, default);
         string output = workspace.File("converted.partial");
         var progress = new RecordingProgress();
-        await processor.ConvertAsync(media, ConversionTarget.Profile81, workspace, output, progress, Guid.NewGuid(), default);
-        foreach (string stage in new[] { "Extracting video", "Remuxing" })
+        await processor.ConvertAsync(media, ConversionTarget.Profile81, workspace, output, progress, Guid.NewGuid(), default, true);
+        foreach (string stage in safe || failStreaming ? new[] { "Extracting video", "Remuxing" } : new[] { "Remuxing" })
         {
             Assert.IsTrue(progress.Values.Any(p => p.Stage == stage && p.Percent is >= 0 and < 100), stage + " native progress");
             Assert.IsTrue(progress.Values.Any(p => p.Stage == stage && p.Percent == 100), stage + " completion");
@@ -166,7 +242,7 @@ public sealed class NativeIntegrationTests
 
         await using var hdrWorkspace = await factory.CreateAsync(16 * 1024 * 1024, null, default);
         string hdrOutput = hdrWorkspace.File("hdr10.partial");
-        await processor.ConvertAsync(media, ConversionTarget.Hdr10, hdrWorkspace, hdrOutput, null, Guid.NewGuid(), default);
+        await processor.ConvertAsync(media, ConversionTarget.Hdr10, hdrWorkspace, hdrOutput, null, Guid.NewGuid(), default, true);
         string hdrRaw = hdrWorkspace.File("hdr10.hevc");
         string hdrClean = hdrWorkspace.File("hdr10-clean.hevc");
         await processor.ExtractVideoAsync(media with { Source = files.Identify(hdrOutput) }, hdrRaw, default);
@@ -199,12 +275,50 @@ public sealed class NativeIntegrationTests
             var failures = await verifier.VerifyAsync(sourceMedia, targetPath, targetProfile, checkWorkspace, default);
             Assert.AreEqual(0, failures.Count, string.Join("; ", failures));
         }
+        // Exercise the complete conversion workflow, including verification fallback,
+        // original naming, archive retention, and deletion after publication.
+        foreach (var target in new[] { ConversionTarget.Profile81, ConversionTarget.Hdr10 })
+        {
+            string serviceInput = workspace.File("service-" + target + ".mkv");
+            File.Copy(input, serviceInput);
+            string targetJson = target == ConversionTarget.Profile81 ? mediaInfoFixtures[output] : mediaInfoFixtures[hdrOutput];
+            var serviceRunner = new FixtureMediaInfoRunner(runner, mediaInfoFixtures, targetJson);
+            var serviceProbe = new MediaProbe(tools, serviceRunner, files, NullLogger<MediaProbe>.Instance);
+            var serviceProcessor = new VideoProcessor(tools, failStreaming ? new FailingPipelineRunner(runner) : runner, TimeProvider.System, NullLogger<VideoProcessor>.Instance);
+            var serviceVerifier = new MediaVerifier(serviceProbe, serviceProcessor, tools, serviceRunner);
+            var dependencies = new DependencyService(new ReadyDetector(tools), null!, null!, tools, NullLogger<DependencyService>.Instance);
+            var service = new ConversionService(dependencies, files, factory, serviceProcessor, serviceVerifier,
+                new OutputPublisher(NullLogger<OutputPublisher>.Instance), archiveStore, NullLogger<ConversionService>.Instance);
+            var sourceMedia = media with { Source = files.Identify(serviceInput) };
+            var analysis = MediaClassifier.Classify(sourceMedia, new(AnalysisMethod.FullRpu, EnhancementLayer.Mel, 259, null, 1, 1));
+            string serviceArchive = Path.ChangeExtension(serviceInput, ".dovi");
+            var result = await service.ExecuteAsync(new(Guid.NewGuid(), analysis, target, serviceInput, serviceArchive,
+                workspace.DirectoryPath, 16 * 1024 * 1024, "fixture", Safe: safe, DeleteBackup: !safe), null, default);
+            Assert.AreEqual(OperationStatus.Completed, result.Status, result.Message);
+            Assert.IsTrue(File.Exists(serviceInput));
+            Assert.IsTrue(File.Exists(serviceArchive));
+            Assert.AreEqual(safe, File.Exists(serviceInput + ".bak.dovi_convert"));
+        }
     }
 
-    private sealed class FixtureMediaInfoRunner(IProcessRunner native, IReadOnlyDictionary<string, string> fixtures) : IProcessRunner
+    private sealed class ReadyDetector(IToolCatalog catalog) : IDependencyDetector
     {
+        public Task<DependencyReport> DetectAsync(IReadOnlyList<NativeTool> tools, CancellationToken cancellationToken, bool skipConfiguredPaths = false) =>
+            Task.FromResult(new DependencyReport(tools.Select(t => new DependencyStatus(t, DependencyState.Ready, catalog.GetPath(t), "test", "fixture")).ToArray()));
+        public Task<DependencyStatus> ValidatePathAsync(NativeTool tool, string path, CancellationToken cancellationToken) => throw new NotSupportedException();
+    }
+
+    private sealed class FailingPipelineRunner(IProcessRunner native) : IProcessRunner
+    {
+        public Task<ProcessResult> RunAsync(ProcessRequest request, CancellationToken cancellationToken) => native.RunAsync(request, cancellationToken);
+        public Task PipeAsync(ProcessRequest producer, ProcessRequest consumer, CancellationToken cancellationToken) => throw new IOException("Simulated streaming failure");
+    }
+
+    private sealed class FixtureMediaInfoRunner(IProcessRunner native, IReadOnlyDictionary<string, string> fixtures, string? defaultJson = null) : IProcessRunner
+    {
+        public Task PipeAsync(ProcessRequest producer, ProcessRequest consumer, CancellationToken cancellationToken) => native.PipeAsync(producer, consumer, cancellationToken);
         public Task<ProcessResult> RunAsync(ProcessRequest request, CancellationToken cancellationToken) => request.Executable == "fixture-mediainfo"
-            ? Task.FromResult(new ProcessResult(0, fixtures[request.Arguments[^1]], "")) : native.RunAsync(request, cancellationToken);
+            ? Task.FromResult(new ProcessResult(0, fixtures.TryGetValue(request.Arguments[^1], out var json) ? json : defaultJson ?? throw new InvalidOperationException("Missing MediaInfo fixture"), "")) : native.RunAsync(request, cancellationToken);
     }
     private sealed class RecordingProgress : IProgress<DoViFixer.Application.Operations.OperationProgress>
     {

@@ -1,3 +1,4 @@
+using DoViFixer.Application.Conversion;
 using DoViFixer.Console.Rendering;
 using DoViFixer.Domain.Analysis;
 
@@ -6,26 +7,51 @@ namespace DoViFixer.Console.Interaction;
 public sealed class FelConversionApproval(ConsoleRenderer renderer,
     Func<string, bool, CancellationToken, Guid?, Task<bool>> confirm)
 {
-    private readonly Dictionary<AnalysisVerdict, bool> answers = new();
-
-    public async Task<bool> ConfirmAsync(MediaAnalysis analysis, CancellationToken cancellationToken)
+    public async Task<IReadOnlyList<ConversionPlan>> ConfirmAsync(
+        IReadOnlyList<ConversionPlan> plans, bool yes, CancellationToken cancellationToken)
     {
         cancellationToken.ThrowIfCancellationRequested();
-        if (answers.TryGetValue(analysis.Verdict, out bool approved))
+        if (plans.Count == 0)
         {
-            return approved;
+            return [];
         }
-        string category = analysis.Verdict switch
+        if (yes)
         {
-            AnalysisVerdict.SimpleFel => "Simple FEL",
-            AnalysisVerdict.ComplexFel => "Complex FEL",
-            _ => throw new ArgumentException("Only detected FEL can be approved.", nameof(analysis))
-        };
-        renderer.Write($"{category}: {analysis.Media.Source.Path}\n{analysis.Reason}");
-        string warning = analysis.Verdict == AnalysisVerdict.ComplexFel
-            ? " Enhancement-layer picture data will be lost." : "";
-        approved = await confirm($"Include {category} files in this conversion batch?{warning}", false, cancellationToken, null);
-        answers.Add(analysis.Verdict, approved);
-        return approved;
+            return await confirm($"Execute these {plans.Count} conversion(s)?", true, cancellationToken, null) ? plans : [];
+        }
+
+        var approved = new HashSet<Guid>();
+        foreach (var group in plans.GroupBy(plan => plan.Analysis.Verdict))
+        {
+            cancellationToken.ThrowIfCancellationRequested();
+            string category = group.Key switch
+            {
+                AnalysisVerdict.SimpleFel => "Simple FEL",
+                AnalysisVerdict.ComplexFel => "Complex FEL",
+                AnalysisVerdict.Mel => "MEL",
+                _ => group.Key.ToString()
+            };
+            renderer.Write($"{category} conversion plans:");
+            foreach (var plan in group)
+            {
+                renderer.Write($"  {plan.Analysis.Media.Source.Path}");
+            }
+            string warning = group.Key is AnalysisVerdict.SimpleFel or AnalysisVerdict.ComplexFel
+                ? " Enhancement-layer picture data will be lost." : "";
+            bool accepted = await confirm($"Execute these {group.Count()} {category} conversion(s) as planned?{warning}",
+                false, cancellationToken, group.Count() == 1 ? group.First().Id : null);
+            foreach (var plan in group)
+            {
+                if (accepted)
+                {
+                    approved.Add(plan.Id);
+                }
+                else
+                {
+                    renderer.Write($"Skipped: {plan.Analysis.Media.Source.Path} (conversion declined).");
+                }
+            }
+        }
+        return plans.Where(plan => approved.Contains(plan.Id)).ToArray();
     }
 }

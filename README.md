@@ -40,24 +40,25 @@ The maintained x64 catalog uses per-user portable ZIPs, prefers a matching WinGe
 dotnet run --project src/DoViFixer.Console -- scan 'E:\Movies' -r 3
 dotnet run --project src/DoViFixer.Console -- inspect 'E:\Movies\Movie.mkv' --json
 
-# Plan exact inputs/outputs first; use existing output/temp directories.
+# Plan exact inputs/outputs first; output directories are created when needed.
 dotnet run --project src/DoViFixer.Console -- convert 'E:\Movies' -r --plan
 dotnet run --project src/DoViFixer.Console -- convert 'E:\Movies\Movie.mkv' --backup --output 'E:\Converted'
 dotnet run --project src/DoViFixer.Console -- convert 'E:\Movies\Movie.mkv' --hdr10 --yes
 
 dotnet run --project src/DoViFixer.Console -- backup 'E:\Movies\Movie.mkv'
-dotnet run --project src/DoViFixer.Console -- restore 'E:\Movies\Movie.dv81.mkv' 'E:\Movies\Movie.dovi'
+dotnet run --project src/DoViFixer.Console -- restore 'E:\Movies\Movie.mkv'
+# Or: restore 'E:\Movies\Movie.mkv' --source 'F:\Backups\Movie.dovi'
 
 # List backups; deletion is a separate explicit choice.
 dotnet run --project src/DoViFixer.Console -- cleanup 'E:\Movies' -r
 dotnet run --project src/DoViFixer.Console -- cleanup 'E:\Movies\Movie.dovi' --delete-backups
 ```
 
-Outputs use `.dv81.mkv`, `.hdr10.mkv`, `.dovi`, or `.restored.mkv` suffixes. Originals stay at their original paths. Existing outputs are never overwritten. Conversion does not delete media; cleanup accepts only exact planned `.dovi` or `.bak.dovi_convert` backup files, revalidates them, and requires an `APPROVE <code>` response. Unattended permanent cleanup requires both `--delete-backups --yes`.
+Conversion accepts multiple files/directories, renames each original to `<filename>.bak.dovi_convert`, and publishes the converted MKV using its original filename (or that filename under `--output`). Existing backups and unrelated outputs are never overwritten. `--delete` removes only that original backup after successful verification and publication; `.dovi` archives remain. On failure or cancellation before publication, the original filename is restored automatically. If recovery is blocked by a collision or access failure, the backup is retained and its path is reported. Backup and restore outputs use `.dovi` and `.restored.mkv`. Cleanup remains a separate command with exact approval; unattended cleanup requires `--delete-backups --yes`.
 
-Scan samples ten positions; inspect and conversion planning analyze the full RPU stream. MEL is eligible. Interactive conversion asks once per batch about Simple FEL when `--include-simple` is absent, and separately about Complex FEL when `--force` is absent. Answering no skips that FEL type and continues planning the other files, including MEL. The final conversion-plan confirmation still applies. With `--yes`, `--plan`, or redirected input, the existing flag-based selection applies: Simple FEL requires `--include-simple`; detected complex FEL requires `--force`. Unknown/failed analysis remains blocked even with `--force`. Missing MaxCLL stays unknown. L1-versus-MaxCLL classification is a metadata heuristic, not a base-layer frame measurement or playback guarantee.
+Scan samples ten positions; inspect and conversion planning analyze the full RPU stream. MEL is eligible. Interactive conversion prepares eligible MEL, Simple FEL, and Complex FEL plans and displays output and backup details before asking for approval. Each category receives one execution confirmation covering all its planned files; there is no additional batch confirmation. Answering no skips that category while approved categories continue. FEL confirmations warn that enhancement-layer picture data will be lost. With `--yes`, `--plan`, or redirected input, the existing flag-based selection applies: Simple FEL requires `--include-simple`; detected complex FEL requires `--force`. Unknown/failed analysis remains blocked even with `--force`. Missing MaxCLL stays unknown. L1-versus-MaxCLL classification is a metadata heuristic, not a base-layer frame measurement or playback guarantee.
 
-All processing currently uses disk extraction; `--safe` is accepted as an explicit synonym for this default. Workspaces are owned per operation. Estimates are deliberately conservative: full inspection/conversion/backup currently reserve eight input sizes plus 1 GiB, with an additional archive allowance for restoration. Destination capacity is checked independently. This trades additional free-space requirements for room for extraction, RPU JSON, payload verification and publication; actual disk usage is usually lower.
+Conversion streams FFmpeg output directly to dovi_tool by default and retries with disk extraction on streaming or verification failure. `--safe` forces disk extraction. Full inspection, archive operations and output verification still use disk, so streaming does not remove the scratch-space requirement. Workspaces are owned per operation. Estimates are deliberately conservative: full inspection/conversion/backup currently reserve eight input sizes plus 1 GiB, with an additional archive allowance for restoration. Destination capacity is checked independently. This trades additional free-space requirements for room for extraction, RPU JSON, payload verification and publication; actual disk usage is usually lower.
 
 Before publication, verification checks the target profile and full RPU count/profile (or absence for HDR10), video dimensions/codec and packet counts, per-track timestamps, audio/subtitle payload hashes, normalized base-layer hashes, attachments, chapters, tags and supported video container metadata. Failed or unavailable checks prevent publication. MKVToolNix may normalize `DefaultDuration`; actual timestamps are compared within 1 ms and video duration within 50 ms. Non-pixel Matroska display units are currently rejected. Full MKV byte identity is not promised.
 
@@ -65,7 +66,7 @@ Batch failures are reported per file and do not stop subsequent files. Ctrl+C st
 
 ## Archives and settings
 
-`.dovi` is an uncompressed TAR containing `el.hevc` and a versioned `manifest.json`. The manifest binds the archive to a SHA-256 of the normalized base layer and records the enhancement-layer length/hash. Reading rejects unknown entries, duplicate entries, traversal paths, links, corrupt payloads and unsupported versions. Legacy upstream `el.hevc`-only TARs require `--allow-legacy-archive`; their source pairing is explicitly unverified.
+`.dovi` is an uncompressed TAR containing `el.hevc` and a versioned `manifest.json`. The manifest binds the archive to a SHA-256 of the normalized base layer and records the enhancement-layer length/hash. Reading rejects unknown entries, duplicate entries, traversal paths, links, corrupt payloads and unsupported versions. Restore accepts upstream `el.hevc`-only TARs directly; their source pairing is explicitly unverified. It discovers the adjacent same-stem `.dovi` archive, or uses `--source <archive.dovi>`. The former second positional archive and `--allow-legacy-archive` remain accepted for compatibility.
 
 Settings live in `%LOCALAPPDATA%\DoViFixer\settings.json`. Writes are atomic and serialized across processes. `settings tool`, `settings reset-tool`, and `settings temp` persist changes. Command-line `--temp`/`--output` overrides are operation-local. `DoViFixer__DataDirectory` can select an isolated data location for testing. Registration itself does not create that location.
 
@@ -129,6 +130,7 @@ $env:DOVIFIXER_TEST_MKVMERGE = 'C:\Tools\MKVToolNix\mkvmerge.exe'
 $env:DOVIFIXER_TEST_MKVEXTRACT = 'C:\Tools\MKVToolNix\mkvextract.exe'
 $env:DOVIFIXER_TEST_DOVITOOL = 'C:\Tools\dovi_tool.exe'
 $env:DOVIFIXER_TEST_FFPROBE = 'C:\Tools\ffprobe.exe'
+$env:DOVIFIXER_TEST_FFMPEG = 'C:\Tools\ffmpeg.exe'
 dotnet test tests/DoViFixer.Infrastructure.Tests --no-restore --filter TestCategory=NativeIntegration
 ```
 

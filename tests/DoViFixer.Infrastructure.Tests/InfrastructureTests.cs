@@ -22,6 +22,86 @@ namespace DoViFixer.Infrastructure.Tests;
 [TestClass]
 public sealed class InfrastructureTests
 {
+    [TestMethod]
+    public void TagComparisonIgnoresOrderAndRedundantLanguageButPreservesMeaning()
+    {
+        var original = System.Xml.Linq.XDocument.Parse("<Tags><Tag><Targets><TrackUID>1</TrackUID><TargetType>MOVIE</TargetType></Targets><Simple><Name>SOURCE_ID</Name><TagLanguage>eng</TagLanguage><String>001011</String></Simple></Tag></Tags>");
+        var remuxed = System.Xml.Linq.XDocument.Parse("<Tags><Tag><Targets><TargetType>MOVIE</TargetType><TrackUID>1</TrackUID></Targets><Simple><Name>SOURCE_ID</Name><TagLanguage>eng</TagLanguage><String>001011</String><TagLanguageIETF>en</TagLanguageIETF></Simple></Tag></Tags>");
+        MediaVerifier.CanonicalizeTags(original);
+        MediaVerifier.CanonicalizeTags(remuxed);
+        Assert.AreEqual(original.ToString(), remuxed.ToString());
+        remuxed.Descendants("String").Single().Value = "changed";
+        Assert.AreNotEqual(original.ToString(), remuxed.ToString());
+        remuxed.Descendants("String").Single().Value = "001011";
+        remuxed.Descendants("Simple").Single().Add(new System.Xml.Linq.XElement("TagLanguageIETF", "fr"));
+        MediaVerifier.CanonicalizeTags(remuxed);
+        Assert.AreNotEqual(original.ToString(), remuxed.ToString());
+    }
+
+    [TestMethod]
+    public async Task RestoreOriginalRevalidatesBackupAndRefusesCollisions()
+    {
+        string source = Path.Combine(directory, "Recovery.mkv");
+        await File.WriteAllTextAsync(source, "original");
+        var backup = files.RenameOriginal(files.Identify(source));
+        Assert.ThrowsExactly<IOException>(() => files.RestoreOriginal(backup with { Length = 1 }, source));
+        Assert.ThrowsExactly<InvalidOperationException>(() => files.RestoreOriginal(backup, source + ".other"));
+        await File.WriteAllTextAsync(source, "unrelated");
+        Assert.ThrowsExactly<System.ComponentModel.Win32Exception>(() => files.RestoreOriginal(backup, source));
+        Assert.AreEqual("unrelated", await File.ReadAllTextAsync(source));
+        Assert.AreEqual("original", await File.ReadAllTextAsync(backup.Path));
+        File.Delete(source);
+        files.RestoreOriginal(backup, source);
+        Assert.AreEqual("original", await File.ReadAllTextAsync(source));
+        Assert.IsFalse(File.Exists(backup.Path));
+    }
+
+    [TestMethod]
+    public async Task OriginalRenameRevalidatesIdentityAndNeverOverwritesBackup()
+    {
+        string source = Path.Combine(directory, "Movie.mkv");
+        await File.WriteAllTextAsync(source, "original");
+        var identity = files.Identify(source);
+        Assert.ThrowsExactly<IOException>(() => files.RenameOriginal(identity with { Length = 1 }));
+        Assert.IsTrue(File.Exists(source));
+        var backup = files.RenameOriginal(identity);
+        Assert.IsFalse(File.Exists(source));
+        Assert.AreEqual("original", await File.ReadAllTextAsync(backup.Path));
+        await File.WriteAllTextAsync(source, "new original");
+        Assert.ThrowsExactly<System.ComponentModel.Win32Exception>(() => files.RenameOriginal(files.Identify(source)));
+        Assert.AreEqual("original", await File.ReadAllTextAsync(backup.Path));
+        Assert.AreEqual("new original", await File.ReadAllTextAsync(source));
+    }
+
+    [TestMethod]
+    public async Task ConversionOutputAllowsOnlyOwnSourceAndCreatesOutputDirectory()
+    {
+        string source = Path.Combine(directory, "Movie.mkv");
+        await File.WriteAllTextAsync(source, "original");
+        Assert.AreEqual(source, files.PrepareOutputPath(source, null, ".mkv", true));
+        string outputDirectory = Path.Combine(directory, "new-output");
+        string output = files.PrepareOutputPath(source, outputDirectory, ".mkv", true);
+        Assert.IsTrue(Directory.Exists(outputDirectory));
+        await File.WriteAllTextAsync(output, "existing");
+        Assert.ThrowsExactly<IOException>(() => files.PrepareOutputPath(source, outputDirectory, ".mkv", true));
+    }
+
+    [TestMethod]
+    public async Task PipelineTransportsBinaryAndRejectsProducerFailure()
+    {
+        string shell = Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.System), "WindowsPowerShell", "v1.0", "powershell.exe");
+        string output = Path.Combine(directory, "binary.bin");
+        ProcessRequest Request(string script) => new(shell, ["-NoProfile", "-NonInteractive", "-Command", script]);
+        var runner = new ProcessRunner(NullLogger<ProcessRunner>.Instance);
+        var producer = Request("$s=[Console]::OpenStandardOutput(); $s.Write([byte[]](0,255,128,13,10),0,5)");
+        var consumer = Request("$s=[IO.File]::Create('" + output.Replace("'", "''") + "'); try { [Console]::OpenStandardInput().CopyTo($s) } finally { $s.Dispose() }");
+        await runner.PipeAsync(producer, consumer, default);
+        CollectionAssert.AreEqual(new byte[] { 0, 255, 128, 13, 10 }, await File.ReadAllBytesAsync(output));
+        await Assert.ThrowsExactlyAsync<IOException>(() => runner.PipeAsync(Request("exit 7"), consumer, default));
+        using var cancellation = new CancellationTokenSource(TimeSpan.FromMilliseconds(500));
+        await Assert.ThrowsAsync<OperationCanceledException>(() => runner.PipeAsync(Request("Start-Sleep -Seconds 60"), consumer, cancellation.Token));
+    }
+
     private string directory = null!;
     private readonly FileOperations files = new();
 
@@ -434,6 +514,7 @@ public sealed class InfrastructureTests
 
     private sealed class FakeProcessRunner : IProcessRunner
     {
+        public Task PipeAsync(ProcessRequest producer, ProcessRequest consumer, CancellationToken cancellationToken) => throw new NotSupportedException();
         public int Calls;
         public string Output { get; set; } = "";
         public Task<ProcessResult> RunAsync(ProcessRequest request, CancellationToken cancellationToken)

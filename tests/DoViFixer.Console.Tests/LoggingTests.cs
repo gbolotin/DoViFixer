@@ -14,6 +14,40 @@ public sealed class LoggingTests
 {
     private string directory = null!;
 
+    [TestMethod]
+    public void ConsoleElapsedTimeIsReadableWhileFileLogsKeepExactMilliseconds()
+    {
+        var previousError = System.Console.Error;
+        using var output = new StringWriter();
+        System.Console.SetError(output);
+        try
+        {
+            using var serilog = LoggingConfiguration.Configure(new LoggerConfiguration(), Configuration()).CreateLogger();
+            using var factory = LoggerFactory.Create(builder => builder.AddSerilog(serilog, dispose: false));
+            var logger = factory.CreateLogger("Test");
+            foreach (double elapsed in new[] { 192349.0141, 250.5, 1250.0, 3723000.0, 93784000.0 })
+            {
+                OperationLog.History(logger, "Failed", elapsed);
+            }
+        }
+        finally
+        {
+            System.Console.SetError(previousError);
+        }
+        foreach (string expected in new[] { "3m 12s", "250.5 ms", "1.25 s", "1h 2m 3s", "1d 2h 3m 4s" })
+        {
+            StringAssert.Contains(output.ToString(), "Operation Failed after " + expected);
+        }
+        foreach (string kind in new[] { "history", "diagnostic" })
+        {
+            var entry = Read(kind)[0];
+            Assert.AreEqual(192349.0141, entry.GetProperty("Properties").GetProperty("ElapsedMilliseconds").GetDouble());
+            Assert.AreEqual("Operation {Outcome} after {ElapsedMilliseconds} ms", entry.GetProperty("MessageTemplate").GetString());
+            StringAssert.Contains(entry.GetProperty("RenderedMessage").GetString()!, "192349.0141 ms");
+            Assert.IsFalse(entry.GetProperty("Properties").TryGetProperty("ConsoleElapsed", out _));
+        }
+    }
+
     [TestInitialize]
     public void Initialize()
     {

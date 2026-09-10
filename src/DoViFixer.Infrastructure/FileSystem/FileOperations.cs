@@ -51,21 +51,55 @@ internal sealed class FileOperations : IFileOperations, IFileDiscovery
             .Order(StringComparer.OrdinalIgnoreCase).ToArray();
     }
 
-    public string PrepareOutputPath(string input, string? outputDirectory, string suffix)
+    public string PrepareOutputPath(string input, string? outputDirectory, string suffix, bool allowInput = false)
     {
         string source = Path.GetFullPath(input);
         string directory = Path.GetFullPath(outputDirectory ?? Path.GetDirectoryName(source)!);
         if (!Directory.Exists(directory))
         {
-            throw new DirectoryNotFoundException($"Create the output directory first: {directory}");
+            RejectReparsePoints(directory);
+            Directory.CreateDirectory(directory);
         }
         RejectReparsePoints(directory);
         string output = Path.Combine(directory, Path.GetFileNameWithoutExtension(source) + suffix);
-        if (File.Exists(output) || Directory.Exists(output) || string.Equals(output, source, StringComparison.OrdinalIgnoreCase))
+        if (!(allowInput && string.Equals(output, source, StringComparison.OrdinalIgnoreCase)) &&
+            (File.Exists(output) || Directory.Exists(output) || string.Equals(output, source, StringComparison.OrdinalIgnoreCase)))
         {
             throw new IOException($"Output collision: {output}. Existing files will not be overwritten.");
         }
         return output;
+    }
+
+    public FileIdentity RenameOriginal(FileIdentity identity)
+    {
+        string backup = identity.Path + ".bak.dovi_convert";
+        RejectReparsePoints(identity.Path);
+        RejectReparsePoints(backup);
+        using var handle = NativeStorage.OpenForDeletion(identity.Path);
+        if (RandomAccess.GetLength(handle) != identity.Length || File.GetLastWriteTimeUtc(handle) != identity.LastWriteUtc)
+        {
+            throw new IOException("Source changed since planning; prepare a new conversion plan.");
+        }
+        NativeStorage.Rename(handle, backup);
+        return identity with { Path = backup };
+    }
+
+    public void RestoreOriginal(FileIdentity backupIdentity, string originalPath)
+    {
+        string destination = Path.GetFullPath(originalPath);
+        if (!string.Equals(backupIdentity.Path, destination + ".bak.dovi_convert", StringComparison.OrdinalIgnoreCase))
+        {
+            throw new InvalidOperationException("Backup does not belong to the original path.");
+        }
+        RejectReparsePoints(backupIdentity.Path);
+        RejectReparsePoints(destination);
+        using var handle = NativeStorage.OpenForDeletion(backupIdentity.Path);
+        if (RandomAccess.GetLength(handle) != backupIdentity.Length || File.GetLastWriteTimeUtc(handle) != backupIdentity.LastWriteUtc)
+        {
+            throw new IOException("Original backup changed; automatic recovery refused.");
+        }
+        // The handle-bound rename refuses to replace an existing destination.
+        NativeStorage.Rename(handle, destination);
     }
 
     public void EnsureWritableDirectory(string directory)
