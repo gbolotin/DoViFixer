@@ -3,7 +3,6 @@ using System.Text.Json;
 using DoViFixer.Application.Updates;
 
 namespace DoViFixer.Infrastructure.Updates;
-
 internal sealed class UpstreamReleaseSource(HttpClient http) : IUpdateSource
 {
     public async Task<ReleaseInfo> GetLatestAsync(CancellationToken cancellationToken)

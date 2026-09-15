@@ -15,7 +15,6 @@ using DoViFixer.Domain.Analysis;
 using DoViFixer.Domain.Conversion;
 
 namespace DoViFixer.Console.Commands;
-
 public sealed class SettingsCommand(SettingsService settings, IUserPathRegistration userPath, ConsoleRenderer renderer) : IConsoleCommand
 {
     public bool Handles(string command) => command == "settings";
@@ -25,27 +24,27 @@ public sealed class SettingsCommand(SettingsService settings, IUserPathRegistrat
         {
             case "add-to-path":
                 string directory = AppContext.BaseDirectory;
-                bool added = userPath.AddDirectory(directory, cancellationToken);
-                renderer.Write(added ? $"Added to user PATH: {directory}" : $"Already in user PATH: {directory}");
-                renderer.Write("Applied to this process. Reopen your terminal (and its host app if needed), then run DoViFixer.Console --help.");
-                break;
+            bool added = userPath.AddDirectory(directory, cancellationToken);
+            renderer.Write(added ? $"Added to user PATH: {directory}" : $"Already in user PATH: {directory}");
+            renderer.Write("Applied to this process. Reopen your terminal (and its host app if needed), then run DoViFixer.Console --help.");
+            break;
             case "show":
                 renderer.Json(await settings.ReadAsync(cancellationToken));
-                break;
+            break;
             case "temp":
                 await settings.SetTemporaryDirectoryAsync(command.Arguments[1], cancellationToken);
-                renderer.Write("Temporary directory saved.");
-                break;
+            renderer.Write("Temporary directory saved.");
+            break;
             case "tool":
                 await settings.SetToolAsync(Enum.Parse<NativeTool>(command.Arguments[1], true), command.Arguments[2], cancellationToken);
-                renderer.Write("Validated tool path saved and applied to the current process.");
-                break;
+            renderer.Write("Validated tool path saved and applied to the current process.");
+            break;
             case "reset-tool":
                 await settings.ResetToolAsync(Enum.Parse<NativeTool>(command.Arguments[1], true), cancellationToken);
-                renderer.Write("Configured tool path reset. The next operation will detect installations again.");
-                break;
+            renderer.Write("Configured tool path reset. The next operation will detect installations again.");
+            break;
         }
+
         return 0;
     }
-
 }

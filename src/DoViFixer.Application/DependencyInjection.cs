@@ -10,7 +10,6 @@ using DoViFixer.Application.Updates;
 using Microsoft.Extensions.DependencyInjection;
 
 namespace DoViFixer.Application;
-
 public static class DependencyInjection
 {
     public static IServiceCollection AddDoViFixerApplication(this IServiceCollection services)
@@ -21,6 +20,7 @@ public static class DependencyInjection
         services.AddTransient<ConversionPlanner>();
         services.AddTransient<ConversionService>();
         services.AddTransient<BatchConversionService>();
+        services.AddTransient<Operations.ControlledBatchService>();
         services.AddTransient<BackupService>();
         services.AddTransient<RestoreService>();
         services.AddTransient<CleanupService>();

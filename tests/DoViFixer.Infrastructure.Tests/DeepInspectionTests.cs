@@ -11,13 +11,11 @@ using Microsoft.Extensions.Logging.Abstractions;
 using Microsoft.VisualStudio.TestTools.UnitTesting;
 
 namespace DoViFixer.Infrastructure.Tests;
-
 [TestClass]
 public sealed class DeepInspectionTests
 {
     private static MemoryStream Rpu(string frames) => new(Encoding.UTF8.GetBytes("[" + frames + "]"));
     private const string Frame = "{\"el_type\":\"FEL\",\"Level1\":{\"max_pq\":3079}}";
-
     [TestMethod]
     public async Task ComparesMatchingFramesInsteadOfGlobalMaxima()
     {
@@ -79,9 +77,7 @@ public sealed class DeepInspectionTests
     [DataRow("0", "0", "1", 593d)]
     public async Task NativeFilterMeasuresSaturatedFullRangeColors(string red, string green, string blue, double expectedNits)
     {
-        await MeasureNativeAsync($"nullsrc=s=16x16:r=1:d=1,format=gbrpf32le,geq=r={red}:g={green}:b={blue}," +
-            "zscale=pin=bt2020:tin=smpte2084:min=gbr:rin=full:p=bt2020:t=smpte2084:m=bt2020nc:r=full,format=yuv444p16le",
-            "full", expectedNits);
+        await MeasureNativeAsync($"nullsrc=s=16x16:r=1:d=1,format=gbrpf32le,geq=r={red}:g={green}:b={blue}," + "zscale=pin=bt2020:tin=smpte2084:min=gbr:rin=full:p=bt2020:t=smpte2084:m=bt2020nc:r=full,format=yuv444p16le", "full", expectedNits);
     }
 
     [TestMethod]
@@ -101,13 +97,16 @@ public sealed class DeepInspectionTests
         {
             Assert.Inconclusive("Set DOVIFIXER_TEST_FFMPEG to run synthetic brightness calibration.");
         }
+
         string directory = Path.Combine(Path.GetTempPath(), "DoViFixer-deep-test-" + Guid.NewGuid().ToString("N"));
         Directory.CreateDirectory(directory);
         try
         {
             var runner = new ProcessRunner(NullLogger<ProcessRunner>.Instance);
-            await runner.RunAsync(new(ffmpeg, new[] { "-nostdin", "-v", "error", "-f", "lavfi", "-i",
-                source, "-vf", DeepInspectionParser.Filter(range), "-fps_mode", "passthrough", "-f", "null", "-" }, directory), default);
+            await runner.RunAsync(new(ffmpeg, new[]
+            {
+                "-nostdin", "-v", "error", "-f", "lavfi", "-i", source, "-vf", DeepInspectionParser.Filter(range), "-fps_mode", "passthrough", "-f", "null", "-"
+            }, directory), default);
             using var rpu = Rpu(Frame);
             using var peaks = File.OpenText(Path.Combine(directory, "brightness.txt"));
             var result = await DeepInspectionParser.CompareAsync(rpu, peaks, default);
@@ -126,24 +125,37 @@ public sealed class DeepInspectionTests
     public async Task NativeDeepInspectionMeasuresEveryFixtureFrame()
     {
         var tools = new ToolCatalog();
-        foreach (var tool in new[] { NativeTool.FFmpeg, NativeTool.FFprobe, NativeTool.DoviTool, NativeTool.MkvMerge, NativeTool.MkvExtract })
+        foreach (var tool in new[]
+        {
+            NativeTool.FFmpeg,
+            NativeTool.FFprobe,
+            NativeTool.DoviTool,
+            NativeTool.MkvMerge,
+            NativeTool.MkvExtract
+        }
+
+        )
         {
             string? path = Environment.GetEnvironmentVariable("DOVIFIXER_TEST_" + tool.ToString().ToUpperInvariant());
             if (path is null)
             {
                 Assert.Inconclusive("Set native test tool paths to run fixture deep inspection.");
             }
+
             tools.Refresh([new(tool, DependencyState.Ready, path, "test", "test")]);
         }
+
         var runner = new ProcessRunner(NullLogger<ProcessRunner>.Instance);
         var files = new FileOperations();
         var factory = new TemporaryWorkspaceFactory(files, NullLogger<TemporaryWorkspaceFactory>.Instance);
         await using var workspace = await factory.CreateAsync(64 * 1024 * 1024, null, default);
         string source = workspace.File("deep-fixture.mkv");
         string fixture = Path.Combine(AppContext.BaseDirectory, "Fixtures", "regular_start_code_4_muxed_el.hevc");
-        await runner.RunAsync(new(tools.GetPath(NativeTool.MkvMerge), new[] { "-o", source, fixture }, AllowWarnings: true), default);
-        var media = new MediaInfo(files.Identify(source), DolbyVisionProfile.Profile7, "HEVC", 0, 0, 0,
-            null, null, null, 0, null, [], 0, 0, "", "{}");
+        await runner.RunAsync(new(tools.GetPath(NativeTool.MkvMerge), new[]
+        {
+            "-o", source, fixture
+        }, AllowWarnings: true), default);
+        var media = new MediaInfo(files.Identify(source), DolbyVisionProfile.Profile7, "HEVC", 0, 0, 0, null, null, null, 0, null, [], 0, 0, "", "{}");
         var probe = new MediaProbe(tools, runner, files, NullLogger<MediaProbe>.Instance);
         var evidence = await probe.AnalyzeAsync(media, AnalysisMethod.DeepInspection, workspace, default);
         Assert.IsNull(evidence.Error, evidence.Error);

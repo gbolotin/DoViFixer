@@ -9,7 +9,6 @@ using Microsoft.Extensions.Logging;
 using Microsoft.VisualStudio.TestTools.UnitTesting;
 
 namespace DoViFixer.Console.Tests;
-
 [TestClass]
 public sealed class ConsoleTests
 {
@@ -32,7 +31,10 @@ public sealed class ConsoleTests
         var final = initial with
         {
             Verdict = DoViFixer.Domain.Analysis.AnalysisVerdict.ComplexFel,
-            Evidence = initial.Evidence with { Method = DoViFixer.Domain.Analysis.AnalysisMethod.DeepInspection },
+            Evidence = initial.Evidence with
+            {
+                Method = DoViFixer.Domain.Analysis.AnalysisMethod.DeepInspection
+            },
             Reason = "Measured expansion in 3 frames"
         };
         string text = DoViFixer.Console.Rendering.ScanRenderer.Format(new("movie.mkv", final, null, initial));
@@ -64,7 +66,10 @@ public sealed class ConsoleTests
             return Task.FromResult(true);
         });
         var approved = await approval.ConfirmAsync([plan], false, default);
-        CollectionAssert.AreEqual(new[] { plan }, approved.ToArray());
+        CollectionAssert.AreEqual(new[]
+        {
+            plan
+        }, approved.ToArray());
         Assert.AreEqual(1, questions.Count);
         StringAssert.Contains(questions[0], "Execute these 1 Simple FEL conversion(s) as planned?");
     }
@@ -87,7 +92,10 @@ public sealed class ConsoleTests
             return Task.FromResult(!question.Contains("Simple FEL", StringComparison.Ordinal));
         });
         var approved = await approval.ConfirmAsync(plans, false, default);
-        CollectionAssert.AreEqual(new[] { plans[0], plans[2], plans[3] }, approved.ToArray());
+        CollectionAssert.AreEqual(new[]
+        {
+            plans[0], plans[2], plans[3]
+        }, approved.ToArray());
         Assert.AreEqual(3, questions.Count);
         StringAssert.Contains(questions[2], "picture data will be lost");
     }
@@ -109,7 +117,11 @@ public sealed class ConsoleTests
             Assert.IsTrue(yes);
             return Task.FromResult(true);
         });
-        var plans = new[] { CreatePlan(DoViFixer.Domain.Analysis.AnalysisVerdict.Mel), CreatePlan(DoViFixer.Domain.Analysis.AnalysisVerdict.ComplexFel) };
+        var plans = new[]
+        {
+            CreatePlan(DoViFixer.Domain.Analysis.AnalysisVerdict.Mel),
+            CreatePlan(DoViFixer.Domain.Analysis.AnalysisVerdict.ComplexFel)
+        };
         CollectionAssert.AreEqual(plans, (await approval.ConfirmAsync(plans, true, default)).ToArray());
         Assert.AreEqual(1, calls);
     }
@@ -118,32 +130,54 @@ public sealed class ConsoleTests
     public async Task CancelledApprovalDoesNotPrompt()
     {
         var approval = new DoViFixer.Console.Interaction.FelConversionApproval(new(), (_, _, _, _) => throw new AssertFailedException("Unexpected prompt."));
-        await Assert.ThrowsExactlyAsync<OperationCanceledException>(() =>
-            approval.ConfirmAsync([CreatePlan(DoViFixer.Domain.Analysis.AnalysisVerdict.SimpleFel)], false, new CancellationToken(true)));
+        await Assert.ThrowsExactlyAsync<OperationCanceledException>(() => approval.ConfirmAsync([CreatePlan(DoViFixer.Domain.Analysis.AnalysisVerdict.SimpleFel)], false, new CancellationToken(true)));
     }
 
     private static ConversionPlan CreatePlan(DoViFixer.Domain.Analysis.AnalysisVerdict verdict)
     {
-        var media = new DoViFixer.Domain.Media.MediaInfo(new(Guid.NewGuid() + ".mkv", 1000, DateTime.UnixEpoch),
-            DoViFixer.Domain.Media.DolbyVisionProfile.Profile7, "HEVC", 0, 1920, 1080, 24, 24, 1, 1000, null, [], 0, 0, "", "{}");
-        var analysis = new DoViFixer.Domain.Analysis.MediaAnalysis(media,
-            new(DoViFixer.Domain.Analysis.AnalysisMethod.FullRpu, DoViFixer.Domain.Media.EnhancementLayer.Fel, 24, 1000, 1, 1),
-            verdict, "Metadata heuristic");
-        return new(Guid.NewGuid(), analysis, DoViFixer.Domain.Conversion.ConversionTarget.Profile81,
-            media.Source.Path, null, null, 1000, analysis.Reason);
+        var media = new DoViFixer.Domain.Media.MediaInfo(new(Guid.NewGuid() + ".mkv", 1000, DateTime.UnixEpoch), DoViFixer.Domain.Media.DolbyVisionProfile.Profile7, "HEVC", 0, 1920, 1080, 24, 24, 1, 1000, null, [], 0, 0, "", "{}");
+        var analysis = new DoViFixer.Domain.Analysis.MediaAnalysis(media, new(DoViFixer.Domain.Analysis.AnalysisMethod.FullRpu, DoViFixer.Domain.Media.EnhancementLayer.Fel, 24, 1000, 1, 1), verdict, "Metadata heuristic");
+        return new(Guid.NewGuid(), analysis, DoViFixer.Domain.Conversion.ConversionTarget.Profile81, media.Source.Path, null, null, 1000, analysis.Reason);
     }
-    [TestMethod]
-    [DataRow(new[] { "convert", "movie.mkv", "--unknown" })]
-    [DataRow(new[] { "scan", "movie.mkv", "--yes" })]
-    [DataRow(new[] { "convert", "--output" })]
-    [DataRow(new[] { "restore" })]
-    [DataRow(new[] { "cleanup", "--yes" })]
-    [DataRow(new[] { "scan", "-r", "-1" })]
-    [DataRow(new[] { "dependencies", "check", "--repair" })]
-    [DataRow(new[] { "settings", "add-to-path", "extra" })]
-    [DataRow(new[] { "settings", "add-to-path", "--json" })]
-    public void InvalidArgumentsFailWithoutStartingHost(string[] args) => Assert.ThrowsExactly<ArgumentException>(() => CommandLine.Parse(args));
 
+    [TestMethod]
+    [DataRow(new[]
+    {
+        "convert", "movie.mkv", "--unknown"
+    })]
+    [DataRow(new[]
+    {
+        "scan", "movie.mkv", "--yes"
+    })]
+    [DataRow(new[]
+    {
+        "convert", "--output"
+    })]
+    [DataRow(new[]
+    {
+        "restore"
+    })]
+    [DataRow(new[]
+    {
+        "cleanup", "--yes"
+    })]
+    [DataRow(new[]
+    {
+        "scan", "-r", "-1"
+    })]
+    [DataRow(new[]
+    {
+        "dependencies", "check", "--repair"
+    })]
+    [DataRow(new[]
+    {
+        "settings", "add-to-path", "extra"
+    })]
+    [DataRow(new[]
+    {
+        "settings", "add-to-path", "--json"
+    })]
+    public void InvalidArgumentsFailWithoutStartingHost(string[] args) => Assert.ThrowsExactly<ArgumentException>(() => CommandLine.Parse(args));
     [TestMethod]
     public void UpstreamConversionAndRestoreArgumentsParse()
     {
@@ -158,7 +192,10 @@ public sealed class ConsoleTests
     [TestMethod]
     public void ConversionApprovalDoesNotImplyInstallationConsent()
     {
-        var command = CommandLine.Parse(new[] { "convert", "movie.mkv", "--yes", "--backup" });
+        var command = CommandLine.Parse(new[]
+        {
+            "convert", "movie.mkv", "--yes", "--backup"
+        });
         Assert.IsTrue(command.Has("yes"));
         Assert.IsFalse(command.Has("install-dependencies"));
     }
@@ -167,7 +204,10 @@ public sealed class ConsoleTests
     public void AddToPathParsesWithoutEnvironmentChanges()
     {
         string? saved = Environment.GetEnvironmentVariable("Path", EnvironmentVariableTarget.User);
-        var command = CommandLine.Parse(new[] { "settings", "add-to-path" });
+        var command = CommandLine.Parse(new[]
+        {
+            "settings", "add-to-path"
+        });
         Assert.AreEqual("settings", command.Command);
         Assert.AreEqual("add-to-path", command.Arguments.Single());
         Assert.AreEqual(saved, Environment.GetEnvironmentVariable("Path", EnvironmentVariableTarget.User));
@@ -176,10 +216,16 @@ public sealed class ConsoleTests
     [TestMethod]
     public void RecursionAndLiteralPathsParse()
     {
-        var command = CommandLine.Parse(new[] { "scan", "-r", "3", "--", "-movie.mkv" });
+        var command = CommandLine.Parse(new[]
+        {
+            "scan", "-r", "3", "--", "-movie.mkv"
+        });
         Assert.AreEqual(3, command.Depth);
         Assert.AreEqual("-movie.mkv", command.Arguments[0]);
-        Assert.AreEqual(5, CommandLine.Parse(new[] { "scan", "-r" }).Depth);
+        Assert.AreEqual(5, CommandLine.Parse(new[]
+        {
+            "scan", "-r"
+        }).Depth);
     }
 
     [TestMethod]
@@ -190,8 +236,14 @@ public sealed class ConsoleTests
         Environment.SetEnvironmentVariable("DoViFixer__DataDirectory", path);
         try
         {
-            Assert.AreEqual(0, await DoViFixer.Console.Program.Main(new[] { "--help" }));
-            Assert.AreEqual(2, await DoViFixer.Console.Program.Main(new[] { "invalid-command" }));
+            Assert.AreEqual(0, await DoViFixer.Console.Program.Main(new[]
+            {
+                "--help"
+            }));
+            Assert.AreEqual(2, await DoViFixer.Console.Program.Main(new[]
+            {
+                "invalid-command"
+            }));
             Assert.IsFalse(Directory.Exists(path));
         }
         finally
@@ -204,10 +256,16 @@ public sealed class ConsoleTests
     public void ContainerResolvesWorkflowGraphWithoutProbingAndDisposesSingletons()
     {
         string path = Path.Combine(Path.GetTempPath(), "DoViFixer-DI-test-" + Guid.NewGuid().ToString("N"));
-        var builder = Host.CreateApplicationBuilder(new HostApplicationBuilderSettings { DisableDefaults = true });
+        var builder = Host.CreateApplicationBuilder(new HostApplicationBuilderSettings
+        {
+            DisableDefaults = true
+        });
         builder.Configuration["DoViFixer:DataDirectory"] = path;
         builder.Logging.ClearProviders();
-        builder.ConfigureContainer(new DefaultServiceProviderFactory(new ServiceProviderOptions { ValidateOnBuild = true, ValidateScopes = true }));
+        builder.ConfigureContainer(new DefaultServiceProviderFactory(new ServiceProviderOptions
+        {
+            ValidateOnBuild = true, ValidateScopes = true
+        }));
         builder.Services.AddDoViFixerApplication().AddDoViFixerInfrastructure(builder.Configuration);
         builder.Services.AddSingleton<OwnedResource>();
         OwnedResource owned;
@@ -219,12 +277,18 @@ public sealed class ConsoleTests
             owned = host.Services.GetRequiredService<OwnedResource>();
             Assert.IsFalse(Directory.Exists(path));
         }
+
         Assert.IsTrue(owned.Disposed);
     }
 
     private sealed class OwnedResource : IDisposable
     {
-        public bool Disposed { get; private set; }
+        public bool Disposed
+        {
+            get;
+            private set;
+        }
+
         public void Dispose() => Disposed = true;
     }
 }

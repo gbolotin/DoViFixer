@@ -3,7 +3,6 @@ using DoViFixer.Console.Rendering;
 using Microsoft.VisualStudio.TestTools.UnitTesting;
 
 namespace DoViFixer.Console.Tests;
-
 [TestClass]
 public sealed class ProgressTests
 {
@@ -14,11 +13,20 @@ public sealed class ProgressTests
         using var renderer = new ConsoleRenderer(output, true, () => 80);
         var progress = new OperationProgress(Guid.NewGuid(), "Extracting", "movie.mkv", 0);
         renderer.Report(progress);
-        renderer.Report(progress with { Percent = 42 });
+        renderer.Report(progress with
+        {
+            Percent = 42
+        });
         Assert.AreEqual(0, output.ToString().Count(c => c == '\n'));
         StringAssert.Contains(output.ToString(), "\rExtracting  42%");
-        renderer.Report(progress with { Percent = 100 });
-        renderer.Report(progress with { Stage = "Verifying", Percent = null });
+        renderer.Report(progress with
+        {
+            Percent = 100
+        });
+        renderer.Report(progress with
+        {
+            Stage = "Verifying", Percent = null
+        });
         renderer.Dispose();
         Assert.AreEqual(2, output.ToString().Count(c => c == '\n'));
     }
@@ -32,8 +40,12 @@ public sealed class ProgressTests
         renderer.Report(progress);
         for (int i = 0; i <= 100; i++)
         {
-            renderer.Report(progress with { Percent = i });
+            renderer.Report(progress with
+            {
+                Percent = i
+            });
         }
+
         Assert.AreEqual(2, output.ToString().Count(c => c == '\n'));
         StringAssert.Contains(output.ToString(), "Remuxing 100%");
     }

@@ -2,10 +2,13 @@ using DoViFixer.Domain.Analysis;
 using DoViFixer.Domain.Media;
 
 namespace DoViFixer.Domain.Conversion;
+public enum ConversionTarget
+{
+    Profile81,
+    Hdr10
+}
 
-public enum ConversionTarget { Profile81, Hdr10 }
 public sealed record ConversionDecision(bool Allowed, string Reason);
-
 public static class ConversionPolicy
 {
     public static ConversionDecision Evaluate(MediaAnalysis analysis, bool includeSimple, bool forceComplex)
@@ -14,6 +17,7 @@ public static class ConversionPolicy
         {
             return new(false, "Only HEVC Dolby Vision Profile 7 MKV inputs are supported.");
         }
+
         return analysis.Verdict switch
         {
             AnalysisVerdict.Mel => new(true, analysis.Reason),

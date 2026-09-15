@@ -6,3 +6,4 @@ TestResults/
 artifacts/
 /src/DoViFixer.Console/Properties/PublishProfiles/FolderProfile.pubxml
 /assets
+*.pubxml

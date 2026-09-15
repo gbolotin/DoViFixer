@@ -4,23 +4,28 @@ using DoViFixer.Domain.Media;
 using Microsoft.VisualStudio.TestTools.UnitTesting;
 
 namespace DoViFixer.Domain.Tests;
-
 [TestClass]
 public sealed class ClassificationTests
 {
-    private static MediaInfo Media(double? maxCll = 1000) => new(new("movie.mkv", 1000, DateTime.UnixEpoch), DolbyVisionProfile.Profile7,
-        "HEVC", 0, 1920, 1080, 24, 24, 1, 0, maxCll, new[] { new MediaTrack(0, "video", "HEVC", "und", "", true, false, "1") }, 0, 0, "", "{}");
-
+    private static MediaInfo Media(double? maxCll = 1000) => new(new("movie.mkv", 1000, DateTime.UnixEpoch), DolbyVisionProfile.Profile7, "HEVC", 0, 1920, 1080, 24, 24, 1, 0, maxCll, new[]
+    {
+        new MediaTrack(0, "video", "HEVC", "und", "", true, false, "1")
+    }, 0, 0, "", "{}");
     [TestMethod]
     [DataRow(0L, AnalysisVerdict.SimpleFel)]
     [DataRow(1L, AnalysisVerdict.ComplexFel)]
     public void DeepInspectionUsesFrameComparisonWithoutMaxCll(long expanded, AnalysisVerdict expected)
     {
-        var evidence = new RpuEvidence(AnalysisMethod.DeepInspection, EnhancementLayer.Fel, 24, 1000, 1, 1,
-            Brightness: new(24, expanded, 1000, 100, 12));
+        var evidence = new RpuEvidence(AnalysisMethod.DeepInspection, EnhancementLayer.Fel, 24, 1000, 1, 1, Brightness: new(24, expanded, 1000, 100, 12));
         Assert.AreEqual(expected, MediaClassifier.Classify(Media(null), evidence).Verdict);
-        Assert.AreEqual(AnalysisVerdict.Unknown, MediaClassifier.Classify(Media(), evidence with { Brightness = null }).Verdict);
-        Assert.AreEqual(AnalysisVerdict.Unknown, MediaClassifier.Classify(Media(), evidence with { Frames = 25 }).Verdict);
+        Assert.AreEqual(AnalysisVerdict.Unknown, MediaClassifier.Classify(Media(), evidence with
+        {
+            Brightness = null
+        }).Verdict);
+        Assert.AreEqual(AnalysisVerdict.Unknown, MediaClassifier.Classify(Media(), evidence with
+        {
+            Frames = 25
+        }).Verdict);
     }
 
     [TestMethod]

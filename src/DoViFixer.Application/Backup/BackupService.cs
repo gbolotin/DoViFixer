@@ -6,11 +6,8 @@ using DoViFixer.Domain.Media;
 using Microsoft.Extensions.Logging;
 
 namespace DoViFixer.Application.Backup;
-
 public sealed record BackupPlan(Guid Id, MediaInfo Media, string Output, string? TemporaryDirectory, long ScratchBytes);
-public sealed class BackupService(DependencyService dependencies, IMediaProbe probe, IFileOperations files,
-    ITemporaryWorkspaceFactory workspaces, IVideoProcessor processor, IBackupArchiveStore archives,
-    IOutputPublisher publisher, ISettingsStore settings, ILogger<BackupService> logger)
+public sealed class BackupService(DependencyService dependencies, IMediaProbe probe, IFileOperations files, ITemporaryWorkspaceFactory workspaces, IVideoProcessor processor, IBackupArchiveStore archives, IOutputPublisher publisher, ISettingsStore settings, ILogger<BackupService> logger)
 {
     public async Task<BackupPlan> PlanAsync(string input, string? outputDirectory, string? temporaryDirectory, CancellationToken cancellationToken)
     {
@@ -21,20 +18,17 @@ public sealed class BackupService(DependencyService dependencies, IMediaProbe pr
         {
             throw new InvalidOperationException("Enhancement-layer backup requires Profile 7.");
         }
+
         var snapshot = await settings.ReadAsync(cancellationToken);
-        return new(Guid.NewGuid(), media, files.PrepareOutputPath(input, outputDirectory, ".dovi"),
-            temporaryDirectory ?? snapshot.TemporaryDirectory, ConversionPolicy.RequiredScratchBytes(media.Source.Length));
+        return new(Guid.NewGuid(), media, files.PrepareOutputPath(input, outputDirectory, ".dovi"), temporaryDirectory ?? snapshot.TemporaryDirectory, ConversionPolicy.RequiredScratchBytes(media.Source.Length));
     }
 
-    public Task<FileResult> ExecuteAsync(BackupPlan approvedPlan, IProgress<OperationProgress>? progress, CancellationToken cancellationToken) =>
-        OperationLog.RunAsync(logger, "Backup", approvedPlan.Id, approvedPlan.Media.Source.Path,
-            async () =>
-            {
-                var result = await ExecuteCoreAsync(approvedPlan, progress, cancellationToken);
-                OperationLog.Result(logger, result);
-                return result;
-            }, cancellationToken, result => result.Status);
-
+    public Task<FileResult> ExecuteAsync(BackupPlan approvedPlan, IProgress<OperationProgress>? progress, CancellationToken cancellationToken) => OperationLog.RunAsync(logger, "Backup", approvedPlan.Id, approvedPlan.Media.Source.Path, async () =>
+    {
+        var result = await ExecuteCoreAsync(approvedPlan, progress, cancellationToken);
+        OperationLog.Result(logger, result);
+        return result;
+    }, cancellationToken, result => result.Status);
     private async Task<FileResult> ExecuteCoreAsync(BackupPlan approvedPlan, IProgress<OperationProgress>? progress, CancellationToken cancellationToken)
     {
         await dependencies.RequireAsync(DependencyRequirements.All, cancellationToken);

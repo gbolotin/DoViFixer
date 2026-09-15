@@ -14,7 +14,6 @@ using DoViFixer.Domain.Analysis;
 using DoViFixer.Domain.Conversion;
 
 namespace DoViFixer.Console.Commands;
-
 public sealed class UpdateCommand(UpdateService updates, ConsoleRenderer renderer) : IConsoleCommand
 {
     public bool Handles(string command) => command == "update-check";
@@ -25,15 +24,16 @@ public sealed class UpdateCommand(UpdateService updates, ConsoleRenderer rendere
         {
             case "update-check":
                 var release = await updates.CheckAsync(cancellationToken);
-                if (command.Has("json"))
-                {
-                    renderer.Json(release);
-                }
-                else
-                {
-                    renderer.Write($"{release.Product}: {release.Version}\n{release.Url}\nReviewed baseline: 8.2.0.");
-                }
-                return 0;
+            if (command.Has("json"))
+            {
+                renderer.Json(release);
+            }
+            else
+            {
+                renderer.Write($"{release.Product}: {release.Version}\n{release.Url}\nReviewed baseline: 8.2.0.");
+            }
+
+            return 0;
             default:
                 throw new ArgumentException("Unsupported command.");
         }

@@ -1,0 +1,233 @@
+<UserControl x:Class="DoViFixer.App.Views.MediaView"
+             xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             Style="{StaticResource {x:Type UserControl}}">
+    <Grid>
+        <Grid.RowDefinitions>
+            <RowDefinition Height="Auto" />
+            <RowDefinition Height="*" />
+            <RowDefinition Height="Auto" />
+            <RowDefinition Height="Auto" />
+        </Grid.RowDefinitions>
+        <StackPanel Orientation="Horizontal" Margin="0,0,0,16">
+            <Button Content="＋  Add files" Command="{Binding AddFilesCommand}" />
+            <Button Content="▱  Add folder" Command="{Binding AddFolderCommand}" />
+            <Button Content="⌕  Scan" Command="{Binding ScanCommand}" />
+            <Button Content="◎  Inspect ▾"
+                    Click="ShowInspectionMenu"
+                    IsEnabled="{Binding CanInspect}">
+                <Button.ContextMenu>
+                    <ContextMenu>
+                        <MenuItem Header="Standard inspection" Command="{Binding InspectCommand}" />
+                        <MenuItem Header="Deep inspection" Command="{Binding DeepInspectCommand}" />
+                    </ContextMenu>
+                </Button.ContextMenu>
+            </Button>
+            <Button Content="▷  Convert" Command="{Binding ConvertCommand}" />
+        </StackPanel>
+        <Grid Grid.Row="1">
+            <Grid.ColumnDefinitions>
+                <ColumnDefinition Width="2.2*" />
+                <ColumnDefinition Width="16" />
+                <ColumnDefinition Width="*" MinWidth="280" />
+            </Grid.ColumnDefinitions>
+            <DataGrid ItemsSource="{Binding Files}"
+                      SelectedItem="{Binding Focused}"
+                      IsReadOnly="True"
+                      EnableRowVirtualization="True">
+                <DataGrid.Columns>
+                    <DataGridTemplateColumn Width="48">
+                        <DataGridTemplateColumn.CellTemplate>
+                            <DataTemplate>
+                                <CheckBox IsChecked="{Binding IsSelected, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}"
+                                          IsEnabled="{Binding SelectionEnabled}"
+                                          HorizontalAlignment="Center"
+                                          VerticalAlignment="Center"
+                                          AutomationProperties.Name="Include file" />
+                            </DataTemplate>
+                        </DataGridTemplateColumn.CellTemplate>
+                    </DataGridTemplateColumn>
+                    <DataGridTemplateColumn Header="File"
+                                            Width="*"
+                                            MinWidth="190">
+                        <DataGridTemplateColumn.CellTemplate>
+                            <DataTemplate>
+                                <StackPanel VerticalAlignment="Center" Margin="10,0">
+                                    <TextBlock Text="{Binding Name}"
+                                               FontWeight="SemiBold"
+                                               TextTrimming="CharacterEllipsis"
+                                               ToolTip="{Binding Path}" />
+                                    <TextBlock Text="{Binding PlannedOutput}"
+                                               FontSize="11"
+                                               Foreground="{StaticResource Muted}"
+                                               TextTrimming="CharacterEllipsis"
+                                               ToolTip="{Binding PlannedOutput}"
+                                               Margin="0,5,0,0" />
+                                </StackPanel>
+                            </DataTemplate>
+                        </DataGridTemplateColumn.CellTemplate>
+                    </DataGridTemplateColumn>
+                    <DataGridTemplateColumn Header="Profile / Type" Width="185">
+                        <DataGridTemplateColumn.CellTemplate>
+                            <DataTemplate>
+                                <TextBlock Text="{Binding Classification}"
+                                           Foreground="{Binding ClassificationColor}"
+                                           VerticalAlignment="Center"
+                                           Margin="10,0"
+                                           TextWrapping="Wrap" />
+                            </DataTemplate>
+                        </DataGridTemplateColumn.CellTemplate>
+                    </DataGridTemplateColumn>
+                    <DataGridTemplateColumn Header="Status" Width="110">
+                        <DataGridTemplateColumn.CellTemplate>
+                            <DataTemplate>
+                                <TextBlock Text="{Binding Status}"
+                                           TextWrapping="Wrap"
+                                           Margin="10,0"
+                                           VerticalAlignment="Center" />
+                            </DataTemplate>
+                        </DataGridTemplateColumn.CellTemplate>
+                    </DataGridTemplateColumn>
+                    <DataGridTemplateColumn Header="Action" Width="90">
+                        <DataGridTemplateColumn.CellTemplate>
+                            <DataTemplate>
+                                <StackPanel VerticalAlignment="Center">
+                                    <Button Content="Cancel"
+                                            Padding="7,6"
+                                            Margin="4"
+                                            Visibility="{Binding IsActive, Converter={StaticResource Visible}}"
+                                            Command="{Binding DataContext.CancelFileCommand, RelativeSource={RelativeSource AncestorType=UserControl}}"
+                                            CommandParameter="{Binding}" />
+                                    <Button Content="Skip"
+                                            Padding="7,6"
+                                            Margin="4"
+                                            Visibility="{Binding IsPending, Converter={StaticResource Visible}}"
+                                            Command="{Binding DataContext.SkipCommand, RelativeSource={RelativeSource AncestorType=UserControl}}"
+                                            CommandParameter="{Binding}" />
+                                </StackPanel>
+                            </DataTemplate>
+                        </DataGridTemplateColumn.CellTemplate>
+                    </DataGridTemplateColumn>
+                </DataGrid.Columns>
+            </DataGrid>
+            <Border Grid.Column="2" Style="{StaticResource Card}">
+                <ScrollViewer VerticalScrollBarVisibility="Auto">
+                    <StackPanel>
+                        <TextBlock Text="Selected file details" Style="{StaticResource Heading}" />
+                        <TextBlock Text="{Binding Focused.Name, TargetNullValue='Select a file to view details', FallbackValue='Select a file to view details'}"
+                                   FontSize="18"
+                                   FontWeight="SemiBold"
+                                   TextWrapping="Wrap"
+                                   Margin="0,0,0,14" />
+                        <TextBlock Text="{Binding Focused.Details}"
+                                   TextWrapping="Wrap"
+                                   Foreground="{StaticResource Muted}" />
+                        <Border BorderBrush="{StaticResource Line}"
+                                BorderThickness="0,1,0,0"
+                                Margin="0,20,0,0"
+                                Padding="0,16,0,0">
+                            <TextBlock Text="{Binding Focused.ResultDetails}" TextWrapping="Wrap" />
+                        </Border>
+                        <WrapPanel Margin="0,16,0,0">
+                            <Button Content="Open output folder"
+                                    Command="{Binding OpenOutputCommand}"
+                                    Margin="0,0,8,8"
+                                    Padding="10,8" />
+                            <Button Content="View logs"
+                                    Command="{Binding OpenLogsCommand}"
+                                    Margin="0,0,0,8"
+                                    Padding="10,8" />
+                        </WrapPanel>
+                    </StackPanel>
+                </ScrollViewer>
+            </Border>
+        </Grid>
+        <Border Grid.Row="2"
+                Style="{StaticResource Card}"
+                Margin="0,14,0,0"
+                Visibility="{Binding OptionsOpen, Converter={StaticResource Visible}}">
+            <StackPanel>
+                <TextBlock Text="Conversion options" Style="{StaticResource Heading}" />
+                <Grid IsEnabled="{Binding IsIdle}">
+                    <Grid.ColumnDefinitions>
+                        <ColumnDefinition />
+                        <ColumnDefinition Width="1.25*" />
+                        <ColumnDefinition Width="1.2*" />
+                    </Grid.ColumnDefinitions>
+                    <StackPanel Margin="0,0,20,0">
+                        <TextBlock Text="Target" FontWeight="SemiBold" />
+                        <RadioButton Content="Profile 8.1"
+                                     GroupName="Target"
+                                     IsChecked="{Binding Hdr10, Converter={StaticResource Inverse}}" />
+                        <RadioButton Content="HDR10"
+                                     GroupName="Target"
+                                     IsChecked="{Binding Hdr10}" />
+                    </StackPanel>
+                    <StackPanel Grid.Column="1" Margin="0,0,20,0">
+                        <TextBlock Text="Destination" FontWeight="SemiBold" />
+                        <RadioButton Content="Same folder as source"
+                                     GroupName="Destination"
+                                     IsChecked="{Binding OtherFolder, Converter={StaticResource Inverse}}" />
+                        <RadioButton Content="Other folder"
+                                     GroupName="Destination"
+                                     IsChecked="{Binding OtherFolder}" />
+                        <DockPanel IsEnabled="{Binding OtherFolder}">
+                            <Button Content="Browse"
+                                    Command="{Binding BrowseDestinationCommand}"
+                                    DockPanel.Dock="Right"
+                                    Margin="8,0,0,0"
+                                    Padding="10,6" />
+                            <TextBox Text="{Binding Destination, UpdateSourceTrigger=PropertyChanged}" AutomationProperties.Name="Output folder" />
+                        </DockPanel>
+                    </StackPanel>
+                    <StackPanel Grid.Column="2">
+                        <TextBlock Text="File handling" FontWeight="SemiBold" />
+                        <RadioButton Content="Keep original"
+                                     GroupName="Retention"
+                                     IsChecked="{Binding ReplaceOriginal, Converter={StaticResource Inverse}}" />
+                        <RadioButton Content="Replace original after verification"
+                                     GroupName="Retention"
+                                     IsChecked="{Binding ReplaceOriginal}" />
+                        <CheckBox Content="Create enhancement-layer archive (EL)" IsChecked="{Binding CreateArchive}" />
+                    </StackPanel>
+                </Grid>
+                <ScrollViewer MaxHeight="80"
+                              VerticalScrollBarVisibility="Auto"
+                              Margin="0,12">
+                    <TextBlock Text="{Binding Review}"
+                               Foreground="#FFD166"
+                               TextWrapping="Wrap" />
+                </ScrollViewer>
+                <StackPanel Orientation="Horizontal" HorizontalAlignment="Right">
+                    <Button Content="Close options" Command="{Binding CloseOptionsCommand}" />
+                    <Button Content="Review changes" Command="{Binding ReviewCommand}" />
+                    <Button Content="▷  Approve and start"
+                            Style="{StaticResource Primary}"
+                            Command="{Binding ApproveCommand}" />
+                </StackPanel>
+            </StackPanel>
+        </Border>
+        <StackPanel Grid.Row="3" Margin="0,16,0,0">
+            <ProgressBar Value="{Binding Percent, Mode=OneWay}"
+                         IsIndeterminate="{Binding Indeterminate}"
+                         Visibility="{Binding IsBusy, Converter={StaticResource Visible}}" />
+            <DockPanel Margin="0,12,0,0">
+                <Button Content="Cancel batch"
+                        Command="{Binding CancelCommand}"
+                        DockPanel.Dock="Right"
+                        Visibility="{Binding IsBusy, Converter={StaticResource Visible}}" />
+                <StackPanel>
+                    <TextBlock Text="{Binding SelectionSummary}" Foreground="{StaticResource Muted}" />
+                    <TextBlock Text="{Binding Status}"
+                               TextWrapping="Wrap"
+                               MaxHeight="72"
+                               Margin="0,5,12,0" />
+                    <TextBlock Text="Row Cancel stops only that file; the batch continues after cleanup."
+                               FontSize="12"
+                               Foreground="{StaticResource Muted}"
+                               Visibility="{Binding IsBusy, Converter={StaticResource Visible}}" />
+                </StackPanel>
+            </DockPanel>
+        </StackPanel>
+    </Grid>
+</UserControl>

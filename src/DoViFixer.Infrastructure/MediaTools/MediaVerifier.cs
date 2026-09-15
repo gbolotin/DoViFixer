@@ -8,11 +8,9 @@ using DoViFixer.Domain.Media;
 using DoViFixer.Infrastructure.MediaTools.Processes;
 
 namespace DoViFixer.Infrastructure.MediaTools;
-
 internal sealed class MediaVerifier(MediaProbe probe, VideoProcessor processor, IToolCatalog tools, IProcessRunner processes) : IMediaVerifier
 {
-    public async Task<IReadOnlyList<string>> VerifyAsync(MediaInfo source, string output, DolbyVisionProfile expectedProfile,
-        ITemporaryWorkspace workspace, CancellationToken cancellationToken, IProgress<OperationProgress>? progress = null, Guid operationId = default)
+    public async Task<IReadOnlyList<string>> VerifyAsync(MediaInfo source, string output, DolbyVisionProfile expectedProfile, ITemporaryWorkspace workspace, CancellationToken cancellationToken, IProgress<OperationProgress>? progress = null, Guid operationId = default)
     {
         int completed = 0;
         // Checkpoints represent completed checks, not elapsed time. Reserve completion for the caller.
@@ -27,11 +25,13 @@ internal sealed class MediaVerifier(MediaProbe probe, VideoProcessor processor, 
         {
             failures.Add("Video packet/frame count changed.");
         }
+
         ReportCheckpoint();
         if (failures.Count != 0)
         {
             return failures;
         }
+
         // Verify all retained track payloads and packet timestamps, including subtitles.
         for (int i = 0; i < source.Tracks.Count; i++)
         {
@@ -48,18 +48,22 @@ internal sealed class MediaVerifier(MediaProbe probe, VideoProcessor processor, 
                 {
                     failures.Add($"Track {original.Id} payload changed.");
                 }
+
                 File.Delete(before);
                 File.Delete(after);
             }
+
             await ExtractAsync(source.Source.Path, "timestamps_v2", $"{original.Id}:{before}", cancellationToken);
             await ExtractAsync(output, "timestamps_v2", $"{converted.Id}:{after}", cancellationToken);
             if (!await TimestampsMatchAsync(before, after, cancellationToken))
             {
                 failures.Add($"Track {original.Id} timestamps changed or verification is unavailable.");
             }
+
             File.Delete(before);
             File.Delete(after);
         }
+
         ReportCheckpoint();
         string beforeBase = await CleanBaseAsync(source, workspace, "before", cancellationToken);
         ReportCheckpoint();
@@ -70,6 +74,7 @@ internal sealed class MediaVerifier(MediaProbe probe, VideoProcessor processor, 
         {
             failures.Add("Base-layer video payload changed.");
         }
+
         File.Delete(beforeBase);
         File.Delete(afterBase);
         ReportCheckpoint();
@@ -81,13 +86,18 @@ internal sealed class MediaVerifier(MediaProbe probe, VideoProcessor processor, 
         return failures;
     }
 
-    private async Task VerifyRpuAsync(MediaInfo target, DolbyVisionProfile expectedProfile, long frames,
-        ITemporaryWorkspace workspace, List<string> failures, CancellationToken cancellationToken)
+    private async Task VerifyRpuAsync(MediaInfo target, DolbyVisionProfile expectedProfile, long frames, ITemporaryWorkspace workspace, List<string> failures, CancellationToken cancellationToken)
     {
         string raw = workspace.File("verify-rpu.hevc");
         string rpu = workspace.File("verify.rpu");
         await processor.ExtractVideoAsync(target, raw, cancellationToken);
-        var extraction = await processes.RunAsync(new(tools.GetPath(NativeTool.DoviTool), new[] { "extract-rpu", raw, "-o", rpu }, AcceptedExitCodes: new[] { 0, 1 }), cancellationToken);
+        var extraction = await processes.RunAsync(new(tools.GetPath(NativeTool.DoviTool), new[]
+        {
+            "extract-rpu", raw, "-o", rpu
+        }, AcceptedExitCodes: new[]
+        {
+            0, 1
+        }), cancellationToken);
         File.Delete(raw);
         if (expectedProfile == DolbyVisionProfile.None)
         {
@@ -95,14 +105,20 @@ internal sealed class MediaVerifier(MediaProbe probe, VideoProcessor processor, 
             {
                 failures.Add("HDR10 output still contains RPU data or its absence could not be verified.");
             }
+
             return;
         }
+
         if (extraction.ExitCode != 0 || !File.Exists(rpu) || new FileInfo(rpu).Length == 0)
         {
             failures.Add("Output RPU data is absent or unreadable.");
             return;
         }
-        await processes.RunAsync(new(tools.GetPath(NativeTool.DoviTool), new[] { "export", "-i", "verify.rpu", "-d", "all=verify-rpu.json" }, workspace.DirectoryPath), cancellationToken);
+
+        await processes.RunAsync(new(tools.GetPath(NativeTool.DoviTool), new[]
+        {
+            "export", "-i", "verify.rpu", "-d", "all=verify-rpu.json"
+        }, workspace.DirectoryPath), cancellationToken);
         await using var stream = File.OpenRead(workspace.File("verify-rpu.json"));
         long count = 0;
         bool wrongProfile = false;
@@ -112,6 +128,7 @@ internal sealed class MediaVerifier(MediaProbe probe, VideoProcessor processor, 
             count++;
             wrongProfile |= !frame.TryGetProperty("dovi_profile", out var profile) || profile.GetInt32() != expected;
         }
+
         if (count != frames || wrongProfile)
         {
             failures.Add($"Output RPU profile/count does not match Profile {expected} and {frames} video frames.");
@@ -125,19 +142,22 @@ internal sealed class MediaVerifier(MediaProbe probe, VideoProcessor processor, 
         {
             failures.Add($"Expected {profile}; detected {target.Profile}.");
         }
+
         if (target.Width <= 0 || target.Height <= 0 || source.Width != target.Width || source.Height != target.Height || source.VideoCodec != target.VideoCodec)
         {
             failures.Add("Video codec/dimensions changed or are unavailable.");
         }
+
         if (source.DurationSeconds is null or <= 0 || target.DurationSeconds is null or <= 0 || Math.Abs(source.DurationSeconds.Value - target.DurationSeconds.Value) > 0.05)
         {
             failures.Add("Video duration differs by more than 50 ms or is unavailable.");
         }
-        if (source.Tracks.Count != target.Tracks.Count || source.AttachmentCount != target.AttachmentCount ||
-            source.ChapterCount != target.ChapterCount || source.Title != target.Title)
+
+        if (source.Tracks.Count != target.Tracks.Count || source.AttachmentCount != target.AttachmentCount || source.ChapterCount != target.ChapterCount || source.Title != target.Title)
         {
             failures.Add("Tracks, attachments, chapters or title changed.");
         }
+
         foreach (var pair in source.Tracks.Zip(target.Tracks))
         {
             var a = pair.First;
@@ -146,11 +166,13 @@ internal sealed class MediaVerifier(MediaProbe probe, VideoProcessor processor, 
             {
                 failures.Add($"Track {a.Id} metadata or order changed.");
             }
+
             if (!TrackLanguage.Equivalent(a.Language, b.Language))
             {
                 failures.Add($"Track {a.Id} language changed: '{a.Language}' -> '{b.Language}'.");
             }
         }
+
         using var sourceJson = JsonDocument.Parse(source.IdentificationJson);
         using var targetJson = JsonDocument.Parse(target.IdentificationJson);
         var sourceVideo = sourceJson.RootElement.GetProperty("tracks").EnumerateArray().Single(t => t.GetProperty("id").GetInt32() == source.VideoTrackId).GetProperty("properties");
@@ -164,7 +186,10 @@ internal sealed class MediaVerifier(MediaProbe probe, VideoProcessor processor, 
         string raw = workspace.File(prefix + ".hevc");
         string clean = workspace.File(prefix + "-clean.hevc");
         await processor.ExtractVideoAsync(media, raw, cancellationToken);
-        await processor.RunDoviAsync(new[] { "remove", raw, "-o", clean }, cancellationToken);
+        await processor.RunDoviAsync(new[]
+        {
+            "remove", raw, "-o", clean
+        }, cancellationToken);
         File.Delete(raw);
         return clean;
     }
@@ -177,17 +202,23 @@ internal sealed class MediaVerifier(MediaProbe probe, VideoProcessor processor, 
         {
             return;
         }
+
         foreach (var pair in a.RootElement.GetProperty("attachments").EnumerateArray().Zip(b.RootElement.GetProperty("attachments").EnumerateArray()))
         {
             string before = workspace.File("attachment-before.bin");
             string after = workspace.File("attachment-after.bin");
             await ExtractAsync(source.Source.Path, "attachments", $"{pair.First.GetProperty("id").GetInt32()}:{before}", cancellationToken);
             await ExtractAsync(target.Source.Path, "attachments", $"{pair.Second.GetProperty("id").GetInt32()}:{after}", cancellationToken);
-            if (await VideoProcessor.HashAsync(before, cancellationToken) != await VideoProcessor.HashAsync(after, cancellationToken) ||
-                new[] { "file_name", "content_type", "description" }.Any(n => MediaMetadataParser.Text(pair.First, n) != MediaMetadataParser.Text(pair.Second, n)))
+            if (await VideoProcessor.HashAsync(before, cancellationToken) != await VideoProcessor.HashAsync(after, cancellationToken) || new[]
+            {
+                "file_name",
+                "content_type",
+                "description"
+            }.Any(n => MediaMetadataParser.Text(pair.First, n) != MediaMetadataParser.Text(pair.Second, n)))
             {
                 failures.Add("Attachment data or metadata changed.");
             }
+
             File.Delete(before);
             File.Delete(after);
         }
@@ -206,11 +237,13 @@ internal sealed class MediaVerifier(MediaProbe probe, VideoProcessor processor, 
             {
                 return "";
             }
+
             string text = File.ReadAllText(path);
             if (string.IsNullOrWhiteSpace(text))
             {
                 return "";
             }
+
             var document = XDocument.Parse(text);
             if (mode == "tags")
             {
@@ -219,30 +252,34 @@ internal sealed class MediaVerifier(MediaProbe probe, VideoProcessor processor, 
                     int index = media.Tracks.ToList().FindIndex(t => t.Uid == uid.Value);
                     uid.Value = "track-" + index;
                 }
-                foreach (var simple in document.Descendants("Simple").Where(s =>
-                    s.Element("Name")?.Value is "BPS" or "DURATION" or "NUMBER_OF_FRAMES" or "NUMBER_OF_BYTES" ||
-                    (s.Element("Name")?.Value.StartsWith("_STATISTICS_", StringComparison.Ordinal) ?? false)).ToArray())
+
+                foreach (var simple in document.Descendants("Simple").Where(s => s.Element("Name")?.Value is "BPS" or "DURATION" or "NUMBER_OF_FRAMES" or "NUMBER_OF_BYTES" || (s.Element("Name")?.Value.StartsWith("_STATISTICS_", StringComparison.Ordinal) ?? false)).ToArray())
                 {
                     simple.Remove();
                 }
+
                 foreach (var tag in document.Descendants("Tag").Where(t => !t.Elements("Simple").Any()).ToArray())
                 {
                     tag.Remove();
                 }
+
                 CanonicalizeTags(document);
                 return string.Join("\n", (document.Root?.Elements() ?? []).Select(e => e.ToString(SaveOptions.DisableFormatting)).Order(StringComparer.Ordinal));
             }
+
             return document.Root?.ToString(SaveOptions.DisableFormatting) ?? "";
         }
+
         if (Normalize(before, source) != Normalize(after, target))
         {
             failures.Add($"{mode} metadata changed.");
         }
     }
 
-    private Task ExtractAsync(string source, string mode, string destination, CancellationToken cancellationToken) =>
-        processes.RunAsync(new(tools.GetPath(NativeTool.MkvExtract), new[] { source, mode, destination }, AllowWarnings: true), cancellationToken);
-
+    private Task ExtractAsync(string source, string mode, string destination, CancellationToken cancellationToken) => processes.RunAsync(new(tools.GetPath(NativeTool.MkvExtract), new[]
+    {
+        source, mode, destination
+    }, AllowWarnings: true), cancellationToken);
     internal static void CanonicalizeTags(XDocument document)
     {
         foreach (var simple in document.Descendants("Simple"))
@@ -253,22 +290,21 @@ internal sealed class MediaVerifier(MediaProbe probe, VideoProcessor processor, 
                 try
                 {
                     // Only ignore a redundant primary-language annotation; retain regional variants.
-                    if (!ietf.Value.Contains('-') && CultureInfo.GetCultureInfo(ietf.Value).ThreeLetterISOLanguageName ==
-                        (simple.Element("TagLanguage")?.Value ?? "und"))
+                    if (!ietf.Value.Contains('-') && CultureInfo.GetCultureInfo(ietf.Value).ThreeLetterISOLanguageName == (simple.Element("TagLanguage")?.Value ?? "und"))
                     {
                         ietf.Remove();
                     }
                 }
                 catch (CultureNotFoundException)
                 {
-                    // Unknown language tags must still compare exactly.
+                // Unknown language tags must still compare exactly.
                 }
             }
         }
+
         foreach (var element in document.Descendants().Reverse().Where(e => e.HasElements).ToArray())
         {
-            element.ReplaceNodes(element.Elements().OrderBy(e => e.Name.ToString(), StringComparer.Ordinal)
-                .ThenBy(e => e.ToString(SaveOptions.DisableFormatting), StringComparer.Ordinal).ToArray());
+            element.ReplaceNodes(element.Elements().OrderBy(e => e.Name.ToString(), StringComparer.Ordinal).ThenBy(e => e.ToString(SaveOptions.DisableFormatting), StringComparer.Ordinal).ToArray());
         }
     }
 
@@ -285,15 +321,17 @@ internal sealed class MediaVerifier(MediaProbe probe, VideoProcessor processor, 
             {
                 return x is null && y is null && count > 0;
             }
+
             if (x.StartsWith('#') && y.StartsWith('#'))
             {
                 continue;
             }
-            if (!double.TryParse(x, CultureInfo.InvariantCulture, out double first) || !double.TryParse(y, CultureInfo.InvariantCulture, out double second) ||
-                !double.IsFinite(first) || !double.IsFinite(second) || Math.Abs(first - second) > 1)
+
+            if (!double.TryParse(x, CultureInfo.InvariantCulture, out double first) || !double.TryParse(y, CultureInfo.InvariantCulture, out double second) || !double.IsFinite(first) || !double.IsFinite(second) || Math.Abs(first - second) > 1)
             {
                 return false;
             }
+
             count++;
         }
     }

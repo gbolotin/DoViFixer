@@ -14,7 +14,6 @@ using DoViFixer.Domain.Analysis;
 using DoViFixer.Domain.Conversion;
 
 namespace DoViFixer.Console.Commands;
-
 public sealed class MediaReadCommand(ScanService scan, InspectionService inspection, ConsoleRenderer renderer) : IConsoleCommand
 {
     public bool Handles(string command) => command is "scan" or "inspect";
@@ -28,6 +27,7 @@ public sealed class MediaReadCommand(ScanService scan, InspectionService inspect
                 {
                     renderer.Write("After scanning, Simple FEL candidates will receive deep inspection of every base-layer frame. This may take a long time and requires temporary disk space.");
                 }
+
                 var scanRenderer = command.Has("json") ? null : new ScanRenderer(renderer, command.Has("candidates-only"));
                 var results = await scan.ScanAsync(input, command.Depth, command.Value("temp"), renderer, cancellationToken, scanRenderer, command.Has("inspect-simple"));
                 var visible = command.Has("candidates-only") ? results.Where(r => r.InitialAnalysis is not null || r.Error is not null || r.Analysis?.Verdict is AnalysisVerdict.Mel or AnalysisVerdict.SimpleFel or AnalysisVerdict.AnalysisFailed).ToArray() : results;
@@ -39,12 +39,14 @@ public sealed class MediaReadCommand(ScanService scan, InspectionService inspect
                 {
                     scanRenderer!.Summary(results);
                 }
+
                 return results.Any(r => r.Error is not null || r.Analysis?.Verdict == AnalysisVerdict.AnalysisFailed) ? 1 : 0;
             case "inspect":
                 if (command.Has("deep") && !command.Has("json"))
                 {
                     renderer.Write("Deep inspection decodes every HDR10 base-layer frame and may take a long time.");
                 }
+
                 var analysis = await inspection.InspectAsync(input, command.Has("deep") ? AnalysisMethod.DeepInspection : AnalysisMethod.FullRpu, command.Value("temp"), cancellationToken);
                 if (command.Has("json"))
                 {
@@ -52,9 +54,9 @@ public sealed class MediaReadCommand(ScanService scan, InspectionService inspect
                 }
                 else
                 {
-                    renderer.Write($"{analysis.Media.Source.Path}\n{analysis.Media.Profile}; {analysis.Verdict}\n{analysis.Reason}\n" +
-                        $"Evidence: {analysis.Evidence.Method}; {analysis.Evidence.Frames:N0} RPUs; L1 peak: {analysis.Evidence.PeakNits?.ToString("F0") ?? "unknown"} nits.");
+                    renderer.Write($"{analysis.Media.Source.Path}\n{analysis.Media.Profile}; {analysis.Verdict}\n{analysis.Reason}\n" + $"Evidence: {analysis.Evidence.Method}; {analysis.Evidence.Frames:N0} RPUs; L1 peak: {analysis.Evidence.PeakNits?.ToString("F0") ?? "unknown"} nits.");
                 }
+
                 return analysis.Verdict == AnalysisVerdict.AnalysisFailed ? 1 : 0;
             default:
                 throw new ArgumentException("Unsupported command.");

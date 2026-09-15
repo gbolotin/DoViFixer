@@ -6,15 +6,10 @@ using DoViFixer.Domain.Media;
 using Microsoft.Extensions.Logging;
 
 namespace DoViFixer.Application.Restore;
-
-public sealed record RestorePlan(Guid Id, MediaInfo Media, FileIdentity Archive, string Output,
-    string? TemporaryDirectory, long ScratchBytes, bool AllowLegacy);
-public sealed class RestoreService(DependencyService dependencies, IMediaProbe probe, IFileOperations files,
-    ITemporaryWorkspaceFactory workspaces, IVideoProcessor processor, IBackupArchiveStore archives,
-    IMediaVerifier verifier, IOutputPublisher publisher, ISettingsStore settings, ILogger<RestoreService> logger)
+public sealed record RestorePlan(Guid Id, MediaInfo Media, FileIdentity Archive, string Output, string? TemporaryDirectory, long ScratchBytes, bool AllowLegacy);
+public sealed class RestoreService(DependencyService dependencies, IMediaProbe probe, IFileOperations files, ITemporaryWorkspaceFactory workspaces, IVideoProcessor processor, IBackupArchiveStore archives, IMediaVerifier verifier, IOutputPublisher publisher, ISettingsStore settings, ILogger<RestoreService> logger)
 {
-    public async Task<RestorePlan> PlanAsync(string input, string archive, string? outputDirectory, string? temporaryDirectory,
-        bool allowLegacy, CancellationToken cancellationToken)
+    public async Task<RestorePlan> PlanAsync(string input, string archive, string? outputDirectory, string? temporaryDirectory, bool allowLegacy, CancellationToken cancellationToken)
     {
         await dependencies.RequireAsync(DependencyRequirements.All, cancellationToken);
         await using var lease = await files.AcquireReadLeaseAsync(files.Identify(input), cancellationToken);
@@ -23,22 +18,18 @@ public sealed class RestoreService(DependencyService dependencies, IMediaProbe p
         {
             throw new InvalidOperationException("Restore requires an HEVC Profile 8.1 or HDR10 base file.");
         }
+
         var archiveIdentity = files.Identify(archive);
         var snapshot = await settings.ReadAsync(cancellationToken);
-        return new(Guid.NewGuid(), media, archiveIdentity, files.PrepareOutputPath(input, outputDirectory, ".restored.mkv"),
-            temporaryDirectory ?? snapshot.TemporaryDirectory,
-            checked(ConversionPolicy.RequiredScratchBytes(media.Source.Length) + archiveIdentity.Length * 3), allowLegacy);
+        return new(Guid.NewGuid(), media, archiveIdentity, files.PrepareOutputPath(input, outputDirectory, ".restored.mkv"), temporaryDirectory ?? snapshot.TemporaryDirectory, checked(ConversionPolicy.RequiredScratchBytes(media.Source.Length) + archiveIdentity.Length * 3), allowLegacy);
     }
 
-    public Task<FileResult> ExecuteAsync(RestorePlan approvedPlan, IProgress<OperationProgress>? progress, CancellationToken cancellationToken) =>
-        OperationLog.RunAsync(logger, "Restore", approvedPlan.Id, approvedPlan.Media.Source.Path,
-            async () =>
-            {
-                var result = await ExecuteCoreAsync(approvedPlan, progress, cancellationToken);
-                OperationLog.Result(logger, result);
-                return result;
-            }, cancellationToken, result => result.Status);
-
+    public Task<FileResult> ExecuteAsync(RestorePlan approvedPlan, IProgress<OperationProgress>? progress, CancellationToken cancellationToken) => OperationLog.RunAsync(logger, "Restore", approvedPlan.Id, approvedPlan.Media.Source.Path, async () =>
+    {
+        var result = await ExecuteCoreAsync(approvedPlan, progress, cancellationToken);
+        OperationLog.Result(logger, result);
+        return result;
+    }, cancellationToken, result => result.Status);
     private async Task<FileResult> ExecuteCoreAsync(RestorePlan approvedPlan, IProgress<OperationProgress>? progress, CancellationToken cancellationToken)
     {
         logger.LogInformation("Restoring archive {Archive} to {Output}; allow legacy {AllowLegacy}", approvedPlan.Archive.Path, approvedPlan.Output, approvedPlan.AllowLegacy);
@@ -54,15 +45,16 @@ public sealed class RestoreService(DependencyService dependencies, IMediaProbe p
         {
             OperationLog.Audit(logger, "UseLegacyArchive", approvedPlan.Archive.Path, "SourcePairingUnverified", approvedPlan.Id);
         }
+
         await processor.RestoreAsync(approvedPlan.Media, manifest, workspace, staged.Path, cancellationToken);
         var findings = await verifier.VerifyAsync(approvedPlan.Media, staged.Path, DolbyVisionProfile.Profile7, workspace, cancellationToken);
         if (findings.Count > 0)
         {
             throw new InvalidDataException("Restoration verification failed: " + string.Join("; ", findings));
         }
+
         await staged.PublishAsync(cancellationToken);
         OperationLog.Audit(logger, "PublishRestore", approvedPlan.Output, "Completed", approvedPlan.Id);
-        return new(approvedPlan.Media.Source.Path, OperationStatus.Completed, approvedPlan.Output,
-            manifest is null ? "Restored media verified. Legacy archive source identity remains unverified." : "Pairing, payload and restored media verified. Original retained.");
+        return new(approvedPlan.Media.Source.Path, OperationStatus.Completed, approvedPlan.Output, manifest is null ? "Restored media verified. Legacy archive source identity remains unverified." : "Pairing, payload and restored media verified. Original retained.");
     }
 }

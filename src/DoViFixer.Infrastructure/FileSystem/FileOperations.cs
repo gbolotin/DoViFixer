@@ -2,7 +2,6 @@ using DoViFixer.Application.Abstractions;
 using DoViFixer.Domain.Media;
 
 namespace DoViFixer.Infrastructure.FileSystem;
-
 internal sealed class FileOperations : IFileOperations, IFileDiscovery
 {
     public FileIdentity Identify(string path)
@@ -14,6 +13,7 @@ internal sealed class FileOperations : IFileOperations, IFileDiscovery
         {
             throw new FileNotFoundException("A nonempty source file is required.", full);
         }
+
         return new(full, info.Length, info.LastWriteTimeUtc);
     }
 
@@ -23,23 +23,28 @@ internal sealed class FileOperations : IFileOperations, IFileDiscovery
         {
             throw new ArgumentOutOfRangeException(nameof(recursiveDepth), "Depth must be between 0 and 100.");
         }
+
         string full = Path.GetFullPath(input);
         RejectReparsePoints(full);
-        bool Matches(string path) => cleanup
-            ? path.EndsWith(".bak.dovi_convert", StringComparison.OrdinalIgnoreCase) || path.EndsWith(".dovi", StringComparison.OrdinalIgnoreCase)
-            : path.EndsWith(".mkv", StringComparison.OrdinalIgnoreCase);
+        bool Matches(string path) => cleanup ? path.EndsWith(".bak.dovi_convert", StringComparison.OrdinalIgnoreCase) || path.EndsWith(".dovi", StringComparison.OrdinalIgnoreCase) : path.EndsWith(".mkv", StringComparison.OrdinalIgnoreCase);
         if (File.Exists(full))
         {
             if (!Matches(full))
             {
                 throw new ArgumentException(cleanup ? "Cleanup accepts only .dovi and .bak.dovi_convert backups." : "Only MKV media is supported.");
             }
-            return new[] { full };
+
+            return new[]
+            {
+                full
+            };
         }
+
         if (!Directory.Exists(full))
         {
             throw new DirectoryNotFoundException(full);
         }
+
         var enumeration = new EnumerationOptions
         {
             RecurseSubdirectories = recursiveDepth > 0,
@@ -47,8 +52,7 @@ internal sealed class FileOperations : IFileOperations, IFileDiscovery
             IgnoreInaccessible = false,
             AttributesToSkip = FileAttributes.ReparsePoint
         };
-        return Directory.EnumerateFiles(full, "*", enumeration).Where(Matches)
-            .Order(StringComparer.OrdinalIgnoreCase).ToArray();
+        return Directory.EnumerateFiles(full, "*", enumeration).Where(Matches).Order(StringComparer.OrdinalIgnoreCase).ToArray();
     }
 
     public string PrepareOutputPath(string input, string? outputDirectory, string suffix, bool allowInput = false)
@@ -60,13 +64,14 @@ internal sealed class FileOperations : IFileOperations, IFileDiscovery
             RejectReparsePoints(directory);
             Directory.CreateDirectory(directory);
         }
+
         RejectReparsePoints(directory);
         string output = Path.Combine(directory, Path.GetFileNameWithoutExtension(source) + suffix);
-        if (!(allowInput && string.Equals(output, source, StringComparison.OrdinalIgnoreCase)) &&
-            (File.Exists(output) || Directory.Exists(output) || string.Equals(output, source, StringComparison.OrdinalIgnoreCase)))
+        if (!(allowInput && string.Equals(output, source, StringComparison.OrdinalIgnoreCase)) && (File.Exists(output) || Directory.Exists(output) || string.Equals(output, source, StringComparison.OrdinalIgnoreCase)))
         {
             throw new IOException($"Output collision: {output}. Existing files will not be overwritten.");
         }
+
         return output;
     }
 
@@ -80,8 +85,12 @@ internal sealed class FileOperations : IFileOperations, IFileDiscovery
         {
             throw new IOException("Source changed since planning; prepare a new conversion plan.");
         }
+
         NativeStorage.Rename(handle, backup);
-        return identity with { Path = backup };
+        return identity with
+        {
+            Path = backup
+        };
     }
 
     public void RestoreOriginal(FileIdentity backupIdentity, string originalPath)
@@ -91,6 +100,7 @@ internal sealed class FileOperations : IFileOperations, IFileDiscovery
         {
             throw new InvalidOperationException("Backup does not belong to the original path.");
         }
+
         RejectReparsePoints(backupIdentity.Path);
         RejectReparsePoints(destination);
         using var handle = NativeStorage.OpenForDeletion(backupIdentity.Path);
@@ -98,6 +108,7 @@ internal sealed class FileOperations : IFileOperations, IFileDiscovery
         {
             throw new IOException("Original backup changed; automatic recovery refused.");
         }
+
         // The handle-bound rename refuses to replace an existing destination.
         NativeStorage.Rename(handle, destination);
     }
@@ -109,8 +120,7 @@ internal sealed class FileOperations : IFileOperations, IFileDiscovery
         Directory.CreateDirectory(full);
         RejectReparsePoints(full);
         string probe = Path.Combine(full, $".dovifixer-write-test-{Guid.NewGuid():N}");
-        using var stream = new FileStream(probe, FileMode.CreateNew, FileAccess.Write, FileShare.None,
-            1, FileOptions.DeleteOnClose);
+        using var stream = new FileStream(probe, FileMode.CreateNew, FileAccess.Write, FileShare.None, 1, FileOptions.DeleteOnClose);
         stream.WriteByte(0);
         stream.Flush();
     }
@@ -121,6 +131,7 @@ internal sealed class FileOperations : IFileOperations, IFileDiscovery
         {
             throw new ArgumentOutOfRangeException(nameof(requiredBytes));
         }
+
         string full = Path.GetFullPath(directory);
         RejectReparsePoints(full);
         // GetDiskFreeSpaceEx handles UNC paths as well as local volumes.
@@ -128,6 +139,7 @@ internal sealed class FileOperations : IFileOperations, IFileDiscovery
         {
             throw new System.ComponentModel.Win32Exception(System.Runtime.InteropServices.Marshal.GetLastWin32Error(), $"Cannot determine available space at {full}.");
         }
+
         if (available < (ulong)requiredBytes)
         {
             throw new IOException($"Insufficient space at {full}: requires {requiredBytes:N0} bytes; available {available:N0}.");
@@ -145,6 +157,7 @@ internal sealed class FileOperations : IFileOperations, IFileDiscovery
             {
                 throw new IOException($"Source changed since planning: {identity.Path}");
             }
+
             return ValueTask.FromResult<IAsyncDisposable>(stream);
         }
         catch
@@ -161,12 +174,14 @@ internal sealed class FileOperations : IFileOperations, IFileDiscovery
         {
             throw new InvalidOperationException("Cleanup may delete only explicitly planned backup files.");
         }
+
         RejectReparsePoints(identity.Path);
         using var handle = NativeStorage.OpenForDeletion(identity.Path);
         if (RandomAccess.GetLength(handle) != identity.Length || File.GetLastWriteTimeUtc(handle) != identity.LastWriteUtc)
         {
             throw new IOException("Backup changed since planning; prepare a new cleanup plan.");
         }
+
         // Mark the already-open, exclusively held file for deletion, avoiding a close/reopen race.
         NativeStorage.DeleteOnClose(handle);
         return Task.CompletedTask;

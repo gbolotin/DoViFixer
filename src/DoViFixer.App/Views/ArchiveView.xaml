@@ -1,0 +1,77 @@
+<UserControl x:Class="DoViFixer.App.Views.ArchiveView"
+             xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             Style="{StaticResource {x:Type UserControl}}">
+    <ScrollViewer VerticalScrollBarVisibility="Auto">
+        <StackPanel>
+            <TextBlock Text="Backup &amp; Restore" Style="{StaticResource Heading}" />
+            <Border Style="{StaticResource Card}">
+                <StackPanel IsEnabled="{Binding IsIdle}">
+                    <TextBlock Text="Enhancement-layer archives"
+                               FontSize="20"
+                               FontWeight="SemiBold" />
+                    <TextBlock Text="Choose a Profile 7 file for backup, or a Profile 8.1 / HDR10 base file for restoration."
+                               Foreground="{StaticResource Muted}"
+                               Margin="0,10,0,10"
+                               TextWrapping="Wrap" />
+                    <TextBlock Text="Media file" Style="{StaticResource Label}" />
+                    <DockPanel>
+                        <Button Content="Browse"
+                                DockPanel.Dock="Right"
+                                Command="{Binding BrowseInputCommand}"
+                                Margin="10,0,0,0" />
+                        <TextBox Text="{Binding Input, UpdateSourceTrigger=PropertyChanged}" />
+                    </DockPanel>
+                    <TextBlock Text="EL archive for restoration" Style="{StaticResource Label}" />
+                    <DockPanel>
+                        <Button Content="Browse"
+                                DockPanel.Dock="Right"
+                                Command="{Binding BrowseArchiveCommand}"
+                                Margin="10,0,0,0" />
+                        <TextBox Text="{Binding Archive, UpdateSourceTrigger=PropertyChanged}" />
+                    </DockPanel>
+                    <TextBlock Text="Output folder (leave blank for the source folder)" Style="{StaticResource Label}" />
+                    <DockPanel>
+                        <Button Content="Browse"
+                                DockPanel.Dock="Right"
+                                Command="{Binding BrowseOutputCommand}"
+                                Margin="10,0,0,0" />
+                        <TextBox Text="{Binding Output, UpdateSourceTrigger=PropertyChanged}" />
+                    </DockPanel>
+                    <CheckBox Content="Allow a legacy archive without verified source pairing"
+                              IsChecked="{Binding AllowLegacy}"
+                              Margin="0,18" />
+                    <StackPanel Orientation="Horizontal">
+                        <Button Content="Review backup" Command="{Binding BackupCommand}" />
+                        <Button Content="Review restoration"
+                                Command="{Binding RestoreCommand}"
+                                Style="{StaticResource Primary}" />
+                    </StackPanel>
+                </StackPanel>
+            </Border>
+            <Border Style="{StaticResource Card}" Margin="0,20,0,0">
+                <StackPanel>
+                    <TextBlock Text="Clean up retained backups"
+                               FontSize="20"
+                               FontWeight="SemiBold" />
+                    <TextBlock Text="Find .dovi and .bak.dovi_convert files in a folder and its subfolders. Review exact files before permanent deletion."
+                               TextWrapping="Wrap"
+                               Foreground="{StaticResource Muted}"
+                               Margin="0,12" />
+                    <Button Content="Choose folder and review cleanup"
+                            Command="{Binding CleanupCommand}"
+                            HorizontalAlignment="Left" />
+                </StackPanel>
+            </Border>
+            <ProgressBar Margin="0,20,0,10"
+                         Value="{Binding Percent, Mode=OneWay}"
+                         IsIndeterminate="{Binding Indeterminate}"
+                         Visibility="{Binding IsBusy, Converter={StaticResource Visible}}" />
+            <TextBlock Text="{Binding Status}" TextWrapping="Wrap" />
+            <Button Content="Cancel operation"
+                    Command="{Binding CancelCommand}"
+                    Visibility="{Binding IsBusy, Converter={StaticResource Visible}}"
+                    HorizontalAlignment="Right" />
+        </StackPanel>
+    </ScrollViewer>
+</UserControl>

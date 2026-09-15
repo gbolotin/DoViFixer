@@ -3,12 +3,10 @@ using DoViFixer.Application.Abstractions;
 using DoViFixer.Application.Dependencies;
 
 namespace DoViFixer.Infrastructure.Dependencies;
-
 internal sealed class ToolCatalog : IToolCatalog
 {
     private readonly ConcurrentDictionary<NativeTool, string> paths = new();
-    public string GetPath(NativeTool tool) => paths.TryGetValue(tool, out string? path) ? path
-        : throw new InvalidOperationException($"{tool} has not passed dependency validation.");
+    public string GetPath(NativeTool tool) => paths.TryGetValue(tool, out string? path) ? path : throw new InvalidOperationException($"{tool} has not passed dependency validation.");
     public void Refresh(IEnumerable<DependencyStatus> statuses)
     {
         foreach (var status in statuses)

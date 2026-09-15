@@ -6,7 +6,6 @@ using DoViFixer.Infrastructure.MediaTools.Processes;
 using Microsoft.Extensions.Logging;
 
 namespace DoViFixer.Infrastructure.Dependencies;
-
 internal sealed class DependencyDetector(ISettingsStore settings, StorageOptions storage, IProcessRunner processes, ILogger<DependencyDetector> logger) : IDependencyDetector
 {
     public async Task<DependencyReport> DetectAsync(IReadOnlyList<NativeTool> tools, CancellationToken cancellationToken, bool skipConfiguredPaths = false)
@@ -25,6 +24,7 @@ internal sealed class DependencyDetector(ISettingsStore settings, StorageOptions
                 });
                 continue;
             }
+
             DependencyStatus? failure = null;
             DependencyStatus? ready = null;
             foreach (string candidate in Candidates(tool))
@@ -35,10 +35,13 @@ internal sealed class DependencyDetector(ISettingsStore settings, StorageOptions
                     ready = result;
                     break;
                 }
+
                 failure ??= result;
             }
+
             results.Add(ready ?? failure ?? new(tool, DependencyState.Missing, null, null, $"{ToolDefinitions.Executable(tool)} was not found."));
         }
+
         return new(results.AsReadOnly());
     }
 
@@ -48,14 +51,19 @@ internal sealed class DependencyDetector(ISettingsStore settings, StorageOptions
         {
             return new(tool, DependencyState.Unusable, path, null, "Executable path must be absolute and exist.");
         }
+
         try
         {
             if (tool == NativeTool.MediaInfo && IsGuiExecutable(path))
             {
                 return new(tool, DependencyState.Unusable, path, null, "This is a GUI-only MediaInfo executable; install MediaInfo CLI.");
             }
+
             string argument = tool is NativeTool.FFmpeg or NativeTool.FFprobe ? "-version" : "--version";
-            var result = await processes.RunAsync(new(path, new[] { argument }, Timeout: TimeSpan.FromSeconds(8)), cancellationToken);
+            var result = await processes.RunAsync(new(path, new[]
+            {
+                argument
+            }, Timeout: TimeSpan.FromSeconds(8)), cancellationToken);
             string output = result.Output + result.Error;
             string identity = tool switch
             {
@@ -67,26 +75,41 @@ internal sealed class DependencyDetector(ISettingsStore settings, StorageOptions
             {
                 return new(tool, DependencyState.Unusable, path, null, "Executable did not identify as the expected command-line tool.");
             }
+
             var versionMatch = Regex.Match(output, @"(?i)(?:version\s+|\bv|dovi_tool\s+)(\d+\.\d+(?:\.\d+)?)");
             if (!versionMatch.Success || !Version.TryParse(versionMatch.Groups[1].Value, out var version))
             {
                 return new(tool, DependencyState.Unusable, path, null, "Could not establish a supported version.");
             }
+
             if (version.Major < ToolDefinitions.MinimumMajor(tool))
             {
                 return new(tool, DependencyState.Incompatible, path, version.ToString(), $"Requires version {ToolDefinitions.MinimumMajor(tool)} or later.");
             }
+
             if (tool == NativeTool.DoviTool)
             {
-                var help = await processes.RunAsync(new(path, new[] { "--help" }, Timeout: TimeSpan.FromSeconds(8)), cancellationToken);
-                if (!new[] { "extract-rpu", "convert", "demux", "mux", "export", "remove" }.All(help.Output.Contains))
+                var help = await processes.RunAsync(new(path, new[]
+                {
+                    "--help"
+                }, Timeout: TimeSpan.FromSeconds(8)), cancellationToken);
+                if (!new[]
+                {
+                    "extract-rpu",
+                    "convert",
+                    "demux",
+                    "mux",
+                    "export",
+                    "remove"
+                }.All(help.Output.Contains))
                 {
                     return new(tool, DependencyState.Incompatible, path, version.ToString(), "Required dovi_tool subcommands are unavailable.");
                 }
             }
+
             return new(tool, DependencyState.Ready, Path.GetFullPath(path), version.ToString(), "Validated command-line executable.");
         }
-        catch (Exception ex) when (ex is not OperationCanceledException)
+        catch (Exception ex)when (ex is not OperationCanceledException)
         {
             logger.LogDebug(ex, "Dependency validation failed for {Tool} at {ToolPath}", tool, path);
             return new(tool, DependencyState.Unusable, path, null, ex.Message);
@@ -101,17 +124,20 @@ internal sealed class DependencyDetector(ISettingsStore settings, StorageOptions
         {
             return false;
         }
+
         stream.Position = 0x3C;
         int peOffset = reader.ReadInt32();
         if (peOffset < 0 || peOffset + 94L > stream.Length)
         {
             return false;
         }
+
         stream.Position = peOffset;
         if (reader.ReadUInt32() != 0x00004550)
         {
             return false;
         }
+
         stream.Position = peOffset + 24 + 68;
         return reader.ReadUInt16() == 2;
     }
@@ -120,21 +146,24 @@ internal sealed class DependencyDetector(ISettingsStore settings, StorageOptions
     {
         string executable = ToolDefinitions.Executable(tool);
         var found = new List<string>();
-        foreach (string root in new[] { storage.ToolsDirectory, Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData), "Microsoft", "WinGet", "Packages") })
+        foreach (string root in new[]
+        {
+            storage.ToolsDirectory,
+            Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData), "Microsoft", "WinGet", "Packages")
+        }
+
+        )
         {
             if (Directory.Exists(root))
             {
                 found.AddRange(Directory.EnumerateFiles(root, executable, new EnumerationOptions
                 {
-                    RecurseSubdirectories = true,
-                    MaxRecursionDepth = 5,
-                    IgnoreInaccessible = true,
-                    AttributesToSkip = FileAttributes.ReparsePoint
+                    RecurseSubdirectories = true, MaxRecursionDepth = 5, IgnoreInaccessible = true, AttributesToSkip = FileAttributes.ReparsePoint
                 }).OrderDescending(StringComparer.OrdinalIgnoreCase));
             }
         }
-        string environmentPath = string.Join(Path.PathSeparator, Environment.GetEnvironmentVariable("PATH"),
-            Environment.GetEnvironmentVariable("PATH", EnvironmentVariableTarget.User), Environment.GetEnvironmentVariable("PATH", EnvironmentVariableTarget.Machine));
+
+        string environmentPath = string.Join(Path.PathSeparator, Environment.GetEnvironmentVariable("PATH"), Environment.GetEnvironmentVariable("PATH", EnvironmentVariableTarget.User), Environment.GetEnvironmentVariable("PATH", EnvironmentVariableTarget.Machine));
         foreach (string directory in environmentPath.Split(Path.PathSeparator, StringSplitOptions.RemoveEmptyEntries))
         {
             string path = Path.Combine(Environment.ExpandEnvironmentVariables(directory.Trim().Trim('"')), executable);
@@ -143,9 +172,25 @@ internal sealed class DependencyDetector(ISettingsStore settings, StorageOptions
                 found.Add(path);
             }
         }
-        foreach (string programFiles in new[] { Environment.GetFolderPath(Environment.SpecialFolder.ProgramFiles), Environment.GetFolderPath(Environment.SpecialFolder.ProgramFilesX86) })
+
+        foreach (string programFiles in new[]
         {
-            foreach (string directory in new[] { "MKVToolNix", "MediaInfo CLI", "MediaInfo", "ffmpeg\\bin", "dovi_tool" })
+            Environment.GetFolderPath(Environment.SpecialFolder.ProgramFiles),
+            Environment.GetFolderPath(Environment.SpecialFolder.ProgramFilesX86)
+        }
+
+        )
+        {
+            foreach (string directory in new[]
+            {
+                "MKVToolNix",
+                "MediaInfo CLI",
+                "MediaInfo",
+                "ffmpeg\\bin",
+                "dovi_tool"
+            }
+
+            )
             {
                 string path = Path.Combine(programFiles, directory, executable);
                 if (File.Exists(path))
@@ -154,6 +199,7 @@ internal sealed class DependencyDetector(ISettingsStore settings, StorageOptions
                 }
             }
         }
+
         return found.Distinct(StringComparer.OrdinalIgnoreCase);
     }
 }

@@ -9,16 +9,20 @@ using Microsoft.Extensions.Logging;
 using Serilog;
 
 namespace DoViFixer.Console.Composition;
-
 public static class ConsoleHost
 {
     public static IHost Build()
     {
-        var builder = Host.CreateApplicationBuilder(new HostApplicationBuilderSettings { Args = [] });
-        builder.ConfigureContainer(new DefaultServiceProviderFactory(new ServiceProviderOptions { ValidateOnBuild = true, ValidateScopes = true }));
+        var builder = Host.CreateApplicationBuilder(new HostApplicationBuilderSettings
+        {
+            Args = []
+        });
+        builder.ConfigureContainer(new DefaultServiceProviderFactory(new ServiceProviderOptions
+        {
+            ValidateOnBuild = true, ValidateScopes = true
+        }));
         builder.Logging.ClearProviders();
-        builder.Services.AddSerilog((_, logging) => LoggingConfiguration.Configure(logging, builder.Configuration),
-            preserveStaticLogger: true);
+        builder.Services.AddSerilog((_, logging) => LoggingConfiguration.Configure(logging, builder.Configuration), preserveStaticLogger: true);
         builder.Services.AddDoViFixerApplication();
         builder.Services.AddDoViFixerInfrastructure(builder.Configuration);
         // All commands share one terminal; the renderer serializes its progress state.

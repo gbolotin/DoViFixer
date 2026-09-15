@@ -14,7 +14,6 @@ using DoViFixer.Domain.Analysis;
 using DoViFixer.Domain.Conversion;
 
 namespace DoViFixer.Console.Commands;
-
 public sealed class ArchiveCommand(BackupService backup, RestoreService restore, ConsoleRenderer renderer, ConsoleInteraction interaction) : IConsoleCommand
 {
     public bool Handles(string command) => command is "backup" or "restore";
@@ -25,36 +24,47 @@ public sealed class ArchiveCommand(BackupService backup, RestoreService restore,
         {
             case "backup":
                 var backupPlan = await backup.PlanAsync(input, command.Value("output"), command.Value("temp"), cancellationToken);
-                interaction.RecordPlan(backupPlan.Id, "Backup", new { backupPlan.Media.Source, backupPlan.Output, backupPlan.TemporaryDirectory, backupPlan.ScratchBytes });
-                renderer.Write($"Backup: {backupPlan.Media.Source.Path}\nArchive: {backupPlan.Output}\nScratch estimate: {ConsoleRenderer.FormatSize(backupPlan.ScratchBytes)}. Original retained.");
-                if (command.Has("plan"))
-                {
-                    return 0;
-                }
-                if (!await interaction.ConfirmAsync("Create this archive?", command.Has("yes"), cancellationToken, backupPlan.Id))
-                {
-                    return 4;
-                }
-                renderer.Result(await backup.ExecuteAsync(backupPlan, renderer, cancellationToken));
+            interaction.RecordPlan(backupPlan.Id, "Backup", new
+            {
+                backupPlan.Media.Source, backupPlan.Output, backupPlan.TemporaryDirectory, backupPlan.ScratchBytes
+            });
+            renderer.Write($"Backup: {backupPlan.Media.Source.Path}\nArchive: {backupPlan.Output}\nScratch estimate: {ConsoleRenderer.FormatSize(backupPlan.ScratchBytes)}. Original retained.");
+            if (command.Has("plan"))
+            {
                 return 0;
+            }
+
+            if (!await interaction.ConfirmAsync("Create this archive?", command.Has("yes"), cancellationToken, backupPlan.Id))
+            {
+                return 4;
+            }
+
+            renderer.Result(await backup.ExecuteAsync(backupPlan, renderer, cancellationToken));
+            return 0;
             case "restore":
                 var restorePlan = await restore.PlanAsync(input, command.Value("source") ?? command.Arguments.ElementAtOrDefault(1) ?? Path.ChangeExtension(input, ".dovi"), command.Value("output"), command.Value("temp"), true, cancellationToken);
-                interaction.RecordPlan(restorePlan.Id, "Restore", new { restorePlan.Media.Source, restorePlan.Archive, restorePlan.Output, restorePlan.TemporaryDirectory, restorePlan.ScratchBytes, restorePlan.AllowLegacy });
-                renderer.Write($"Base: {restorePlan.Media.Source.Path}\nArchive: {restorePlan.Archive.Path}\nOutput: {restorePlan.Output}\nScratch estimate: {ConsoleRenderer.FormatSize(restorePlan.ScratchBytes)}. Original retained.");
-                if (restorePlan.AllowLegacy)
-                {
-                    renderer.Write("Upstream EL-only archives are supported; source pairing cannot be verified without a manifest.");
-                }
-                if (command.Has("plan"))
-                {
-                    return 0;
-                }
-                if (!await interaction.ConfirmAsync("Restore this file?", command.Has("yes"), cancellationToken, restorePlan.Id))
-                {
-                    return 4;
-                }
-                renderer.Result(await restore.ExecuteAsync(restorePlan, renderer, cancellationToken));
+            interaction.RecordPlan(restorePlan.Id, "Restore", new
+            {
+                restorePlan.Media.Source, restorePlan.Archive, restorePlan.Output, restorePlan.TemporaryDirectory, restorePlan.ScratchBytes, restorePlan.AllowLegacy
+            });
+            renderer.Write($"Base: {restorePlan.Media.Source.Path}\nArchive: {restorePlan.Archive.Path}\nOutput: {restorePlan.Output}\nScratch estimate: {ConsoleRenderer.FormatSize(restorePlan.ScratchBytes)}. Original retained.");
+            if (restorePlan.AllowLegacy)
+            {
+                renderer.Write("Upstream EL-only archives are supported; source pairing cannot be verified without a manifest.");
+            }
+
+            if (command.Has("plan"))
+            {
                 return 0;
+            }
+
+            if (!await interaction.ConfirmAsync("Restore this file?", command.Has("yes"), cancellationToken, restorePlan.Id))
+            {
+                return 4;
+            }
+
+            renderer.Result(await restore.ExecuteAsync(restorePlan, renderer, cancellationToken));
+            return 0;
             default:
                 throw new ArgumentException("Unsupported command.");
         }

@@ -1,7 +1,6 @@
 using DoViFixer.Application.Dependencies;
 
 namespace DoViFixer.Console.Commands;
-
 public sealed record CommandLine(string Command, IReadOnlyList<string> Arguments, IReadOnlyDictionary<string, string?> Options)
 {
     public bool Has(string name) => Options.ContainsKey(name);
@@ -14,6 +13,7 @@ public sealed record CommandLine(string Command, IReadOnlyList<string> Arguments
         {
             return new("help", [], new Dictionary<string, string?>());
         }
+
         string command = args[0].ToLowerInvariant();
         string[] allowed = command switch
         {
@@ -39,16 +39,29 @@ public sealed record CommandLine(string Command, IReadOnlyList<string> Arguments
                 literal = true;
                 continue;
             }
+
             if (literal || !argument.StartsWith('-'))
             {
                 positionals.Add(argument);
                 continue;
             }
-            string name = argument switch { "-r" => "recursive", "-t" => "temp", "-o" => "output", "-y" => "yes", "-s" => "safe", "-f" => "force", "-b" => "backup", _ => argument.StartsWith("--", StringComparison.Ordinal) ? argument[2..] : argument };
+
+            string name = argument switch
+            {
+                "-r" => "recursive",
+                "-t" => "temp",
+                "-o" => "output",
+                "-y" => "yes",
+                "-s" => "safe",
+                "-f" => "force",
+                "-b" => "backup",
+                _ => argument.StartsWith("--", StringComparison.Ordinal) ? argument[2..] : argument
+            };
             if (!allowed.Contains(name, StringComparer.Ordinal) || options.ContainsKey(name))
             {
                 throw new ArgumentException($"Unknown, duplicate or inapplicable option '{argument}' for {command}.");
             }
+
             string? value = null;
             if (name is "temp" or "output" or "source")
             {
@@ -56,6 +69,7 @@ public sealed record CommandLine(string Command, IReadOnlyList<string> Arguments
                 {
                     throw new ArgumentException($"{argument} requires a path.");
                 }
+
                 value = args[i];
             }
             else if (name == "recursive")
@@ -67,11 +81,14 @@ public sealed record CommandLine(string Command, IReadOnlyList<string> Arguments
                     {
                         throw new ArgumentException("Recursion depth must be between 0 and 100.");
                     }
+
                     value = args[++i];
                 }
             }
+
             options.Add(name, value);
         }
+
         var parsed = new CommandLine(command, positionals.AsReadOnly(), options);
         parsed.Validate();
         return parsed;
@@ -86,8 +103,7 @@ public sealed record CommandLine(string Command, IReadOnlyList<string> Arguments
             "inspect" or "backup" => Arguments.Count == 1,
             "restore" => Arguments.Count is 1 or 2 && !(Arguments.Count == 2 && Has("source")),
             "update-check" => Arguments.Count == 0,
-            "dependencies" => Arguments.Count >= 1 && Arguments[0] is "check" or "install" &&
-                Arguments.Skip(1).All(a => Enum.TryParse<NativeTool>(a, true, out var tool) && Enum.IsDefined(tool)),
+            "dependencies" => Arguments.Count >= 1 && Arguments[0] is "check" or "install" && Arguments.Skip(1).All(a => Enum.TryParse<NativeTool>(a, true, out var tool) && Enum.IsDefined(tool)),
             "settings" => Arguments.Count >= 1 && (Arguments[0] switch
             {
                 "show" or "add-to-path" => Arguments.Count == 1,
@@ -102,16 +118,18 @@ public sealed record CommandLine(string Command, IReadOnlyList<string> Arguments
         {
             throw new ArgumentException($"Invalid arguments for {Command}. Run --help for command syntax.");
         }
+
         if (Command == "dependencies" && ((Arguments[0] == "check" && (Has("yes") || Has("repair"))) || (Arguments[0] == "install" && Has("json"))))
         {
             throw new ArgumentException("dependencies check supports --json; dependencies install supports --yes and --repair.");
         }
+
         if (Command == "cleanup" && Has("yes") && !Has("delete-backups"))
         {
             throw new ArgumentException("Unattended cleanup requires both --delete-backups and --yes.");
         }
-        if ((Has("plan") && Has("yes")) || (Has("json") && Has("install-dependencies")) ||
-            (Command == "settings" && Has("json") && Arguments[0] != "show"))
+
+        if ((Has("plan") && Has("yes")) || (Has("json") && Has("install-dependencies")) || (Command == "settings" && Has("json") && Arguments[0] != "show"))
         {
             throw new ArgumentException("These options cannot be combined. Run --help for supported forms.");
         }

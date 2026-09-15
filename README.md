@@ -2,9 +2,9 @@
 
 [GPL-3.0 license](LICENSE)
 
-Native Windows .NET 10 console workflows for inspecting Dolby Vision MKVs, converting Profile 7 to Profile 8.1 or HDR10, and backing up/restoring enhancement layers. The shared Domain, Application and Infrastructure projects are ready for a later WPF presentation layer.
+Native Windows .NET 10 console and WPF applications for inspecting Dolby Vision MKVs, converting Profile 7 to Profile 8.1 or HDR10, and backing up/restoring enhancement layers. Both applications use the same Domain, Application and Infrastructure services.
 
-DoViFixer is a native Windows .NET implementation inspired by [dovi_convert](https://github.com/cryptochrome/dovi_convert), adapting its Dolby Vision workflows for a shared console and future WPF architecture.
+DoViFixer is a native Windows .NET implementation inspired by [dovi_convert](https://github.com/cryptochrome/dovi_convert), adapting its Dolby Vision workflows for a shared console and WPF architecture.
 
 ## Build and run
 
@@ -13,11 +13,22 @@ Requires the .NET 10 SDK; `global.json` pins 10.0.400. NuGet versions are centra
 ```powershell
 dotnet restore DoViFixer.sln
 dotnet build DoViFixer.sln --no-restore
+dotnet run --project src/DoViFixer.App --no-build
 dotnet run --project src/DoViFixer.Console --no-build -- --help
 dotnet run --project src/DoViFixer.Console --no-build -- dependencies check
 ```
 
 Help and argument validation do not start the host, probe executables, install tools, or create settings/workspaces.
+
+## WPF desktop application
+
+Phase 4 follows the Studio v3 Media mockups and v2 Backup & Restore / Settings designs. Launch `src/DoViFixer.App/bin/Debug/net10.0-windows/DoViFixer.App.exe` after building. See [WPF implementation and verification](docs/wpf.md).
+
+- **Media:** add MKV files or folders (subfolders included, up to 100 levels), then independently Scan, Inspect (standard/deep), or Convert. Focus controls the right details panel; checkboxes control inclusion. Convert automatically performs full analysis and opens the bottom options/review panel.
+- **Approval:** changing selection, target, destination, or file handling invalidates the plan. Use **Review changes**, then **Approve and start** for the displayed paths and warnings. FEL picture loss and replacement of originals are included in that approval. Native-tool installation has its own separate plan and approval.
+- **Cancellation:** row Cancel waits for that file's recovery before continuing. Skip unchecks a pending file. Cancel batch stops subsequent items. Closing the application cancels and awaits active work before disposing its resources.
+- **Backup & Restore:** review archive and restoration plans, or review exact cleanup targets with a typed deletion confirmation.
+- **Settings:** shared temporary storage, output and retention defaults, dependency installation and validated tool paths. Defaults never authorize execution. WPF logs are rolling `app-diagnostic-`, `app-history-` and `app-audit-` JSONL files under `%LOCALAPPDATA%\DoViFixer\Logs`.
 
 ## Dependencies
 

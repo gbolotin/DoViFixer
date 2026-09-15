@@ -13,7 +13,6 @@ using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.DependencyInjection.Extensions;
 
 namespace DoViFixer.Infrastructure;
-
 public static class DependencyInjection
 {
     public static IServiceCollection AddDoViFixerInfrastructure(this IServiceCollection services, IConfiguration configuration)
@@ -27,7 +26,10 @@ public static class DependencyInjection
         services.AddSingleton<IToolCatalog, ToolCatalog>();
         services.AddSingleton(_ =>
         {
-            var http = new HttpClient { Timeout = TimeSpan.FromMinutes(30) };
+            var http = new HttpClient
+            {
+                Timeout = TimeSpan.FromMinutes(30)
+            };
             http.DefaultRequestHeaders.UserAgent.ParseAdd("DoViFixer/0.1.0");
             return http;
         });

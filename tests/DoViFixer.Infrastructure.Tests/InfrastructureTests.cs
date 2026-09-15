@@ -18,7 +18,6 @@ using Microsoft.Extensions.Logging.Abstractions;
 using Microsoft.VisualStudio.TestTools.UnitTesting;
 
 namespace DoViFixer.Infrastructure.Tests;
-
 [TestClass]
 public sealed class InfrastructureTests
 {
@@ -44,7 +43,10 @@ public sealed class InfrastructureTests
         string source = Path.Combine(directory, "Recovery.mkv");
         await File.WriteAllTextAsync(source, "original");
         var backup = files.RenameOriginal(files.Identify(source));
-        Assert.ThrowsExactly<IOException>(() => files.RestoreOriginal(backup with { Length = 1 }, source));
+        Assert.ThrowsExactly<IOException>(() => files.RestoreOriginal(backup with
+        {
+            Length = 1
+        }, source));
         Assert.ThrowsExactly<InvalidOperationException>(() => files.RestoreOriginal(backup, source + ".other"));
         await File.WriteAllTextAsync(source, "unrelated");
         Assert.ThrowsExactly<System.ComponentModel.Win32Exception>(() => files.RestoreOriginal(backup, source));
@@ -62,7 +64,10 @@ public sealed class InfrastructureTests
         string source = Path.Combine(directory, "Movie.mkv");
         await File.WriteAllTextAsync(source, "original");
         var identity = files.Identify(source);
-        Assert.ThrowsExactly<IOException>(() => files.RenameOriginal(identity with { Length = 1 }));
+        Assert.ThrowsExactly<IOException>(() => files.RenameOriginal(identity with
+        {
+            Length = 1
+        }));
         Assert.IsTrue(File.Exists(source));
         var backup = files.RenameOriginal(identity);
         Assert.IsFalse(File.Exists(source));
@@ -96,7 +101,10 @@ public sealed class InfrastructureTests
         var producer = Request("$s=[Console]::OpenStandardOutput(); $s.Write([byte[]](0,255,128,13,10),0,5)");
         var consumer = Request("$s=[IO.File]::Create('" + output.Replace("'", "''") + "'); try { [Console]::OpenStandardInput().CopyTo($s) } finally { $s.Dispose() }");
         await runner.PipeAsync(producer, consumer, default);
-        CollectionAssert.AreEqual(new byte[] { 0, 255, 128, 13, 10 }, await File.ReadAllBytesAsync(output));
+        CollectionAssert.AreEqual(new byte[]
+        {
+            0, 255, 128, 13, 10
+        }, await File.ReadAllBytesAsync(output));
         await Assert.ThrowsExactlyAsync<IOException>(() => runner.PipeAsync(Request("exit 7"), consumer, default));
         using var cancellation = new CancellationTokenSource(TimeSpan.FromMilliseconds(500));
         await Assert.ThrowsAsync<OperationCanceledException>(() => runner.PipeAsync(Request("Start-Sleep -Seconds 60"), consumer, cancellation.Token));
@@ -104,7 +112,6 @@ public sealed class InfrastructureTests
 
     private string directory = null!;
     private readonly FileOperations files = new();
-
     [TestInitialize]
     public void Initialize()
     {
@@ -130,7 +137,6 @@ public sealed class InfrastructureTests
         Assert.IsTrue(Directory.Exists(path));
         Assert.AreEqual(Path.GetFullPath(path), (await service.ReadAsync(default)).TemporaryDirectory);
         Assert.AreEqual(0, Directory.GetFileSystemEntries(path).Length);
-
         string existing = Path.Combine(path, "keep.txt");
         await File.WriteAllTextAsync(existing, "keep");
         await service.SetTemporaryDirectoryAsync(path, default);
@@ -148,10 +154,8 @@ public sealed class InfrastructureTests
         await Assert.ThrowsExactlyAsync<IOException>(() => service.SetTemporaryDirectoryAsync(file, default));
         Assert.AreEqual(directory, (await service.ReadAsync(default)).TemporaryDirectory);
         Assert.AreEqual("keep", await File.ReadAllTextAsync(file));
-
         string cancelled = Path.Combine(directory, "cancelled");
-        await Assert.ThrowsExactlyAsync<OperationCanceledException>(() =>
-            service.SetTemporaryDirectoryAsync(cancelled, new CancellationToken(true)));
+        await Assert.ThrowsExactlyAsync<OperationCanceledException>(() => service.SetTemporaryDirectoryAsync(cancelled, new CancellationToken(true)));
         Assert.IsFalse(Directory.Exists(cancelled));
         Assert.AreEqual(directory, (await service.ReadAsync(default)).TemporaryDirectory);
     }
@@ -176,8 +180,7 @@ public sealed class InfrastructureTests
         string duplicate = original + ";\"" + app.ToUpperInvariant() + "\\\";C:\\Keep";
         Assert.AreEqual(duplicate, UserPathRegistration.AppendDirectory(duplicate, app));
         string variable = @"%SystemRoot%\System32;C:\Keep";
-        Assert.AreEqual(variable, UserPathRegistration.AppendDirectory(variable,
-            Path.Combine(Environment.GetEnvironmentVariable("SystemRoot")!, "System32")));
+        Assert.AreEqual(variable, UserPathRegistration.AppendDirectory(variable, Path.Combine(Environment.GetEnvironmentVariable("SystemRoot")!, "System32")));
     }
 
     [TestMethod]
@@ -198,14 +201,13 @@ public sealed class InfrastructureTests
         await using var writeWorkspace = await factory.CreateAsync(0, directory, default);
         await File.WriteAllTextAsync(writeWorkspace.File("el.hevc"), "test enhancement payload");
         string hash = await VideoProcessor.HashAsync(writeWorkspace.File("el.hevc"), default);
-        var manifest = new ArchiveManifest(1, "movie.mkv", new string('A', 64), hash, new FileInfo(writeWorkspace.File("el.hevc")).Length, 24, DateTimeOffset.UnixEpoch);
+        var manifest = new ArchiveManifest(1, "movie.mkv", new string ('A', 64), hash, new FileInfo(writeWorkspace.File("el.hevc")).Length, 24, DateTimeOffset.UnixEpoch);
         var archive = new BackupArchiveStore();
         string path = Path.Combine(directory, "movie.dovi");
         await archive.WriteAsync(path, manifest, writeWorkspace, default);
         await using var readWorkspace = await factory.CreateAsync(0, directory, default);
         Assert.AreEqual(manifest, await archive.ReadAsync(path, readWorkspace, false, default));
         Assert.AreEqual(hash, await VideoProcessor.HashAsync(readWorkspace.File("el.hevc"), default));
-
         string legacy = Path.Combine(directory, "legacy.dovi");
         await WriteTarAsync(legacy, ("el.hevc", "payload"));
         await using var legacyWorkspace = await factory.CreateAsync(0, directory, default);
@@ -231,7 +233,7 @@ public sealed class InfrastructureTests
     public async Task ArchiveRejectsHashMismatchAndDuplicatePayload()
     {
         string archive = Path.Combine(directory, "bad.dovi");
-        var manifest = new ArchiveManifest(1, "source", new string('A', 64), new string('B', 64), 7, 1, DateTimeOffset.UnixEpoch);
+        var manifest = new ArchiveManifest(1, "source", new string ('A', 64), new string ('B', 64), 7, 1, DateTimeOffset.UnixEpoch);
         await WriteTarAsync(archive, ("el.hevc", "payload"), ("manifest.json", JsonSerializer.Serialize(manifest)));
         var factory = new TemporaryWorkspaceFactory(files, NullLogger<TemporaryWorkspaceFactory>.Instance);
         await using var workspace = await factory.CreateAsync(0, directory, default);
@@ -254,6 +256,7 @@ public sealed class InfrastructureTests
             await File.WriteAllTextAsync(output, "existing");
             await Assert.ThrowsExactlyAsync<IOException>(() => staged.PublishAsync(default));
         }
+
         Assert.AreEqual("existing", await File.ReadAllTextAsync(output));
         Assert.AreEqual(0, Directory.GetDirectories(directory).Length);
     }
@@ -268,6 +271,7 @@ public sealed class InfrastructureTests
             await File.WriteAllTextAsync(staged.Path, "verified");
             await staged.PublishAsync(default);
         }
+
         Assert.AreEqual("verified", await File.ReadAllTextAsync(output));
         var factory = new TemporaryWorkspaceFactory(files, NullLogger<TemporaryWorkspaceFactory>.Instance);
         string workspacePath;
@@ -276,6 +280,7 @@ public sealed class InfrastructureTests
             workspacePath = workspace.DirectoryPath;
             Assert.ThrowsExactly<ArgumentException>(() => workspace.File("../escape"));
         }
+
         Assert.IsFalse(Directory.Exists(workspacePath));
     }
 
@@ -289,6 +294,7 @@ public sealed class InfrastructureTests
         {
             await Assert.ThrowsExactlyAsync<IOException>(() => File.WriteAllTextAsync(source, "changed"));
         }
+
         await File.WriteAllTextAsync(source, "changed length");
         await Assert.ThrowsExactlyAsync<IOException>(async () => await files.AcquireReadLeaseAsync(identity, default));
     }
@@ -315,8 +321,13 @@ public sealed class InfrastructureTests
         var options = new StorageOptions(Path.Combine(directory, "settings"));
         var a = new SettingsStore(options, NullLogger<SettingsStore>.Instance);
         var b = new SettingsStore(options, NullLogger<SettingsStore>.Instance);
-        await Task.WhenAll(a.UpdateAsync(s => s with { ToolPaths = s.ToolPaths.SetItem(NativeTool.MkvMerge, "A") }, default),
-            b.UpdateAsync(s => s with { ToolPaths = s.ToolPaths.SetItem(NativeTool.DoviTool, "B") }, default));
+        await Task.WhenAll(a.UpdateAsync(s => s with
+        {
+            ToolPaths = s.ToolPaths.SetItem(NativeTool.MkvMerge, "A")
+        }, default), b.UpdateAsync(s => s with
+        {
+            ToolPaths = s.ToolPaths.SetItem(NativeTool.DoviTool, "B")
+        }, default));
         var settings = await a.ReadAsync(default);
         Assert.AreEqual(2, settings.ToolPaths.Count);
         Assert.AreEqual("A", settings.ToolPaths[NativeTool.MkvMerge]);
@@ -354,17 +365,26 @@ public sealed class InfrastructureTests
     {
         var storage = new StorageOptions(directory);
         var settings = new SettingsStore(storage, NullLogger<SettingsStore>.Instance);
-        await settings.UpdateAsync(s => s with { ToolPaths = s.ToolPaths.SetItem(NativeTool.MkvMerge, Path.Combine(directory, "missing.exe")) }, default);
+        await settings.UpdateAsync(s => s with
+        {
+            ToolPaths = s.ToolPaths.SetItem(NativeTool.MkvMerge, Path.Combine(directory, "missing.exe"))
+        }, default);
         var runner = new FakeProcessRunner();
         var detector = new DependencyDetector(settings, storage, runner, NullLogger<DependencyDetector>.Instance);
-        var report = await detector.DetectAsync(new[] { NativeTool.MkvMerge }, default);
+        var report = await detector.DetectAsync(new[]
+        {
+            NativeTool.MkvMerge
+        }, default);
         Assert.AreEqual(DependencyState.Unusable, report.Tools[0].State);
         Assert.AreEqual(0, runner.Calls);
         string installed = Path.Combine(storage.ToolsDirectory, "mkvmerge.exe");
         Directory.CreateDirectory(storage.ToolsDirectory);
         await File.WriteAllTextAsync(installed, "fixture executable");
         runner.Output = "mkvmerge v100.0.0";
-        var rediscovered = await detector.DetectAsync(new[] { NativeTool.MkvMerge }, default, skipConfiguredPaths: true);
+        var rediscovered = await detector.DetectAsync(new[]
+        {
+            NativeTool.MkvMerge
+        }, default, skipConfiguredPaths: true);
         Assert.AreEqual(DependencyState.Ready, rediscovered.Tools[0].State);
         Assert.AreEqual(installed, rediscovered.Tools[0].Path);
         Assert.AreEqual(Path.Combine(directory, "missing.exe"), (await settings.ReadAsync(default)).ToolPaths[NativeTool.MkvMerge]);
@@ -375,7 +395,10 @@ public sealed class InfrastructureTests
     {
         string console = Path.Combine(directory, "tool.exe");
         await File.WriteAllTextAsync(console, "fake console executable");
-        var runner = new FakeProcessRunner { Output = "mkvmerge v79.0.0" };
+        var runner = new FakeProcessRunner
+        {
+            Output = "mkvmerge v79.0.0"
+        };
         var detector = new DependencyDetector(new SettingsStore(new(directory), NullLogger<SettingsStore>.Instance), new(directory), runner, NullLogger<DependencyDetector>.Instance);
         Assert.AreEqual(DependencyState.Incompatible, (await detector.ValidatePathAsync(NativeTool.MkvMerge, console, default)).State);
         runner.Output = "MediaInfo Graphical interface v26.05";
@@ -403,21 +426,34 @@ public sealed class InfrastructureTests
     {
         using var http = new HttpClient();
         var installer = new DependencyInstaller(new(directory), new FakeProcessRunner(), http, NullLogger<DependencyInstaller>.Instance);
-        var missing = new DependencyReport(new[] { new DependencyStatus(NativeTool.DoviTool, DependencyState.Missing, null, null, "missing") });
+        var missing = new DependencyReport(new[]
+        {
+            new DependencyStatus(NativeTool.DoviTool, DependencyState.Missing, null, null, "missing")
+        });
         var plan = await installer.PrepareAsync(missing, default);
         Assert.AreEqual(1, plan.Items.Count);
         Assert.AreEqual(InstallationProvider.VerifiedZip, plan.Items[0].Provider);
         Assert.AreEqual(64, plan.Items[0].Sha256!.Length);
         Assert.IsFalse(plan.Items[0].RequiresElevation);
-        var invalid = new DependencyReport(new[] { new DependencyStatus(NativeTool.DoviTool, state, "invalid", null, "bad path"),
-            new DependencyStatus(NativeTool.MediaInfo, DependencyState.Missing, null, null, "missing"),
-            new DependencyStatus(NativeTool.FFmpeg, DependencyState.Ready, "working", "9", "ready") });
+        var invalid = new DependencyReport(new[]
+        {
+            new DependencyStatus(NativeTool.DoviTool, state, "invalid", null, "bad path"), new DependencyStatus(NativeTool.MediaInfo, DependencyState.Missing, null, null, "missing"), new DependencyStatus(NativeTool.FFmpeg, DependencyState.Ready, "working", "9", "ready")
+        });
         var repair = await installer.PrepareAsync(invalid, default);
         Assert.AreEqual(2, repair.Items.Count);
         Assert.AreEqual(0, repair.Unavailable.Count);
         Assert.AreEqual(invalid.Tools[0], repair.Replacements!.Single());
         Assert.IsFalse(repair.Items.Any(i => i.Tools.Contains(NativeTool.FFmpeg)));
-        var modified = plan with { Items = new[] { plan.Items[0] with { Source = "https://example.invalid/unapproved.zip" } } };
+        var modified = plan with
+        {
+            Items = new[]
+            {
+                plan.Items[0] with
+                {
+                    Source = "https://example.invalid/unapproved.zip"
+                }
+            }
+        };
         await Assert.ThrowsExactlyAsync<InvalidOperationException>(() => installer.InstallAsync(modified, null, default));
     }
 
@@ -435,13 +471,16 @@ public sealed class InfrastructureTests
         string mkv = await File.ReadAllTextAsync(Path.Combine(AppContext.BaseDirectory, "Fixtures", "mkvmerge.json"));
         string mi = JsonSerializer.Serialize(new
         {
-            media = new { track = new[] { new Dictionary<string, string>
+            media = new
             {
-                ["@type"] = "Video", ["Format"] = "HEVC",
-                ["HDR_Format"] = "Dolby Vision / SMPTE ST 2086",
-                ["HDR_Format_Profile"] = profile, ["HDR_Format_Level"] = "06 / ",
-                ["HDR_Format_Compatibility"] = "Blu-ray / HDR10"
-            } } }
+                track = new[]
+                {
+                    new Dictionary<string, string>
+                    {
+                        ["@type"] = "Video", ["Format"] = "HEVC", ["HDR_Format"] = "Dolby Vision / SMPTE ST 2086", ["HDR_Format_Profile"] = profile, ["HDR_Format_Level"] = "06 / ", ["HDR_Format_Compatibility"] = "Blu-ray / HDR10"
+                    }
+                }
+            }
         });
         var result = MediaMetadataParser.Parse(new("fixture.mkv", 1000, DateTime.UnixEpoch), mkv, mi);
         Assert.AreEqual(expected, result.Profile);
@@ -474,7 +513,10 @@ public sealed class InfrastructureTests
         foreach (var entry in entries)
         {
             await using var data = new MemoryStream(Encoding.UTF8.GetBytes(entry.Content));
-            await writer.WriteEntryAsync(new PaxTarEntry(TarEntryType.RegularFile, entry.Name) { DataStream = data });
+            await writer.WriteEntryAsync(new PaxTarEntry(TarEntryType.RegularFile, entry.Name)
+            {
+                DataStream = data
+            });
         }
     }
 
@@ -500,15 +542,34 @@ public sealed class InfrastructureTests
              "Duration":"1","HDR_Format":"Dolby Vision","HDR_Format_Profile":"dvhe.07"}]}}
             """;
         var source = MediaMetadataParser.Parse(new("fixture.mkv", 1000, DateTime.UnixEpoch), mkv, mi);
-        source = source with { Tracks = source.Tracks.Select(t => t with { Language = original }).ToArray() };
-        var target = source with { Tracks = source.Tracks.Select(t => t with { Language = remuxed }).ToArray() };
+        source = source with
+        {
+            Tracks = source.Tracks.Select(t => t with
+            {
+                Language = original
+            }).ToArray()
+        };
+        var target = source with
+        {
+            Tracks = source.Tracks.Select(t => t with
+            {
+                Language = remuxed
+            }).ToArray()
+        };
         var failures = MediaVerifier.CompareMetadata(source, target, DolbyVisionProfile.Profile7);
         Assert.AreEqual(equivalent ? 0 : source.Tracks.Count, failures.Count);
         if (!equivalent)
         {
             Assert.IsTrue(failures.All(f => f.Contains($"'{original}' -> '{remuxed}'", StringComparison.Ordinal)));
         }
-        var renamed = target with { Tracks = target.Tracks.Select(t => t with { Name = t.Name + " changed" }).ToArray() };
+
+        var renamed = target with
+        {
+            Tracks = target.Tracks.Select(t => t with
+            {
+                Name = t.Name + " changed"
+            }).ToArray()
+        };
         Assert.IsTrue(MediaVerifier.CompareMetadata(source, renamed, DolbyVisionProfile.Profile7).Any(f => f.Contains("metadata or order", StringComparison.Ordinal)));
     }
 
@@ -516,7 +577,13 @@ public sealed class InfrastructureTests
     {
         public Task PipeAsync(ProcessRequest producer, ProcessRequest consumer, CancellationToken cancellationToken) => throw new NotSupportedException();
         public int Calls;
-        public string Output { get; set; } = "";
+        public string Output
+        {
+            get;
+            set;
+        }
+        = "";
+
         public Task<ProcessResult> RunAsync(ProcessRequest request, CancellationToken cancellationToken)
         {
             Calls++;

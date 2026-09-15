@@ -4,7 +4,7 @@ Date: 2026-09-07
 
 Updated: 2026-09-08 (automatic dependency detection and installation requirement).
 
-Status: Console phases 1–3 implemented on 2026-09-08. The four production projects, focused test projects, dependency setup, read-only analysis, conversion/backup/restore/cleanup, settings and console composition now exist. WPF phase 4 is deferred as requested. See [upstream-parity.md](upstream-parity.md) for deliberate differences and the boundary between fixture-tested behavior and remaining environment-dependent integration checks. The design below remains the architecture reference.
+Status: Console phases 1–3 implemented on 2026-09-08. WPF phase 4 implemented on 2026-09-11 using Studio v3 Media and v2 archive/settings mockups. `DoViFixer.App` uses Prism/DryIoc with the shared services, operation-scoped batch controls, plan approval, dependency setup and focused UI/composition tests. See [wpf.md](wpf.md) for implementation and verification and [upstream-parity.md](upstream-parity.md) for media integration limits. The design below remains the architecture reference; future labels in the original tree describe the original sequencing.
 
 ## Objective
 

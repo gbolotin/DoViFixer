@@ -3,16 +3,15 @@ using DoViFixer.Domain.Analysis;
 using DoViFixer.Domain.Media;
 
 namespace DoViFixer.Console.Rendering;
-
 public sealed class ScanRenderer(ConsoleRenderer renderer, bool candidatesOnly) : IProgress<ScanItem>
 {
     public void Report(ScanItem item)
     {
-        if (candidatesOnly && item.InitialAnalysis is null && item.Error is null && item.Analysis?.Verdict is not
-            (AnalysisVerdict.Mel or AnalysisVerdict.SimpleFel or AnalysisVerdict.AnalysisFailed))
+        if (candidatesOnly && item.InitialAnalysis is null && item.Error is null && item.Analysis?.Verdict is not (AnalysisVerdict.Mel or AnalysisVerdict.SimpleFel or AnalysisVerdict.AnalysisFailed))
         {
             return;
         }
+
         ConsoleColor? color = item.Error is not null ? ConsoleColor.Red : item.Analysis?.Verdict switch
         {
             AnalysisVerdict.Mel => ConsoleColor.Green,
@@ -28,7 +27,10 @@ public sealed class ScanRenderer(ConsoleRenderer renderer, bool candidatesOnly) 
     {
         int failed = results.Count(r => r.Error is not null || r.Analysis?.Verdict == AnalysisVerdict.AnalysisFailed);
         renderer.Write($"Scanned {results.Count} file(s); {failed} failed.");
-        if (results.Any(r => r.Analysis is { Evidence.Method: not AnalysisMethod.DeepInspection, Verdict: AnalysisVerdict.SimpleFel or AnalysisVerdict.ComplexFel }))
+        if (results.Any(r => r.Analysis is
+        {
+            Evidence.Method: not AnalysisMethod.DeepInspection, Verdict: AnalysisVerdict.SimpleFel or AnalysisVerdict.ComplexFel
+        }))
         {
             renderer.Write("Simple/complex FEL is estimated from Dolby Vision metadata, not decoded video pixels. It does not guarantee playback quality.");
         }
@@ -40,6 +42,7 @@ public sealed class ScanRenderer(ConsoleRenderer renderer, bool candidatesOnly) 
         {
             return $"{item.Path}\n  {(item.InitialAnalysis is null ? "FAILED" : "AUTO-INSPECTION FAILED")}: {item.Error}\n";
         }
+
         var analysis = item.Analysis!;
         string profile = analysis.Media.Profile switch
         {
@@ -59,9 +62,7 @@ public sealed class ScanRenderer(ConsoleRenderer renderer, bool candidatesOnly) 
             AnalysisVerdict.NotApplicable => "Not applicable",
             _ => "Unknown"
         };
-        string details = analysis.Evidence.Method != AnalysisMethod.DeepInspection && analysis.Verdict is AnalysisVerdict.SimpleFel or AnalysisVerdict.ComplexFel
-            ? $"Metadata L1 peak: {analysis.Evidence.PeakNits:N0} nits | MaxCLL: {analysis.Media.MaxCll:N0} nits"
-            : analysis.Reason;
+        string details = analysis.Evidence.Method != AnalysisMethod.DeepInspection && analysis.Verdict is AnalysisVerdict.SimpleFel or AnalysisVerdict.ComplexFel ? $"Metadata L1 peak: {analysis.Evidence.PeakNits:N0} nits | MaxCLL: {analysis.Media.MaxCll:N0} nits" : analysis.Reason;
         string update = item.InitialAnalysis is null ? "" : "Auto-inspected: Simple FEL -> ";
         return $"{item.Path}\n  {profile} | {update}{verdict}\n  Evidence: {analysis.Evidence.Method}\n  {details}\n";
     }

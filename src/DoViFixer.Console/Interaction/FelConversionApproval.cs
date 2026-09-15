@@ -3,18 +3,16 @@ using DoViFixer.Console.Rendering;
 using DoViFixer.Domain.Analysis;
 
 namespace DoViFixer.Console.Interaction;
-
-public sealed class FelConversionApproval(ConsoleRenderer renderer,
-    Func<string, bool, CancellationToken, Guid?, Task<bool>> confirm)
+public sealed class FelConversionApproval(ConsoleRenderer renderer, Func<string, bool, CancellationToken, Guid?, Task<bool>> confirm)
 {
-    public async Task<IReadOnlyList<ConversionPlan>> ConfirmAsync(
-        IReadOnlyList<ConversionPlan> plans, bool yes, CancellationToken cancellationToken)
+    public async Task<IReadOnlyList<ConversionPlan>> ConfirmAsync(IReadOnlyList<ConversionPlan> plans, bool yes, CancellationToken cancellationToken)
     {
         cancellationToken.ThrowIfCancellationRequested();
         if (plans.Count == 0)
         {
-            return [];
+            return[];
         }
+
         if (yes)
         {
             return await confirm($"Execute these {plans.Count} conversion(s)?", true, cancellationToken, null) ? plans : [];
@@ -36,10 +34,9 @@ public sealed class FelConversionApproval(ConsoleRenderer renderer,
             {
                 renderer.Write($"  {plan.Analysis.Media.Source.Path}");
             }
-            string warning = group.Key is AnalysisVerdict.SimpleFel or AnalysisVerdict.ComplexFel
-                ? " Enhancement-layer picture data will be lost." : "";
-            bool accepted = await confirm($"Execute these {group.Count()} {category} conversion(s) as planned?{warning}",
-                false, cancellationToken, group.Count() == 1 ? group.First().Id : null);
+
+            string warning = group.Key is AnalysisVerdict.SimpleFel or AnalysisVerdict.ComplexFel ? " Enhancement-layer picture data will be lost." : "";
+            bool accepted = await confirm($"Execute these {group.Count()} {category} conversion(s) as planned?{warning}", false, cancellationToken, group.Count() == 1 ? group.First().Id : null);
             foreach (var plan in group)
             {
                 if (accepted)
@@ -52,6 +49,7 @@ public sealed class FelConversionApproval(ConsoleRenderer renderer,
                 }
             }
         }
+
         return plans.Where(plan => approved.Contains(plan.Id)).ToArray();
     }
 }

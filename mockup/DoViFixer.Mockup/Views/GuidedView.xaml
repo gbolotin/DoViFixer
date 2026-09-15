@@ -1,0 +1,141 @@
+<UserControl x:Class="DoViFixer.Mockup.Views.GuidedView"
+             xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             FontFamily="Segoe UI"
+             FontSize="14">
+    <UserControl.Resources>
+        <ResourceDictionary>
+            <ResourceDictionary.MergedDictionaries>
+                <ResourceDictionary Source="../Styles/Guided.xaml" />
+            </ResourceDictionary.MergedDictionaries>
+        </ResourceDictionary>
+    </UserControl.Resources>
+    <Grid Background="{DynamicResource Canvas}">
+        <ScrollViewer VerticalScrollBarVisibility="Auto" HorizontalScrollBarVisibility="Disabled">
+            <Grid Margin="24">
+                <Grid.ColumnDefinitions>
+                    <ColumnDefinition Width="190" />
+                    <ColumnDefinition Width="*" />
+                </Grid.ColumnDefinitions>
+                <StackPanel>
+                    <TextBlock Text="DoViFixer"
+                               FontSize="25"
+                               FontWeight="Bold"
+                               Margin="12,0,0,30" />
+                    <TextBlock Text="Scan" Style="{StaticResource Nav}" />
+                    <TextBlock Text="Inspect" Style="{StaticResource Nav}" />
+                    <TextBlock Text="Convert" Style="{StaticResource Nav}" />
+                    <TextBlock Text="Backup &amp; Restore" Style="{StaticResource Nav}" />
+                    <TextBlock Text="Settings" Style="{StaticResource Nav}" />
+                    <TextBlock Text="● Tools ready (sample)"
+                               Margin="12,48,0,8"
+                               Foreground="{DynamicResource Accent}" />
+                    <TextBlock Text="Navigation preview"
+                               Style="{StaticResource MutedText}"
+                               Margin="12,12,0,0" />
+                </StackPanel>
+                <StackPanel Grid.Column="1" Margin="20,0,0,0">
+                    <TextBlock Text="✓  1. Add files      ───      ✓  2. Analyze      ───      ③  Review      ───      4. Convert"
+                               Foreground="{DynamicResource Accent}"
+                               FontSize="17"
+                               Margin="0,4,0,28" />
+                    <TextBlock Text="Review conversion plan" Style="{StaticResource Title}" />
+                    <TextBlock Text="Review the sample output and retention choices before simulating." Style="{StaticResource MutedText}" />
+                    <Grid Margin="0,12,0,20">
+                        <Grid.ColumnDefinitions>
+                            <ColumnDefinition Width="*" />
+                            <ColumnDefinition Width="290" />
+                        </Grid.ColumnDefinitions>
+                        <Border Style="{StaticResource Card}" Margin="0,0,18,0">
+                            <StackPanel>
+                                <TextBlock Text="{Binding SelectedFile.Name}" Style="{StaticResource Heading}" />
+                                <TextBlock Text="Profile 7     →     Profile 8.1"
+                                           FontSize="26"
+                                           Margin="0,10" />
+                                <TextBlock Text="{Binding SelectedFile.Analysis}"
+                                           Foreground="{DynamicResource Accent}"
+                                           Margin="0,0,0,18" />
+                                <TextBlock Text="Output file" Style="{StaticResource MutedText}" />
+                                <TextBlock Text="{Binding SelectedFile.OutputPath}" Margin="0,0,0,20" />
+                                <Border Background="{DynamicResource Selected}"
+                                        Padding="16"
+                                        CornerRadius="6">
+                                    <StackPanel>
+                                        <CheckBox Content="Keep original file" IsChecked="{Binding KeepOriginal}" />
+                                        <TextBlock Text="{Binding Retention}" />
+                                        <TextBlock Text="Uncheck to preview removal after verification. No deletion occurs in this demo."
+                                                   Style="{StaticResource MutedText}"
+                                                   Margin="0,8,0,0" />
+                                    </StackPanel>
+                                </Border>
+                                <Border Background="#FFF4D9"
+                                        Padding="16"
+                                        CornerRadius="6"
+                                        Margin="0,18">
+                                    <TextBlock Text="{Binding SelectedFile.PictureNote}" Foreground="#795117" />
+                                </Border>
+                                <TextBlock Text="Retained in output" Style="{StaticResource Heading}" />
+                                <TextBlock Text="Audio · 3 tracks&#xA;Subtitles · 4 tracks&#xA;Chapters · 12 chapters&#xA;Dolby Vision RPU metadata" LineHeight="28" />
+                            </StackPanel>
+                        </Border>
+                        <Border Grid.Column="1" Style="{StaticResource Card}">
+                            <StackPanel>
+                                <TextBlock Text="Batch summary" Style="{StaticResource Heading}" />
+                                <TextBlock Text="{Binding SelectionSummary}" Margin="0,0,0,18" />
+                                <ListBox ItemsSource="{Binding Files}"
+                                         SelectedItem="{Binding SelectedFile}"
+                                         Background="{DynamicResource Surface}"
+                                         BorderThickness="0"
+                                         Foreground="{DynamicResource Ink}"
+                                         HorizontalContentAlignment="Stretch">
+                                    <ListBox.ItemTemplate>
+                                        <DataTemplate>
+                                            <StackPanel Margin="4,8">
+                                                <CheckBox IsChecked="{Binding IsIncluded}" Content="{Binding Name}" />
+                                                <TextBlock Text="{Binding Analysis}" Style="{StaticResource MutedText}" />
+                                            </StackPanel>
+                                        </DataTemplate>
+                                    </ListBox.ItemTemplate>
+                                </ListBox>
+                                <Separator Margin="0,14" />
+                                <TextBlock Text="● Tools ready (sample)"
+                                           Foreground="{DynamicResource Accent}"
+                                           Margin="0,0,0,20" />
+                                <TextBlock Text="Temporary storage" Style="{StaticResource Heading}" />
+                                <TextBlock Text="D:\DoViFixer\Temp" Style="{StaticResource MutedText}" />
+                                <TextBlock Text="Destination" Style="{StaticResource Heading}" />
+                                <TextBlock Text="D:\Movies\Converted" Style="{StaticResource MutedText}" />
+                            </StackPanel>
+                        </Border>
+                    </Grid>
+                    <Border Style="{StaticResource Card}">
+                        <StackPanel>
+                            <DockPanel Margin="0,0,0,12">
+                                <TextBlock Text="{Binding Stage}"
+                                           FontSize="18"
+                                           FontWeight="SemiBold" />
+                                <TextBlock Text="{Binding Progress, StringFormat={}{0:0}%}"
+                                           HorizontalAlignment="Right"
+                                           Foreground="{DynamicResource Accent}" />
+                            </DockPanel>
+                            <ProgressBar Value="{Binding Progress, Mode=OneWay}" Maximum="100" />
+                            <TextBlock Text="Extract  →  Convert metadata  →  Remux  →  Verify"
+                                       Style="{StaticResource MutedText}"
+                                       Margin="0,14,0,16" />
+                            <StackPanel Orientation="Horizontal">
+                                <Button Content="Simulate conversion"
+                                        Style="{StaticResource Primary}"
+                                        Command="{Binding StartCommand}" />
+                                <Button Content="Cancel" Command="{Binding CancelCommand}" />
+                                <Button Content="Reset demo" Command="{Binding ResetCommand}" />
+                            </StackPanel>
+                        </StackPanel>
+                    </Border>
+                    <TextBlock Text="{Binding Status}"
+                               Style="{StaticResource MutedText}"
+                               Margin="0,16,0,0" />
+                </StackPanel>
+            </Grid>
+        </ScrollViewer>
+    </Grid>
+</UserControl>

@@ -8,7 +8,6 @@ using Microsoft.Extensions.Logging;
 using System.Runtime.InteropServices;
 
 namespace DoViFixer.Console;
-
 public static class Program
 {
     public static async Task<int> Main(string[] args)
@@ -23,26 +22,27 @@ public static class Program
             await System.Console.Error.WriteLineAsync(ex.Message);
             return 2;
         }
+
         if (command.Command == "help")
         {
             using var renderer = new ConsoleRenderer();
             new HelpRenderer(renderer).Write();
             return 0;
         }
+
         Serilog.Debugging.SelfLog.Enable(TextWriter.Synchronized(System.Console.Error));
         try
         {
             using var host = ConsoleHost.Build();
             var logger = host.Services.GetRequiredService<ILoggerFactory>().CreateLogger("DoViFixer.Console");
-            logger.LogInformation("Starting {Command}; runtime {Runtime}; OS {OperatingSystem}; architecture {Architecture}",
-                command.Command, RuntimeInformation.FrameworkDescription, RuntimeInformation.OSDescription, RuntimeInformation.ProcessArchitecture);
+            logger.LogInformation("Starting {Command}; runtime {Runtime}; OS {OperatingSystem}; architecture {Architecture}", command.Command, RuntimeInformation.FrameworkDescription, RuntimeInformation.OSDescription, RuntimeInformation.ProcessArchitecture);
             var lifetime = host.Services.GetRequiredService<IHostApplicationLifetime>();
             try
             {
                 await host.StartAsync();
                 return await host.Services.GetRequiredService<CommandDispatcher>().ExecuteAsync(command, lifetime.ApplicationStopping);
             }
-            catch (OperationCanceledException) when (lifetime.ApplicationStopping.IsCancellationRequested)
+            catch (OperationCanceledException)when (lifetime.ApplicationStopping.IsCancellationRequested)
             {
                 logger.LogInformation("Application cancelled");
                 throw;

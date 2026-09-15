@@ -14,7 +14,6 @@ using DoViFixer.Domain.Analysis;
 using DoViFixer.Domain.Conversion;
 
 namespace DoViFixer.Console.Commands;
-
 public sealed class CleanupCommand(CleanupService cleanup, ConsoleRenderer renderer, ConsoleInteraction interaction) : IConsoleCommand
 {
     public bool Handles(string command) => command == "cleanup";
@@ -25,26 +24,30 @@ public sealed class CleanupCommand(CleanupService cleanup, ConsoleRenderer rende
         {
             case "cleanup":
                 var cleanupPlan = cleanup.Plan(input, command.Depth);
-                foreach (var file in cleanupPlan.Files)
-                {
-                    interaction.RecordPlan(cleanupPlan.Id, "DeleteBackup", file);
-                    renderer.Write($"{file.Path} ({ConsoleRenderer.FormatSize(file.Length)})");
-                }
-                renderer.Write($"{cleanupPlan.Files.Count} backup(s) selected.");
-                if (!command.Has("delete-backups") || cleanupPlan.Files.Count == 0)
-                {
-                    return 0;
-                }
-                if (!await interaction.ConfirmDeletionAsync(cleanupPlan.Id, command.Has("yes"), cancellationToken))
-                {
-                    return 4;
-                }
-                var deleted = await cleanup.ExecuteAsync(cleanupPlan, cancellationToken);
-                foreach (var file in deleted.Files)
-                {
-                    renderer.Result(file);
-                }
-                return CommandDispatcher.ExitCode(deleted.Status);
+            foreach (var file in cleanupPlan.Files)
+            {
+                interaction.RecordPlan(cleanupPlan.Id, "DeleteBackup", file);
+                renderer.Write($"{file.Path} ({ConsoleRenderer.FormatSize(file.Length)})");
+            }
+
+            renderer.Write($"{cleanupPlan.Files.Count} backup(s) selected.");
+            if (!command.Has("delete-backups") || cleanupPlan.Files.Count == 0)
+            {
+                return 0;
+            }
+
+            if (!await interaction.ConfirmDeletionAsync(cleanupPlan.Id, command.Has("yes"), cancellationToken))
+            {
+                return 4;
+            }
+
+            var deleted = await cleanup.ExecuteAsync(cleanupPlan, cancellationToken);
+            foreach (var file in deleted.Files)
+            {
+                renderer.Result(file);
+            }
+
+            return CommandDispatcher.ExitCode(deleted.Status);
             default:
                 throw new ArgumentException("Unsupported command.");
         }

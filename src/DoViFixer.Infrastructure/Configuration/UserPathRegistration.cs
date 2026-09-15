@@ -3,7 +3,6 @@ using DoViFixer.Application.Operations;
 using Microsoft.Extensions.Logging;
 
 namespace DoViFixer.Infrastructure.Configuration;
-
 internal sealed class UserPathRegistration(ILogger<UserPathRegistration> logger) : IUserPathRegistration
 {
     public bool AddDirectory(string directory, CancellationToken cancellationToken)
@@ -14,6 +13,7 @@ internal sealed class UserPathRegistration(ILogger<UserPathRegistration> logger)
         {
             throw new ArgumentException("PATH requires an existing directory without semicolons.", nameof(directory));
         }
+
         string? saved = Environment.GetEnvironmentVariable("Path", EnvironmentVariableTarget.User);
         string updated = AppendDirectory(saved, full);
         bool changed = !string.Equals(saved, updated, StringComparison.Ordinal);
@@ -21,6 +21,7 @@ internal sealed class UserPathRegistration(ILogger<UserPathRegistration> logger)
         {
             Environment.SetEnvironmentVariable("Path", updated, EnvironmentVariableTarget.User);
         }
+
         string process = AppendDirectory(Environment.GetEnvironmentVariable("Path", EnvironmentVariableTarget.Process), full);
         Environment.SetEnvironmentVariable("Path", process, EnvironmentVariableTarget.Process);
         OperationLog.Audit(logger, "AddUserPath", full, "Completed");
@@ -37,6 +38,7 @@ internal sealed class UserPathRegistration(ILogger<UserPathRegistration> logger)
             {
                 continue;
             }
+
             try
             {
                 if (string.Equals(Path.TrimEndingDirectorySeparator(Path.GetFullPath(expanded)), normalized, StringComparison.OrdinalIgnoreCase))
@@ -46,9 +48,10 @@ internal sealed class UserPathRegistration(ILogger<UserPathRegistration> logger)
             }
             catch (ArgumentException)
             {
-                // Preserve unrelated malformed entries without interpreting them.
+            // Preserve unrelated malformed entries without interpreting them.
             }
         }
+
         return string.IsNullOrEmpty(path) ? directory : path + (path.EndsWith(';') ? "" : ";") + directory;
     }
 }

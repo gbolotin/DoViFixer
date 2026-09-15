@@ -8,12 +8,10 @@ using Microsoft.VisualStudio.TestTools.UnitTesting;
 using Serilog;
 
 namespace DoViFixer.Console.Tests;
-
 [TestClass]
 public sealed class LoggingTests
 {
     private string directory = null!;
-
     [TestMethod]
     public void ConsoleElapsedTimeIsReadableWhileFileLogsKeepExactMilliseconds()
     {
@@ -25,7 +23,16 @@ public sealed class LoggingTests
             using var serilog = LoggingConfiguration.Configure(new LoggerConfiguration(), Configuration()).CreateLogger();
             using var factory = LoggerFactory.Create(builder => builder.AddSerilog(serilog, dispose: false));
             var logger = factory.CreateLogger("Test");
-            foreach (double elapsed in new[] { 192349.0141, 250.5, 1250.0, 3723000.0, 93784000.0 })
+            foreach (double elapsed in new[]
+            {
+                192349.0141,
+                250.5,
+                1250.0,
+                3723000.0,
+                93784000.0
+            }
+
+            )
             {
                 OperationLog.History(logger, "Failed", elapsed);
             }
@@ -34,11 +41,28 @@ public sealed class LoggingTests
         {
             System.Console.SetError(previousError);
         }
-        foreach (string expected in new[] { "3m 12s", "250.5 ms", "1.25 s", "1h 2m 3s", "1d 2h 3m 4s" })
+
+        foreach (string expected in new[]
+        {
+            "3m 12s",
+            "250.5 ms",
+            "1.25 s",
+            "1h 2m 3s",
+            "1d 2h 3m 4s"
+        }
+
+        )
         {
             StringAssert.Contains(output.ToString(), "Operation Failed after " + expected);
         }
-        foreach (string kind in new[] { "history", "diagnostic" })
+
+        foreach (string kind in new[]
+        {
+            "history",
+            "diagnostic"
+        }
+
+        )
         {
             var entry = Read(kind)[0];
             Assert.AreEqual(192349.0141, entry.GetProperty("Properties").GetProperty("ElapsedMilliseconds").GetDouble());
@@ -63,21 +87,16 @@ public sealed class LoggingTests
         }
     }
 
-    private IConfiguration Configuration(params (string Name, string Value)[] values) => new ConfigurationBuilder()
-        .AddInMemoryCollection(new Dictionary<string, string?> { ["DoViFixer:DataDirectory"] = directory }
-            .Concat(values.Select(v => new KeyValuePair<string, string?>("DoViFixer:Logging:" + v.Name, v.Value))))
-        .Build();
-
-    private JsonElement[] Read(string kind) => Directory.EnumerateFiles(Path.Combine(directory, "Logs"), kind + "-*.jsonl")
-        .SelectMany(File.ReadLines).Select(line =>
-        {
-            using var document = JsonDocument.Parse(line);
-            return document.RootElement.Clone();
-        }).ToArray();
-
-    private static string? Property(JsonElement entry, string name) =>
-        entry.GetProperty("Properties").TryGetProperty(name, out var property) ? property.ToString() : null;
-
+    private IConfiguration Configuration(params (string Name, string Value)[] values) => new ConfigurationBuilder().AddInMemoryCollection(new Dictionary<string, string?>
+    {
+        ["DoViFixer:DataDirectory"] = directory
+    }.Concat(values.Select(v => new KeyValuePair<string, string?>("DoViFixer:Logging:" + v.Name, v.Value)))).Build();
+    private JsonElement[] Read(string kind) => Directory.EnumerateFiles(Path.Combine(directory, "Logs"), kind + "-*.jsonl").SelectMany(File.ReadLines).Select(line =>
+    {
+        using var document = JsonDocument.Parse(line);
+        return document.RootElement.Clone();
+    }).ToArray();
+    private static string? Property(JsonElement entry, string name) => entry.GetProperty("Properties").TryGetProperty(name, out var property) ? property.ToString() : null;
     [TestMethod]
     public async Task HistoryAndAuditPersistEvenWhenDiagnosticsAreFiltered()
     {
@@ -91,16 +110,23 @@ public sealed class LoggingTests
             {
                 logger.LogDebug("Debug message excluded");
                 var interaction = new ConsoleInteraction(factory.CreateLogger<ConsoleInteraction>());
-                interaction.RecordPlan(planId, "Backup", new { Input = "movie.mkv", Output = "movie.dovi" });
+                interaction.RecordPlan(planId, "Backup", new
+                {
+                    Input = "movie.mkv", Output = "movie.dovi"
+                });
                 Assert.IsTrue(await interaction.ConfirmAsync("Create archive?", true, default, planId));
                 OperationLog.Audit(logger, "PublishBackup", "movie.dovi", "Completed", planId);
                 return 0;
             }, default);
         }
+
         var history = Read("history");
-        CollectionAssert.AreEquivalent(new[] { "Started", "Completed" }, history.Select(e => Property(e, "Outcome")).ToArray());
+        CollectionAssert.AreEquivalent(new[]
+        {
+            "Started", "Completed"
+        }, history.Select(e => Property(e, "Outcome")).ToArray());
         Assert.IsTrue(history.All(e => Property(e, "OperationId") == operationId.ToString()));
-        Assert.IsTrue(history.All(e => Property(e, "LogKind") == "History" && Property(e, "SessionId") is not null));
+        Assert.IsTrue(history.All(e => Property(e, "LogKind") == "History" && Property(e, "SessionId")is not null));
         var audit = Read("audit");
         Assert.AreEqual(3, audit.Length);
         Assert.IsTrue(audit.All(e => Property(e, "PlanId") == planId.ToString() && Property(e, "LogKind") == "Audit"));
@@ -127,12 +153,12 @@ public sealed class LoggingTests
                 return 1;
             }, default);
             await started.Task;
-            await Assert.ThrowsExactlyAsync<InvalidDataException>(() => OperationLog.RunAsync<int>(logger, "Second", second, "second.mkv",
-                () => throw new InvalidDataException("Verification fixture failed", new IOException("Fixture inner cause")), default));
+            await Assert.ThrowsExactlyAsync<InvalidDataException>(() => OperationLog.RunAsync<int>(logger, "Second", second, "second.mkv", () => throw new InvalidDataException("Verification fixture failed", new IOException("Fixture inner cause")), default));
             release.SetResult();
             await one;
             logger.LogDebug("Outside operation");
         }
+
         var history = Read("history");
         Assert.AreEqual(4, history.Length);
         Assert.IsTrue(history.Where(e => Property(e, "OperationId") == first.ToString()).All(e => Property(e, "Operation") == "First"));
@@ -158,7 +184,11 @@ public sealed class LoggingTests
                 return Task.FromResult(0);
             }, cancellation.Token));
         }
-        CollectionAssert.AreEqual(new[] { "Started", "Cancelled" }, Read("history").Select(e => Property(e, "Outcome")).ToArray());
+
+        CollectionAssert.AreEqual(new[]
+        {
+            "Started", "Cancelled"
+        }, Read("history").Select(e => Property(e, "Outcome")).ToArray());
     }
 
     [TestMethod]
@@ -168,9 +198,10 @@ public sealed class LoggingTests
         {
             for (int i = 0; i < 10; i++)
             {
-                logger.Debug("Event {Index} {Payload}", i, new string('x', 600));
+                logger.Debug("Event {Index} {Payload}", i, new string ('x', 600));
             }
         }
+
         Assert.AreEqual(2, Directory.GetFiles(Path.Combine(directory, "Logs"), "diagnostic-*.jsonl").Length);
         Assert.IsTrue(Read("diagnostic").Any(e => Property(e, "Index") == "9"));
     }
