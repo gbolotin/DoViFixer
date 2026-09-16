@@ -113,7 +113,6 @@
         <Setter Property="CanUserSortColumns" Value="False" />
         <Setter Property="RowHeaderWidth" Value="0" />
         <Setter Property="SelectionMode" Value="Single" />
-        <Setter Property="RowHeight" Value="76" />
     </Style>
     <Style TargetType="DataGridColumnHeader">
         <Setter Property="Background" Value="#12212A" />
@@ -126,6 +125,21 @@
         <Setter Property="BorderThickness" Value="0" />
         <Setter Property="Padding" Value="8" />
         <Setter Property="VerticalContentAlignment" Value="Center" />
+        <Setter Property="Template">
+            <Setter.Value>
+                <ControlTemplate TargetType="DataGridCell">
+                    <Border Background="{TemplateBinding Background}"
+                            BorderBrush="{TemplateBinding BorderBrush}"
+                            BorderThickness="{TemplateBinding BorderThickness}"
+                            Padding="{TemplateBinding Padding}"
+                            SnapsToDevicePixels="True">
+                        <ContentPresenter HorizontalAlignment="{TemplateBinding HorizontalContentAlignment}"
+                                          VerticalAlignment="{TemplateBinding VerticalContentAlignment}"
+                                          SnapsToDevicePixels="{TemplateBinding SnapsToDevicePixels}" />
+                    </Border>
+                </ControlTemplate>
+            </Setter.Value>
+        </Setter>
         <Style.Triggers>
             <Trigger Property="IsSelected" Value="True">
                 <Setter Property="Background" Value="#204450" />

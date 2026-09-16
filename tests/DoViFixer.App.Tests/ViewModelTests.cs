@@ -7,6 +7,28 @@ namespace DoViFixer.App.Tests;
 public sealed class ViewModelTests
 {
     [TestMethod]
+    public async Task ClearedRowsCannotInvalidateNewConversionPlans()
+    {
+        using var runtime = new TestRuntime();
+        var model = runtime.Container.Resolve<MediaViewModel>();
+        await model.AddAsync([@"C:\Media\Mountain.mkv"]);
+        var removedRow = model.Files.Single();
+        model.ClearAllCommand.Execute();
+        Assert.HasCount(0, model.Files);
+        Assert.IsNull(model.Focused);
+
+        await model.AddAsync([@"C:\Media\Ocean.mkv"]);
+        await model.ConvertCommand.ExecuteAsync();
+        Assert.IsTrue(model.ApproveCommand.CanExecute(null));
+
+        removedRow.IsSelected = false;
+        Assert.IsTrue(model.ApproveCommand.CanExecute(null));
+
+        model.Files.Single().IsSelected = false;
+        Assert.IsFalse(model.ApproveCommand.CanExecute(null));
+    }
+
+    [TestMethod]
     [DataRow(false, true, 0, 0)]
     [DataRow(true, false, 1, 0)]
     [DataRow(true, true, 1, 1)]

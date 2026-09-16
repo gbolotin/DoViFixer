@@ -1,4 +1,5 @@
 using System.Collections.ObjectModel;
+using System.ComponentModel;
 using DoViFixer.App.Dialogs;
 using DoViFixer.App.Presentation;
 using DoViFixer.Application.Abstractions;
@@ -74,6 +75,8 @@ public sealed class MediaViewModel : OperationViewModel
 
         OpenOutputCommand = new(() => dialogs.OpenFolder(Path.GetDirectoryName(Focused!.Result!.Output!)!), () => Focused?.Result?.Output is not null);
         OpenLogsCommand = new(dialogs.OpenLogs);
+        ToggleSelectAllCommand = new(ToggleSelectAll, () => IsIdle && Files.Any(row => row.SelectionEnabled));
+        ClearAllCommand = new(ClearAll, () => IsIdle && Files.Count > 0);
     }
 
     public ObservableCollection<MediaRow> Files { get; } = [];
@@ -160,6 +163,58 @@ public sealed class MediaViewModel : OperationViewModel
         private set => SetProperty(ref review, value);
     }
     public string SelectionSummary => $"{Files.Count(f => f.IsSelected)} selected / {Files.Count(f => !f.IsSelected)} excluded";
+    public bool? AllFilesSelected => Files.Count == 0 || Files.All(row => !row.IsSelected)
+        ? false
+        : Files.All(row => row.IsSelected) ? true : null;
+
+    public DelegateCommand ToggleSelectAllCommand
+    {
+        get;
+    }
+
+    public DelegateCommand ClearAllCommand
+    {
+        get;
+    }
+
+    private void ClearAll()
+    {
+        if (!IsIdle)
+        {
+            return;
+        }
+
+        foreach (var row in Files)
+        {
+            row.PropertyChanged -= OnRowPropertyChanged;
+        }
+
+        Files.Clear();
+        Focused = null;
+        OptionsOpen = false;
+        InvalidatePlan();
+        Status = "File list cleared.";
+        RaisePropertyChanged(nameof(SelectionSummary));
+        RaisePropertyChanged(nameof(AllFilesSelected));
+        CommandsChanged();
+    }
+
+    private void ToggleSelectAll()
+    {
+        if (!IsIdle)
+        {
+            return;
+        }
+
+        bool selectAll = AllFilesSelected != true;
+        foreach (var row in Files.Where(row => row.SelectionEnabled))
+        {
+            row.IsSelected = selectAll;
+        }
+
+        RaisePropertyChanged(nameof(AllFilesSelected));
+    }
+
     public bool CanInspect => CanOperate();
     public AsyncCommand AddFilesCommand
     {
@@ -222,6 +277,8 @@ public sealed class MediaViewModel : OperationViewModel
     protected override void CommandsChanged()
     {
         RaisePropertyChanged(nameof(CanInspect));
+        ToggleSelectAllCommand?.RaiseCanExecuteChanged();
+        ClearAllCommand?.RaiseCanExecuteChanged();
         AddFilesCommand?.RaiseCanExecuteChanged();
         AddFolderCommand?.RaiseCanExecuteChanged();
         ScanCommand?.RaiseCanExecuteChanged();
@@ -248,30 +305,7 @@ public sealed class MediaViewModel : OperationViewModel
                     }
 
                     var row = new MediaRow(path);
-                    row.PropertyChanged += (_, e) =>
-                    {
-                        if (e.PropertyName == nameof(MediaRow.Result))
-                        {
-                            OpenOutputCommand.RaiseCanExecuteChanged();
-                        }
-
-                        if (e.PropertyName != nameof(MediaRow.IsSelected))
-                        {
-                            return;
-                        }
-
-                        if (IsBusy && !row.IsSelected)
-                        {
-                            Skip(row);
-                        }
-                        else if (IsIdle)
-                        {
-                            InvalidatePlan();
-                        }
-
-                        RaisePropertyChanged(nameof(SelectionSummary));
-                        CommandsChanged();
-                    };
+                    row.PropertyChanged += OnRowPropertyChanged;
                     Files.Add(row);
                 }
             }
@@ -284,7 +318,39 @@ public sealed class MediaViewModel : OperationViewModel
         Focused ??= Files.FirstOrDefault();
         InvalidatePlan();
         RaisePropertyChanged(nameof(SelectionSummary));
+        RaisePropertyChanged(nameof(AllFilesSelected));
     });
+    private void OnRowPropertyChanged(object? sender, PropertyChangedEventArgs e)
+    {
+        if (sender is not MediaRow row)
+        {
+            return;
+        }
+
+        if (e.PropertyName == nameof(MediaRow.Result))
+        {
+            OpenOutputCommand.RaiseCanExecuteChanged();
+        }
+
+        if (e.PropertyName != nameof(MediaRow.IsSelected))
+        {
+            return;
+        }
+
+        if (IsBusy && !row.IsSelected)
+        {
+            Skip(row);
+        }
+        else if (IsIdle)
+        {
+            InvalidatePlan();
+        }
+
+        RaisePropertyChanged(nameof(SelectionSummary));
+        RaisePropertyChanged(nameof(AllFilesSelected));
+        CommandsChanged();
+    }
+
     private void InvalidatePlan()
     {
         plans.Clear();

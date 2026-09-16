@@ -12,6 +12,7 @@
         <StackPanel Orientation="Horizontal" Margin="0,0,0,16">
             <Button Content="＋  Add files" Command="{Binding AddFilesCommand}" />
             <Button Content="▱  Add folder" Command="{Binding AddFolderCommand}" />
+            <Button Content="Clear all" Command="{Binding ClearAllCommand}" />
             <Button Content="⌕  Scan" Command="{Binding ScanCommand}" />
             <Button Content="◎  Inspect ▾"
                     Click="ShowInspectionMenu"
@@ -36,34 +37,61 @@
                       IsReadOnly="True"
                       EnableRowVirtualization="True">
                 <DataGrid.Columns>
-                    <DataGridTemplateColumn Width="48">
-                        <DataGridTemplateColumn.CellTemplate>
-                            <DataTemplate>
-                                <CheckBox IsChecked="{Binding IsSelected, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}"
-                                          IsEnabled="{Binding SelectionEnabled}"
-                                          HorizontalAlignment="Center"
-                                          VerticalAlignment="Center"
-                                          AutomationProperties.Name="Include file" />
-                            </DataTemplate>
-                        </DataGridTemplateColumn.CellTemplate>
-                    </DataGridTemplateColumn>
                     <DataGridTemplateColumn Header="File"
                                             Width="*"
-                                            MinWidth="190">
+                                            MinWidth="238">
+                        <DataGridTemplateColumn.CellStyle>
+                            <Style TargetType="DataGridCell" BasedOn="{StaticResource {x:Type DataGridCell}}">
+                                <Setter Property="Padding" Value="12,8" />
+                            </Style>
+                        </DataGridTemplateColumn.CellStyle>
+                        <DataGridTemplateColumn.HeaderTemplate>
+                            <DataTemplate>
+                                <StackPanel Orientation="Horizontal">
+                                    <CheckBox IsChecked="{Binding DataContext.AllFilesSelected, RelativeSource={RelativeSource AncestorType=DataGrid}, Mode=OneWay}"
+                                              Command="{Binding DataContext.ToggleSelectAllCommand, RelativeSource={RelativeSource AncestorType=DataGrid}}"
+                                              Margin="0,0,12,0"
+                                              VerticalAlignment="Center"
+                                              ToolTip="Select all / none"
+                                              AutomationProperties.Name="Select all or clear all files" />
+                                    <TextBlock Text="File" VerticalAlignment="Center" />
+                                </StackPanel>
+                            </DataTemplate>
+                        </DataGridTemplateColumn.HeaderTemplate>
                         <DataGridTemplateColumn.CellTemplate>
                             <DataTemplate>
-                                <StackPanel VerticalAlignment="Center" Margin="10,0">
-                                    <TextBlock Text="{Binding Name}"
-                                               FontWeight="SemiBold"
-                                               TextTrimming="CharacterEllipsis"
-                                               ToolTip="{Binding Path}" />
-                                    <TextBlock Text="{Binding PlannedOutput}"
-                                               FontSize="11"
-                                               Foreground="{StaticResource Muted}"
-                                               TextTrimming="CharacterEllipsis"
-                                               ToolTip="{Binding PlannedOutput}"
-                                               Margin="0,5,0,0" />
-                                </StackPanel>
+                                <DockPanel>
+                                    <CheckBox IsChecked="{Binding IsSelected, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}"
+                                              IsEnabled="{Binding SelectionEnabled}"
+                                              Margin="0,0,12,0"
+                                              VerticalAlignment="Center"
+                                              AutomationProperties.Name="Include file" />
+                                    <StackPanel VerticalAlignment="Center">
+                                        <TextBlock Text="{Binding Name}"
+                                                   FontWeight="SemiBold"
+                                                   TextTrimming="CharacterEllipsis"
+                                                   ToolTip="{Binding Path}" />
+                                        <TextBlock Text="{Binding PlannedOutput}"
+                                                   FontSize="11"
+                                                   Foreground="{StaticResource Muted}"
+                                                   TextTrimming="CharacterEllipsis"
+                                                   ToolTip="{Binding PlannedOutput}"
+                                                   Margin="0,5,0,0">
+                                            <TextBlock.Style>
+                                                <Style TargetType="TextBlock" BasedOn="{StaticResource {x:Type TextBlock}}">
+                                                    <Style.Triggers>
+                                                        <DataTrigger Binding="{Binding PlannedOutput}" Value="">
+                                                            <Setter Property="Visibility" Value="Collapsed" />
+                                                        </DataTrigger>
+                                                        <DataTrigger Binding="{Binding PlannedOutput}" Value="{x:Null}">
+                                                            <Setter Property="Visibility" Value="Collapsed" />
+                                                        </DataTrigger>
+                                                    </Style.Triggers>
+                                                </Style>
+                                            </TextBlock.Style>
+                                        </TextBlock>
+                                    </StackPanel>
+                                </DockPanel>
                             </DataTemplate>
                         </DataGridTemplateColumn.CellTemplate>
                     </DataGridTemplateColumn>
