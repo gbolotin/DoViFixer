@@ -4,6 +4,18 @@ using DoViFixer.Application.Dependencies;
 namespace DoViFixer.Application.Settings;
 public sealed record UserSettings
 {
+    public bool AutomaticallyScanAddedFiles
+    {
+        get;
+        init;
+    }
+    = true;
+    public bool UseCachedResults
+    {
+        get;
+        init;
+    }
+    = true;
     public ImmutableDictionary<NativeTool, string> ToolPaths
     {
         get;

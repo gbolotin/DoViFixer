@@ -65,9 +65,11 @@ internal sealed class MediaVerifier(MediaProbe probe, VideoProcessor processor, 
         }
 
         ReportCheckpoint();
-        string beforeBase = await CleanBaseAsync(source, workspace, "before", cancellationToken);
+        bool compareSourceRpu = source.Profile == DolbyVisionProfile.Profile7 && expectedProfile == DolbyVisionProfile.Profile81;
+        string beforeBase = await CleanBaseAsync(source, workspace, "before", cancellationToken, compareSourceRpu);
         ReportCheckpoint();
-        await VerifyRpuAsync(target, expectedProfile, outputFrames, workspace, failures, cancellationToken);
+        await VerifyRpuAsync(source, target, expectedProfile, outputFrames, workspace, failures, cancellationToken);
+        File.Delete(workspace.File("before.hevc"));
         ReportCheckpoint();
         string afterBase = await CleanBaseAsync(target, workspace, "after", cancellationToken);
         if (await VideoProcessor.HashAsync(beforeBase, cancellationToken) != await VideoProcessor.HashAsync(afterBase, cancellationToken))
@@ -86,7 +88,7 @@ internal sealed class MediaVerifier(MediaProbe probe, VideoProcessor processor, 
         return failures;
     }
 
-    private async Task VerifyRpuAsync(MediaInfo target, DolbyVisionProfile expectedProfile, long frames, ITemporaryWorkspace workspace, List<string> failures, CancellationToken cancellationToken)
+    private async Task VerifyRpuAsync(MediaInfo source, MediaInfo target, DolbyVisionProfile expectedProfile, long frames, ITemporaryWorkspace workspace, List<string> failures, CancellationToken cancellationToken)
     {
         string raw = workspace.File("verify-rpu.hevc");
         string rpu = workspace.File("verify.rpu");
@@ -98,7 +100,6 @@ internal sealed class MediaVerifier(MediaProbe probe, VideoProcessor processor, 
         {
             0, 1
         }), cancellationToken);
-        File.Delete(raw);
         if (expectedProfile == DolbyVisionProfile.None)
         {
             if (extraction.ExitCode != 1 || extraction.Error.Trim() != "Error: No RPU was found in input file")
@@ -129,10 +130,46 @@ internal sealed class MediaVerifier(MediaProbe probe, VideoProcessor processor, 
             wrongProfile |= !frame.TryGetProperty("dovi_profile", out var profile) || profile.GetInt32() != expected;
         }
 
+        if (source.Profile == DolbyVisionProfile.Profile7 && expectedProfile == DolbyVisionProfile.Profile81)
+        {
+            await using var originalStream = File.OpenRead(workspace.File("before.hevc"));
+            long originalCount = (await RpuCoverage.ReadAsync(originalStream, cancellationToken, countRpuOnly: true)).Count;
+            if (originalCount != count)
+            {
+                failures.Add("RPU metadata count changed during conversion; metadata must not be added or removed.");
+            }
+        }
+
         if (count != frames || wrongProfile)
         {
-            failures.Add($"Output RPU profile/count does not match Profile {expected} and {frames} video frames.");
+            if (wrongProfile || expectedProfile != DolbyVisionProfile.Profile81 || source.Profile != DolbyVisionProfile.Profile7 || count <= 0 || count >= frames)
+            {
+                failures.Add($"Output RPU profile/count does not match Profile {expected} and {frames} video frames.");
+            }
+            else
+            {
+                string originalRaw = workspace.File("before.hevc");
+                try
+                {
+                    var after = await RpuCoverage.VerifyAsync(raw, target.Source.Path, count, tools, processes, cancellationToken, requireNoEnhancementLayer: true);
+                    var before = await RpuCoverage.VerifyAsync(originalRaw, source.Source.Path, count, tools, processes, cancellationToken);
+                    if (before != after || after.TotalFrames != frames)
+                    {
+                        failures.Add("Metadata-free ending or per-frame RPU positions changed during conversion.");
+                    }
+                }
+                catch (InvalidDataException ex)
+                {
+                    failures.Add($"Metadata-free ending verification failed: {ex.Message}");
+                }
+                finally
+                {
+                    File.Delete(originalRaw);
+                }
+            }
         }
+
+        File.Delete(raw);
     }
 
     internal static IReadOnlyList<string> CompareMetadata(MediaInfo source, MediaInfo target, DolbyVisionProfile profile)
@@ -181,7 +218,7 @@ internal sealed class MediaVerifier(MediaProbe probe, VideoProcessor processor, 
         return failures;
     }
 
-    private async Task<string> CleanBaseAsync(MediaInfo media, ITemporaryWorkspace workspace, string prefix, CancellationToken cancellationToken)
+    private async Task<string> CleanBaseAsync(MediaInfo media, ITemporaryWorkspace workspace, string prefix, CancellationToken cancellationToken, bool preserveRaw = false)
     {
         string raw = workspace.File(prefix + ".hevc");
         string clean = workspace.File(prefix + "-clean.hevc");
@@ -190,7 +227,10 @@ internal sealed class MediaVerifier(MediaProbe probe, VideoProcessor processor, 
         {
             "remove", raw, "-o", clean
         }, cancellationToken);
-        File.Delete(raw);
+        if (!preserveRaw)
+        {
+            File.Delete(raw);
+        }
         return clean;
     }
 

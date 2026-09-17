@@ -39,9 +39,23 @@ internal sealed class MediaProbe(IToolCatalog tools, IProcessRunner processes, I
                 long frames = await CountFramesAsync(media.Source.Path, cancellationToken);
                 if (evidence.Frames != frames)
                 {
-                    return evidence with
+                    if (method == AnalysisMethod.DeepInspection || evidence.Frames <= 0 || evidence.Frames > frames)
                     {
-                        Error = $"Full RPU count {evidence.Frames} differs from video packet count {frames}."
+                        return evidence with
+                        {
+                            Error = $"Full RPU count {evidence.Frames} differs from video packet count {frames}. Deep inspection requires complete frame coverage."
+                        };
+                    }
+
+                    var coverage = await RpuCoverage.VerifyAsync(raw, media.Source.Path, evidence.Frames, tools, processes, cancellationToken);
+                    if (coverage.TotalFrames != frames)
+                    {
+                        throw new InvalidDataException("RPU coverage frame count differs from video packet count.");
+                    }
+
+                    evidence = evidence with
+                    {
+                        MetadataFreeTail = coverage
                     };
                 }
 
@@ -59,6 +73,7 @@ internal sealed class MediaProbe(IToolCatalog tools, IProcessRunner processes, I
             }
 
             var samples = new List<RpuEvidence>();
+            var diagnostics = new List<string>();
             for (int i = 0; i < 10; i++)
             {
                 string raw = workspace.File($"sample-{i}.hevc");
@@ -74,6 +89,8 @@ internal sealed class MediaProbe(IToolCatalog tools, IProcessRunner processes, I
                 catch (Exception ex)when (ex is IOException or InvalidDataException or System.Text.Json.JsonException)
                 {
                     logger.LogDebug(ex, "RPU sample {SampleIndex} failed for {Input}", i, media.Source.Path);
+                    var position = TimeSpan.FromSeconds(media.DurationSeconds.Value * (0.05 + i * 0.1));
+                    diagnostics.Add($"Sample {i + 1}/10 at {position:hh\\:mm\\:ss}: {ex.Message}");
                 // Missing sample coverage remains Unknown; never turn a failed probe into complex FEL.
                 }
                 finally
@@ -83,7 +100,7 @@ internal sealed class MediaProbe(IToolCatalog tools, IProcessRunner processes, I
             }
 
             EnhancementLayer layer = samples.Any(s => s.Layer == EnhancementLayer.Fel) ? EnhancementLayer.Fel : samples.Count > 0 && samples.All(s => s.Layer == EnhancementLayer.Mel) ? EnhancementLayer.Mel : EnhancementLayer.Unknown;
-            return new(method, layer, samples.Sum(s => s.Frames), samples.Select(s => s.PeakNits).Max(), samples.Count, 10);
+            return new(method, layer, samples.Sum(s => s.Frames), samples.Select(s => s.PeakNits).Max(), samples.Count, 10, SampleDiagnostics: diagnostics.Count == 0 ? null : string.Join("\n", diagnostics));
         }
         catch (Exception ex)when (ex is not OperationCanceledException)
         {

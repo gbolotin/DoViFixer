@@ -21,6 +21,55 @@ public sealed class AnalysisCacheTests
     }
 
     [TestMethod]
+    public async Task VerifiedTailAndUnclassifiedFelPersistWithTheirEvidence()
+    {
+        var original = Analysis();
+        var media = original.Media with
+        {
+            MaxCll = null
+        };
+        var evidence = original.Evidence with
+        {
+            Layer = EnhancementLayer.Fel,
+            MetadataFreeTail = new(30, original.Evidence.Frames, new string('A', 64))
+        };
+        var analysis = MediaClassifier.Classify(media, evidence);
+        Assert.AreEqual(AnalysisVerdict.FelUnclassified, analysis.Verdict);
+        await Cache().WriteAsync(analysis, default);
+        var restored = await Cache().ReadAsync(media.Source, AnalysisMethod.FullRpu, default);
+        Assert.IsNotNull(restored);
+        Assert.AreEqual(evidence.MetadataFreeTail, restored.Evidence.MetadataFreeTail);
+        Assert.AreEqual(analysis.Reason, restored.Reason);
+    }
+
+    [TestMethod]
+    public async Task ClearRemovesOnlyAnalysisEntriesAndAllowsFreshResults()
+    {
+        var cache = Cache();
+        Assert.AreEqual(0, await cache.ClearAsync(default));
+        var analysis = Analysis();
+        await cache.WriteAsync(analysis, default);
+        string settings = Path.Combine(directory, "settings.json");
+        await File.WriteAllTextAsync(settings, "{}");
+        string temporary = Path.Combine(directory, "cache", "analysis", "active.tmp");
+        await File.WriteAllTextAsync(temporary, "in progress");
+        Assert.AreEqual(1, await cache.ClearAsync(default));
+        Assert.IsTrue(File.Exists(settings));
+        Assert.IsTrue(File.Exists(temporary));
+        Assert.IsNull(await cache.ReadAsync(analysis.Media.Source, AnalysisMethod.FullRpu, default));
+        await cache.WriteAsync(analysis, default);
+        Assert.IsNotNull(await cache.ReadAsync(analysis.Media.Source, AnalysisMethod.FullRpu, default));
+    }
+
+    [TestMethod]
+    public void OlderSettingsEnableAutomaticScanningAndCacheReuse()
+    {
+        var settings = System.Text.Json.JsonSerializer.Deserialize<DoViFixer.Application.Settings.UserSettings>("{}");
+        Assert.IsTrue(settings!.AutomaticallyScanAddedFiles);
+        Assert.IsTrue(settings.UseCachedResults);
+    }
+
+    [TestMethod]
     public async Task PersistsAcrossInstancesAndInvalidatesChangedIdentityAndMethod()
     {
         var analysis = Analysis();

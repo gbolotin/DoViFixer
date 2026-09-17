@@ -26,6 +26,7 @@ public sealed class FelConversionApproval(ConsoleRenderer renderer, Func<string,
             {
                 AnalysisVerdict.SimpleFel => "Simple FEL",
                 AnalysisVerdict.ComplexFel => "Complex FEL",
+                AnalysisVerdict.FelUnclassified => "Unclassified FEL with verified metadata-free ending",
                 AnalysisVerdict.Mel => "MEL",
                 _ => group.Key.ToString()
             };
@@ -35,7 +36,7 @@ public sealed class FelConversionApproval(ConsoleRenderer renderer, Func<string,
                 renderer.Write($"  {plan.Analysis.Media.Source.Path}");
             }
 
-            string warning = group.Key is AnalysisVerdict.SimpleFel or AnalysisVerdict.ComplexFel ? " Enhancement-layer picture data will be lost." : "";
+            string warning = group.Key is AnalysisVerdict.SimpleFel or AnalysisVerdict.ComplexFel or AnalysisVerdict.FelUnclassified ? " Enhancement-layer picture data will be lost." : "";
             bool accepted = await confirm($"Execute these {group.Count()} {category} conversion(s) as planned?{warning}", false, cancellationToken, group.Count() == 1 ? group.First().Id : null);
             foreach (var plan in group)
             {

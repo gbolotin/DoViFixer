@@ -93,6 +93,12 @@ public sealed class WorkflowTests
     private sealed class MemoryCache : IAnalysisCache
     {
         private readonly Dictionary<(FileIdentity, AnalysisMethod), MediaAnalysis> entries = new();
+        public Task<int> ClearAsync(CancellationToken cancellationToken)
+        {
+            int count = entries.Count;
+            entries.Clear();
+            return Task.FromResult(count);
+        }
         public Task<MediaAnalysis?> ReadAsync(FileIdentity source, AnalysisMethod method, CancellationToken cancellationToken) => Task.FromResult(entries.GetValueOrDefault((source, method)));
         public Task WriteAsync(MediaAnalysis analysis, CancellationToken cancellationToken)
         {

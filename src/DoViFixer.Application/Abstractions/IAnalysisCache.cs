@@ -6,4 +6,5 @@ public interface IAnalysisCache
 {
     Task<MediaAnalysis?> ReadAsync(FileIdentity source, AnalysisMethod method, CancellationToken cancellationToken);
     Task WriteAsync(MediaAnalysis analysis, CancellationToken cancellationToken);
+    Task<int> ClearAsync(CancellationToken cancellationToken);
 }

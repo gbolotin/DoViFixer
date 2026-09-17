@@ -23,6 +23,8 @@ public static class ConversionPolicy
             AnalysisVerdict.Mel => new(true, analysis.Reason),
             AnalysisVerdict.SimpleFel when includeSimple => new(true, analysis.Reason),
             AnalysisVerdict.ComplexFel when forceComplex => new(true, "Explicit complex-FEL override: enhancement-layer picture data will be lost."),
+            AnalysisVerdict.FelUnclassified when forceComplex && MediaClassifier.HasVerifiedTail(analysis.Evidence) && analysis.Evidence.Layer == EnhancementLayer.Fel => new(true, analysis.Reason),
+            AnalysisVerdict.FelUnclassified => new(false, "Unclassified FEL with a verified metadata-free ending requires --force or explicit FEL approval; enhancement-layer picture data will be lost."),
             AnalysisVerdict.SimpleFel => new(false, "Simple FEL requires --include-simple."),
             AnalysisVerdict.ComplexFel => new(false, "Complex FEL requires --force."),
             _ => new(false, "Analysis is unknown or failed. Inspect the file and resolve missing evidence before converting.")

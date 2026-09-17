@@ -3,6 +3,7 @@ using DoViFixer.App.Dialogs;
 using DoViFixer.App.Presentation;
 using DoViFixer.Application.Dependencies;
 using DoViFixer.Application.Settings;
+using DoViFixer.Application.Abstractions;
 
 namespace DoViFixer.App.ViewModels;
 public sealed class SettingsViewModel : OperationViewModel
@@ -12,9 +13,11 @@ public sealed class SettingsViewModel : OperationViewModel
     private bool otherFolder;
     private bool replaceOriginal;
     private bool createArchive;
+    private bool automaticallyScanAddedFiles = true;
+    private bool useCachedResults = true;
     private NativeTool selectedTool;
     private string toolPath = "";
-    public SettingsViewModel(SettingsService settings, DependencyService dependencies, DependencySetup setup, IUserDialogs dialogs)
+    public SettingsViewModel(SettingsService settings, DependencyService dependencies, DependencySetup setup, IUserDialogs dialogs, IAnalysisCache cache)
     {
         LoadCommand = new(() => RunAsync(async (token, _) =>
         {
@@ -24,6 +27,8 @@ public sealed class SettingsViewModel : OperationViewModel
             OtherFolder = value.OutputDirectory is not null;
             ReplaceOriginal = value.ReplaceOriginal;
             CreateArchive = value.CreateElArchive;
+            AutomaticallyScanAddedFiles = value.AutomaticallyScanAddedFiles;
+            UseCachedResults = value.UseCachedResults;
             Status = "Settings loaded.";
         }), () => IsIdle);
         BrowseTemporaryCommand = new(() => Temporary = dialogs.PickFolder() ?? Temporary);
@@ -36,8 +41,13 @@ public sealed class SettingsViewModel : OperationViewModel
                 throw new InvalidOperationException("Choose an output folder.");
             }
 
-            await Task.Run(() => settings.SetPreferencesAsync(Temporary, OtherFolder ? Destination : null, ReplaceOriginal, CreateArchive, token), token);
+            await Task.Run(() => settings.SetPreferencesAsync(Temporary, OtherFolder ? Destination : null, ReplaceOriginal, CreateArchive, token, AutomaticallyScanAddedFiles, UseCachedResults), token);
             Status = "Defaults saved. Each conversion still requires plan approval.";
+        }), () => IsIdle);
+        ClearCacheCommand = new(() => RunAsync(async (token, _) =>
+        {
+            int removed = await Task.Run(() => cache.ClearAsync(token), token);
+            Status = $"Cleared {removed} cached analysis results. Future scans will analyze those files again.";
         }), () => IsIdle);
         CheckCommand = new(() => RunAsync(async (token, _) =>
         {
@@ -72,6 +82,20 @@ public sealed class SettingsViewModel : OperationViewModel
         }), () => IsIdle);
     }
 
+    public bool AutomaticallyScanAddedFiles
+    {
+        get => automaticallyScanAddedFiles;
+        set => SetProperty(ref automaticallyScanAddedFiles, value);
+    }
+    public bool UseCachedResults
+    {
+        get => useCachedResults;
+        set => SetProperty(ref useCachedResults, value);
+    }
+    public AsyncCommand ClearCacheCommand
+    {
+        get;
+    }
     public string Temporary
     {
         get => temporary;
@@ -164,6 +188,7 @@ public sealed class SettingsViewModel : OperationViewModel
     {
         LoadCommand?.RaiseCanExecuteChanged();
         SaveCommand?.RaiseCanExecuteChanged();
+        ClearCacheCommand?.RaiseCanExecuteChanged();
         CheckCommand?.RaiseCanExecuteChanged();
         InstallCommand?.RaiseCanExecuteChanged();
         SetToolCommand?.RaiseCanExecuteChanged();

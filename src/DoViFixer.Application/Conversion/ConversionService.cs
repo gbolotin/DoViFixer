@@ -47,7 +47,7 @@ public sealed class ConversionPlanner(IFileDiscovery discovery, IFileOperations 
                 progress?.Report(new(Guid.Empty, "Planning", path));
                 var analysis = await inspection.InspectAsync(path, AnalysisMethod.FullRpu, request.TemporaryDirectory, cancellationToken);
                 var decision = ConversionPolicy.Evaluate(analysis, request.IncludeSimple, request.ForceComplex);
-                if (!decision.Allowed && approveFel is not null && analysis.Verdict is AnalysisVerdict.SimpleFel or AnalysisVerdict.ComplexFel && ConversionPolicy.Evaluate(analysis, true, true).Allowed && await approveFel(analysis, cancellationToken))
+                if (!decision.Allowed && approveFel is not null && analysis.Verdict is AnalysisVerdict.SimpleFel or AnalysisVerdict.ComplexFel or AnalysisVerdict.FelUnclassified && ConversionPolicy.Evaluate(analysis, true, true).Allowed && await approveFel(analysis, cancellationToken))
                 {
                     decision = ConversionPolicy.Evaluate(analysis, true, true);
                 }

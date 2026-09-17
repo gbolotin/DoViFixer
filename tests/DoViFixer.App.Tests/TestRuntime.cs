@@ -122,15 +122,31 @@ internal sealed class TestRuntime : IFileDiscovery, IFileOperations, IMediaProbe
         return Task.FromResult(new MediaInfo(Identify(path), DolbyVisionProfile.Profile7, "HEVC", 0, 3840, 2160, 1000, 23.976, 5772, 0, 1000, [], 0, 1, null, "{}"));
     }
 
-    public Task<RpuEvidence> AnalyzeAsync(MediaInfo media, AnalysisMethod method, ITemporaryWorkspace workspace, CancellationToken cancellationToken)
+    public Func<CancellationToken, Task>? DuringAnalysis
     {
+        get;
+        set;
+    }
+    public int Analyses
+    {
+        get;
+        private set;
+    }
+    public async Task<RpuEvidence> AnalyzeAsync(MediaInfo media, AnalysisMethod method, ITemporaryWorkspace workspace, CancellationToken cancellationToken)
+    {
+        Analyses++;
+        if (DuringAnalysis is not null)
+        {
+            await DuringAnalysis(cancellationToken);
+        }
+
         if (method == AnalysisMethod.FullRpu)
         {
             FullAnalyses++;
         }
 
         bool mel = media.Source.Path.Contains("Mountain");
-        return Task.FromResult(new RpuEvidence(method, mel ? EnhancementLayer.Mel : EnhancementLayer.Fel, 1000, media.Source.Path.Contains("City") ? 1400 : 900, 10, 10));
+        return new RpuEvidence(method, mel ? EnhancementLayer.Mel : EnhancementLayer.Fel, 1000, media.Source.Path.Contains("City") ? 1400 : 900, 10, 10);
     }
 
     public Task<UserSettings> ReadAsync(CancellationToken cancellationToken) => Task.FromResult(Settings);
@@ -151,8 +167,19 @@ internal sealed class TestRuntime : IFileDiscovery, IFileOperations, IMediaProbe
     }
 
     public ValueTask<ITemporaryWorkspace> CreateAsync(long requiredBytes, string? directory, CancellationToken cancellationToken) => ValueTask.FromResult<ITemporaryWorkspace>(new Workspace());
-    public Task<MediaAnalysis?> ReadAsync(FileIdentity source, AnalysisMethod method, CancellationToken cancellationToken) => Task.FromResult<MediaAnalysis?>(null);
-    public Task WriteAsync(MediaAnalysis analysis, CancellationToken cancellationToken) => Task.CompletedTask;
+    private readonly Dictionary<(FileIdentity, AnalysisMethod), MediaAnalysis> cache = new();
+    public Task<MediaAnalysis?> ReadAsync(FileIdentity source, AnalysisMethod method, CancellationToken cancellationToken) => Task.FromResult(cache.GetValueOrDefault((source, method)));
+    public Task WriteAsync(MediaAnalysis analysis, CancellationToken cancellationToken)
+    {
+        cache[(analysis.Media.Source, analysis.Evidence.Method)] = analysis;
+        return Task.CompletedTask;
+    }
+    public Task<int> ClearAsync(CancellationToken cancellationToken)
+    {
+        int count = cache.Count;
+        cache.Clear();
+        return Task.FromResult(count);
+    }
     public async Task ConvertAsync(MediaInfo media, ConversionTarget target, ITemporaryWorkspace workspace, string stagedOutput, IProgress<OperationProgress>? progress, Guid operationId, CancellationToken cancellationToken, bool safe = false)
     {
         Conversions++;
@@ -169,8 +196,14 @@ internal sealed class TestRuntime : IFileDiscovery, IFileOperations, IMediaProbe
     public IStagedOutput Stage(string destination) => new Staged(destination);
     public string[] PickFiles(string filter = "Matroska media|*.mkv") => [];
     public string? PickFolder() => null;
+    public string? OpenedFolder
+    {
+        get;
+        private set;
+    }
     public void OpenFolder(string path)
     {
+        OpenedFolder = path;
     }
 
     public void OpenLogs()

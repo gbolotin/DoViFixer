@@ -16,15 +16,44 @@ public enum AnalysisVerdict
     SimpleFel,
     ComplexFel,
     Unknown,
-    AnalysisFailed
+    AnalysisFailed,
+    FelUnclassified
 }
 
-public sealed record RpuEvidence(AnalysisMethod Method, EnhancementLayer Layer, long Frames, double? PeakNits, int SuccessfulSamples, int RequestedSamples, string? Error = null, BrightnessComparison? Brightness = null);
+public sealed record MetadataFreeTail(long TotalFrames, long RpuFrames, string PositionHash)
+{
+    public long TailFrames => TotalFrames - RpuFrames;
+}
+public sealed record RpuEvidence(AnalysisMethod Method, EnhancementLayer Layer, long Frames, double? PeakNits, int SuccessfulSamples, int RequestedSamples, string? Error = null, BrightnessComparison? Brightness = null, string? SampleDiagnostics = null, MetadataFreeTail? MetadataFreeTail = null);
 public sealed record BrightnessComparison(long ComparedFrames, long ExpandedFrames, double BaseLayerPeakNits, double MaximumDeltaNits, long MaximumDeltaFrame, double ThresholdNits = 50);
 public sealed record MediaAnalysis(MediaInfo Media, RpuEvidence Evidence, AnalysisVerdict Verdict, string Reason);
 public static class MediaClassifier
 {
     public static MediaAnalysis Classify(MediaInfo media, RpuEvidence evidence)
+    {
+        var result = ClassifyCore(media, evidence);
+        if (HasVerifiedTail(evidence))
+        {
+            result = result with
+            {
+                Reason = result.Reason + $" Verified metadata-free ending: {evidence.MetadataFreeTail!.TailFrames:N0} of {evidence.MetadataFreeTail.TotalFrames:N0} frames. Preserve these base-layer frames without adding Dolby Vision metadata."
+            };
+        }
+
+        return result;
+    }
+
+    public static bool HasVerifiedTail(RpuEvidence evidence) => evidence.Method == AnalysisMethod.FullRpu
+        && evidence.Error is null
+        && evidence.SuccessfulSamples == evidence.RequestedSamples
+        && evidence.Frames > 0
+        && evidence.MetadataFreeTail is { } tail
+        && tail.RpuFrames == evidence.Frames
+        && tail.TotalFrames > tail.RpuFrames
+        && tail.PositionHash is { Length: 64 }
+        && tail.PositionHash.All(Uri.IsHexDigit);
+
+    private static MediaAnalysis ClassifyCore(MediaInfo media, RpuEvidence evidence)
     {
         if (media.Profile != DolbyVisionProfile.Profile7)
         {
@@ -34,6 +63,11 @@ public static class MediaClassifier
         if (evidence.Error is not null)
         {
             return new(media, evidence, AnalysisVerdict.AnalysisFailed, evidence.Error);
+        }
+
+        if (evidence.MetadataFreeTail is not null && !HasVerifiedTail(evidence))
+        {
+            return new(media, evidence, AnalysisVerdict.AnalysisFailed, "Metadata-free ending evidence is invalid or incomplete.");
         }
 
         if (evidence.Frames <= 0 || evidence.SuccessfulSamples < evidence.RequestedSamples)
@@ -61,6 +95,11 @@ public static class MediaClassifier
 
         if (evidence.Layer != EnhancementLayer.Fel || evidence.PeakNits is null || media.MaxCll is null or <= 0)
         {
+            if (evidence.Layer == EnhancementLayer.Fel && HasVerifiedTail(evidence))
+            {
+                return new(media, evidence, AnalysisVerdict.FelUnclassified, "FEL detected with verified frame coverage, but brightness metadata is insufficient to classify Simple versus Complex FEL. Discarding the enhancement layer loses its picture data.");
+            }
+
             return new(media, evidence, AnalysisVerdict.Unknown, "FEL classification requires layer type, L1 metadata and measured MaxCLL metadata.");
         }
 

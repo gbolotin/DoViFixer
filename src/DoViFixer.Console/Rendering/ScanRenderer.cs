@@ -57,6 +57,7 @@ public sealed class ScanRenderer(ConsoleRenderer renderer, bool candidatesOnly) 
         {
             AnalysisVerdict.SimpleFel => "Simple FEL",
             AnalysisVerdict.ComplexFel => "Complex FEL",
+            AnalysisVerdict.FelUnclassified => "FEL (unclassified; verified metadata-free ending)",
             AnalysisVerdict.Mel => "MEL",
             AnalysisVerdict.AnalysisFailed => "FAILED",
             AnalysisVerdict.NotApplicable => "Not applicable",

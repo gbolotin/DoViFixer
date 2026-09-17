@@ -68,6 +68,14 @@ public sealed class VisualTests
             await model.ScanCommand.ExecuteAsync();
             model.Focused = model.Files[1];
             await RenderAsync(media, "02-scan-results");
+            var completeAnalysis = model.Files[1].Analysis!;
+            model.Files[1].Analysis = DoViFixer.Domain.Analysis.MediaClassifier.Classify(completeAnalysis.Media, completeAnalysis.Evidence with
+            {
+                SuccessfulSamples = 9,
+                SampleDiagnostics = "Sample 10/10 at 01:39:51: No RPU was found in input file"
+            });
+            await RenderAsync(media, "02-incomplete-scan");
+            model.Files[1].Analysis = completeAnalysis;
             await model.ConvertCommand.ExecuteAsync();
             await RenderAsync(media, "03-conversion-review");
             await RenderAsync(media, "04-review-minimum", 1060, 685);
@@ -100,15 +108,15 @@ public sealed class VisualTests
             Assert.IsFalse(model.Files[0].SelectionEnabled);
             await RenderAsync(media, "05-conversion-progress");
             model.Files[1].IsSelected = false;
-            Assert.AreEqual("Skipped", model.Files[1].Status);
+            Assert.AreEqual("Conversion skipped", model.Files[1].Status);
             model.CancelFileCommand.Execute(model.Files[0]);
             await recovering.Task;
             Assert.AreEqual(1, runtime.Conversions);
             releaseRecovery.SetResult();
             await operation;
             Assert.AreEqual(2, runtime.Conversions);
-            Assert.AreEqual("Cancelled", model.Files[0].Status);
-            Assert.AreEqual("Completed", model.Files[2].Status);
+            Assert.AreEqual("Conversion cancelled", model.Files[0].Status);
+            Assert.AreEqual("Converted", model.Files[2].Status);
             Assert.IsTrue(shell.CanNavigate);
             model.Focused = model.Files[2];
             await RenderAsync(media, "06-results");

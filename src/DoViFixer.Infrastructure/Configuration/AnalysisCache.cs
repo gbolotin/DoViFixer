@@ -12,6 +12,25 @@ internal sealed class AnalysisCache(StorageOptions options, ILogger<AnalysisCach
     // Bump when probing, evidence interpretation, or analysis algorithms change.
     private const int version = 1;
     private sealed record Entry(int Version, MediaAnalysis Analysis);
+    public Task<int> ClearAsync(CancellationToken cancellationToken)
+    {
+        cancellationToken.ThrowIfCancellationRequested();
+        string directory = Path.Combine(options.RootDirectory, "cache", "analysis");
+        int removed = 0;
+        if (Directory.Exists(directory))
+        {
+            foreach (string path in Directory.EnumerateFiles(directory, "*.json", SearchOption.TopDirectoryOnly))
+            {
+                cancellationToken.ThrowIfCancellationRequested();
+                File.Delete(path);
+                removed++;
+            }
+        }
+
+        logger.LogInformation("Cleared {Count} analysis cache entries", removed);
+        return Task.FromResult(removed);
+    }
+
     public async Task<MediaAnalysis?> ReadAsync(FileIdentity source, AnalysisMethod method, CancellationToken cancellationToken)
     {
         cancellationToken.ThrowIfCancellationRequested();
@@ -83,7 +102,7 @@ internal sealed class AnalysisCache(StorageOptions options, ILogger<AnalysisCach
         }
     }
 
-    private static bool Cacheable(MediaAnalysis analysis) => analysis.Evidence.Error is null && MediaClassifier.Classify(analysis.Media, analysis.Evidence).Verdict is AnalysisVerdict.NotApplicable or AnalysisVerdict.Mel or AnalysisVerdict.SimpleFel or AnalysisVerdict.ComplexFel && (analysis.Evidence.Method != AnalysisMethod.MetadataOnly || analysis.Media.Profile != DolbyVisionProfile.Profile7);
+    private static bool Cacheable(MediaAnalysis analysis) => analysis.Evidence.Error is null && MediaClassifier.Classify(analysis.Media, analysis.Evidence).Verdict is AnalysisVerdict.NotApplicable or AnalysisVerdict.Mel or AnalysisVerdict.SimpleFel or AnalysisVerdict.ComplexFel or AnalysisVerdict.FelUnclassified && (analysis.Evidence.Method != AnalysisMethod.MetadataOnly || analysis.Media.Profile != DolbyVisionProfile.Profile7);
     private string CachePath(FileIdentity source, AnalysisMethod method)
     {
         string key = Convert.ToHexString(SHA256.HashData(Encoding.UTF8.GetBytes(Path.GetFullPath(source.Path).ToUpperInvariant())));

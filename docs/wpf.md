@@ -14,11 +14,21 @@ Media selection and focus are separate. Scan uses sampled inspection; standard/d
 
 The right panel keeps source analysis and the last conversion outcome, including real output, verification and original-retention messages. Analysis failure remains distinct from Unknown and Complex FEL. Scan/inspection do not erase earlier conversion outcomes. Classification text accompanies every color.
 
+The Media table combines **Status / Action** in one column. New rows show Not scanned with an empty Profile / Type. Successful scan or inspection clears the row status; Profile / Type and the evidence in file details describe the result. Queued and active rows offer Skip and Cancel. Failed/cancelled analysis names the operation and offers Retry for that row using the same analysis method. Conversion results use Converted, Converted with warnings, or an operation-specific failure/cancellation label. Published output offers Open folder for the clicked row, independently of focus. Retrying analysis never executes conversion.
+
 Backup and restore present exact plans before execution. Cleanup lists exact discovered `.dovi` and `.bak.dovi_convert` files and requires a plan-specific `APPROVE` code. Tool setup displays package/version, source, destination, scope, elevation, digest and unavailable routes, then independently validates installed tools before resuming the requested workflow. No tools are installed at startup.
 
 Preferences are persisted in one settings update after path validation. Existing console settings and tool paths remain compatible. Clearing the temporary directory restores the system default. Serilog is owned by the Prism root, uses the shared history/audit conventions and does not replace the static logger. App logs use a separate filename prefix in the shared Logs directory.
 
+Newly added files appear before automatic sampled scanning begins. Only newly added rows enter the sequential queue, with Queued/Scanning/result states, pending-item skipping, per-file cancellation and whole-batch cancellation. Valid cached analysis is checked before native-tool setup. Scan remains available for retries; full and deep inspection remain explicit actions. Adding files and starting other operations remain disabled while the batch is active.
+
+Settings includes **Automatically scan added files** and **Use cached analysis results**, both enabled by default, including for existing settings files. Save defaults persists both options. Disabling cache reuse bypasses saved evidence and probe metadata for subsequent analysis and conversion planning; successful fresh analysis is still saved. **Clear analysis cache** immediately removes saved analysis JSON entries only, leaving media, settings, current displayed results and in-progress temporary files intact. An ongoing operation in another process may save fresh entries after clearing. No automatic size or age limit is applied.
+
 ## Verification
+
+Full inspection supports a verified metadata-free ending: it checks the complete Annex B access-unit map against uniquely timestamped video packets, sorts into presentation order, and requires RPU-bearing frames to form a continuous prefix with no enhancement-layer data in the remaining tail. Leading/internal gaps, duplicate metadata, missing delimiters and unsupported multi-slice layouts remain blocked. Deep inspection still requires complete per-frame RPU coverage.
+
+The result explains the tail frame count. When FEL is identified but brightness metadata is insufficient, the UI reports **FEL · Unclassified** and conversion requires explicit FEL approval (or `--force` in the CLI). Conversion retains the base-layer ending without synthesizing metadata. Verification checks original/output RPU counts and positions, output RPU profiles, absence of enhancement-layer data in the converted tail case, and the existing base-layer SHA-256, timestamps and retained-track checks. Coverage checking adds an extra sequential read of extracted video and packet timestamps. The ordinary safe-extraction fallback still applies.
 
 ```powershell
 dotnet build DoViFixer.sln --no-restore

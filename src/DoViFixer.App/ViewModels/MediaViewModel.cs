@@ -74,6 +74,9 @@ public sealed class MediaViewModel : OperationViewModel
         });
 
         OpenOutputCommand = new(() => dialogs.OpenFolder(Path.GetDirectoryName(Focused!.Result!.Output!)!), () => Focused?.Result?.Output is not null);
+        OpenRowOutputCommand = new(row => dialogs.OpenFolder(Path.GetDirectoryName(row.Result!.Output!)!), row => row is not null && row.CanOpenResult);
+        RetryAnalysisCommand = new(row => RunAsync((token, progress) => AnalyzeRowsAsync([row], row.LastAnalysisMethod!.Value, progress, token)), row => IsIdle && Files.Contains(row) && row.CanRetryAnalysis && row.LastAnalysisMethod is not null);
+        InspectIncompleteCommand = new(row => RunAsync((token, progress) => AnalyzeRowsAsync([row], AnalysisMethod.FullRpu, progress, token)), row => IsIdle && Files.Contains(row) && row.CanInspectIncomplete);
         OpenLogsCommand = new(dialogs.OpenLogs);
         ToggleSelectAllCommand = new(ToggleSelectAll, () => IsIdle && Files.Any(row => row.SelectionEnabled));
         ClearAllCommand = new(ClearAll, () => IsIdle && Files.Count > 0);
@@ -274,9 +277,24 @@ public sealed class MediaViewModel : OperationViewModel
     }
 
     private bool CanOperate() => IsIdle && Files.Any(f => f.IsSelected);
+    public AsyncCommand<MediaRow> RetryAnalysisCommand
+    {
+        get;
+    }
+    public AsyncCommand<MediaRow> InspectIncompleteCommand
+    {
+        get;
+    }
+    public DelegateCommand<MediaRow> OpenRowOutputCommand
+    {
+        get;
+    }
     protected override void CommandsChanged()
     {
         RaisePropertyChanged(nameof(CanInspect));
+        RetryAnalysisCommand?.RaiseCanExecuteChanged();
+        InspectIncompleteCommand?.RaiseCanExecuteChanged();
+        OpenRowOutputCommand?.RaiseCanExecuteChanged();
         ToggleSelectAllCommand?.RaiseCanExecuteChanged();
         ClearAllCommand?.RaiseCanExecuteChanged();
         AddFilesCommand?.RaiseCanExecuteChanged();
@@ -290,8 +308,9 @@ public sealed class MediaViewModel : OperationViewModel
         BrowseDestinationCommand?.RaiseCanExecuteChanged();
     }
 
-    public Task AddAsync(IEnumerable<string> inputs) => RunAsync(async (token, _) =>
+    public Task AddAsync(IEnumerable<string> inputs) => RunAsync(async (token, progress) =>
     {
+        var added = new List<MediaRow>();
         foreach (string input in inputs)
         {
             try
@@ -307,6 +326,7 @@ public sealed class MediaViewModel : OperationViewModel
                     var row = new MediaRow(path);
                     row.PropertyChanged += OnRowPropertyChanged;
                     Files.Add(row);
+                    added.Add(row);
                 }
             }
             catch (Exception ex)when (ex is not OperationCanceledException)
@@ -319,6 +339,10 @@ public sealed class MediaViewModel : OperationViewModel
         InvalidatePlan();
         RaisePropertyChanged(nameof(SelectionSummary));
         RaisePropertyChanged(nameof(AllFilesSelected));
+        if (added.Count > 0 && (await settings.ReadAsync(token)).AutomaticallyScanAddedFiles)
+        {
+            await AnalyzeRowsAsync(added.ToArray(), AnalysisMethod.SampledRpu, progress, token);
+        }
     });
     private void OnRowPropertyChanged(object? sender, PropertyChangedEventArgs e)
     {
@@ -330,6 +354,13 @@ public sealed class MediaViewModel : OperationViewModel
         if (e.PropertyName == nameof(MediaRow.Result))
         {
             OpenOutputCommand.RaiseCanExecuteChanged();
+        }
+
+        if (e.PropertyName is nameof(MediaRow.CanRetryAnalysis) or nameof(MediaRow.CanOpenResult) or nameof(MediaRow.CanInspectIncomplete))
+        {
+            InspectIncompleteCommand.RaiseCanExecuteChanged();
+            RetryAnalysisCommand.RaiseCanExecuteChanged();
+            OpenRowOutputCommand.RaiseCanExecuteChanged();
         }
 
         if (e.PropertyName != nameof(MediaRow.IsSelected))
@@ -373,10 +404,10 @@ public sealed class MediaViewModel : OperationViewModel
         row.IsPending = false;
         row.IsSelected = false;
         row.SelectionEnabled = false;
-        row.Status = "Skipped";
+        row.Status = $"{row.OperationName} skipped";
     }
 
-    private void BeginBatch(MediaRow[] rows)
+    private void BeginBatch(MediaRow[] rows, string pendingStatus = "Queued")
     {
         control = new(rows.Select(r => r.Path));
         foreach (var row in Files)
@@ -386,9 +417,10 @@ public sealed class MediaViewModel : OperationViewModel
 
         foreach (var row in rows)
         {
+            row.CanRetryAnalysis = false;
             row.IsPending = true;
             row.SelectionEnabled = true;
-            row.Status = "Pending";
+            row.Status = pendingStatus;
         }
     }
 
@@ -400,7 +432,8 @@ public sealed class MediaViewModel : OperationViewModel
         {
             if (row.IsPending)
             {
-                row.Status = "Not run";
+                row.Status = $"{row.OperationName} cancelled";
+                row.CanRetryAnalysis = row.LastAnalysisMethod is not null;
             }
 
             row.IsPending = false;
@@ -428,26 +461,41 @@ public sealed class MediaViewModel : OperationViewModel
 
     private Task AnalyzeAsync(AnalysisMethod method) => RunAsync(async (token, progress) =>
     {
+        await AnalyzeRowsAsync(Files.Where(r => r.IsSelected).ToArray(), method, progress, token);
+    });
+
+    private async Task AnalyzeRowsAsync(MediaRow[] rows, AnalysisMethod method, IProgress<OperationProgress> progress, CancellationToken token)
+    {
         InvalidatePlan();
-        if (!await dependencies.EnsureAsync(progress, token))
+        bool? toolsReady = null;
+        foreach (var row in rows)
         {
-            Status = "Required tools are unavailable.";
-            return;
+            row.LastAnalysisMethod = method;
         }
 
-        var rows = Files.Where(r => r.IsSelected).ToArray();
-        BeginBatch(rows);
+        BeginBatch(rows, "Queued");
         try
         {
             var results = await batch.ExecuteAsync(rows, row => row.Path, async (row, itemToken) =>
             {
-                Activate(row, method == AnalysisMethod.SampledRpu ? "Analyzing" : "Inspecting");
+                Activate(row, method == AnalysisMethod.SampledRpu ? "Scanning" : "Inspecting");
                 row.AnalysisError = null;
                 row.Notice = "";
                 row.Analysis = null;
                 try
                 {
-                    row.Analysis = await Task.Run(() => inspection.InspectAsync(row.Path, method, null, itemToken), itemToken);
+                    row.Analysis = await Task.Run(() => inspection.ReadCachedAsync(row.Path, method, itemToken), itemToken);
+                    if (row.Analysis is null)
+                    {
+                        toolsReady ??= await dependencies.EnsureAsync(progress, itemToken);
+                        if (toolsReady != true)
+                        {
+                            return new FileResult(row.Path, OperationStatus.Failed, null, "Required tools are unavailable. Open Settings to configure tools, then retry Scan.");
+                        }
+
+                        row.Analysis = await Task.Run(() => inspection.InspectAsync(row.Path, method, null, itemToken), itemToken);
+                    }
+
                     return new FileResult(row.Path, row.Analysis.Verdict == AnalysisVerdict.AnalysisFailed ? OperationStatus.Failed : OperationStatus.Completed, null, row.Analysis.Reason);
                 }
                 finally
@@ -457,7 +505,8 @@ public sealed class MediaViewModel : OperationViewModel
             }, control!, new InlineProgress<FileResult>(result =>
             {
                 var row = rows.First(r => r.Path == result.Input);
-                row.Status = result.Status.ToString();
+                row.Status = result.Status == OperationStatus.Completed ? "" : $"{row.OperationName} {result.Status.ToString().ToLowerInvariant()}";
+                row.CanRetryAnalysis = result.Status is OperationStatus.Failed or OperationStatus.Cancelled;
                 if (result.Status == OperationStatus.Failed)
                 {
                     row.AnalysisError = result.Message;
@@ -467,13 +516,13 @@ public sealed class MediaViewModel : OperationViewModel
                     row.Notice = result.Message;
                 }
             }), token);
-            Status = Summary(results);
+            Status = $"{(method == AnalysisMethod.SampledRpu ? "Scan" : "Inspection")}: {Summary(results)}";
         }
         finally
         {
             EndBatch();
         }
-    });
+    }
 
     private async Task OpenConversionAsync()
     {
@@ -521,7 +570,8 @@ public sealed class MediaViewModel : OperationViewModel
                 row.Notice = "";
                 row.Analysis = plan.Analysis;
                 row.PlannedOutput = plan.Output;
-                row.Status = "Ready";
+                row.CanRetryAnalysis = false;
+                row.Status = "Ready to convert";
             }
 
             foreach (var skipped in prepared.Skipped)
@@ -529,12 +579,12 @@ public sealed class MediaViewModel : OperationViewModel
                 var row = rows.FirstOrDefault(r => r.Path == skipped.Input);
                 if (row is not null)
                 {
-                    row.Status = skipped.Status.ToString();
+                    row.Status = $"Conversion planning {skipped.Status.ToString().ToLowerInvariant()}";
                     row.Notice = skipped.Message;
                 }
             }
 
-            string warnings = string.Join("\n", plans.Where(p => p.Analysis.Verdict is AnalysisVerdict.SimpleFel or AnalysisVerdict.ComplexFel).Select(p => $"WARNING — {Path.GetFileName(p.Analysis.Media.Source.Path)}: Enhancement-layer picture data will be lost."));
+            string warnings = string.Join("\n", plans.Where(p => p.Analysis.Verdict is AnalysisVerdict.SimpleFel or AnalysisVerdict.ComplexFel or AnalysisVerdict.FelUnclassified).Select(p => $"WARNING — {Path.GetFileName(p.Analysis.Media.Source.Path)}: Enhancement-layer picture data will be lost."));
             Review = (warnings.Length == 0 ? "" : warnings + "\n\n") + string.Join("\n\n", plans.Select(p => $"{p.Analysis.Media.Source.Path}\n→ {p.Output}\nTarget: {(p.Target == ConversionTarget.Profile81 ? "Profile 8.1" : "HDR10")}; original: {(p.DeleteBackup ? "replace after verification; original backup deleted" : "retained")}\n" + (p.Archive is null ? "" : $"EL archive: {p.Archive}\n") + p.Decision)) + "\n" + string.Join("\n", prepared.Skipped.Select(s => $"{s.Input}: {s.Status} — {s.Message}"));
             Status = $"{plans.Count} plans ready for approval.";
         }
@@ -557,13 +607,18 @@ public sealed class MediaViewModel : OperationViewModel
 
         OptionsOpen = false;
         var rows = Files.Where(r => approved.Any(p => p.Analysis.Media.Source.Path == r.Path)).ToArray();
+        foreach (var row in rows)
+        {
+            row.LastAnalysisMethod = null;
+        }
+
         BeginBatch(rows);
         try
         {
             var result = await batch.ExecuteAsync(approved, p => p.Analysis.Media.Source.Path, async (plan, itemToken) =>
             {
                 var row = rows.First(r => r.Path == plan.Analysis.Media.Source.Path);
-                Activate(row, "Preparing");
+                Activate(row, "Preparing conversion");
                 try
                 {
                     return await Task.Run(() => conversion.ExecuteAsync(plan, progress, itemToken), itemToken);
@@ -576,9 +631,14 @@ public sealed class MediaViewModel : OperationViewModel
             {
                 var row = rows.First(r => r.Path == result.Input);
                 row.Result = result;
-                row.Status = result.Status.ToString();
+                row.Status = result.Status switch
+                {
+                    OperationStatus.Completed => "Converted",
+                    OperationStatus.Partial => "Converted with warnings",
+                    _ => $"Conversion {result.Status.ToString().ToLowerInvariant()}"
+                };
             }), token);
-            Status = Summary(result);
+            Status = $"Conversion: {Summary(result)}";
         }
         finally
         {
