@@ -76,6 +76,7 @@ public sealed class VisualTests
             });
             await RenderAsync(media, "02-incomplete-scan");
             model.Files[1].Analysis = completeAnalysis;
+            model.Files[2].IsSelected = true;
             await model.ConvertCommand.ExecuteAsync();
             await RenderAsync(media, "03-conversion-review");
             await RenderAsync(media, "04-review-minimum", 1060, 685);

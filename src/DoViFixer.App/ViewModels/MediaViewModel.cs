@@ -368,7 +368,7 @@ public sealed class MediaViewModel : OperationViewModel
             return;
         }
 
-        if (IsBusy && !row.IsSelected)
+        if (IsBusy && !row.IsSelected && row.IsPending)
         {
             Skip(row);
         }
@@ -424,13 +424,15 @@ public sealed class MediaViewModel : OperationViewModel
         }
     }
 
-    private void EndBatch()
+    private void EndBatch(bool deselectPending = true)
     {
         control?.Dispose();
         control = null;
         foreach (var row in Files)
         {
-            if (row.IsPending)
+            bool wasPending = row.IsPending;
+            bool wasActive = row.IsActive;
+            if (wasPending)
             {
                 row.Status = $"{row.OperationName} cancelled";
                 row.CanRetryAnalysis = row.LastAnalysisMethod is not null;
@@ -439,6 +441,11 @@ public sealed class MediaViewModel : OperationViewModel
             row.IsPending = false;
             row.IsActive = false;
             row.SelectionEnabled = true;
+
+            if (deselectPending && (wasPending || wasActive))
+            {
+                row.IsSelected = false;
+            }
         }
     }
 
@@ -467,6 +474,8 @@ public sealed class MediaViewModel : OperationViewModel
     private async Task AnalyzeRowsAsync(MediaRow[] rows, AnalysisMethod method, IProgress<OperationProgress> progress, CancellationToken token)
     {
         InvalidatePlan();
+        var userSettings = await settings.ReadAsync(token);
+        bool autoSelect = userSettings.AutoSelectAfterScan;
         bool? toolsReady = null;
         foreach (var row in rows)
         {
@@ -515,12 +524,24 @@ public sealed class MediaViewModel : OperationViewModel
                 {
                     row.Notice = result.Message;
                 }
+
+                if (result.Status == OperationStatus.Completed)
+                {
+                    if (autoSelect)
+                    {
+                        row.IsSelected = ConversionPolicy.ShouldAutoSelectAfterAnalysis(row.Analysis);
+                    }
+                }
+                else if (result.Status is OperationStatus.Failed or OperationStatus.Cancelled)
+                {
+                    row.IsSelected = false;
+                }
             }), token);
             Status = $"{(method == AnalysisMethod.SampledRpu ? "Scan" : "Inspection")}: {Summary(results)}";
         }
         finally
         {
-            EndBatch();
+            EndBatch(deselectPending: true);
         }
     }
 

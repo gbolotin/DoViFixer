@@ -16,6 +16,12 @@ public sealed record UserSettings
         init;
     }
     = true;
+    public bool AutoSelectAfterScan
+    {
+        get;
+        init;
+    }
+    = true;
     public ImmutableDictionary<NativeTool, string> ToolPaths
     {
         get;

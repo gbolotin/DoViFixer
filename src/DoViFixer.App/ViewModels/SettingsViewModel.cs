@@ -15,6 +15,7 @@ public sealed class SettingsViewModel : OperationViewModel
     private bool createArchive;
     private bool automaticallyScanAddedFiles = true;
     private bool useCachedResults = true;
+    private bool autoSelectAfterScan = true;
     private NativeTool selectedTool;
     private string toolPath = "";
     public SettingsViewModel(SettingsService settings, DependencyService dependencies, DependencySetup setup, IUserDialogs dialogs, IAnalysisCache cache)
@@ -29,6 +30,7 @@ public sealed class SettingsViewModel : OperationViewModel
             CreateArchive = value.CreateElArchive;
             AutomaticallyScanAddedFiles = value.AutomaticallyScanAddedFiles;
             UseCachedResults = value.UseCachedResults;
+            AutoSelectAfterScan = value.AutoSelectAfterScan;
             Status = "Settings loaded.";
         }), () => IsIdle);
         BrowseTemporaryCommand = new(() => Temporary = dialogs.PickFolder() ?? Temporary);
@@ -41,7 +43,7 @@ public sealed class SettingsViewModel : OperationViewModel
                 throw new InvalidOperationException("Choose an output folder.");
             }
 
-            await Task.Run(() => settings.SetPreferencesAsync(Temporary, OtherFolder ? Destination : null, ReplaceOriginal, CreateArchive, token, AutomaticallyScanAddedFiles, UseCachedResults), token);
+            await Task.Run(() => settings.SetPreferencesAsync(Temporary, OtherFolder ? Destination : null, ReplaceOriginal, CreateArchive, token, AutomaticallyScanAddedFiles, UseCachedResults, AutoSelectAfterScan), token);
             Status = "Defaults saved. Each conversion still requires plan approval.";
         }), () => IsIdle);
         ClearCacheCommand = new(() => RunAsync(async (token, _) =>
@@ -91,6 +93,11 @@ public sealed class SettingsViewModel : OperationViewModel
     {
         get => useCachedResults;
         set => SetProperty(ref useCachedResults, value);
+    }
+    public bool AutoSelectAfterScan
+    {
+        get => autoSelectAfterScan;
+        set => SetProperty(ref autoSelectAfterScan, value);
     }
     public AsyncCommand ClearCacheCommand
     {

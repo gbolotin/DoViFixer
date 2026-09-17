@@ -119,7 +119,8 @@ internal sealed class TestRuntime : IFileDiscovery, IFileOperations, IMediaProbe
     public Task<MediaInfo> ProbeAsync(string path, CancellationToken cancellationToken)
     {
         Probes++;
-        return Task.FromResult(new MediaInfo(Identify(path), DolbyVisionProfile.Profile7, "HEVC", 0, 3840, 2160, 1000, 23.976, 5772, 0, 1000, [], 0, 1, null, "{}"));
+        var profile = path.Contains("P81") ? DolbyVisionProfile.Profile81 : path.Contains("Sdr") ? DolbyVisionProfile.None : DolbyVisionProfile.Profile7;
+        return Task.FromResult(new MediaInfo(Identify(path), profile, "HEVC", 0, 3840, 2160, 1000, 23.976, 5772, 0, 1000, [], 0, 1, null, "{}"));
     }
 
     public Func<CancellationToken, Task>? DuringAnalysis

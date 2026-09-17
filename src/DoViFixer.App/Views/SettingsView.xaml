@@ -39,6 +39,7 @@
                                Margin="0,18,0,8" />
                     <CheckBox Content="Automatically scan added files" IsChecked="{Binding AutomaticallyScanAddedFiles}" />
                     <CheckBox Content="Use cached analysis results" IsChecked="{Binding UseCachedResults}" />
+                    <CheckBox Content="Automatically select convertible files after scan" IsChecked="{Binding AutoSelectAfterScan}" />
                     <TextBlock Text="When disabled, scans and inspections analyze files again. Successful results are still saved."
                                TextWrapping="Wrap"
                                Foreground="{StaticResource Muted}" />

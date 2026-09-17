@@ -31,5 +31,15 @@ public static class ConversionPolicy
         };
     }
 
+    public static bool ShouldAutoSelectAfterAnalysis(MediaAnalysis? analysis)
+    {
+        if (analysis is null || analysis.Media.Profile != DolbyVisionProfile.Profile7 || !analysis.Media.VideoCodec.Contains("HEVC", StringComparison.OrdinalIgnoreCase))
+        {
+            return false;
+        }
+
+        return analysis.Verdict is AnalysisVerdict.Mel or AnalysisVerdict.SimpleFel;
+    }
+
     public static long RequiredScratchBytes(long sourceLength) => checked(sourceLength * 8 + (1L << 30));
 }

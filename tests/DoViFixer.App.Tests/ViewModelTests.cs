@@ -289,4 +289,134 @@ public sealed class ViewModelTests
         Assert.IsTrue(runtime.Reviews[0].Contains(@"C:\Media\Mountain.dovi"));
         Assert.AreEqual("Backup not approved.", model.Status);
     }
+
+    [TestMethod]
+    public async Task ScanAutoSelectsMelAndSimpleFelAndDeselectsOthers()
+    {
+        using var runtime = new TestRuntime();
+        var model = runtime.Container.Resolve<MediaViewModel>();
+        await model.AddAsync([
+            @"C:\Media\Mountain.mkv",
+            @"C:\Media\Ocean.mkv",
+            @"C:\Media\City.mkv",
+            @"C:\Media\P81.mkv",
+            @"C:\Media\Sdr.mkv"
+        ]);
+
+        Assert.HasCount(5, model.Files);
+        Assert.IsTrue(model.Files[0].IsSelected, "Mountain (MEL) must be selected.");
+        Assert.IsTrue(model.Files[1].IsSelected, "Ocean (Simple FEL) must be selected.");
+        Assert.IsFalse(model.Files[2].IsSelected, "City (Complex FEL) must be deselected.");
+        Assert.IsFalse(model.Files[3].IsSelected, "P81 (Profile 8.1) must be deselected.");
+        Assert.IsFalse(model.Files[4].IsSelected, "Sdr (No DV) must be deselected.");
+
+        Assert.AreEqual("2 selected / 3 excluded", model.SelectionSummary);
+        Assert.IsNull(model.AllFilesSelected);
+    }
+
+    [TestMethod]
+    public async Task ScanCancellationDeselectsCancelledAndUnprocessedRows()
+    {
+        using var runtime = new TestRuntime();
+        var started = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+        runtime.DuringAnalysis = async token =>
+        {
+            started.TrySetResult();
+            await Task.Delay(Timeout.Infinite, token);
+        };
+        var model = runtime.Container.Resolve<MediaViewModel>();
+        var adding = model.AddAsync([@"C:\Media\Mountain.mkv", @"C:\Media\Ocean.mkv"]);
+        await started.Task.WaitAsync(TimeSpan.FromSeconds(10));
+        Assert.IsTrue(model.IsBusy);
+        runtime.DuringAnalysis = null;
+        model.CancelCommand.Execute();
+        await adding.WaitAsync(TimeSpan.FromSeconds(10));
+
+        Assert.IsTrue(model.IsIdle);
+        Assert.IsFalse(model.Files[0].IsSelected, "Cancelled active row must be deselected.");
+        Assert.IsFalse(model.Files[1].IsSelected, "Unprocessed pending row must be deselected.");
+        Assert.AreEqual("0 selected / 2 excluded", model.SelectionSummary);
+        Assert.IsFalse(model.AllFilesSelected);
+    }
+
+    [TestMethod]
+    public async Task InspectIncompletePromotesRowToSelectedWhenMel()
+    {
+        using var runtime = new TestRuntime();
+        var model = runtime.Container.Resolve<MediaViewModel>();
+        await model.AddAsync([@"C:\Media\Mountain.mkv"]);
+        var row = model.Files[0];
+
+        var evidence = row.Analysis!.Evidence with
+        {
+            SuccessfulSamples = 9,
+            SampleDiagnostics = "Sample 10/10 at 01:39:51: No RPU was found in input file"
+        };
+        row.Analysis = DoViFixer.Domain.Analysis.MediaClassifier.Classify(row.Analysis.Media, evidence);
+        row.IsSelected = false;
+
+        Assert.IsTrue(row.CanInspectIncomplete);
+        Assert.IsFalse(row.IsSelected);
+
+        await model.InspectIncompleteCommand.ExecuteAsync(row);
+
+        Assert.AreEqual(DoViFixer.Domain.Analysis.AnalysisVerdict.Mel, row.Analysis!.Verdict);
+        Assert.IsTrue(row.IsSelected, "Promoting incomplete scan to MEL via inspection must select the row.");
+        Assert.AreEqual("1 selected / 0 excluded", model.SelectionSummary);
+    }
+
+    [TestMethod]
+    public async Task CachedScanResultsApplyIdenticalAutoSelection()
+    {
+        using var runtime = new TestRuntime();
+        var model = runtime.Container.Resolve<MediaViewModel>();
+        await model.AddAsync([@"C:\Media\Mountain.mkv", @"C:\Media\City.mkv"]);
+        Assert.IsTrue(model.Files[0].IsSelected);
+        Assert.IsFalse(model.Files[1].IsSelected);
+
+        model.ClearAllCommand.Execute();
+        runtime.Ready = false;
+
+        await model.AddAsync([@"C:\Media\Mountain.mkv", @"C:\Media\City.mkv"]);
+        Assert.IsTrue(model.Files[0].IsSelected, "Cached MEL must be selected.");
+        Assert.IsFalse(model.Files[1].IsSelected, "Cached Complex FEL must be deselected.");
+    }
+
+    [TestMethod]
+    public async Task DisabledAutoSelectPreservesInitialSelection()
+    {
+        using var runtime = new TestRuntime();
+        var settings = runtime.Container.Resolve<SettingsViewModel>();
+        await settings.LoadCommand.ExecuteAsync();
+        Assert.IsTrue(settings.AutoSelectAfterScan);
+        settings.AutoSelectAfterScan = false;
+        await settings.SaveCommand.ExecuteAsync();
+        Assert.IsFalse(runtime.Settings.AutoSelectAfterScan);
+
+        var model = runtime.Container.Resolve<MediaViewModel>();
+        await model.AddAsync([@"C:\Media\Mountain.mkv", @"C:\Media\City.mkv"]);
+        Assert.IsTrue(model.Files[0].IsSelected, "Mountain must remain selected when auto-select is disabled.");
+        Assert.IsTrue(model.Files[1].IsSelected, "City must remain selected when auto-select is disabled.");
+        Assert.AreEqual("2 selected / 0 excluded", model.SelectionSummary);
+        Assert.IsTrue(model.AllFilesSelected);
+    }
+
+    [TestMethod]
+    public async Task AddingFilesPreservesExistingRowSelectionAndFocus()
+    {
+        using var runtime = new TestRuntime();
+        var model = runtime.Container.Resolve<MediaViewModel>();
+        await model.AddAsync([@"C:\Media\Mountain.mkv", @"C:\Media\Ocean.mkv"]);
+
+        model.Files[0].IsSelected = false;
+        model.Focused = model.Files[0];
+
+        await model.AddAsync([@"C:\Media\City.mkv"]);
+
+        Assert.HasCount(3, model.Files);
+        Assert.IsFalse(model.Files[0].IsSelected, "Existing Mountain row selection must not change.");
+        Assert.IsTrue(model.Files[1].IsSelected, "Existing Ocean row selection must not change.");
+        Assert.IsFalse(model.Files[2].IsSelected, "New City row must be deselected based on scan result.");
+        Assert.AreSame(model.Files[0], model.Focused, "Focused row must remain unchanged when adding files.");
+    }
 }

@@ -80,4 +80,46 @@ public sealed class ClassificationTests
         Assert.ThrowsExactly<ArgumentOutOfRangeException>(() => MediaClassifier.PqToNits(4096));
         Assert.ThrowsExactly<OverflowException>(() => ConversionPolicy.RequiredScratchBytes(long.MaxValue));
     }
+
+    [TestMethod]
+    public void ShouldAutoSelectAfterAnalysisSelectsOnlyMelAndSimpleFel()
+    {
+        Assert.IsFalse(ConversionPolicy.ShouldAutoSelectAfterAnalysis(null));
+
+        var mel = MediaClassifier.Classify(Media(null), new(AnalysisMethod.FullRpu, EnhancementLayer.Mel, 24, null, 1, 1));
+        Assert.IsTrue(ConversionPolicy.ShouldAutoSelectAfterAnalysis(mel));
+
+        var simpleFel = MediaClassifier.Classify(Media(), new(AnalysisMethod.FullRpu, EnhancementLayer.Fel, 24, 1000, 1, 1));
+        Assert.IsTrue(ConversionPolicy.ShouldAutoSelectAfterAnalysis(simpleFel));
+
+        var complexFel = MediaClassifier.Classify(Media(), new(AnalysisMethod.FullRpu, EnhancementLayer.Fel, 24, 1100, 1, 1));
+        Assert.IsFalse(ConversionPolicy.ShouldAutoSelectAfterAnalysis(complexFel));
+
+        var unknown = MediaClassifier.Classify(Media(null), new(AnalysisMethod.FullRpu, EnhancementLayer.Fel, 24, 1000, 1, 1));
+        Assert.IsFalse(ConversionPolicy.ShouldAutoSelectAfterAnalysis(unknown));
+
+        var failed = MediaClassifier.Classify(Media(), new(AnalysisMethod.FullRpu, EnhancementLayer.Fel, 0, null, 0, 1, "failed"));
+        Assert.IsFalse(ConversionPolicy.ShouldAutoSelectAfterAnalysis(failed));
+
+        var nonDvMedia = Media() with
+        {
+            Profile = DolbyVisionProfile.None
+        };
+        var nonDv = MediaClassifier.Classify(nonDvMedia, new(AnalysisMethod.FullRpu, EnhancementLayer.Mel, 24, null, 1, 1));
+        Assert.IsFalse(ConversionPolicy.ShouldAutoSelectAfterAnalysis(nonDv));
+
+        var profile81Media = Media() with
+        {
+            Profile = DolbyVisionProfile.Profile81
+        };
+        var profile81 = MediaClassifier.Classify(profile81Media, new(AnalysisMethod.FullRpu, EnhancementLayer.Mel, 24, null, 1, 1));
+        Assert.IsFalse(ConversionPolicy.ShouldAutoSelectAfterAnalysis(profile81));
+
+        var nonHevcMedia = Media() with
+        {
+            VideoCodec = "AVC"
+        };
+        var nonHevc = MediaClassifier.Classify(nonHevcMedia, new(AnalysisMethod.FullRpu, EnhancementLayer.Mel, 24, null, 1, 1));
+        Assert.IsFalse(ConversionPolicy.ShouldAutoSelectAfterAnalysis(nonHevc));
+    }
 }
