@@ -7,7 +7,7 @@ namespace DoViFixer.Application.Abstractions;
 public interface IMediaProbe
 {
     Task<MediaInfo> ProbeAsync(string path, CancellationToken cancellationToken);
-    Task<RpuEvidence> AnalyzeAsync(MediaInfo media, AnalysisMethod method, ITemporaryWorkspace workspace, CancellationToken cancellationToken);
+    Task<RpuEvidence> AnalyzeAsync(MediaInfo media, AnalysisMethod method, ITemporaryWorkspace workspace, CancellationToken cancellationToken, IProgress<OperationProgress>? progress = null);
 }
 
 public interface IVideoProcessor

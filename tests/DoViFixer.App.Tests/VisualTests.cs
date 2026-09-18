@@ -76,6 +76,45 @@ public sealed class VisualTests
             });
             await RenderAsync(media, "02-incomplete-scan");
             model.Files[1].Analysis = completeAnalysis;
+            foreach (var command in new[] { model.ScanCommand, model.InspectCommand, model.DeepInspectCommand })
+            {
+                await runtime.ClearAsync(default);
+                model.ToggleSelectAllCommand.Execute();
+                if (model.AllFilesSelected != true)
+                {
+                    model.ToggleSelectAllCommand.Execute();
+                }
+
+                var analyzing = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+                var releaseAnalysis = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+                int analyses = 0;
+                runtime.DuringAnalysis = async token =>
+                {
+                    if (++analyses == 2)
+                    {
+                        analyzing.SetResult();
+                        await releaseAnalysis.Task.WaitAsync(token);
+                    }
+                };
+                var analysisOperation = command.ExecuteAsync();
+                await analyzing.Task;
+                Assert.AreEqual(1, model.BatchProgress.Processed);
+                Assert.AreEqual(3, model.BatchProgress.Total);
+                await RenderAsync(media, $"02-{model.BatchProgress.Operation}-progress", 1060, 685);
+                Assert.AreEqual(40, model.BatchProgress.StagePercent);
+                releaseAnalysis.SetResult();
+                await analysisOperation;
+                Assert.AreEqual(100, model.BatchProgress.Percent);
+                runtime.DuringAnalysis = null;
+            }
+
+            await runtime.ClearAsync(default);
+            foreach (var row in model.Files)
+            {
+                row.IsSelected = true;
+            }
+
+            await model.ScanCommand.ExecuteAsync();
             model.Files[2].IsSelected = true;
             await model.ConvertCommand.ExecuteAsync();
             await RenderAsync(media, "03-conversion-review");
@@ -108,6 +147,9 @@ public sealed class VisualTests
             Assert.IsTrue(model.Files[0].IsActive);
             Assert.IsFalse(model.Files[0].SelectionEnabled);
             await RenderAsync(media, "05-conversion-progress");
+            await RenderAsync(media, "05-conversion-progress-minimum", 1060, 685);
+            Assert.AreSame(model.Files[0], model.BatchProgress.CurrentJob);
+            Assert.AreEqual(45, model.BatchProgress.StagePercent);
             model.Files[1].IsSelected = false;
             Assert.AreEqual("Conversion skipped", model.Files[1].Status);
             model.CancelFileCommand.Execute(model.Files[0]);
@@ -118,6 +160,8 @@ public sealed class VisualTests
             Assert.AreEqual(2, runtime.Conversions);
             Assert.AreEqual("Conversion cancelled", model.Files[0].Status);
             Assert.AreEqual("Converted", model.Files[2].Status);
+            Assert.AreEqual(3, model.BatchProgress.Processed, "Cancelled, skipped and completed files all finish their batch slot.");
+            Assert.AreEqual(100, model.BatchProgress.Percent);
             Assert.IsTrue(shell.CanNavigate);
             model.Focused = model.Files[2];
             await RenderAsync(media, "06-results");

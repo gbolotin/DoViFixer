@@ -133,9 +133,10 @@ internal sealed class TestRuntime : IFileDiscovery, IFileOperations, IMediaProbe
         get;
         private set;
     }
-    public async Task<RpuEvidence> AnalyzeAsync(MediaInfo media, AnalysisMethod method, ITemporaryWorkspace workspace, CancellationToken cancellationToken)
+    public async Task<RpuEvidence> AnalyzeAsync(MediaInfo media, AnalysisMethod method, ITemporaryWorkspace workspace, CancellationToken cancellationToken, IProgress<OperationProgress>? progress = null)
     {
         Analyses++;
+        progress?.Report(new(Guid.Empty, method == AnalysisMethod.SampledRpu ? "Analyzing sample 5 of 10" : "Extracting video", media.Source.Path, 40));
         if (DuringAnalysis is not null)
         {
             await DuringAnalysis(cancellationToken);

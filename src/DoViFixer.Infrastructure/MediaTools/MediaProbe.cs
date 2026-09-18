@@ -1,6 +1,7 @@
 using System.Globalization;
 using DoViFixer.Application.Abstractions;
 using DoViFixer.Application.Dependencies;
+using DoViFixer.Application.Operations;
 using DoViFixer.Domain.Analysis;
 using DoViFixer.Domain.Media;
 using DoViFixer.Infrastructure.MediaTools.DoviTool;
@@ -24,18 +25,21 @@ internal sealed class MediaProbe(IToolCatalog tools, IProcessRunner processes, I
         return MediaMetadataParser.Parse(identity, mkv.Output, mi.Output);
     }
 
-    public async Task<RpuEvidence> AnalyzeAsync(MediaInfo media, AnalysisMethod method, ITemporaryWorkspace workspace, CancellationToken cancellationToken)
+    public async Task<RpuEvidence> AnalyzeAsync(MediaInfo media, AnalysisMethod method, ITemporaryWorkspace workspace, CancellationToken cancellationToken, IProgress<OperationProgress>? progress = null)
     {
         try
         {
             if (method is AnalysisMethod.FullRpu or AnalysisMethod.DeepInspection)
             {
+                progress?.Report(new(Guid.Empty, "Extracting video", media.Source.Path, 0));
                 string raw = workspace.File("inspection.hevc");
                 await processes.RunAsync(new(tools.GetPath(NativeTool.MkvExtract), new[]
                 {
-                    media.Source.Path, "tracks", $"{media.VideoTrackId}:{raw}"
-                }, AllowWarnings: true), cancellationToken);
+                    "--gui-mode", media.Source.Path, "tracks", $"{media.VideoTrackId}:{raw}"
+                }, AllowWarnings: true, OutputLine: new MkvProgress(progress, Guid.Empty, "Extracting video", media.Source.Path).Report), cancellationToken);
+                progress?.Report(new(Guid.Empty, "Analyzing RPU metadata", media.Source.Path));
                 var evidence = await AnalyzeRawAsync(raw, method, workspace, cancellationToken);
+                progress?.Report(new(Guid.Empty, "Checking frame coverage", media.Source.Path));
                 long frames = await CountFramesAsync(media.Source.Path, cancellationToken);
                 if (evidence.Frames != frames)
                 {
@@ -61,6 +65,7 @@ internal sealed class MediaProbe(IToolCatalog tools, IProcessRunner processes, I
 
                 if (method == AnalysisMethod.DeepInspection)
                 {
+                    progress?.Report(new(Guid.Empty, "Measuring base-layer brightness", media.Source.Path));
                     return await AnalyzeBrightnessAsync(raw, workspace, cancellationToken);
                 }
 
@@ -76,6 +81,7 @@ internal sealed class MediaProbe(IToolCatalog tools, IProcessRunner processes, I
             var diagnostics = new List<string>();
             for (int i = 0; i < 10; i++)
             {
+                progress?.Report(new(Guid.Empty, $"Analyzing sample {i + 1} of 10", media.Source.Path, i * 10));
                 string raw = workspace.File($"sample-{i}.hevc");
                 try
                 {
@@ -99,6 +105,7 @@ internal sealed class MediaProbe(IToolCatalog tools, IProcessRunner processes, I
                 }
             }
 
+            progress?.Report(new(Guid.Empty, "Samples analyzed", media.Source.Path, 100));
             EnhancementLayer layer = samples.Any(s => s.Layer == EnhancementLayer.Fel) ? EnhancementLayer.Fel : samples.Count > 0 && samples.All(s => s.Layer == EnhancementLayer.Mel) ? EnhancementLayer.Mel : EnhancementLayer.Unknown;
             return new(method, layer, samples.Sum(s => s.Frames), samples.Select(s => s.PeakNits).Max(), samples.Count, 10, SampleDiagnostics: diagnostics.Count == 0 ? null : string.Join("\n", diagnostics));
         }

@@ -114,6 +114,9 @@ public sealed class ViewModelTests
         Assert.AreEqual("Queued", model.Files[1].Status);
         Assert.AreEqual(1, runtime.Analyses);
         Assert.IsTrue(model.IsBusy);
+        Assert.AreEqual(2, model.BatchProgress.Total);
+        Assert.AreEqual(0, model.BatchProgress.Processed);
+        Assert.AreSame(model.Files[0], model.BatchProgress.CurrentJob);
         runtime.DuringAnalysis = null;
         if (cancelAll)
         {
@@ -130,6 +133,8 @@ public sealed class ViewModelTests
         Assert.AreEqual(cancelAll ? "Scan cancelled" : "", model.Files[1].Status);
         Assert.IsTrue(model.Files[0].CanRetryAnalysis);
         Assert.AreEqual(cancelAll ? 1 : 2, runtime.Analyses);
+        Assert.AreEqual(cancelAll ? 50 : 100, model.BatchProgress.Percent);
+        Assert.IsFalse(model.BatchProgress.IsRunning);
         Assert.AreEqual(0, runtime.FullAnalyses);
     }
 

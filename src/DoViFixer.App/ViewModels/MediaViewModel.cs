@@ -75,14 +75,15 @@ public sealed class MediaViewModel : OperationViewModel
 
         OpenOutputCommand = new(() => dialogs.OpenFolder(Path.GetDirectoryName(Focused!.Result!.Output!)!), () => Focused?.Result?.Output is not null);
         OpenRowOutputCommand = new(row => dialogs.OpenFolder(Path.GetDirectoryName(row.Result!.Output!)!), row => row is not null && row.CanOpenResult);
-        RetryAnalysisCommand = new(row => RunAsync((token, progress) => AnalyzeRowsAsync([row], row.LastAnalysisMethod!.Value, progress, token)), row => IsIdle && Files.Contains(row) && row.CanRetryAnalysis && row.LastAnalysisMethod is not null);
-        InspectIncompleteCommand = new(row => RunAsync((token, progress) => AnalyzeRowsAsync([row], AnalysisMethod.FullRpu, progress, token)), row => IsIdle && Files.Contains(row) && row.CanInspectIncomplete);
+        RetryAnalysisCommand = new(row => RunAsync((token, _) => AnalyzeRowsAsync([row], row.LastAnalysisMethod!.Value, token)), row => IsIdle && Files.Contains(row) && row.CanRetryAnalysis && row.LastAnalysisMethod is not null);
+        InspectIncompleteCommand = new(row => RunAsync((token, _) => AnalyzeRowsAsync([row], AnalysisMethod.FullRpu, token)), row => IsIdle && Files.Contains(row) && row.CanInspectIncomplete);
         OpenLogsCommand = new(dialogs.OpenLogs);
         ToggleSelectAllCommand = new(ToggleSelectAll, () => IsIdle && Files.Any(row => row.SelectionEnabled));
         ClearAllCommand = new(ClearAll, () => IsIdle && Files.Count > 0);
     }
 
     public ObservableCollection<MediaRow> Files { get; } = [];
+    public BatchProgressViewModel BatchProgress { get; } = new();
 
     public MediaRow? Focused
     {
@@ -308,7 +309,7 @@ public sealed class MediaViewModel : OperationViewModel
         BrowseDestinationCommand?.RaiseCanExecuteChanged();
     }
 
-    public Task AddAsync(IEnumerable<string> inputs) => RunAsync(async (token, progress) =>
+    public Task AddAsync(IEnumerable<string> inputs) => RunAsync(async (token, _) =>
     {
         var added = new List<MediaRow>();
         foreach (string input in inputs)
@@ -341,7 +342,7 @@ public sealed class MediaViewModel : OperationViewModel
         RaisePropertyChanged(nameof(AllFilesSelected));
         if (added.Count > 0 && (await settings.ReadAsync(token)).AutomaticallyScanAddedFiles)
         {
-            await AnalyzeRowsAsync(added.ToArray(), AnalysisMethod.SampledRpu, progress, token);
+            await AnalyzeRowsAsync(added.ToArray(), AnalysisMethod.SampledRpu, token);
         }
     });
     private void OnRowPropertyChanged(object? sender, PropertyChangedEventArgs e)
@@ -407,9 +408,11 @@ public sealed class MediaViewModel : OperationViewModel
         row.Status = $"{row.OperationName} skipped";
     }
 
-    private void BeginBatch(MediaRow[] rows, string pendingStatus = "Queued")
+    private void BeginBatch(MediaRow[] rows, string operationName)
     {
         control = new(rows.Select(r => r.Path));
+        BatchProgress.Begin(rows.Length, operationName);
+        Status = $"{operationName} batch in progress.";
         foreach (var row in Files)
         {
             row.SelectionEnabled = false;
@@ -420,12 +423,13 @@ public sealed class MediaViewModel : OperationViewModel
             row.CanRetryAnalysis = false;
             row.IsPending = true;
             row.SelectionEnabled = true;
-            row.Status = pendingStatus;
+            row.Status = "Queued";
         }
     }
 
     private void EndBatch(bool deselectPending = true)
     {
+        BatchProgress.End();
         control?.Dispose();
         control = null;
         foreach (var row in Files)
@@ -449,29 +453,21 @@ public sealed class MediaViewModel : OperationViewModel
         }
     }
 
-    private static void Activate(MediaRow row, string stage)
+    private IProgress<OperationProgress> Activate(MediaRow row, string stage)
     {
         row.IsPending = false;
         row.IsActive = true;
         row.SelectionEnabled = false;
         row.Status = stage;
+        return BatchProgress.Start(row, stage);
     }
 
-    protected override void OnProgress(OperationProgress progress)
+    private Task AnalyzeAsync(AnalysisMethod method) => RunAsync(async (token, _) =>
     {
-        var row = Files.FirstOrDefault(f => f.IsActive);
-        if (row is not null && (progress.File == row.Path || progress.File == row.Path + ".bak.dovi_convert"))
-        {
-            row.Status = progress.Stage;
-        }
-    }
-
-    private Task AnalyzeAsync(AnalysisMethod method) => RunAsync(async (token, progress) =>
-    {
-        await AnalyzeRowsAsync(Files.Where(r => r.IsSelected).ToArray(), method, progress, token);
+        await AnalyzeRowsAsync(Files.Where(r => r.IsSelected).ToArray(), method, token);
     });
 
-    private async Task AnalyzeRowsAsync(MediaRow[] rows, AnalysisMethod method, IProgress<OperationProgress> progress, CancellationToken token)
+    private async Task AnalyzeRowsAsync(MediaRow[] rows, AnalysisMethod method, CancellationToken token)
     {
         InvalidatePlan();
         var userSettings = await settings.ReadAsync(token);
@@ -482,12 +478,12 @@ public sealed class MediaViewModel : OperationViewModel
             row.LastAnalysisMethod = method;
         }
 
-        BeginBatch(rows, "Queued");
+        BeginBatch(rows, method == AnalysisMethod.SampledRpu ? "Scan" : method == AnalysisMethod.DeepInspection ? "Deep inspection" : "Inspection");
         try
         {
             var results = await batch.ExecuteAsync(rows, row => row.Path, async (row, itemToken) =>
             {
-                Activate(row, method == AnalysisMethod.SampledRpu ? "Scanning" : "Inspecting");
+                var jobProgress = Activate(row, method == AnalysisMethod.SampledRpu ? "Scanning" : "Inspecting");
                 row.AnalysisError = null;
                 row.Notice = "";
                 row.Analysis = null;
@@ -496,13 +492,13 @@ public sealed class MediaViewModel : OperationViewModel
                     row.Analysis = await Task.Run(() => inspection.ReadCachedAsync(row.Path, method, itemToken), itemToken);
                     if (row.Analysis is null)
                     {
-                        toolsReady ??= await dependencies.EnsureAsync(progress, itemToken);
+                        toolsReady ??= await dependencies.EnsureAsync(jobProgress, itemToken);
                         if (toolsReady != true)
                         {
                             return new FileResult(row.Path, OperationStatus.Failed, null, "Required tools are unavailable. Open Settings to configure tools, then retry Scan.");
                         }
 
-                        row.Analysis = await Task.Run(() => inspection.InspectAsync(row.Path, method, null, itemToken), itemToken);
+                        row.Analysis = await Task.Run(() => inspection.InspectAsync(row.Path, method, null, itemToken, jobProgress), itemToken);
                     }
 
                     return new FileResult(row.Path, row.Analysis.Verdict == AnalysisVerdict.AnalysisFailed ? OperationStatus.Failed : OperationStatus.Completed, null, row.Analysis.Reason);
@@ -513,6 +509,7 @@ public sealed class MediaViewModel : OperationViewModel
                 }
             }, control!, new InlineProgress<FileResult>(result =>
             {
+                BatchProgress.Complete();
                 var row = rows.First(r => r.Path == result.Input);
                 row.Status = result.Status == OperationStatus.Completed ? "" : $"{row.OperationName} {result.Status.ToString().ToLowerInvariant()}";
                 row.CanRetryAnalysis = result.Status is OperationStatus.Failed or OperationStatus.Cancelled;
@@ -617,7 +614,7 @@ public sealed class MediaViewModel : OperationViewModel
             }
         }
     });
-    private Task ConvertAsync() => RunAsync(async (token, progress) =>
+    private Task ConvertAsync() => RunAsync(async (token, _) =>
     {
         var approved = plans.ToArray();
         plans.Clear();
@@ -633,16 +630,16 @@ public sealed class MediaViewModel : OperationViewModel
             row.LastAnalysisMethod = null;
         }
 
-        BeginBatch(rows);
+        BeginBatch(rows, "Conversion");
         try
         {
             var result = await batch.ExecuteAsync(approved, p => p.Analysis.Media.Source.Path, async (plan, itemToken) =>
             {
                 var row = rows.First(r => r.Path == plan.Analysis.Media.Source.Path);
-                Activate(row, "Preparing conversion");
+                var jobProgress = Activate(row, "Preparing conversion");
                 try
                 {
-                    return await Task.Run(() => conversion.ExecuteAsync(plan, progress, itemToken), itemToken);
+                    return await Task.Run(() => conversion.ExecuteAsync(plan, jobProgress, itemToken), itemToken);
                 }
                 finally
                 {
@@ -650,6 +647,7 @@ public sealed class MediaViewModel : OperationViewModel
                 }
             }, control!, new InlineProgress<FileResult>(result =>
             {
+                BatchProgress.Complete();
                 var row = rows.First(r => r.Path == result.Input);
                 row.Result = result;
                 row.Status = result.Status switch

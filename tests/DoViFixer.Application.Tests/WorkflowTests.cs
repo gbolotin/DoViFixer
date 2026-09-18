@@ -583,7 +583,7 @@ public sealed class WorkflowTests
             });
         }
 
-        public Task<RpuEvidence> AnalyzeAsync(MediaInfo media, AnalysisMethod method, ITemporaryWorkspace workspace, CancellationToken cancellationToken)
+        public Task<RpuEvidence> AnalyzeAsync(MediaInfo media, AnalysisMethod method, ITemporaryWorkspace workspace, CancellationToken cancellationToken, IProgress<OperationProgress>? progress = null)
         {
             AnalyzeCalls++;
             if (method == AnalysisMethod.DeepInspection)

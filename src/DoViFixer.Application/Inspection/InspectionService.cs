@@ -9,9 +9,9 @@ using Microsoft.Extensions.Logging;
 namespace DoViFixer.Application.Inspection;
 public sealed class InspectionService(DependencyService dependencies, IMediaProbe probe, ITemporaryWorkspaceFactory workspaces, ISettingsStore settings, IFileOperations files, ILogger<InspectionService> logger, IAnalysisCache cache)
 {
-    public Task<MediaAnalysis> InspectAsync(string path, AnalysisMethod method, string? temporaryDirectory, CancellationToken cancellationToken) => OperationLog.RunAsync(logger, "Inspect", Guid.NewGuid(), path, async () =>
+    public Task<MediaAnalysis> InspectAsync(string path, AnalysisMethod method, string? temporaryDirectory, CancellationToken cancellationToken, IProgress<OperationProgress>? progress = null) => OperationLog.RunAsync(logger, "Inspect", Guid.NewGuid(), path, async () =>
     {
-        var analysis = await InspectCoreAsync(path, method, temporaryDirectory, cancellationToken);
+        var analysis = await InspectCoreAsync(path, method, temporaryDirectory, cancellationToken, progress);
         logger.LogInformation("Analysis {Profile} {Verdict}; method {Method}; frames {Frames}; {Reason}", analysis.Media.Profile, analysis.Verdict, analysis.Evidence.Method, analysis.Evidence.Frames, analysis.Reason);
         return analysis;
     }, cancellationToken, result => result.Verdict == AnalysisVerdict.AnalysisFailed ? OperationStatus.Failed : OperationStatus.Completed);
@@ -54,7 +54,7 @@ public sealed class InspectionService(DependencyService dependencies, IMediaProb
         return null;
     }
 
-    private async Task<MediaAnalysis> InspectCoreAsync(string path, AnalysisMethod method, string? temporaryDirectory, CancellationToken cancellationToken)
+    private async Task<MediaAnalysis> InspectCoreAsync(string path, AnalysisMethod method, string? temporaryDirectory, CancellationToken cancellationToken, IProgress<OperationProgress>? progress)
     {
         cancellationToken.ThrowIfCancellationRequested();
         var snapshot = await settings.ReadAsync(cancellationToken);
@@ -71,6 +71,7 @@ public sealed class InspectionService(DependencyService dependencies, IMediaProb
         var previous = snapshot.UseCachedResults
             ? await cache.ReadAsync(source, AnalysisMethod.SampledRpu, cancellationToken) ?? await cache.ReadAsync(source, AnalysisMethod.FullRpu, cancellationToken) ?? await cache.ReadAsync(source, AnalysisMethod.DeepInspection, cancellationToken)
             : null;
+        progress?.Report(new(Guid.Empty, "Reading media information", path));
         var media = previous is null ? await probe.ProbeAsync(source.Path, cancellationToken) : previous.Media with
         {
             Source = source
@@ -85,7 +86,8 @@ public sealed class InspectionService(DependencyService dependencies, IMediaProb
 
         long space = method is AnalysisMethod.FullRpu or AnalysisMethod.DeepInspection ? ConversionPolicy.RequiredScratchBytes(media.Source.Length) : 1L << 30;
         await using var workspace = await workspaces.CreateAsync(space, temporaryDirectory ?? snapshot.TemporaryDirectory, cancellationToken);
-        var evidence = await probe.AnalyzeAsync(media, method, workspace, cancellationToken);
+        var evidence = await probe.AnalyzeAsync(media, method, workspace, cancellationToken, progress);
+        progress?.Report(new(Guid.Empty, "Saving analysis", path));
         var analysis = MediaClassifier.Classify(media, evidence);
         await cache.WriteAsync(analysis, cancellationToken);
         return analysis;
