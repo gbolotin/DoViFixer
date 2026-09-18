@@ -101,7 +101,7 @@ public sealed class VisualTests
                 Assert.AreEqual(1, model.BatchProgress.Processed);
                 Assert.AreEqual(3, model.BatchProgress.Total);
                 await RenderAsync(media, $"02-{model.BatchProgress.Operation}-progress", 1060, 685);
-                Assert.AreEqual(40, model.BatchProgress.StagePercent);
+                Assert.AreEqual(40, model.BatchProgress.CurrentJob!.Progress.StagePercent);
                 releaseAnalysis.SetResult();
                 await analysisOperation;
                 Assert.AreEqual(100, model.BatchProgress.Percent);
@@ -149,7 +149,7 @@ public sealed class VisualTests
             await RenderAsync(media, "05-conversion-progress");
             await RenderAsync(media, "05-conversion-progress-minimum", 1060, 685);
             Assert.AreSame(model.Files[0], model.BatchProgress.CurrentJob);
-            Assert.AreEqual(45, model.BatchProgress.StagePercent);
+            Assert.AreEqual(45, model.Files[0].Progress.StagePercent);
             model.Files[1].IsSelected = false;
             Assert.AreEqual("Conversion skipped", model.Files[1].Status);
             model.CancelFileCommand.Execute(model.Files[0]);

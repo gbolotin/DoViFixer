@@ -4,6 +4,8 @@ using DoViFixer.Domain.Analysis;
 namespace DoViFixer.App.ViewModels;
 public sealed class MediaRow(string path) : BindableBase
 {
+    public ProgressViewModel Progress { get; } = new();
+
     private bool selected = true;
     private bool selectionEnabled = true;
     private bool pending;

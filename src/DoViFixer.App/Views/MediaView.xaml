@@ -135,7 +135,7 @@
                                             </TextBlock.Style>
                                         </TextBlock>
                                         <StackPanel Margin="0,4,4,4" Visibility="{Binding IsActive, Converter={StaticResource Visible}}">
-                                            <StackPanel DataContext="{Binding DataContext.BatchProgress, RelativeSource={RelativeSource AncestorType=UserControl}}">
+                                            <StackPanel DataContext="{Binding Progress}">
                                                 <TextBlock Text="{Binding Stage}"
                                                            TextTrimming="CharacterEllipsis"
                                                            ToolTip="{Binding Stage}" />

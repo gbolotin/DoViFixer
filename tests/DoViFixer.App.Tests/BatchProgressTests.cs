@@ -24,23 +24,24 @@ public sealed class BatchProgressTests
             context.Drain();
             Assert.AreEqual(25, model.Percent);
             Assert.AreEqual("1 of 4 files processed", model.Summary);
-            Assert.AreEqual(75, model.StagePercent);
+            Assert.AreEqual(75, row.Progress.StagePercent);
             Assert.AreSame(row, model.CurrentJob);
-            Assert.IsFalse(model.IsIndeterminate);
+            Assert.IsFalse(row.Progress.IsIndeterminate);
 
             progress.Report(new(Guid.NewGuid(), "Converting metadata", row.Path));
             context.Drain();
-            Assert.IsTrue(model.IsIndeterminate);
-            Assert.AreEqual("Working…", model.StageProgressText);
+            Assert.IsTrue(row.Progress.IsIndeterminate);
+            Assert.AreEqual("Working…", row.Progress.StageProgressText);
             Assert.AreEqual(25, model.Percent);
 
             model.Complete();
+            Assert.IsFalse(row.Progress.IsIndeterminate);
             model.Complete();
             model.Complete();
             Assert.AreEqual(100, model.Percent);
             model.End();
             Assert.IsFalse(model.IsRunning);
-            Assert.IsFalse(model.IsIndeterminate);
+            Assert.IsFalse(row.Progress.IsIndeterminate);
             Assert.IsNull(model.CurrentJob);
             model.Begin(2, "Scan");
             Assert.AreEqual(0, model.Percent);
@@ -70,17 +71,67 @@ public sealed class BatchProgressTests
             model.Start(second, "Inspecting");
             context.Drain();
             Assert.AreSame(second, model.CurrentJob);
-            Assert.AreEqual("Inspecting", model.Stage);
+            Assert.AreEqual("Inspecting", second.Progress.Stage);
+            Assert.AreEqual("Scanning", first.Progress.Stage);
+            Assert.AreEqual(0, first.Progress.StagePercent);
+            Assert.IsFalse(first.Progress.IsIndeterminate);
             Assert.AreEqual(50, model.Percent);
 
             model.End();
+            Assert.IsFalse(second.Progress.IsIndeterminate);
             model.Begin(1, "Scan");
             model.Start(first, "Retrying");
             oldProgress.Report(new(Guid.Empty, "Old sample", first.Path, 100));
             context.Drain();
-            Assert.AreEqual("Retrying", model.Stage);
-            Assert.IsTrue(model.IsIndeterminate);
+            Assert.AreEqual("Retrying", first.Progress.Stage);
+            Assert.IsTrue(first.Progress.IsIndeterminate);
             Assert.AreEqual(0, model.Percent);
+        }
+        finally
+        {
+            SynchronizationContext.SetSynchronizationContext(previous);
+        }
+    }
+
+    [TestMethod]
+    [DataRow("Complete")]
+    [DataRow("End")]
+    [DataRow("Begin")]
+    public void FinishingOrReplacingBatchStopsRowProgressAndRejectsQueuedReports(string transition)
+    {
+        var previous = SynchronizationContext.Current;
+        var context = new QueuedContext();
+        SynchronizationContext.SetSynchronizationContext(context);
+        try
+        {
+            var model = new BatchProgressViewModel();
+            var row = new MediaRow("first.mkv") { LastAnalysisMethod = null };
+            model.Begin(1, "Conversion");
+            var progress = model.Start(row, "Preparing conversion");
+            progress.Report(new(Guid.Empty, "Extracting video", row.Path, 35));
+            context.Drain();
+            Assert.AreEqual("Extracting video", row.Status);
+
+            progress.Report(new(Guid.Empty, "Late report", row.Path, 100));
+            switch (transition)
+            {
+                case "Complete":
+                    model.Complete();
+                    break;
+                case "End":
+                    model.End();
+                    break;
+                case "Begin":
+                    model.Begin(2, "Scan");
+                    break;
+            }
+
+            context.Drain();
+            Assert.IsNull(model.CurrentJob);
+            Assert.IsFalse(row.Progress.IsIndeterminate);
+            Assert.AreEqual(35, row.Progress.StagePercent);
+            Assert.AreEqual("Extracting video", row.Progress.Stage);
+            Assert.AreEqual("Extracting video", row.Status);
         }
         finally
         {
