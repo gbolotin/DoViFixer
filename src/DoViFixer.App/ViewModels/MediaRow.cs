@@ -35,6 +35,7 @@ public sealed class MediaRow(string path) : BindableBase
     private MediaAnalysis? analysis;
     private FileResult? result;
     private string? analysisError;
+    private string? warning;
     private string notice = "";
     public string Path
     {
@@ -42,6 +43,16 @@ public sealed class MediaRow(string path) : BindableBase
     }
     = path;
     public string Name => System.IO.Path.GetFileName(Path);
+    public string? Warning
+    {
+        get => warning;
+        set
+        {
+            SetProperty(ref warning, value);
+            RaisePropertyChanged(nameof(HasWarning));
+        }
+    }
+    public bool HasWarning => !string.IsNullOrWhiteSpace(warning);
     public bool IsSelected
     {
         get => selected;

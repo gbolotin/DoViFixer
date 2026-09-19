@@ -255,17 +255,50 @@ public sealed class ViewModelTests
         Assert.AreEqual(1, runtime.FullAnalyses);
         Assert.AreEqual(0, runtime.Conversions);
         Assert.IsTrue(model.Review.Contains("Enhancement-layer picture data will be lost"));
+        Assert.IsTrue(model.Files.Single().HasWarning);
+        Assert.AreEqual("Enhancement-layer picture data will be lost.", model.Files.Single().Warning);
         Assert.IsTrue(model.ApproveCommand.CanExecute(null));
         model.Hdr10 = true;
         Assert.IsFalse(model.ApproveCommand.CanExecute(null));
+        Assert.IsFalse(model.Files.Single().HasWarning);
+        Assert.IsNull(model.Files.Single().Warning);
         await model.ApproveCommand.ExecuteAsync();
         Assert.AreEqual(0, runtime.Conversions);
         await model.ReviewCommand.ExecuteAsync();
+        Assert.IsTrue(model.Files.Single().HasWarning);
+        Assert.AreEqual("Enhancement-layer picture data will be lost.", model.Files.Single().Warning);
         await model.ApproveCommand.ExecuteAsync();
         Assert.AreEqual(1, runtime.Conversions);
         Assert.AreEqual("Converted", model.Files.Single().Status);
+        Assert.IsFalse(model.Files.Single().HasWarning);
+        Assert.IsNull(model.Files.Single().Warning);
         Assert.IsTrue(model.Files.Single().CanOpenResult);
         Assert.IsTrue(model.Files.Single().Result!.Output!.EndsWith(" - HDR10.mkv"));
+    }
+
+    [TestMethod]
+    public async Task PrepareAsyncSetsWarningTriangleOnFelRowsAndInvalidateClearsIt()
+    {
+        using var runtime = new TestRuntime();
+        var model = runtime.Container.Resolve<MediaViewModel>();
+        await model.AddAsync([@"C:\Media\Mountain.mkv", @"C:\Media\Ocean.mkv", @"C:\Media\City.mkv"]);
+        model.Files[2].IsSelected = true;
+        await model.ConvertCommand.ExecuteAsync();
+
+        Assert.IsFalse(model.Files[0].HasWarning);
+        Assert.IsNull(model.Files[0].Warning);
+
+        Assert.IsTrue(model.Files[1].HasWarning);
+        Assert.AreEqual("Enhancement-layer picture data will be lost.", model.Files[1].Warning);
+
+        Assert.IsTrue(model.Files[2].HasWarning);
+        Assert.AreEqual("Enhancement-layer picture data will be lost.", model.Files[2].Warning);
+
+        model.OtherFolder = true;
+        Assert.IsFalse(model.Files[1].HasWarning);
+        Assert.IsNull(model.Files[1].Warning);
+        Assert.IsFalse(model.Files[2].HasWarning);
+        Assert.IsNull(model.Files[2].Warning);
     }
 
     [TestMethod]

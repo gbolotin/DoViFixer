@@ -117,12 +117,9 @@
                                         <ColumnDefinition Width="Auto" />
                                     </Grid.ColumnDefinitions>
                                     <StackPanel VerticalAlignment="Center">
-                                        <TextBlock Text="{Binding Status}"
-                                                   TextWrapping="Wrap"
-                                                   VerticalAlignment="Center"
-                                                   ToolTip="{Binding Details}">
-                                            <TextBlock.Style>
-                                                <Style TargetType="TextBlock">
+                                        <StackPanel Orientation="Horizontal" VerticalAlignment="Center">
+                                            <StackPanel.Style>
+                                                <Style TargetType="StackPanel">
                                                     <Style.Triggers>
                                                         <DataTrigger Binding="{Binding IsActive}" Value="True">
                                                             <Setter Property="Visibility" Value="Collapsed" />
@@ -132,8 +129,20 @@
                                                         </DataTrigger>
                                                     </Style.Triggers>
                                                 </Style>
-                                            </TextBlock.Style>
-                                        </TextBlock>
+                                            </StackPanel.Style>
+                                            <TextBlock Text="{Binding Status}"
+                                                       TextWrapping="Wrap"
+                                                       VerticalAlignment="Center"
+                                                       ToolTip="{Binding Details}" />
+                                            <TextBlock Text="⚠"
+                                                       Foreground="#FFD166"
+                                                       FontWeight="SemiBold"
+                                                       Margin="6,0,0,0"
+                                                       VerticalAlignment="Center"
+                                                       Visibility="{Binding HasWarning, Converter={StaticResource Visible}}"
+                                                       ToolTip="{Binding Warning}"
+                                                       AutomationProperties.Name="Conversion warning" />
+                                        </StackPanel>
                                         <StackPanel Margin="0,4,4,4" Visibility="{Binding IsActive, Converter={StaticResource Visible}}">
                                             <StackPanel DataContext="{Binding Progress}">
                                                 <TextBlock Text="{Binding Stage}"
@@ -273,13 +282,13 @@
                         <CheckBox Content="Create enhancement-layer archive (EL)" IsChecked="{Binding CreateArchive}" />
                     </StackPanel>
                 </Grid>
-                <ScrollViewer MaxHeight="80"
+                <!--<ScrollViewer MaxHeight="80"
                               VerticalScrollBarVisibility="Auto"
                               Margin="0,12">
                     <TextBlock Text="{Binding Review}"
                                Foreground="#FFD166"
                                TextWrapping="Wrap" />
-                </ScrollViewer>
+                </ScrollViewer>-->
                 <StackPanel Orientation="Horizontal" HorizontalAlignment="Right">
                     <Button Content="Close options" Command="{Binding CloseOptionsCommand}" />
                     <Button Content="Review changes" Command="{Binding ReviewCommand}" />

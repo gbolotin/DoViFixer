@@ -389,6 +389,7 @@ public sealed class MediaViewModel : OperationViewModel
         foreach (var row in Files)
         {
             row.PlannedOutput = "";
+            row.Warning = null;
         }
 
         Review = "Review the current options to prepare exact output paths and warnings.";
@@ -590,6 +591,9 @@ public sealed class MediaViewModel : OperationViewModel
                 row.PlannedOutput = plan.Output;
                 row.CanRetryAnalysis = false;
                 row.Status = "Ready to convert";
+                row.Warning = plan.Analysis.Verdict is AnalysisVerdict.SimpleFel or AnalysisVerdict.ComplexFel or AnalysisVerdict.FelUnclassified
+                    ? "Enhancement-layer picture data will be lost."
+                    : null;
             }
 
             foreach (var skipped in prepared.Skipped)
@@ -599,6 +603,7 @@ public sealed class MediaViewModel : OperationViewModel
                 {
                     row.Status = $"Conversion planning {skipped.Status.ToString().ToLowerInvariant()}";
                     row.Notice = skipped.Message;
+                    row.Warning = null;
                 }
             }
 
@@ -628,6 +633,7 @@ public sealed class MediaViewModel : OperationViewModel
         foreach (var row in rows)
         {
             row.LastAnalysisMethod = null;
+            row.Warning = null;
         }
 
         BeginBatch(rows, "Conversion");
