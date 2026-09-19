@@ -299,7 +299,7 @@
             </StackPanel>
         </Border>
         <StackPanel Grid.Row="3" Margin="0,8,0,0">
-            <Border Style="{StaticResource Card}" Visibility="{Binding IsBusy, Converter={StaticResource Visible}}">
+            <Border Style="{StaticResource Card}" Visibility="{Binding BatchProgress.IsRunning, Converter={StaticResource Visible}}">
                 <Grid>
                     <Grid.ColumnDefinitions>
                         <ColumnDefinition Width="*" />
@@ -307,38 +307,53 @@
                     </Grid.ColumnDefinitions>
                     <StackPanel Margin="0,0,24,0">
                         <DockPanel Margin="0,0,0,8">
-                            <TextBlock Text="{Binding ActiveProgressText}"
+                            <TextBlock Text="{Binding BatchProgress.Percent, StringFormat={}{0:0}%}"
                                        DockPanel.Dock="Right"
                                        Foreground="{StaticResource Accent}"
                                        FontSize="22"
                                        Margin="12,0,0,0" />
-                            <TextBlock Text="{Binding ActiveProgressTitle}"
+                            <TextBlock Text="{Binding BatchProgress.Operation}"
                                        VerticalAlignment="Center"
-                                       FontSize="22"
+                                       FontSize="22" 
                                        Foreground="{StaticResource Muted}" />
                         </DockPanel>
-                        <ProgressBar Value="{Binding ActiveProgressPercent, Mode=OneWay}"
-                                     IsIndeterminate="{Binding ActiveProgressIndeterminate}"
+                         <ProgressBar Value="{Binding BatchProgress.Percent, Mode=OneWay}"
                                      Height="8"
-                                     AutomationProperties.Name="Overall progress" />
-                        <TextBlock Text="{Binding ActiveProgressSummary}"
+                                     AutomationProperties.Name="Overall batch progress" />
+                        <TextBlock Text="{Binding BatchProgress.Summary}"
                                    Margin="0,8,0,0"
                                    Foreground="{StaticResource Muted}"
-                                   ToolTip="{Binding ActiveProgressToolTip}" />
+                                   ToolTip="Processed includes completed, failed, cancelled and skipped files. Each file has equal weight in the batch." />
                     </StackPanel>
-                    <Button Grid.Column="1"
+                    <Button Grid.Column="1" 
                             VerticalAlignment="Center"
                             Content="Cancel"
                             Command="{Binding CancelCommand}"
                             Margin="0" />
                 </Grid>
             </Border>
-            <StackPanel Margin="0,8,0,0"
-                        Orientation="Horizontal"
-                        TextBlock.Foreground="{StaticResource Muted}">
+            <StackPanel>
+                <StackPanel.Style>
+                    <Style TargetType="StackPanel">
+                        <Style.Triggers>
+                            <DataTrigger Binding="{Binding BatchProgress.IsRunning}" Value="True">
+                                <Setter Property="Visibility" Value="Collapsed" />
+                            </DataTrigger>
+                        </Style.Triggers>
+                    </Style>
+                </StackPanel.Style>
+                <ProgressBar Value="{Binding Percent, Mode=OneWay}"
+                             IsIndeterminate="{Binding Indeterminate}"
+                             Visibility="{Binding IsBusy, Converter={StaticResource Visible}}" />
+                <Button Content="Cancel"
+                        Command="{Binding CancelCommand}"
+                        HorizontalAlignment="Right"
+                        Visibility="{Binding IsBusy, Converter={StaticResource Visible}}" />
+            </StackPanel>
+            <StackPanel Margin="0,8,0,0" Orientation="Horizontal" TextBlock.Foreground="{StaticResource Muted}">
                 <TextBlock Text="{Binding SelectionSummary}" />
-                <TextBlock Text=" | " />
-                <TextBlock Text="{Binding Status}"/>
+                <TextBlock Text=" | "/>
+                <TextBlock Text="{Binding Status}" TextWrapping="Wrap"/>
             </StackPanel>
         </StackPanel>
     </Grid>
