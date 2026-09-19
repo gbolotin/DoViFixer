@@ -348,7 +348,7 @@ public sealed class ViewModelTests
         Assert.IsFalse(model.Files[3].IsSelected, "P81 (Profile 8.1) must be deselected.");
         Assert.IsFalse(model.Files[4].IsSelected, "Sdr (No DV) must be deselected.");
 
-        Assert.AreEqual("2 selected / 3 excluded", model.SelectionSummary);
+        Assert.AreEqual("5 items | 2 items selected", model.SelectionSummary);
         Assert.IsNull(model.AllFilesSelected);
     }
 
@@ -373,7 +373,7 @@ public sealed class ViewModelTests
         Assert.IsTrue(model.IsIdle);
         Assert.IsFalse(model.Files[0].IsSelected, "Cancelled active row must be deselected.");
         Assert.IsFalse(model.Files[1].IsSelected, "Unprocessed pending row must be deselected.");
-        Assert.AreEqual("0 selected / 2 excluded", model.SelectionSummary);
+        Assert.AreEqual("2 items", model.SelectionSummary);
         Assert.IsFalse(model.AllFilesSelected);
     }
 
@@ -400,7 +400,7 @@ public sealed class ViewModelTests
 
         Assert.AreEqual(DoViFixer.Domain.Analysis.AnalysisVerdict.Mel, row.Analysis!.Verdict);
         Assert.IsTrue(row.IsSelected, "Promoting incomplete scan to MEL via inspection must select the row.");
-        Assert.AreEqual("1 selected / 0 excluded", model.SelectionSummary);
+        Assert.AreEqual("1 item | 1 item selected", model.SelectionSummary);
     }
 
     [TestMethod]
@@ -435,7 +435,7 @@ public sealed class ViewModelTests
         await model.AddAsync([@"C:\Media\Mountain.mkv", @"C:\Media\City.mkv"]);
         Assert.IsTrue(model.Files[0].IsSelected, "Mountain must remain selected when auto-select is disabled.");
         Assert.IsTrue(model.Files[1].IsSelected, "City must remain selected when auto-select is disabled.");
-        Assert.AreEqual("2 selected / 0 excluded", model.SelectionSummary);
+        Assert.AreEqual("2 items | 2 items selected", model.SelectionSummary);
         Assert.IsTrue(model.AllFilesSelected);
     }
 
@@ -457,4 +457,122 @@ public sealed class ViewModelTests
         Assert.IsFalse(model.Files[2].IsSelected, "New City row must be deselected based on scan result.");
         Assert.AreSame(model.Files[0], model.Focused, "Focused row must remain unchanged when adding files.");
     }
+
+    [TestMethod]
+    public async Task PrepareAsyncReportsBatchProgressAndFileStatus()
+    {
+        using var runtime = new TestRuntime();
+        var model = runtime.Container.Resolve<MediaViewModel>();
+        await model.AddAsync([@"C:\Media\Mountain.mkv", @"C:\Media\Ocean.mkv"]);
+
+        int analysesBefore = runtime.Analyses;
+        var started = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+        var release = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+        runtime.DuringAnalysis = async token =>
+        {
+            if (runtime.Analyses == analysesBefore + 1)
+            {
+                started.TrySetResult();
+                await release.Task.WaitAsync(token);
+            }
+        };
+
+        var convertTask = model.ConvertCommand.ExecuteAsync();
+        await started.Task;
+
+        Assert.IsTrue(model.IsBusy);
+        Assert.AreEqual("Conversion planning", model.BatchProgress.Operation);
+        Assert.AreEqual(2, model.BatchProgress.Total);
+        Assert.AreEqual(0, model.BatchProgress.Processed);
+        Assert.IsTrue(model.Files[0].IsActive);
+        Assert.IsTrue(model.Files[1].IsPending);
+        Assert.AreEqual("Queued", model.Files[1].Status);
+
+        release.SetResult();
+        await convertTask;
+
+        Assert.IsTrue(model.IsIdle);
+        Assert.AreEqual(2, model.BatchProgress.Processed);
+        Assert.AreEqual("Ready to convert", model.Files[0].Status);
+        Assert.AreEqual("Ready to convert", model.Files[1].Status);
+        Assert.IsTrue(model.ApproveCommand.CanExecute(null));
+    }
+
+    [TestMethod]
+    public async Task PrepareAsyncSupportsPerFileCancellationAndSkip()
+    {
+        using var runtime = new TestRuntime();
+        var model = runtime.Container.Resolve<MediaViewModel>();
+        await model.AddAsync([@"C:\Media\Mountain.mkv", @"C:\Media\Ocean.mkv", @"C:\Media\City.mkv"]);
+        model.Files[2].IsSelected = true;
+
+        int analysesBefore = runtime.Analyses;
+        var started = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+        var release = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+        runtime.DuringAnalysis = async token =>
+        {
+            if (runtime.Analyses == analysesBefore + 1)
+            {
+                started.TrySetResult();
+                await release.Task.WaitAsync(token);
+            }
+        };
+
+        var convertTask = model.ConvertCommand.ExecuteAsync();
+        await started.Task;
+
+        model.SkipCommand.Execute(model.Files[2]);
+        Assert.AreEqual("Conversion planning skipped", model.Files[2].Status);
+
+        model.CancelFileCommand.Execute(model.Files[0]);
+        release.SetResult();
+        await convertTask;
+
+        Assert.AreEqual("Conversion planning cancelled", model.Files[0].Status);
+        Assert.AreEqual("Ready to convert", model.Files[1].Status);
+        Assert.AreEqual("Conversion planning skipped", model.Files[2].Status);
+    }
+
+    [TestMethod]
+    public async Task PrepareAsyncDetectsOutputCollisionsAcrossBatch()
+    {
+        using var runtime = new TestRuntime();
+        var model = runtime.Container.Resolve<MediaViewModel>();
+        await model.AddAsync([@"C:\FolderA\Movie.mkv", @"C:\FolderB\Movie.mkv"]);
+        model.OtherFolder = true;
+        model.Destination = @"C:\Output";
+
+        await model.ReviewCommand.ExecuteAsync();
+
+        Assert.AreEqual("Ready to convert", model.Files[0].Status);
+        Assert.AreEqual("Conversion planning failed", model.Files[1].Status);
+        Assert.IsTrue(model.Files[1].AnalysisError!.Contains("Multiple inputs resolve to the same output"));
+    }
+
+    [TestMethod]
+    public async Task SelectionSummaryFormatsPluralAndHidesWhenNoneSelected()
+    {
+        using var runtime = new TestRuntime();
+        var model = runtime.Container.Resolve<MediaViewModel>();
+
+        Assert.AreEqual("0 items", model.SelectionSummary);
+
+        await model.AddAsync([@"C:\Media\Mountain.mkv"]);
+        model.Files[0].IsSelected = false;
+        Assert.AreEqual("1 item", model.SelectionSummary);
+
+        model.Files[0].IsSelected = true;
+        Assert.AreEqual("1 item | 1 item selected", model.SelectionSummary);
+
+        await model.AddAsync([@"C:\Media\Ocean.mkv", @"C:\Media\City.mkv", @"C:\Media\P81.mkv", @"C:\Media\Sdr.mkv"]);
+        // 5 total: Mountain(selected), Ocean(selected), City(deselected), P81(deselected), Sdr(deselected)
+        Assert.AreEqual("5 items | 2 items selected", model.SelectionSummary);
+
+        model.Files[1].IsSelected = false;
+        Assert.AreEqual("5 items | 1 item selected", model.SelectionSummary);
+
+        model.Files[0].IsSelected = false;
+        Assert.AreEqual("5 items", model.SelectionSummary);
+    }
 }
+

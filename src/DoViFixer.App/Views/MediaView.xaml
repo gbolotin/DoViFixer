@@ -298,7 +298,7 @@
                 </StackPanel>
             </StackPanel>
         </Border>
-        <StackPanel Grid.Row="3" Margin="0,16,0,0">
+        <StackPanel Grid.Row="3" Margin="0,8,0,0">
             <Border Style="{StaticResource Card}" Visibility="{Binding BatchProgress.IsRunning, Converter={StaticResource Visible}}">
                 <Grid>
                     <Grid.ColumnDefinitions>
@@ -306,8 +306,7 @@
                         <ColumnDefinition Width="Auto" />
                     </Grid.ColumnDefinitions>
                     <StackPanel Margin="0,0,24,0">
-                        <TextBlock Text="Overall batch" FontWeight="SemiBold" />
-                        <DockPanel Margin="0,8,0,10">
+                        <DockPanel Margin="0,0,0,8">
                             <TextBlock Text="{Binding BatchProgress.Percent, StringFormat={}{0:0}%}"
                                        DockPanel.Dock="Right"
                                        Foreground="{StaticResource Accent}"
@@ -315,9 +314,10 @@
                                        Margin="12,0,0,0" />
                             <TextBlock Text="{Binding BatchProgress.Operation}"
                                        VerticalAlignment="Center"
+                                       FontSize="22" 
                                        Foreground="{StaticResource Muted}" />
                         </DockPanel>
-                        <ProgressBar Value="{Binding BatchProgress.Percent, Mode=OneWay}"
+                         <ProgressBar Value="{Binding BatchProgress.Percent, Mode=OneWay}"
                                      Height="8"
                                      AutomationProperties.Name="Overall batch progress" />
                         <TextBlock Text="{Binding BatchProgress.Summary}"
@@ -325,11 +325,11 @@
                                    Foreground="{StaticResource Muted}"
                                    ToolTip="Processed includes completed, failed, cancelled and skipped files. Each file has equal weight in the batch." />
                     </StackPanel>
-                    <StackPanel Grid.Column="1" VerticalAlignment="Center">
-                        <Button Content="Cancel batch"
-                                Command="{Binding CancelCommand}"
-                                Margin="0" />
-                    </StackPanel>
+                    <Button Grid.Column="1" 
+                            VerticalAlignment="Center"
+                            Content="Cancel"
+                            Command="{Binding CancelCommand}"
+                            Margin="0" />
                 </Grid>
             </Border>
             <StackPanel>
@@ -350,19 +350,11 @@
                         HorizontalAlignment="Right"
                         Visibility="{Binding IsBusy, Converter={StaticResource Visible}}" />
             </StackPanel>
-            <DockPanel Margin="0,12,0,0">
-                <StackPanel>
-                    <TextBlock Text="{Binding SelectionSummary}" Foreground="{StaticResource Muted}" />
-                    <TextBlock Text="{Binding Status}"
-                               TextWrapping="Wrap"
-                               MaxHeight="72"
-                               Margin="0,5,12,0" />
-                    <TextBlock Text="Row Cancel stops only that file; the batch continues after cleanup."
-                               FontSize="12"
-                               Foreground="{StaticResource Muted}"
-                               Visibility="{Binding IsBusy, Converter={StaticResource Visible}}" />
-                </StackPanel>
-            </DockPanel>
+            <StackPanel Margin="0,8,0,0" Orientation="Horizontal" TextBlock.Foreground="{StaticResource Muted}">
+                <TextBlock Text="{Binding SelectionSummary}" />
+                <TextBlock Text=" | "/>
+                <TextBlock Text="{Binding Status}" TextWrapping="Wrap"/>
+            </StackPanel>
         </StackPanel>
     </Grid>
 </UserControl>

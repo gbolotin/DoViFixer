@@ -4,6 +4,7 @@ namespace DoViFixer.App.ViewModels;
 
 public sealed class BatchProgressViewModel : BindableBase
 {
+    private readonly object gate = new();
     private int revision;
     private bool isRunning;
     private int total;
@@ -21,13 +22,17 @@ public sealed class BatchProgressViewModel : BindableBase
 
     public void Begin(int fileCount, string operationName)
     {
-        revision++;
-        CurrentJob?.Progress.End();
-        total = fileCount;
-        processed = 0;
-        operation = operationName;
-        CurrentJob = null;
-        IsRunning = true;
+        lock (gate)
+        {
+            revision++;
+            CurrentJob?.Progress.End();
+            total = fileCount;
+            processed = 0;
+            operation = operationName;
+            CurrentJob = null;
+            IsRunning = true;
+        }
+
         RaisePropertyChanged(nameof(Total));
         RaisePropertyChanged(nameof(Operation));
         NotifyBatchProgress();
@@ -35,41 +40,56 @@ public sealed class BatchProgressViewModel : BindableBase
 
     public IProgress<OperationProgress> Start(MediaRow row, string initialStage)
     {
-        int jobRevision = ++revision;
-        CurrentJob?.Progress.End();
-        CurrentJob = row;
+        int jobRevision;
+        lock (gate)
+        {
+            jobRevision = ++revision;
+            CurrentJob?.Progress.End();
+            CurrentJob = row;
+        }
+
         row.Progress.Start(initialStage);
         // Each job owns its callback, so late reports cannot update another file or batch.
         return new Progress<OperationProgress>(progress =>
         {
-            if (!IsRunning || revision != jobRevision)
+            lock (gate)
             {
-                return;
-            }
+                if (!IsRunning || revision != jobRevision || CurrentJob != row)
+                {
+                    return;
+                }
 
-            row.Progress.Update(progress.Stage, progress.Percent);
-            if (row.LastAnalysisMethod is null)
-            {
-                row.Status = progress.Stage;
+                row.Progress.Update(progress.Stage, progress.Percent);
+                if (row.LastAnalysisMethod is null || row.CurrentOperation == "Conversion planning")
+                {
+                    row.Status = progress.Stage;
+                }
             }
         });
     }
 
     public void Complete()
     {
-        revision++;
-        processed++;
-        CurrentJob?.Progress.End();
-        CurrentJob = null;
+        lock (gate)
+        {
+            revision++;
+            processed++;
+            CurrentJob?.Progress.End();
+            CurrentJob = null;
+        }
+
         NotifyBatchProgress();
     }
 
     public void End()
     {
-        revision++;
-        IsRunning = false;
-        CurrentJob?.Progress.End();
-        CurrentJob = null;
+        lock (gate)
+        {
+            revision++;
+            IsRunning = false;
+            CurrentJob?.Progress.End();
+            CurrentJob = null;
+        }
     }
 
     private void NotifyBatchProgress()

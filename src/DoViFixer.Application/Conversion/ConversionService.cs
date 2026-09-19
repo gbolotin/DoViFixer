@@ -13,12 +13,12 @@ public sealed record ConversionPlan(Guid Id, MediaAnalysis Analysis, ConversionT
 public sealed record ConversionPlanningResult(IReadOnlyList<ConversionPlan> Plans, IReadOnlyList<FileResult> Skipped);
 public sealed class ConversionPlanner(IFileDiscovery discovery, IFileOperations files, InspectionService inspection, ISettingsStore settings, ILogger<ConversionPlanner> logger)
 {
-    public Task<ConversionPlanningResult> PlanAsync(ConversionRequest request, IProgress<OperationProgress>? progress, CancellationToken cancellationToken, Func<MediaAnalysis, CancellationToken, Task<bool>>? approveFel = null) => OperationLog.RunAsync(logger, "PlanConversion", Guid.NewGuid(), request.Input, () => PlanCoreAsync(request, progress, cancellationToken, approveFel), cancellationToken, result => result.Skipped.Any(f => f.Status == OperationStatus.Failed) ? (result.Plans.Count > 0 ? OperationStatus.Partial : OperationStatus.Failed) : (result.Plans.Count > 0 ? OperationStatus.Completed : OperationStatus.Skipped));
-    private async Task<ConversionPlanningResult> PlanCoreAsync(ConversionRequest request, IProgress<OperationProgress>? progress, CancellationToken cancellationToken, Func<MediaAnalysis, CancellationToken, Task<bool>>? approveFel)
+    public Task<ConversionPlanningResult> PlanAsync(ConversionRequest request, IProgress<OperationProgress>? progress, CancellationToken cancellationToken, Func<MediaAnalysis, CancellationToken, Task<bool>>? approveFel = null, ISet<string>? existingOutputs = null) => OperationLog.RunAsync(logger, "PlanConversion", Guid.NewGuid(), request.Input, () => PlanCoreAsync(request, progress, cancellationToken, approveFel, existingOutputs), cancellationToken, result => result.Skipped.Any(f => f.Status == OperationStatus.Failed) ? (result.Plans.Count > 0 ? OperationStatus.Partial : OperationStatus.Failed) : (result.Plans.Count > 0 ? OperationStatus.Completed : OperationStatus.Skipped));
+    private async Task<ConversionPlanningResult> PlanCoreAsync(ConversionRequest request, IProgress<OperationProgress>? progress, CancellationToken cancellationToken, Func<MediaAnalysis, CancellationToken, Task<bool>>? approveFel, ISet<string>? existingOutputs)
     {
         var plans = new List<ConversionPlan>();
         var skipped = new List<FileResult>();
-        var outputs = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+        var outputs = existingOutputs ?? new HashSet<string>(StringComparer.OrdinalIgnoreCase);
         var snapshot = await settings.ReadAsync(cancellationToken);
         var inputs = new[]
         {
@@ -45,7 +45,7 @@ public sealed class ConversionPlanner(IFileDiscovery discovery, IFileOperations 
             try
             {
                 progress?.Report(new(Guid.Empty, "Planning", path));
-                var analysis = await inspection.InspectAsync(path, AnalysisMethod.FullRpu, request.TemporaryDirectory, cancellationToken);
+                var analysis = await inspection.InspectAsync(path, AnalysisMethod.FullRpu, request.TemporaryDirectory, cancellationToken, progress);
                 var decision = ConversionPolicy.Evaluate(analysis, request.IncludeSimple, request.ForceComplex);
                 if (!decision.Allowed && approveFel is not null && analysis.Verdict is AnalysisVerdict.SimpleFel or AnalysisVerdict.ComplexFel or AnalysisVerdict.FelUnclassified && ConversionPolicy.Evaluate(analysis, true, true).Allowed && await approveFel(analysis, cancellationToken))
                 {

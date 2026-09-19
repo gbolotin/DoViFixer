@@ -24,7 +24,12 @@ public sealed class MediaRow(string path) : BindableBase
         set;
     }
     = AnalysisMethod.SampledRpu;
-    public string OperationName => LastAnalysisMethod is null ? "Conversion" : LastAnalysisMethod == AnalysisMethod.SampledRpu ? "Scan" : "Inspection";
+    public string? CurrentOperation
+    {
+        get;
+        set;
+    }
+    public string OperationName => CurrentOperation ?? (LastAnalysisMethod is null ? "Conversion" : LastAnalysisMethod == AnalysisMethod.SampledRpu ? "Scan" : "Inspection");
     public bool CanRetryAnalysis
     {
         get => canRetryAnalysis;

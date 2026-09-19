@@ -166,7 +166,22 @@ public sealed class MediaViewModel : OperationViewModel
         get => review;
         private set => SetProperty(ref review, value);
     }
-    public string SelectionSummary => $"{Files.Count(f => f.IsSelected)} selected / {Files.Count(f => !f.IsSelected)} excluded";
+    public string SelectionSummary
+    {
+        get
+        {
+            var total = Files.Count;
+            var selected = Files.Count(f => f.IsSelected);
+            var totalText = $"{total} {(total == 1 ? "item" : "items")}";
+            if (selected == 0)
+            {
+                return totalText;
+            }
+
+            var selectedText = $"{selected} {(selected == 1 ? "item" : "items")} selected";
+            return $"{totalText} | {selectedText}";
+        }
+    }
     public bool? AllFilesSelected => Files.Count == 0 || Files.All(row => !row.IsSelected)
         ? false
         : Files.All(row => row.IsSelected) ? true : null;
@@ -421,6 +436,7 @@ public sealed class MediaViewModel : OperationViewModel
 
         foreach (var row in rows)
         {
+            row.CurrentOperation = operationName == "Conversion planning" ? "Conversion planning" : null;
             row.CanRetryAnalysis = false;
             row.IsPending = true;
             row.SelectionEnabled = true;
@@ -443,6 +459,7 @@ public sealed class MediaViewModel : OperationViewModel
                 row.CanRetryAnalysis = row.LastAnalysisMethod is not null;
             }
 
+            row.CurrentOperation = null;
             row.IsPending = false;
             row.IsActive = false;
             row.SelectionEnabled = true;
@@ -572,51 +589,96 @@ public sealed class MediaViewModel : OperationViewModel
         }
 
         var rows = Files.Where(r => r.IsSelected).ToArray();
-        foreach (var row in Files)
+        if (rows.Length == 0)
         {
-            row.SelectionEnabled = false;
+            return;
         }
 
+        var outputs = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+        var skippedResults = new List<FileResult>();
+        bool targetHdr10 = Hdr10;
+        string? outputDir = OtherFolder ? Destination : null;
+        bool deleteBackup = ReplaceOriginal;
+        bool createArchive = CreateArchive;
+
+        BeginBatch(rows, "Conversion planning");
         try
         {
-            var request = new ConversionRequest(rows[0].Path, Target: Hdr10 ? ConversionTarget.Hdr10 : ConversionTarget.Profile81, OutputDirectory: OtherFolder ? Destination : null, IncludeSimple: true, ForceComplex: true, CreateBackup: CreateArchive, DeleteBackup: ReplaceOriginal, AdditionalInputs: rows.Skip(1).Select(r => r.Path).ToArray());
-            var prepared = await Task.Run(() => planner.PlanAsync(request, progress, token), token);
-            plans.AddRange(prepared.Plans);
-            foreach (var plan in plans)
+            var results = await batch.ExecuteAsync(rows, row => row.Path, async (row, itemToken) =>
             {
-                var row = rows.First(r => r.Path == plan.Analysis.Media.Source.Path);
+                var jobProgress = Activate(row, "Planning");
                 row.AnalysisError = null;
                 row.Notice = "";
-                row.Analysis = plan.Analysis;
-                row.PlannedOutput = plan.Output;
-                row.CanRetryAnalysis = false;
-                row.Status = "Ready to convert";
-                row.Warning = plan.Analysis.Verdict is AnalysisVerdict.SimpleFel or AnalysisVerdict.ComplexFel or AnalysisVerdict.FelUnclassified
-                    ? "Enhancement-layer picture data will be lost."
-                    : null;
-            }
-
-            foreach (var skipped in prepared.Skipped)
-            {
-                var row = rows.FirstOrDefault(r => r.Path == skipped.Input);
-                if (row is not null)
+                row.Warning = null;
+                row.PlannedOutput = "";
+                try
                 {
-                    row.Status = $"Conversion planning {skipped.Status.ToString().ToLowerInvariant()}";
-                    row.Notice = skipped.Message;
-                    row.Warning = null;
+                    var request = new ConversionRequest(
+                        row.Path,
+                        Target: targetHdr10 ? ConversionTarget.Hdr10 : ConversionTarget.Profile81,
+                        OutputDirectory: outputDir,
+                        IncludeSimple: true,
+                        ForceComplex: true,
+                        CreateBackup: createArchive,
+                        DeleteBackup: deleteBackup
+                    );
+                    var prepared = await Task.Run(() => planner.PlanAsync(request, jobProgress, itemToken, existingOutputs: outputs), itemToken);
+                    if (prepared.Plans.Count > 0)
+                    {
+                        var plan = prepared.Plans[0];
+                        plans.Add(plan);
+                        row.Analysis = plan.Analysis;
+                        row.PlannedOutput = plan.Output;
+                        row.Warning = plan.Analysis.Verdict is AnalysisVerdict.SimpleFel or AnalysisVerdict.ComplexFel or AnalysisVerdict.FelUnclassified
+                            ? "Enhancement-layer picture data will be lost."
+                            : null;
+                        return new FileResult(row.Path, OperationStatus.Completed, plan.Output, plan.Decision);
+                    }
+
+                    if (prepared.Skipped.Count > 0)
+                    {
+                        var skipped = prepared.Skipped[0];
+                        skippedResults.Add(skipped);
+                        return skipped;
+                    }
+
+                    return new FileResult(row.Path, OperationStatus.Failed, null, "Conversion planning produced no plan.");
                 }
-            }
+                finally
+                {
+                    row.IsActive = false;
+                }
+            }, control!, new InlineProgress<FileResult>(result =>
+            {
+                BatchProgress.Complete();
+                var row = rows.First(r => r.Path == result.Input);
+                row.CanRetryAnalysis = false;
+                if (result.Status == OperationStatus.Completed)
+                {
+                    row.Status = "Ready to convert";
+                }
+                else
+                {
+                    row.Status = $"Conversion planning {result.Status.ToString().ToLowerInvariant()}";
+                    row.Notice = result.Message;
+                    row.Warning = null;
+                    if (result.Status == OperationStatus.Failed)
+                    {
+                        row.AnalysisError = result.Message;
+                    }
+                }
+            }), token);
 
             string warnings = string.Join("\n", plans.Where(p => p.Analysis.Verdict is AnalysisVerdict.SimpleFel or AnalysisVerdict.ComplexFel or AnalysisVerdict.FelUnclassified).Select(p => $"WARNING — {Path.GetFileName(p.Analysis.Media.Source.Path)}: Enhancement-layer picture data will be lost."));
-            Review = (warnings.Length == 0 ? "" : warnings + "\n\n") + string.Join("\n\n", plans.Select(p => $"{p.Analysis.Media.Source.Path}\n→ {p.Output}\nTarget: {(p.Target == ConversionTarget.Profile81 ? "Profile 8.1" : "HDR10")}; original: {(p.DeleteBackup ? "replace after verification; original backup deleted" : "retained")}\n" + (p.Archive is null ? "" : $"EL archive: {p.Archive}\n") + p.Decision)) + "\n" + string.Join("\n", prepared.Skipped.Select(s => $"{s.Input}: {s.Status} — {s.Message}"));
+            var planText = string.Join("\n\n", plans.Select(p => $"{p.Analysis.Media.Source.Path}\n→ {p.Output}\nTarget: {(p.Target == ConversionTarget.Profile81 ? "Profile 8.1" : "HDR10")}; original: {(p.DeleteBackup ? "replace after verification; original backup deleted" : "retained")}\n" + (p.Archive is null ? "" : $"EL archive: {p.Archive}\n") + p.Decision));
+            var skipText = string.Join("\n", skippedResults.Select(s => $"{s.Input}: {s.Status} — {s.Message}"));
+            Review = (warnings.Length == 0 ? "" : warnings + "\n\n") + planText + (planText.Length > 0 && skipText.Length > 0 ? "\n\n" : "") + skipText;
             Status = $"{plans.Count} plans ready for approval.";
         }
         finally
         {
-            foreach (var row in Files)
-            {
-                row.SelectionEnabled = true;
-            }
+            EndBatch(deselectPending: true);
+            ApproveCommand?.RaiseCanExecuteChanged();
         }
     });
     private Task ConvertAsync() => RunAsync(async (token, _) =>

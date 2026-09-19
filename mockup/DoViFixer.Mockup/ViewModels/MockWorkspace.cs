@@ -120,7 +120,22 @@ public sealed class MockWorkspace : ObservableModel, IDisposable
     }
 
     public string Retention => KeepOriginal ? "Keep original file" : "Remove only after verified success (simulation)";
-    public string SelectionSummary => $"{Files.Count(f => f.IsIncluded)} selected · {Files.Count(f => !f.IsIncluded)} excluded";
+    public string SelectionSummary
+    {
+        get
+        {
+            var total = Files.Count;
+            var selected = Files.Count(f => f.IsIncluded);
+            var totalText = $"{total} {(total == 1 ? "item" : "items")}";
+            if (selected == 0)
+            {
+                return totalText;
+            }
+
+            var selectedText = $"{selected} {(selected == 1 ? "item" : "items")} selected";
+            return $"{totalText} | {selectedText}";
+        }
+    }
 
     public string Status
     {
