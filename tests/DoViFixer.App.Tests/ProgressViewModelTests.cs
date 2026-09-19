@@ -90,4 +90,41 @@ public sealed class ProgressViewModelTests
         CollectionAssert.Contains(changed, nameof(model.IsIndeterminate));
         CollectionAssert.Contains(changed, nameof(model.StageProgressText));
     }
+
+    [TestMethod]
+    public void CanonicalPropertiesMatchAliasesAndOperationProgressUpdatesState()
+    {
+        var model = new ProgressViewModel();
+        Assert.AreEqual(0, model.Percent);
+        Assert.AreEqual(model.Percent, model.StagePercent);
+        Assert.IsFalse(model.IsIndeterminate);
+        Assert.AreEqual(model.IsIndeterminate, model.Indeterminate);
+        Assert.AreEqual("", model.ProgressText);
+        Assert.AreEqual(model.ProgressText, model.StageProgressText);
+        Assert.IsFalse(model.IsRunning);
+
+        model.Start("Starting");
+        Assert.IsTrue(model.IsRunning);
+        Assert.IsTrue(model.IsIndeterminate);
+        Assert.IsTrue(model.Indeterminate);
+        Assert.AreEqual("Working…", model.ProgressText);
+
+        var progress = new DoViFixer.Application.Operations.OperationProgress(Guid.NewGuid(), "Injecting", "test.mkv", 60.5);
+        model.Update(progress);
+
+        Assert.AreEqual("Injecting", model.Stage);
+        Assert.AreEqual(60.5, model.Percent);
+        Assert.AreEqual(60.5, model.StagePercent);
+        Assert.IsFalse(model.IsIndeterminate);
+        Assert.IsFalse(model.Indeterminate);
+        Assert.AreEqual("61%", model.ProgressText);
+        Assert.AreEqual("61%", model.StageProgressText);
+
+        model.Reset();
+        Assert.IsFalse(model.IsRunning);
+        Assert.AreEqual("", model.Stage);
+        Assert.AreEqual(0, model.Percent);
+        Assert.IsFalse(model.IsIndeterminate);
+        Assert.AreEqual("", model.ProgressText);
+    }
 }

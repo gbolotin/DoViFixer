@@ -80,10 +80,45 @@ public sealed class MediaViewModel : OperationViewModel
         OpenLogsCommand = new(dialogs.OpenLogs);
         ToggleSelectAllCommand = new(ToggleSelectAll, () => IsIdle && Files.Any(row => row.SelectionEnabled));
         ClearAllCommand = new(ClearAll, () => IsIdle && Files.Count > 0);
+
+        BatchProgress.PropertyChanged += (_, _) => NotifyActiveProgress();
+        Progress.PropertyChanged += (_, _) => NotifyActiveProgress();
+        PropertyChanged += (_, e) =>
+        {
+            if (e.PropertyName is nameof(Status) or nameof(IsBusy))
+            {
+                NotifyActiveProgress();
+            }
+        };
     }
 
     public ObservableCollection<MediaRow> Files { get; } = [];
     public BatchProgressViewModel BatchProgress { get; } = new();
+
+    public double ActiveProgressPercent => BatchProgress.IsRunning ? BatchProgress.Percent : Percent;
+    public bool ActiveProgressIndeterminate => !BatchProgress.IsRunning && IsIndeterminate;
+    public string ActiveProgressTitle => BatchProgress.IsRunning
+        ? BatchProgress.Operation
+        : (string.IsNullOrWhiteSpace(Stage) ? "Working…" : Stage);
+    public string ActiveProgressText => BatchProgress.IsRunning
+        ? $"{BatchProgress.Percent:0}%"
+        : Progress.ProgressText;
+    public string ActiveProgressSummary => BatchProgress.IsRunning
+        ? BatchProgress.Summary
+        : Status;
+    public string? ActiveProgressToolTip => BatchProgress.IsRunning
+        ? "Processed includes completed, failed, cancelled and skipped files. Each file has equal weight in the batch."
+        : null;
+
+    private void NotifyActiveProgress()
+    {
+        RaisePropertyChanged(nameof(ActiveProgressPercent));
+        RaisePropertyChanged(nameof(ActiveProgressIndeterminate));
+        RaisePropertyChanged(nameof(ActiveProgressTitle));
+        RaisePropertyChanged(nameof(ActiveProgressText));
+        RaisePropertyChanged(nameof(ActiveProgressSummary));
+        RaisePropertyChanged(nameof(ActiveProgressToolTip));
+    }
 
     public MediaRow? Focused
     {

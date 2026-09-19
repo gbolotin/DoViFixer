@@ -1,3 +1,4 @@
+using DoViFixer.App.ViewModels;
 using DoViFixer.Application.Operations;
 
 namespace DoViFixer.App.Presentation;
@@ -6,11 +7,30 @@ public abstract class OperationViewModel : BindableBase
     private CancellationTokenSource? cancellation;
     private bool isBusy;
     private string status = "Ready";
-    private double percent;
-    private bool indeterminate;
+
+    public ProgressViewModel Progress { get; } = new();
+
     protected OperationViewModel()
     {
         CancelCommand = new(() => cancellation?.Cancel(), () => IsBusy);
+        Progress.PropertyChanged += (_, e) =>
+        {
+            if (e.PropertyName is nameof(ProgressViewModel.Percent) or nameof(ProgressViewModel.StagePercent))
+            {
+                RaisePropertyChanged(nameof(Percent));
+            }
+
+            if (e.PropertyName is nameof(ProgressViewModel.IsIndeterminate) or nameof(ProgressViewModel.Indeterminate))
+            {
+                RaisePropertyChanged(nameof(Indeterminate));
+                RaisePropertyChanged(nameof(IsIndeterminate));
+            }
+
+            if (e.PropertyName is nameof(ProgressViewModel.Stage))
+            {
+                RaisePropertyChanged(nameof(Stage));
+            }
+        };
     }
 
     public bool IsBusy
@@ -31,16 +51,12 @@ public abstract class OperationViewModel : BindableBase
         get => status;
         set => SetProperty(ref status, value);
     }
-    public double Percent
-    {
-        get => percent;
-        private set => SetProperty(ref percent, value);
-    }
-    public bool Indeterminate
-    {
-        get => indeterminate;
-        private set => SetProperty(ref indeterminate, value);
-    }
+
+    public string Stage => Progress.Stage;
+    public double Percent => Progress.Percent;
+    public bool Indeterminate => Progress.IsIndeterminate;
+    public bool IsIndeterminate => Progress.IsIndeterminate;
+
     public DelegateCommand CancelCommand
     {
         get;
@@ -76,8 +92,7 @@ public abstract class OperationViewModel : BindableBase
         using var source = new CancellationTokenSource();
         cancellation = source;
         IsBusy = true;
-        Percent = 0;
-        Indeterminate = true;
+        Progress.Start("Starting…");
         // Callback lifetime is bounded; queued progress cannot overwrite a later operation.
         var progress = new Progress<OperationProgress>(p =>
         {
@@ -86,9 +101,8 @@ public abstract class OperationViewModel : BindableBase
                 return;
             }
 
-            Status = $"{p.Stage}  {p.File}";
-            Percent = p.Percent ?? 0;
-            Indeterminate = p.Percent is null;
+            Status = string.IsNullOrWhiteSpace(p.File) ? p.Stage : $"{p.Stage}  {p.File}";
+            Progress.Update(p);
             OnProgress(p);
         });
         try
@@ -106,7 +120,7 @@ public abstract class OperationViewModel : BindableBase
         finally
         {
             cancellation = null;
-            Indeterminate = false;
+            Progress.End();
             IsBusy = false;
         }
     }
