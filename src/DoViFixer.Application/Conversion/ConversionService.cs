@@ -10,14 +10,14 @@ using Microsoft.Extensions.Logging;
 namespace DoViFixer.Application.Conversion;
 public sealed record ConversionRequest(string Input, int RecursiveDepth = 0, ConversionTarget Target = ConversionTarget.Profile81, string? OutputDirectory = null, string? TemporaryDirectory = null, bool IncludeSimple = false, bool ForceComplex = false, bool CreateBackup = false, bool Safe = false, bool DeleteBackup = false, IReadOnlyList<string>? AdditionalInputs = null);
 public sealed record ConversionPlan(Guid Id, MediaAnalysis Analysis, ConversionTarget Target, string Output, string? Archive, string? TemporaryDirectory, long ScratchBytes, string Decision, bool Safe = false, bool DeleteBackup = false);
-public sealed record ConversionPlanningResult(IReadOnlyList<ConversionPlan> Plans, IReadOnlyList<FileResult> Skipped);
+public sealed record ConversionPlanningResult(IReadOnlyList<ConversionPlan> Plans, IReadOnlyList<OperationItemResult> Skipped);
 public sealed class ConversionPlanner(IFileDiscovery discovery, IFileOperations files, InspectionService inspection, ISettingsStore settings, ILogger<ConversionPlanner> logger)
 {
     public Task<ConversionPlanningResult> PlanAsync(ConversionRequest request, IProgress<OperationProgress>? progress, CancellationToken cancellationToken, Func<MediaAnalysis, CancellationToken, Task<bool>>? approveFel = null, ISet<string>? existingOutputs = null) => OperationLog.RunAsync(logger, "PlanConversion", Guid.NewGuid(), request.Input, () => PlanCoreAsync(request, progress, cancellationToken, approveFel, existingOutputs), cancellationToken, result => result.Skipped.Any(f => f.Status == OperationStatus.Failed) ? (result.Plans.Count > 0 ? OperationStatus.Partial : OperationStatus.Failed) : (result.Plans.Count > 0 ? OperationStatus.Completed : OperationStatus.Skipped));
     private async Task<ConversionPlanningResult> PlanCoreAsync(ConversionRequest request, IProgress<OperationProgress>? progress, CancellationToken cancellationToken, Func<MediaAnalysis, CancellationToken, Task<bool>>? approveFel, ISet<string>? existingOutputs)
     {
         var plans = new List<ConversionPlan>();
-        var skipped = new List<FileResult>();
+        var skipped = new List<OperationItemResult>();
         var outputs = existingOutputs ?? new HashSet<string>(StringComparer.OrdinalIgnoreCase);
         var snapshot = await settings.ReadAsync(cancellationToken);
         var inputs = new[]
@@ -86,13 +86,13 @@ public sealed class ConversionPlanner(IFileDiscovery discovery, IFileOperations 
 
 public sealed class ConversionService(DependencyService dependencies, IFileOperations files, ITemporaryWorkspaceFactory workspaces, IVideoProcessor processor, IMediaVerifier verifier, IOutputPublisher publisher, IBackupArchiveStore archives, ILogger<ConversionService> logger)
 {
-    public Task<FileResult> ExecuteAsync(ConversionPlan approvedPlan, IProgress<OperationProgress>? progress, CancellationToken cancellationToken) => OperationLog.RunAsync(logger, "Convert", approvedPlan.Id, approvedPlan.Analysis.Media.Source.Path, async () =>
+    public Task<OperationItemResult> ExecuteAsync(ConversionPlan approvedPlan, IProgress<OperationProgress>? progress, CancellationToken cancellationToken) => OperationLog.RunAsync(logger, "Convert", approvedPlan.Id, approvedPlan.Analysis.Media.Source.Path, async () =>
     {
         var result = await ExecuteCoreAsync(approvedPlan, progress, cancellationToken);
         OperationLog.Result(logger, result);
         return result;
     }, cancellationToken, result => result.Status);
-    private async Task<FileResult> ExecuteCoreAsync(ConversionPlan approvedPlan, IProgress<OperationProgress>? progress, CancellationToken cancellationToken)
+    private async Task<OperationItemResult> ExecuteCoreAsync(ConversionPlan approvedPlan, IProgress<OperationProgress>? progress, CancellationToken cancellationToken)
     {
         var media = approvedPlan.Analysis.Media;
         logger.LogInformation("Executing plan {PlanId}: target {Target}; output {Output}; archive {Archive}; scratch {ScratchBytes}; temporary directory {TemporaryDirectory}; {Decision}", approvedPlan.Id, approvedPlan.Target, approvedPlan.Output, approvedPlan.Archive, approvedPlan.ScratchBytes, approvedPlan.TemporaryDirectory, approvedPlan.Decision);
@@ -219,7 +219,7 @@ public sealed class BatchConversionService(ConversionService conversion, ILogger
 
     private async Task<BatchResult> ExecuteCoreAsync(IReadOnlyList<ConversionPlan> approvedPlans, IProgress<OperationProgress>? progress, CancellationToken cancellationToken)
     {
-        var results = new List<FileResult>();
+        var results = new List<OperationItemResult>();
         foreach (var plan in approvedPlans)
         {
             try

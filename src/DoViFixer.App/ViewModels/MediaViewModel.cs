@@ -80,10 +80,45 @@ public sealed class MediaViewModel : OperationViewModel
         OpenLogsCommand = new(dialogs.OpenLogs);
         ToggleSelectAllCommand = new(ToggleSelectAll, () => IsIdle && Files.Any(row => row.SelectionEnabled));
         ClearAllCommand = new(ClearAll, () => IsIdle && Files.Count > 0);
+
+        BatchProgress.PropertyChanged += (_, _) => NotifyActiveProgress();
+        Progress.PropertyChanged += (_, _) => NotifyActiveProgress();
+        PropertyChanged += (_, e) =>
+        {
+            if (e.PropertyName is nameof(Status) or nameof(IsBusy))
+            {
+                NotifyActiveProgress();
+            }
+        };
     }
 
     public ObservableCollection<MediaRow> Files { get; } = [];
     public BatchProgressViewModel BatchProgress { get; } = new();
+
+    public double ActiveProgressPercent => BatchProgress.IsRunning ? BatchProgress.Percent : Percent;
+    public bool ActiveProgressIndeterminate => !BatchProgress.IsRunning && IsIndeterminate;
+    public string ActiveProgressTitle => BatchProgress.IsRunning
+        ? BatchProgress.Operation
+        : (string.IsNullOrWhiteSpace(Stage) ? "Working…" : Stage);
+    public string ActiveProgressText => BatchProgress.IsRunning
+        ? $"{BatchProgress.Percent:0}%"
+        : Progress.ProgressText;
+    public string ActiveProgressSummary => BatchProgress.IsRunning
+        ? BatchProgress.Summary
+        : Status;
+    public string? ActiveProgressToolTip => BatchProgress.IsRunning
+        ? "Processed includes completed, failed, cancelled and skipped files. Each file has equal weight in the batch."
+        : null;
+
+    private void NotifyActiveProgress()
+    {
+        RaisePropertyChanged(nameof(ActiveProgressPercent));
+        RaisePropertyChanged(nameof(ActiveProgressIndeterminate));
+        RaisePropertyChanged(nameof(ActiveProgressTitle));
+        RaisePropertyChanged(nameof(ActiveProgressText));
+        RaisePropertyChanged(nameof(ActiveProgressSummary));
+        RaisePropertyChanged(nameof(ActiveProgressToolTip));
+    }
 
     public MediaRow? Focused
     {
@@ -403,8 +438,7 @@ public sealed class MediaViewModel : OperationViewModel
         plans.Clear();
         foreach (var row in Files)
         {
-            row.PlannedOutput = "";
-            row.Warning = null;
+            row.ClearPlan();
         }
 
         Review = "Review the current options to prepare exact output paths and warnings.";
@@ -513,22 +547,22 @@ public sealed class MediaViewModel : OperationViewModel
                         toolsReady ??= await dependencies.EnsureAsync(jobProgress, itemToken);
                         if (toolsReady != true)
                         {
-                            return new FileResult(row.Path, OperationStatus.Failed, null, "Required tools are unavailable. Open Settings to configure tools, then retry Scan.");
+                            return new OperationItemResult(row.Path, OperationStatus.Failed, null, "Required tools are unavailable. Open Settings to configure tools, then retry Scan.");
                         }
 
                         row.Analysis = await Task.Run(() => inspection.InspectAsync(row.Path, method, null, itemToken, jobProgress), itemToken);
                     }
 
-                    return new FileResult(row.Path, row.Analysis.Verdict == AnalysisVerdict.AnalysisFailed ? OperationStatus.Failed : OperationStatus.Completed, null, row.Analysis.Reason);
+                    return new OperationItemResult(row.Path, row.Analysis.Verdict == AnalysisVerdict.AnalysisFailed ? OperationStatus.Failed : OperationStatus.Completed, null, row.Analysis.Reason);
                 }
                 finally
                 {
                     row.IsActive = false;
                 }
-            }, control!, new InlineProgress<FileResult>(result =>
+            }, control!, new InlineProgress<OperationItemResult>(result =>
             {
                 BatchProgress.Complete();
-                var row = rows.First(r => r.Path == result.Input);
+                var row = rows.First(r => r.Path == result.Item);
                 row.Status = result.Status == OperationStatus.Completed ? "" : $"{row.OperationName} {result.Status.ToString().ToLowerInvariant()}";
                 row.CanRetryAnalysis = result.Status is OperationStatus.Failed or OperationStatus.Cancelled;
                 if (result.Status == OperationStatus.Failed)
@@ -542,6 +576,7 @@ public sealed class MediaViewModel : OperationViewModel
 
                 if (result.Status == OperationStatus.Completed)
                 {
+                    row.SetScanned();
                     if (autoSelect)
                     {
                         row.IsSelected = ConversionPolicy.ShouldAutoSelectAfterAnalysis(row.Analysis);
@@ -595,7 +630,7 @@ public sealed class MediaViewModel : OperationViewModel
         }
 
         var outputs = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
-        var skippedResults = new List<FileResult>();
+        var skippedResults = new List<OperationItemResult>();
         bool targetHdr10 = Hdr10;
         string? outputDir = OtherFolder ? Destination : null;
         bool deleteBackup = ReplaceOriginal;
@@ -628,11 +663,11 @@ public sealed class MediaViewModel : OperationViewModel
                         var plan = prepared.Plans[0];
                         plans.Add(plan);
                         row.Analysis = plan.Analysis;
-                        row.PlannedOutput = plan.Output;
-                        row.Warning = plan.Analysis.Verdict is AnalysisVerdict.SimpleFel or AnalysisVerdict.ComplexFel or AnalysisVerdict.FelUnclassified
+                        string? warning = plan.Analysis.Verdict is AnalysisVerdict.SimpleFel or AnalysisVerdict.ComplexFel or AnalysisVerdict.FelUnclassified
                             ? "Enhancement-layer picture data will be lost."
                             : null;
-                        return new FileResult(row.Path, OperationStatus.Completed, plan.Output, plan.Decision);
+                        row.SetPlan(plan.Output, warning);
+                        return new OperationItemResult(row.Path, OperationStatus.Completed, plan.Output, plan.Decision);
                     }
 
                     if (prepared.Skipped.Count > 0)
@@ -642,16 +677,16 @@ public sealed class MediaViewModel : OperationViewModel
                         return skipped;
                     }
 
-                    return new FileResult(row.Path, OperationStatus.Failed, null, "Conversion planning produced no plan.");
+                    return new OperationItemResult(row.Path, OperationStatus.Failed, null, "Conversion planning produced no plan.");
                 }
                 finally
                 {
                     row.IsActive = false;
                 }
-            }, control!, new InlineProgress<FileResult>(result =>
+            }, control!, new InlineProgress<OperationItemResult>(result =>
             {
                 BatchProgress.Complete();
-                var row = rows.First(r => r.Path == result.Input);
+                var row = rows.First(r => r.Path == result.Item);
                 row.CanRetryAnalysis = false;
                 if (result.Status == OperationStatus.Completed)
                 {
@@ -670,8 +705,16 @@ public sealed class MediaViewModel : OperationViewModel
             }), token);
 
             string warnings = string.Join("\n", plans.Where(p => p.Analysis.Verdict is AnalysisVerdict.SimpleFel or AnalysisVerdict.ComplexFel or AnalysisVerdict.FelUnclassified).Select(p => $"WARNING — {Path.GetFileName(p.Analysis.Media.Source.Path)}: Enhancement-layer picture data will be lost."));
-            var planText = string.Join("\n\n", plans.Select(p => $"{p.Analysis.Media.Source.Path}\n→ {p.Output}\nTarget: {(p.Target == ConversionTarget.Profile81 ? "Profile 8.1" : "HDR10")}; original: {(p.DeleteBackup ? "replace after verification; original backup deleted" : "retained")}\n" + (p.Archive is null ? "" : $"EL archive: {p.Archive}\n") + p.Decision));
-            var skipText = string.Join("\n", skippedResults.Select(s => $"{s.Input}: {s.Status} — {s.Message}"));
+            var planText = string.Join("\n\n", plans.Select(p =>
+            {
+                string tempFolder = Path.GetFullPath(string.IsNullOrWhiteSpace(p.TemporaryDirectory) ? Path.GetTempPath() : p.TemporaryDirectory);
+                return $"{p.Analysis.Media.Source.Path}\n→ {p.Output}\nTarget: {(p.Target == ConversionTarget.Profile81 ? "Profile 8.1" : "HDR10")}; original: {(p.DeleteBackup ? "replace after verification; original backup deleted" : "retained")}\n" +
+                    $"Temporary folder: {tempFolder}\n" +
+                    "A separate job subfolder is created here when conversion starts.\n" +
+                    $"Required scratch space for this file: {p.ScratchBytes / 1073741824d:0.0} GiB ({p.ScratchBytes:N0} bytes)\nOutput space is additional.\n" +
+                    (p.Archive is null ? "" : $"EL archive: {p.Archive}\n") + p.Decision;
+            }));
+            var skipText = string.Join("\n", skippedResults.Select(s => $"{s.Item}: {s.Status} — {s.Message}"));
             Review = (warnings.Length == 0 ? "" : warnings + "\n\n") + planText + (planText.Length > 0 && skipText.Length > 0 ? "\n\n" : "") + skipText;
             Status = $"{plans.Count} plans ready for approval.";
         }
@@ -713,17 +756,19 @@ public sealed class MediaViewModel : OperationViewModel
                 {
                     row.IsActive = false;
                 }
-            }, control!, new InlineProgress<FileResult>(result =>
+            }, control!, new InlineProgress<OperationItemResult>(result =>
             {
                 BatchProgress.Complete();
-                var row = rows.First(r => r.Path == result.Input);
-                row.Result = result;
-                row.Status = result.Status switch
+                var row = rows.First(r => r.Path == result.Item);
+                if (result.Status is OperationStatus.Completed or OperationStatus.Partial)
                 {
-                    OperationStatus.Completed => "Converted",
-                    OperationStatus.Partial => "Converted with warnings",
-                    _ => $"Conversion {result.Status.ToString().ToLowerInvariant()}"
-                };
+                    row.SetConverted(result);
+                }
+                else
+                {
+                    row.Result = result;
+                    row.Status = $"Conversion {result.Status.ToString().ToLowerInvariant()}";
+                }
             }), token);
             Status = $"Conversion: {Summary(result)}";
         }
@@ -732,7 +777,7 @@ public sealed class MediaViewModel : OperationViewModel
             EndBatch();
         }
     });
-    private static string Summary(BatchResult result) => string.Join(" · ", result.Files.GroupBy(r => r.Status).Select(g => $"{g.Count()} {g.Key}"));
+    private static string Summary(BatchResult result) => string.Join(" · ", result.Items.GroupBy(r => r.Status).Select(g => $"{g.Count()} {g.Key}"));
 }
 
 internal sealed class InlineProgress<T>(Action<T> report) : IProgress<T>

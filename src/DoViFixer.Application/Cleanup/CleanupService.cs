@@ -11,7 +11,7 @@ public sealed class CleanupService(IFileDiscovery discovery, IFileOperations fil
     public Task<BatchResult> ExecuteAsync(CleanupPlan approvedPlan, CancellationToken cancellationToken) => OperationLog.RunAsync(logger, "Cleanup", approvedPlan.Id, null, () => ExecuteCoreAsync(approvedPlan, cancellationToken), cancellationToken, result => result.Status);
     private async Task<BatchResult> ExecuteCoreAsync(CleanupPlan approvedPlan, CancellationToken cancellationToken)
     {
-        var results = new List<FileResult>();
+        var results = new List<OperationItemResult>();
         foreach (var file in approvedPlan.Files)
         {
             cancellationToken.ThrowIfCancellationRequested();

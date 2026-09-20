@@ -23,13 +23,13 @@ public sealed class BackupService(DependencyService dependencies, IMediaProbe pr
         return new(Guid.NewGuid(), media, files.PrepareOutputPath(input, outputDirectory, ".dovi"), temporaryDirectory ?? snapshot.TemporaryDirectory, ConversionPolicy.RequiredScratchBytes(media.Source.Length));
     }
 
-    public Task<FileResult> ExecuteAsync(BackupPlan approvedPlan, IProgress<OperationProgress>? progress, CancellationToken cancellationToken) => OperationLog.RunAsync(logger, "Backup", approvedPlan.Id, approvedPlan.Media.Source.Path, async () =>
+    public Task<OperationItemResult> ExecuteAsync(BackupPlan approvedPlan, IProgress<OperationProgress>? progress, CancellationToken cancellationToken) => OperationLog.RunAsync(logger, "Backup", approvedPlan.Id, approvedPlan.Media.Source.Path, async () =>
     {
         var result = await ExecuteCoreAsync(approvedPlan, progress, cancellationToken);
         OperationLog.Result(logger, result);
         return result;
     }, cancellationToken, result => result.Status);
-    private async Task<FileResult> ExecuteCoreAsync(BackupPlan approvedPlan, IProgress<OperationProgress>? progress, CancellationToken cancellationToken)
+    private async Task<OperationItemResult> ExecuteCoreAsync(BackupPlan approvedPlan, IProgress<OperationProgress>? progress, CancellationToken cancellationToken)
     {
         await dependencies.RequireAsync(DependencyRequirements.All, cancellationToken);
         await using var lease = await files.AcquireReadLeaseAsync(approvedPlan.Media.Source, cancellationToken);

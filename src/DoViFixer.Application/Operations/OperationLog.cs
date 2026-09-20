@@ -41,13 +41,13 @@ public static class OperationLog
         logger.Log(outcome is "Failed" or "Partial" ? LogLevel.Error : LogLevel.Information, new EventId(1000, "OperationOutcome"), exception, "Operation {Outcome} after {ElapsedMilliseconds} ms", outcome, elapsedMilliseconds);
     }
 
-    public static void Result(ILogger logger, FileResult result)
+    public static void Result(ILogger logger, IOperationItemResult result)
     {
         using var kind = logger.BeginScope(new Dictionary<string, object>
         {
             ["LogKind"] = "History"
         });
-        logger.LogInformation(new EventId(1001, "FileResult"), "File {Input} {Outcome}; output {Output}; {Reason}", result.Input, result.Status.ToString(), result.Output, result.Message);
+        logger.LogInformation(new EventId(1001, "ItemResult"), "Item {Item} {Outcome}; output {Output}; {Reason}", result.Item, result.Status.ToString(), result.Output, result.Message);
     }
 
     public static void Audit(ILogger logger, string action, string target, string outcome, Guid? planId = null)

@@ -92,7 +92,7 @@ public sealed class ArchiveViewModel : OperationViewModel
 
             OperationLog.Audit(logger, "ApproveCleanup", review, "ApprovedByExactCode", plan.Id);
             var result = await Task.Run(() => cleanup.ExecuteAsync(plan, token), token);
-            Status = string.Join("\n", result.Files.Select(f => $"{f.Input}: {f.Status} — {f.Message}"));
+            Status = string.Join("\n", result.Items.Select(f => $"{f.Item}: {f.Status} — {f.Message}"));
         }), () => IsIdle);
     }
 

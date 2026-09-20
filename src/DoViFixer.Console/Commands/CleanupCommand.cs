@@ -42,7 +42,7 @@ public sealed class CleanupCommand(CleanupService cleanup, ConsoleRenderer rende
             }
 
             var deleted = await cleanup.ExecuteAsync(cleanupPlan, cancellationToken);
-            foreach (var file in deleted.Files)
+            foreach (var file in deleted.Items)
             {
                 renderer.Result(file);
             }

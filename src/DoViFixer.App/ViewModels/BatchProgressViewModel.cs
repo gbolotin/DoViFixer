@@ -59,7 +59,7 @@ public sealed class BatchProgressViewModel : BindableBase
                     return;
                 }
 
-                row.Progress.Update(progress.Stage, progress.Percent);
+                row.Progress.Update(progress);
                 if (row.LastAnalysisMethod is null || row.CurrentOperation == "Conversion planning")
                 {
                     row.Status = progress.Stage;

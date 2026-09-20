@@ -65,7 +65,7 @@
             </Border>
             <ProgressBar Margin="0,20,0,10"
                          Value="{Binding Percent, Mode=OneWay}"
-                         IsIndeterminate="{Binding Indeterminate}"
+                         IsIndeterminate="{Binding IsIndeterminate}"
                          Visibility="{Binding IsBusy, Converter={StaticResource Visible}}" />
             <TextBlock Text="{Binding Status}" TextWrapping="Wrap" />
             <Button Content="Cancel operation"
