@@ -52,7 +52,7 @@ public sealed class ControlledBatchTests
         CollectionAssert.AreEqual(new[]
         {
             OperationStatus.Cancelled, OperationStatus.Skipped, OperationStatus.Completed
-        }, result.Files.Select(f => f.Status).ToArray());
+        }, result.Items.Select(f => f.Status).ToArray());
         Assert.IsFalse(control.Cancel("a"));
     }
 
@@ -73,10 +73,10 @@ public sealed class ControlledBatchTests
             }
 
             cancellation.Cancel();
-            return Task.FromResult(new FileResult(path, OperationStatus.Cancelled, null, "Cancelled"));
+            return Task.FromResult(new OperationItemResult(path, OperationStatus.Cancelled, null, "Cancelled"));
         }, control, null, cancellation.Token);
-        Assert.HasCount(2, result.Files);
-        Assert.AreEqual(OperationStatus.Failed, result.Files[0].Status);
-        Assert.AreEqual(OperationStatus.Cancelled, result.Files[1].Status);
+        Assert.HasCount(2, result.Items);
+        Assert.AreEqual(OperationStatus.Failed, result.Items[0].Status);
+        Assert.AreEqual(OperationStatus.Cancelled, result.Items[1].Status);
     }
 }

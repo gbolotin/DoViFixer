@@ -258,18 +258,27 @@ public sealed class ViewModelTests
         Assert.IsTrue(model.Files.Single().HasWarning);
         Assert.AreEqual("Enhancement-layer picture data will be lost.", model.Files.Single().Warning);
         Assert.IsTrue(model.ApproveCommand.CanExecute(null));
+        Assert.AreEqual("Ready to convert", model.Files.Single().Status);
+        Assert.AreEqual(MediaRowState.PlanReady, model.Files.Single().State);
+        Assert.IsTrue(model.Files.Single().PlannedOutput.EndsWith(" - DV P8.1.mkv"));
         model.Hdr10 = true;
         Assert.IsFalse(model.ApproveCommand.CanExecute(null));
         Assert.IsFalse(model.Files.Single().HasWarning);
         Assert.IsNull(model.Files.Single().Warning);
+        Assert.AreEqual("", model.Files.Single().Status);
+        Assert.AreEqual("", model.Files.Single().PlannedOutput);
+        Assert.AreEqual(MediaRowState.Scanned, model.Files.Single().State);
         await model.ApproveCommand.ExecuteAsync();
         Assert.AreEqual(0, runtime.Conversions);
         await model.ReviewCommand.ExecuteAsync();
+        Assert.AreEqual("Ready to convert", model.Files.Single().Status);
+        Assert.AreEqual(MediaRowState.PlanReady, model.Files.Single().State);
         Assert.IsTrue(model.Files.Single().HasWarning);
         Assert.AreEqual("Enhancement-layer picture data will be lost.", model.Files.Single().Warning);
         await model.ApproveCommand.ExecuteAsync();
         Assert.AreEqual(1, runtime.Conversions);
         Assert.AreEqual("Converted", model.Files.Single().Status);
+        Assert.AreEqual(MediaRowState.Converted, model.Files.Single().State);
         Assert.IsFalse(model.Files.Single().HasWarning);
         Assert.IsNull(model.Files.Single().Warning);
         Assert.IsTrue(model.Files.Single().CanOpenResult);
@@ -573,6 +582,46 @@ public sealed class ViewModelTests
 
         model.Files[0].IsSelected = false;
         Assert.AreEqual("5 items", model.SelectionSummary);
+    }
+
+    [TestMethod]
+    public async Task ActiveProgressPropertiesReflectBatchAndNonBatchOperations()
+    {
+        using var runtime = new TestRuntime();
+        var model = runtime.Container.Resolve<MediaViewModel>();
+
+        Assert.IsFalse(model.IsBusy);
+        Assert.IsFalse(model.BatchProgress.IsRunning);
+        Assert.AreEqual(0, model.ActiveProgressPercent);
+        Assert.IsFalse(model.ActiveProgressIndeterminate);
+        Assert.AreEqual("Ready", model.ActiveProgressSummary);
+
+        var started = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+        runtime.DuringAnalysis = async token =>
+        {
+            started.TrySetResult();
+            await Task.Delay(Timeout.Infinite, token);
+        };
+
+        var task = model.AddAsync([@"C:\Media\Mountain.mkv", @"C:\Media\Ocean.mkv"]);
+        await started.Task.WaitAsync(TimeSpan.FromSeconds(10));
+
+        Assert.IsTrue(model.IsBusy);
+        Assert.IsTrue(model.BatchProgress.IsRunning);
+        Assert.AreEqual("Scan", model.ActiveProgressTitle);
+        Assert.AreEqual("0%", model.ActiveProgressText);
+        Assert.AreEqual(0, model.ActiveProgressPercent);
+        Assert.IsFalse(model.ActiveProgressIndeterminate);
+        Assert.AreEqual("0 of 2 files processed", model.ActiveProgressSummary);
+        Assert.IsNotNull(model.ActiveProgressToolTip);
+
+        runtime.DuringAnalysis = null;
+        model.CancelCommand.Execute();
+        await task.WaitAsync(TimeSpan.FromSeconds(10));
+
+        Assert.IsFalse(model.IsBusy);
+        Assert.IsFalse(model.BatchProgress.IsRunning);
+        Assert.IsNull(model.ActiveProgressToolTip);
     }
 }
 

@@ -33,7 +33,7 @@ public sealed class ProgressTests
         var probe = new MediaProbe(tools, new FailingRunner(), files, NullLogger<MediaProbe>.Instance);
         var sink = new RecordingProgress();
         var result = await probe.AnalyzeAsync(media, method, workspace, default, sink);
-        Assert.IsTrue(sink.Values.All(value => value.File == media.Source.Path));
+        Assert.IsTrue(sink.Values.All(value => value.Item == media.Source.Path));
         if (method == AnalysisMethod.SampledRpu)
         {
             CollectionAssert.AreEqual(Enumerable.Range(0, 11).Select(value => (double?)(value * 10)).ToArray(), sink.Values.Select(value => value.Percent).ToArray());
@@ -61,7 +61,7 @@ public sealed class ProgressTests
         {
             25, 99
         }, sink.Values.Select(v => v.Percent).ToArray());
-        Assert.IsTrue(sink.Values.All(v => v.OperationId == id && v.File == "movie.mkv"));
+        Assert.IsTrue(sink.Values.All(v => v.OperationId == id && v.Item == "movie.mkv"));
     }
 
     private sealed class RecordingProgress : IProgress<OperationProgress>

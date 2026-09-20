@@ -282,13 +282,13 @@
                         <CheckBox Content="Create enhancement-layer archive (EL)" IsChecked="{Binding CreateArchive}" />
                     </StackPanel>
                 </Grid>
-                <!--<ScrollViewer MaxHeight="80"
+                <ScrollViewer MaxHeight="180"
                               VerticalScrollBarVisibility="Auto"
                               Margin="0,12">
                     <TextBlock Text="{Binding Review}"
                                Foreground="#FFD166"
                                TextWrapping="Wrap" />
-                </ScrollViewer>-->
+                </ScrollViewer>
                 <StackPanel Orientation="Horizontal" HorizontalAlignment="Right">
                     <Button Content="Close options"
                             Command="{Binding CloseOptionsCommand}"
@@ -303,7 +303,7 @@
             </StackPanel>
         </Border>
         <StackPanel Grid.Row="3" Margin="0,8,0,0">
-            <Border Style="{StaticResource Card}" Visibility="{Binding BatchProgress.IsRunning, Converter={StaticResource Visible}}">
+            <Border Style="{StaticResource Card}" Visibility="{Binding IsBusy, Converter={StaticResource Visible}}">
                 <Grid>
                     <Grid.ColumnDefinitions>
                         <ColumnDefinition Width="*" />
@@ -311,53 +311,38 @@
                     </Grid.ColumnDefinitions>
                     <StackPanel Margin="0,0,24,0">
                         <DockPanel Margin="0,0,0,8">
-                            <TextBlock Text="{Binding BatchProgress.Percent, StringFormat={}{0:0}%}"
+                            <TextBlock Text="{Binding ActiveProgressText}"
                                        DockPanel.Dock="Right"
                                        Foreground="{DynamicResource {x:Static SystemColors.AccentColorBrushKey}}"
                                        FontSize="22"
                                        Margin="12,0,0,0" />
-                            <TextBlock Text="{Binding BatchProgress.Operation}"
+                            <TextBlock Text="{Binding ActiveProgressTitle}"
                                        VerticalAlignment="Center"
-                                       FontSize="22" 
+                                       FontSize="22"
                                        Foreground="{DynamicResource TextFillColorSecondaryBrush}" />
                         </DockPanel>
-                         <ProgressBar Value="{Binding BatchProgress.Percent, Mode=OneWay}"
+                        <ProgressBar Value="{Binding ActiveProgressPercent, Mode=OneWay}"
+                                     IsIndeterminate="{Binding ActiveProgressIndeterminate}"
                                      Height="8"
-                                     AutomationProperties.Name="Overall batch progress" />
-                        <TextBlock Text="{Binding BatchProgress.Summary}"
-                                    Margin="0,8,0,0"
-                                    Foreground="{DynamicResource TextFillColorSecondaryBrush}"
-                                    ToolTip="Processed includes completed, failed, cancelled and skipped files. Each file has equal weight in the batch." />
+                                     AutomationProperties.Name="Overall progress" />
+                        <TextBlock Text="{Binding ActiveProgressSummary}"
+                                   Margin="0,8,0,0"
+                                   Foreground="{DynamicResource TextFillColorSecondaryBrush}"
+                                   ToolTip="{Binding ActiveProgressToolTip}" />
                     </StackPanel>
-                    <Button Grid.Column="1" 
+                    <Button Grid.Column="1"
                             VerticalAlignment="Center"
                             Content="Cancel"
                             Command="{Binding CancelCommand}"
                             Margin="0" />
                 </Grid>
             </Border>
-            <StackPanel>
-                <StackPanel.Style>
-                    <Style TargetType="StackPanel">
-                        <Style.Triggers>
-                            <DataTrigger Binding="{Binding BatchProgress.IsRunning}" Value="True">
-                                <Setter Property="Visibility" Value="Collapsed" />
-                            </DataTrigger>
-                        </Style.Triggers>
-                    </Style>
-                </StackPanel.Style>
-                <ProgressBar Value="{Binding Percent, Mode=OneWay}"
-                             IsIndeterminate="{Binding Indeterminate}"
-                             Visibility="{Binding IsBusy, Converter={StaticResource Visible}}" />
-                <Button Content="Cancel"
-                        Command="{Binding CancelCommand}"
-                        HorizontalAlignment="Right"
-                        Visibility="{Binding IsBusy, Converter={StaticResource Visible}}" />
-            </StackPanel>
-            <StackPanel Margin="0,8,0,0" Orientation="Horizontal" TextBlock.Foreground="{DynamicResource TextFillColorSecondaryBrush}">
+            <StackPanel Margin="0,8,0,0"
+                        Orientation="Horizontal"
+                        TextBlock.Foreground="{DynamicResource TextFillColorSecondaryBrush}">
                 <TextBlock Text="{Binding SelectionSummary}" />
-                <TextBlock Text=" | "/>
-                <TextBlock Text="{Binding Status}" TextWrapping="Wrap"/>
+                <TextBlock Text=" | " />
+                <TextBlock Text="{Binding Status}" TextWrapping="Wrap" />
             </StackPanel>
         </StackPanel>
     </Grid>

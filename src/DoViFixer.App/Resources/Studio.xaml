@@ -7,6 +7,7 @@
     <BooleanToVisibilityConverter x:Key="Visible" />
     <p:InverseBooleanConverter x:Key="Inverse" />
     <SolidColorBrush x:Key="Accent" Color="{DynamicResource {x:Static SystemColors.AccentColorKey}}" />
+    <SolidColorBrush x:Key="Muted" Color="#808080" />
     <Style x:Key="Heading"
            TargetType="TextBlock"
            BasedOn="{StaticResource TitleTextBlockStyle}">

@@ -18,6 +18,10 @@
                                 Margin="10,0,0,0" />
                         <TextBox Text="{Binding Temporary, UpdateSourceTrigger=PropertyChanged}" />
                     </DockPanel>
+                    <TextBlock Text="Working space for extracted video, Dolby Vision metadata and verification files during scans, inspections, conversions, backups and restores. Each operation uses its own subfolder and attempts to remove it when finished, including after failure or cancellation. Final output files use the output folder selected below. Leave blank to use the Windows temporary folder. Conversion review shows the resolved folder and required scratch space for each file."
+                               TextWrapping="Wrap"
+                               Foreground="{DynamicResource TextFillColorSecondaryBrush}"
+                               Margin="0,6,0,12" />
                     <RadioButton Content="Same folder as source"
                                  GroupName="DefaultDestination"
                                  IsChecked="{Binding OtherFolder, Converter={StaticResource Inverse}}" />
@@ -116,7 +120,7 @@
                        Foreground="{DynamicResource TextFillColorSecondaryBrush}"
                        Margin="0,20" />
             <ProgressBar Value="{Binding Percent, Mode=OneWay}"
-                         IsIndeterminate="{Binding Indeterminate}"
+                         IsIndeterminate="{Binding IsIndeterminate}"
                          Visibility="{Binding IsBusy, Converter={StaticResource Visible}}" />
             <TextBlock Text="{Binding Status}"
                        TextWrapping="Wrap"
