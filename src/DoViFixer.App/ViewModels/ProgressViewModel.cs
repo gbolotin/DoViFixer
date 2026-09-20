@@ -1,3 +1,5 @@
+using DoViFixer.Application.Operations;
+
 namespace DoViFixer.App.ViewModels;
 
 public sealed class ProgressViewModel : BindableBase
@@ -6,14 +8,27 @@ public sealed class ProgressViewModel : BindableBase
     private string stage = "";
     private double? stagePercent;
 
-    public string Stage { get => stage; private set => SetProperty(ref stage, value); }
-    public double StagePercent => stagePercent ?? 0;
+    public bool IsRunning
+    {
+        get => isRunning;
+        private set => SetProperty(ref isRunning, value);
+    }
+
+    public string Stage
+    {
+        get => stage;
+        private set => SetProperty(ref stage, value);
+    }
+
+    public double Percent => stagePercent ?? 0;
+    public double StagePercent => Percent;
     public bool IsIndeterminate => isRunning && stagePercent is null;
-    public string StageProgressText => stagePercent is { } value ? $"{value:0}%" : isRunning ? "Working…" : "";
+    public string ProgressText => stagePercent is { } value ? $"{value:0}%" : isRunning ? "Working…" : "";
+    public string StageProgressText => ProgressText;
 
     public void Start(string initialStage)
     {
-        isRunning = true;
+        IsRunning = true;
         Update(initialStage, null);
     }
 
@@ -21,15 +36,36 @@ public sealed class ProgressViewModel : BindableBase
     {
         Stage = stage;
         stagePercent = percent is { } value && double.IsFinite(value) ? Math.Clamp(value, 0, 100) : null;
+        RaisePropertyChanged(nameof(Percent));
         RaisePropertyChanged(nameof(StagePercent));
         RaisePropertyChanged(nameof(IsIndeterminate));
+        RaisePropertyChanged(nameof(ProgressText));
         RaisePropertyChanged(nameof(StageProgressText));
+    }
+
+    public void Update(OperationProgress progress)
+    {
+        Update(progress.Stage, progress.Percent);
     }
 
     public void End()
     {
-        isRunning = false;
+        IsRunning = false;
         RaisePropertyChanged(nameof(IsIndeterminate));
+        RaisePropertyChanged(nameof(ProgressText));
+        RaisePropertyChanged(nameof(StageProgressText));
+    }
+
+    public void Reset()
+    {
+        IsRunning = false;
+        Stage = "";
+        stagePercent = null;
+        RaisePropertyChanged(nameof(Percent));
+        RaisePropertyChanged(nameof(StagePercent));
+        RaisePropertyChanged(nameof(IsIndeterminate));
+        RaisePropertyChanged(nameof(ProgressText));
         RaisePropertyChanged(nameof(StageProgressText));
     }
 }
+

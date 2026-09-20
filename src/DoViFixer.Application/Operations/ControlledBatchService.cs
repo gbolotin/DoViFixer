@@ -1,29 +1,37 @@
 using Microsoft.Extensions.Logging;
 
 namespace DoViFixer.Application.Operations;
-/// <summary>Runs selected items sequentially; per-file cancellation awaits recovery before continuing.</summary>
+/// <summary>Runs selected items sequentially; per-item cancellation awaits recovery before continuing.</summary>
 public sealed class ControlledBatchService(ILogger<ControlledBatchService> logger)
 {
-    public async Task<BatchResult> ExecuteAsync<T>(IReadOnlyList<T> items, Func<T, string> path, Func<T, CancellationToken, Task<FileResult>> execute, BatchControl control, IProgress<FileResult>? completed, CancellationToken cancellationToken)
+    public async Task<BatchResult> ExecuteAsync<T>(
+        IReadOnlyList<T> items,
+        Func<T, string> itemKey,
+        Func<T, CancellationToken, Task<OperationItemResult>> execute,
+        BatchControl control,
+        IProgress<OperationItemResult>? completed,
+        CancellationToken cancellationToken)
     {
-        var results = new List<FileResult>();
+        var results = new List<OperationItemResult>();
         foreach (var item in items)
         {
-            string input = path(item);
-            FileResult result;
+            string key = itemKey(item);
+            OperationItemResult result;
             try
             {
-                var token = control.Start(input, cancellationToken);
-                result = token is null ? new(input, OperationStatus.Skipped, null, "Deselected before starting.") : await execute(item, token.Value);
+                var token = control.Start(key, cancellationToken);
+                result = token is null
+                    ? new(key, OperationStatus.Skipped, null, "Deselected before starting.")
+                    : await execute(item, token.Value);
             }
             catch (OperationCanceledException)
             {
-                result = new(input, OperationStatus.Cancelled, null, "Cancelled; operation cleanup has finished.");
+                result = new(key, OperationStatus.Cancelled, null, "Cancelled; operation cleanup has finished.");
             }
             catch (Exception ex)
             {
-                logger.LogError(ex, "Batch item failed: {Input}", input);
-                result = new(input, OperationStatus.Failed, null, ex.Message);
+                logger.LogError(ex, "Batch item failed: {Item}", key);
+                result = new(key, OperationStatus.Failed, null, ex.Message);
             }
             finally
             {

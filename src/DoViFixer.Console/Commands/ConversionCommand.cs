@@ -66,14 +66,14 @@ public sealed class ConversionCommand(ConversionPlanner planner, BatchConversion
         }
 
         var executed = await conversion.ExecuteAsync(approvedPlans, renderer, cancellationToken);
-        foreach (var file in executed.Files)
+        foreach (var file in executed.Items)
         {
             renderer.Result(file);
         }
 
-        var result = new BatchResult(planned.Skipped.Where(f => f.Status == OperationStatus.Failed).Concat(executed.Files).ToArray());
-        int partial = result.Files.Count(f => f.Status == OperationStatus.Partial);
-        renderer.Write($"{result.Status.ToString().ToUpperInvariant()}: {result.Files.Count(f => f.Status == OperationStatus.Completed)} completed, " + (partial > 0 ? $"{partial} partial, " : "") + $"{result.Files.Count(f => f.Status == OperationStatus.Failed)} failed.");
+        var result = new BatchResult(planned.Skipped.Where(f => f.Status == OperationStatus.Failed).Concat(executed.Items).ToArray());
+        int partial = result.Items.Count(f => f.Status == OperationStatus.Partial);
+        renderer.Write($"{result.Status.ToString().ToUpperInvariant()}: {result.Items.Count(f => f.Status == OperationStatus.Completed)} completed, " + (partial > 0 ? $"{partial} partial, " : "") + $"{result.Items.Count(f => f.Status == OperationStatus.Failed)} failed.");
         return result.Status == OperationStatus.Completed && planned.Skipped.Any(f => f.Status == OperationStatus.Failed) ? 1 : CommandDispatcher.ExitCode(result.Status);
     }
 }

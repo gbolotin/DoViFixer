@@ -301,7 +301,7 @@ public sealed class WorkflowTests
         Assert.IsTrue(runtime.ConversionLog.Entries.Any(e => Equals(e.Properties.GetValueOrDefault("Outcome"), "Cancelled")));
         Assert.AreEqual(0, runtime.Restored);
         Assert.AreEqual(0, runtime.Renamed);
-        StringAssert.Contains(result.Files[0].Message, "Original retained");
+        StringAssert.Contains(result.Items[0].Message, "Original retained");
         Assert.IsFalse(runtime.ConversionLog.Entries.Any(e => Equals(e.Properties.GetValueOrDefault("Outcome"), "Completed") && e.Properties.ContainsKey("ElapsedMilliseconds")));
     }
 

@@ -4,50 +4,55 @@ using DoViFixer.Domain.Analysis;
 namespace DoViFixer.App.ViewModels;
 public sealed class MediaRow(string path) : BindableBase
 {
-    public ProgressViewModel Progress { get; } = new();
-
+    #region Private fields
     private bool selected = true;
     private bool selectionEnabled = true;
     private bool pending;
     private bool active;
+    private MediaRowState state = MediaRowState.NotScanned;
     private string status = "Not scanned";
     private bool canRetryAnalysis;
+    private string output = "";
+    private MediaAnalysis? analysis;
+    private OperationItemResult? result;
+    private string? analysisError;
+    private string? warning;
+    private string notice = "";
+
+    #endregion
+
+    #region Public fields
+    
+    public string Path { get; } = path;
+    public string Name => System.IO.Path.GetFileName(Path);
+    public ProgressViewModel Progress { get; } = new();
     public bool HasIncompleteScan => Analysis is not null
         && Analysis.Media.Profile == Domain.Media.DolbyVisionProfile.Profile7
         && Analysis.Verdict == AnalysisVerdict.Unknown
         && Analysis.Evidence.Method == AnalysisMethod.SampledRpu
         && (Analysis.Evidence.Frames <= 0 || Analysis.Evidence.SuccessfulSamples < Analysis.Evidence.RequestedSamples);
     public bool CanInspectIncomplete => HasIncompleteScan && !IsActive && !IsPending;
-    public AnalysisMethod? LastAnalysisMethod
-    {
-        get;
-        set;
-    }
-    = AnalysisMethod.SampledRpu;
-    public string? CurrentOperation
-    {
-        get;
-        set;
-    }
+    public AnalysisMethod? LastAnalysisMethod { get; set;} = AnalysisMethod.SampledRpu;
+    public string? CurrentOperation { get; set; }
     public string OperationName => CurrentOperation ?? (LastAnalysisMethod is null ? "Conversion" : LastAnalysisMethod == AnalysisMethod.SampledRpu ? "Scan" : "Inspection");
+    public MediaRowState State
+    {
+        get => state;
+        private set
+        {
+            if (SetProperty(ref state, value))
+            {
+                RaisePropertyChanged(nameof(CanOpenResult));
+            }
+        }
+    }
     public bool CanRetryAnalysis
     {
         get => canRetryAnalysis;
         set => SetProperty(ref canRetryAnalysis, value);
     }
-    public bool CanOpenResult => Result?.Output is not null && Status is "Converted" or "Converted with warnings";
-    private string output = "";
-    private MediaAnalysis? analysis;
-    private FileResult? result;
-    private string? analysisError;
-    private string? warning;
-    private string notice = "";
-    public string Path
-    {
-        get;
-    }
-    = path;
-    public string Name => System.IO.Path.GetFileName(Path);
+    public bool CanOpenResult => Result?.Output is not null && State == MediaRowState.Converted;
+   
     public string? Warning
     {
         get => warning;
@@ -123,6 +128,17 @@ public sealed class MediaRow(string path) : BindableBase
         }
     }
 
+    public OperationItemResult? Result
+    {
+        get => result;
+        set
+        {
+            SetProperty(ref result, value);
+            RaisePropertyChanged(nameof(ResultDetails));
+            RaisePropertyChanged(nameof(CanOpenResult));
+        }
+    }
+
     public MediaAnalysis? Analysis
     {
         get => analysis;
@@ -134,17 +150,6 @@ public sealed class MediaRow(string path) : BindableBase
             RaisePropertyChanged(nameof(Classification));
             RaisePropertyChanged(nameof(ClassificationColor));
             RaisePropertyChanged(nameof(Details));
-        }
-    }
-
-    public FileResult? Result
-    {
-        get => result;
-        set
-        {
-            SetProperty(ref result, value);
-            RaisePropertyChanged(nameof(ResultDetails));
-            RaisePropertyChanged(nameof(CanOpenResult));
         }
     }
 
@@ -172,11 +177,81 @@ public sealed class MediaRow(string path) : BindableBase
         AnalysisVerdict.Unknown or AnalysisVerdict.FelUnclassified => "#FFD166",
         _ => "#A6B6C3"
     };
-    public string Details => AnalysisError is not null ? $"{Path}\n\nAnalysis failed\n{AnalysisError}" : Analysis is not
-    {
-    }
+    public string Details => AnalysisError is not null ? $"{Path}\n\nAnalysis failed\n{AnalysisError}" : Analysis is not{ }
     a ? Path + "\n" + Notice : $"{Path}\n\n{Classification}\n{a.Media.Width} × {a.Media.Height} · {a.Media.FramesPerSecond:0.###} fps\n" + $"{TimeSpan.FromSeconds(a.Media.DurationSeconds ?? 0):g} · {a.Media.Source.Length / 1073741824d:0.00} GiB\n\n" + $"Evidence: {EvidenceName(a.Evidence.Method)}\nFrames: {a.Evidence.Frames:N0}\nSamples: {a.Evidence.SuccessfulSamples}/{a.Evidence.RequestedSamples}\n\n{a.Reason}\n{a.Evidence.SampleDiagnostics}\n" + (HasIncompleteScan ? "\nSuggested action: Inspect. Standard inspection examines the full RPU metadata stream instead of short samples. It may take longer; missing metadata may still prevent classification.\n" : "") + $"\n{Notice}";
     public string ResultDetails => Result is null ? "" : $"Last conversion result\n{Result.Status}\n{Result.Output}\n{Result.Message}";
+
+    public void SetPlan(string plannedOutput, string? warning)
+    {
+        PlannedOutput = plannedOutput;
+        Warning = warning;
+        Status = "Ready to convert";
+        State = MediaRowState.PlanReady;
+    }
+
+    public void ClearPlan()
+    {
+        if (State != MediaRowState.PlanReady)
+        {
+            return;
+        }
+
+        PlannedOutput = "";
+        Warning = null;
+        Status = "";
+        State = MediaRowState.Scanned;
+    }
+
+    public void SetConverted(OperationItemResult itemResult)
+    {
+        Result = itemResult;
+        Status = itemResult.Status == OperationStatus.Partial || HasWarning ? "Converted with warnings" : "Converted";
+        State = MediaRowState.Converted;
+    }
+
+    public void SetScanned()
+    {
+        Status = "";
+        State = MediaRowState.Scanned;
+    }
+
+    public void SetSkipped()
+    {
+        IsPending = false;
+        IsSelected = false;
+        SelectionEnabled = false;
+        Status = $"{OperationName} skipped";
+        State = MediaRowState.Skipped;
+    }
+
+    public void SetActive(string stage)
+    {
+        IsPending = false;
+        IsActive = true;
+        SelectionEnabled = false;
+        Status = stage;
+        State = MediaRowState.Active;
+    }
+
+    public void SetCancelled(string? message = null)
+    {
+        if (message is not null)
+        {
+            Notice = message;
+        }
+
+        Status = $"{OperationName} cancelled";
+        State = MediaRowState.Cancelled;
+    }
+
+    public void SetFailed(string? error, string? statusText = null)
+    {
+        AnalysisError = error;
+        Status = statusText ?? $"{OperationName} failed";
+        State = MediaRowState.Failed;
+    }
+
+    #endregion
 
     private static string EvidenceName(AnalysisMethod method) => method switch
     {

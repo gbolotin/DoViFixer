@@ -24,13 +24,13 @@ public sealed class RestoreService(DependencyService dependencies, IMediaProbe p
         return new(Guid.NewGuid(), media, archiveIdentity, files.PrepareOutputPath(input, outputDirectory, ".restored.mkv"), temporaryDirectory ?? snapshot.TemporaryDirectory, checked(ConversionPolicy.RequiredScratchBytes(media.Source.Length) + archiveIdentity.Length * 3), allowLegacy);
     }
 
-    public Task<FileResult> ExecuteAsync(RestorePlan approvedPlan, IProgress<OperationProgress>? progress, CancellationToken cancellationToken) => OperationLog.RunAsync(logger, "Restore", approvedPlan.Id, approvedPlan.Media.Source.Path, async () =>
+    public Task<OperationItemResult> ExecuteAsync(RestorePlan approvedPlan, IProgress<OperationProgress>? progress, CancellationToken cancellationToken) => OperationLog.RunAsync(logger, "Restore", approvedPlan.Id, approvedPlan.Media.Source.Path, async () =>
     {
         var result = await ExecuteCoreAsync(approvedPlan, progress, cancellationToken);
         OperationLog.Result(logger, result);
         return result;
     }, cancellationToken, result => result.Status);
-    private async Task<FileResult> ExecuteCoreAsync(RestorePlan approvedPlan, IProgress<OperationProgress>? progress, CancellationToken cancellationToken)
+    private async Task<OperationItemResult> ExecuteCoreAsync(RestorePlan approvedPlan, IProgress<OperationProgress>? progress, CancellationToken cancellationToken)
     {
         logger.LogInformation("Restoring archive {Archive} to {Output}; allow legacy {AllowLegacy}", approvedPlan.Archive.Path, approvedPlan.Output, approvedPlan.AllowLegacy);
         await dependencies.RequireAsync(DependencyRequirements.All, cancellationToken);

@@ -72,10 +72,10 @@ public sealed class ConsoleRenderer : IProgress<OperationProgress>, IDisposable
     {
         lock (progressLock)
         {
-            bool sameStage = previousProgress is not null && previousProgress.OperationId == value.OperationId && previousProgress.Stage == value.Stage && previousProgress.File == value.File;
+            bool sameStage = previousProgress is not null && previousProgress.OperationId == value.OperationId && previousProgress.Stage == value.Stage && previousProgress.Item == value.Item;
             double? percent = value.Percent is double number && double.IsFinite(number) ? Math.Clamp(number, 0, 100) : null;
             string label = percent is double p ? $"{Math.Floor(p), 3:0}%" : " ...";
-            string message = $"{value.Stage} {label}{(value.File is null ? "" : $": {value.File}")}";
+            string message = $"{value.Stage} {label}{(value.Item is null ? "" : $": {value.Item}")}";
             if (!interactive)
             {
                 // Keep logs readable: one stage start and one successful completion.
@@ -127,5 +127,5 @@ public sealed class ConsoleRenderer : IProgress<OperationProgress>, IDisposable
         }
     }
 
-    public void Result(FileResult result) => Write($"{result.Status.ToString().ToUpperInvariant()}: {result.Input}\n  {result.Message}{(result.Output is null ? "" : $"\n  Output: {result.Output}")}");
+    public void Result(IOperationItemResult result) => Write($"{result.Status.ToString().ToUpperInvariant()}: {result.Item}\n  {result.Message}{(result.Output is null ? "" : $"\n  Output: {result.Output}")}");
 }
