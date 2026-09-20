@@ -147,6 +147,76 @@
             </Trigger>
         </Style.Triggers>
     </Style>
+    <Style TargetType="ListView">
+        <Setter Property="Background" Value="{StaticResource Surface}" />
+        <Setter Property="Foreground" Value="{StaticResource Ink}" />
+        <Setter Property="BorderBrush" Value="{StaticResource Line}" />
+        <Setter Property="BorderThickness" Value="1" />
+        <Setter Property="AlternationCount" Value="2" />
+        <Setter Property="ScrollViewer.HorizontalScrollBarVisibility" Value="Auto" />
+        <Setter Property="ScrollViewer.VerticalScrollBarVisibility" Value="Auto" />
+        <Setter Property="ScrollViewer.CanContentScroll" Value="True" />
+        <Setter Property="VirtualizingPanel.IsVirtualizing" Value="True" />
+        <Setter Property="VirtualizingPanel.VirtualizationMode" Value="Recycling" />
+    </Style>
+    <Style TargetType="GridViewColumnHeader">
+        <Setter Property="Background" Value="#12212A" />
+        <Setter Property="Foreground" Value="{StaticResource Muted}" />
+        <Setter Property="Padding" Value="12,16" />
+        <Setter Property="BorderThickness" Value="0,0,1,1" />
+        <Setter Property="BorderBrush" Value="{StaticResource Line}" />
+        <Setter Property="HorizontalContentAlignment" Value="Left" />
+        <Setter Property="Template">
+            <Setter.Value>
+                <ControlTemplate TargetType="GridViewColumnHeader">
+                    <Border Background="{TemplateBinding Background}"
+                            BorderBrush="{TemplateBinding BorderBrush}"
+                            BorderThickness="{TemplateBinding BorderThickness}"
+                            Padding="{TemplateBinding Padding}">
+                        <ContentPresenter HorizontalAlignment="{TemplateBinding HorizontalContentAlignment}"
+                                          VerticalAlignment="{TemplateBinding VerticalContentAlignment}"
+                                          SnapsToDevicePixels="{TemplateBinding SnapsToDevicePixels}" />
+                    </Border>
+                </ControlTemplate>
+            </Setter.Value>
+        </Setter>
+        <Style.Triggers>
+            <Trigger Property="Role" Value="Padding">
+                <Setter Property="BorderThickness" Value="0,0,0,1" />
+            </Trigger>
+        </Style.Triggers>
+    </Style>
+    <Style TargetType="ListViewItem">
+        <Setter Property="Background" Value="{StaticResource Surface}" />
+        <Setter Property="Foreground" Value="{StaticResource Ink}" />
+        <Setter Property="BorderBrush" Value="{StaticResource Line}" />
+        <Setter Property="BorderThickness" Value="0,0,0,1" />
+        <Setter Property="HorizontalContentAlignment" Value="Stretch" />
+        <Setter Property="Template">
+            <Setter.Value>
+                <ControlTemplate TargetType="ListViewItem">
+                    <Border Background="{TemplateBinding Background}"
+                            BorderBrush="{TemplateBinding BorderBrush}"
+                            BorderThickness="{TemplateBinding BorderThickness}"
+                            Padding="{TemplateBinding Padding}"
+                            SnapsToDevicePixels="True">
+                        <GridViewRowPresenter HorizontalAlignment="Stretch"
+                                              VerticalAlignment="{TemplateBinding VerticalContentAlignment}"
+                                              SnapsToDevicePixels="{TemplateBinding SnapsToDevicePixels}" />
+                    </Border>
+                    <ControlTemplate.Triggers>
+                        <Trigger Property="ItemsControl.AlternationIndex" Value="1">
+                            <Setter Property="Background" Value="#192C36" />
+                        </Trigger>
+                        <Trigger Property="IsSelected" Value="True">
+                            <Setter Property="Background" Value="#204450" />
+                            <Setter Property="Foreground" Value="{StaticResource Ink}" />
+                        </Trigger>
+                    </ControlTemplate.Triggers>
+                </ControlTemplate>
+            </Setter.Value>
+        </Setter>
+    </Style>
     <Style TargetType="ProgressBar">
         <Setter Property="Height" Value="7" />
         <Setter Property="Foreground" Value="{StaticResource Accent}" />

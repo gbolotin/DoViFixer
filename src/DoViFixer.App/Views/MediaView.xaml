@@ -32,175 +32,166 @@
                 <ColumnDefinition Width="16" />
                 <ColumnDefinition Width="*" MinWidth="280" />
             </Grid.ColumnDefinitions>
-            <DataGrid ItemsSource="{Binding Files}"
-                      SelectedItem="{Binding Focused}"
-                      IsReadOnly="True"
-                      EnableRowVirtualization="True">
-                <DataGrid.Columns>
-                    <DataGridTemplateColumn Header="File"
-                                            Width="*"
-                                            MinWidth="238">
-                        <DataGridTemplateColumn.CellStyle>
-                            <Style TargetType="DataGridCell" BasedOn="{StaticResource {x:Type DataGridCell}}">
-                                <Setter Property="Padding" Value="12,8" />
-                            </Style>
-                        </DataGridTemplateColumn.CellStyle>
-                        <DataGridTemplateColumn.HeaderTemplate>
-                            <DataTemplate>
-                                <StackPanel Orientation="Horizontal">
-                                    <CheckBox IsChecked="{Binding DataContext.AllFilesSelected, RelativeSource={RelativeSource AncestorType=DataGrid}, Mode=OneWay}"
-                                              Command="{Binding DataContext.ToggleSelectAllCommand, RelativeSource={RelativeSource AncestorType=DataGrid}}"
-                                              Margin="0,0,12,0"
-                                              VerticalAlignment="Center"
-                                              ToolTip="Select all / none"
-                                              AutomationProperties.Name="Select all or clear all files" />
-                                    <TextBlock Text="File" VerticalAlignment="Center" />
-                                </StackPanel>
-                            </DataTemplate>
-                        </DataGridTemplateColumn.HeaderTemplate>
-                        <DataGridTemplateColumn.CellTemplate>
-                            <DataTemplate>
-                                <DockPanel>
-                                    <CheckBox IsChecked="{Binding IsSelected, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}"
-                                              IsEnabled="{Binding SelectionEnabled}"
-                                              Margin="0,0,12,0"
-                                              VerticalAlignment="Center"
-                                              AutomationProperties.Name="Include file" />
-                                    <StackPanel VerticalAlignment="Center">
-                                        <TextBlock Text="{Binding Name}"
-                                                   FontWeight="SemiBold"
-                                                   TextTrimming="CharacterEllipsis"
-                                                   ToolTip="{Binding Path}" />
-                                        <TextBlock Text="{Binding PlannedOutput}"
-                                                   FontSize="11"
-                                                   Foreground="{StaticResource Muted}"
-                                                   TextTrimming="CharacterEllipsis"
-                                                   ToolTip="{Binding PlannedOutput}"
-                                                   Margin="0,5,0,0">
-                                            <TextBlock.Style>
-                                                <Style TargetType="TextBlock" BasedOn="{StaticResource {x:Type TextBlock}}">
-                                                    <Style.Triggers>
-                                                        <DataTrigger Binding="{Binding PlannedOutput}" Value="">
-                                                            <Setter Property="Visibility" Value="Collapsed" />
-                                                        </DataTrigger>
-                                                        <DataTrigger Binding="{Binding PlannedOutput}" Value="{x:Null}">
-                                                            <Setter Property="Visibility" Value="Collapsed" />
-                                                        </DataTrigger>
-                                                    </Style.Triggers>
-                                                </Style>
-                                            </TextBlock.Style>
-                                        </TextBlock>
+            <ListView ItemsSource="{Binding Files}"
+                      SelectedItem="{Binding Focused}">
+                <ListView.View>
+                    <GridView>
+                        <GridViewColumn Header="File" Width="238">
+                            <GridViewColumn.HeaderTemplate>
+                                <DataTemplate>
+                                    <StackPanel Orientation="Horizontal">
+                                        <CheckBox IsChecked="{Binding DataContext.AllFilesSelected, RelativeSource={RelativeSource AncestorType=ListView}, Mode=OneWay}"
+                                                  Command="{Binding DataContext.ToggleSelectAllCommand, RelativeSource={RelativeSource AncestorType=ListView}}"
+                                                  Margin="0,0,12,0"
+                                                  VerticalAlignment="Center"
+                                                  ToolTip="Select all / none"
+                                                  AutomationProperties.Name="Select all or clear all files" />
+                                        <TextBlock Text="File" VerticalAlignment="Center" />
                                     </StackPanel>
-                                </DockPanel>
-                            </DataTemplate>
-                        </DataGridTemplateColumn.CellTemplate>
-                    </DataGridTemplateColumn>
-                    <DataGridTemplateColumn Header="Profile / Type" Width="185">
-                        <DataGridTemplateColumn.CellTemplate>
-                            <DataTemplate>
-                                <TextBlock Text="{Binding Classification}"
-                                           Foreground="{Binding ClassificationColor}"
-                                           VerticalAlignment="Center"
-                                           Margin="10,0"
-                                           TextWrapping="Wrap" />
-                            </DataTemplate>
-                        </DataGridTemplateColumn.CellTemplate>
-                    </DataGridTemplateColumn>
-                    <DataGridTemplateColumn Header="Status / Action"
-                                            Width="270"
-                                            MinWidth="270">
-                        <DataGridTemplateColumn.CellTemplate>
-                            <DataTemplate>
-                                <Grid VerticalAlignment="Center" Margin="6,0">
-                                    <Grid.ColumnDefinitions>
-                                        <ColumnDefinition Width="*" />
-                                        <ColumnDefinition Width="Auto" />
-                                    </Grid.ColumnDefinitions>
-                                    <StackPanel VerticalAlignment="Center">
-                                        <StackPanel Orientation="Horizontal" VerticalAlignment="Center">
-                                            <StackPanel.Style>
-                                                <Style TargetType="StackPanel">
-                                                    <Style.Triggers>
-                                                        <DataTrigger Binding="{Binding IsActive}" Value="True">
-                                                            <Setter Property="Visibility" Value="Collapsed" />
-                                                        </DataTrigger>
-                                                        <DataTrigger Binding="{Binding Status}" Value="">
-                                                            <Setter Property="Visibility" Value="Collapsed" />
-                                                        </DataTrigger>
-                                                    </Style.Triggers>
-                                                </Style>
-                                            </StackPanel.Style>
-                                            <TextBlock Text="{Binding Status}"
-                                                       TextWrapping="Wrap"
-                                                       VerticalAlignment="Center"
-                                                       ToolTip="{Binding Details}" />
-                                            <TextBlock Text="⚠"
-                                                       Foreground="#FFD166"
+                                </DataTemplate>
+                            </GridViewColumn.HeaderTemplate>
+                            <GridViewColumn.CellTemplate>
+                                <DataTemplate>
+                                    <DockPanel Margin="12,8">
+                                        <CheckBox IsChecked="{Binding IsSelected, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}"
+                                                  IsEnabled="{Binding SelectionEnabled}"
+                                                  Margin="0,0,12,0"
+                                                  VerticalAlignment="Center"
+                                                  AutomationProperties.Name="Include file" />
+                                        <StackPanel VerticalAlignment="Center">
+                                            <TextBlock Text="{Binding Name}"
                                                        FontWeight="SemiBold"
-                                                       Margin="6,0,0,0"
-                                                       VerticalAlignment="Center"
-                                                       Visibility="{Binding HasWarning, Converter={StaticResource Visible}}"
-                                                       ToolTip="{Binding Warning}"
-                                                       AutomationProperties.Name="Conversion warning" />
+                                                       TextTrimming="CharacterEllipsis"
+                                                       ToolTip="{Binding Path}" />
+                                            <TextBlock Text="{Binding PlannedOutput}"
+                                                       FontSize="11"
+                                                       Foreground="{StaticResource Muted}"
+                                                       TextTrimming="CharacterEllipsis"
+                                                       ToolTip="{Binding PlannedOutput}"
+                                                       Margin="0,5,0,0">
+                                                <TextBlock.Style>
+                                                    <Style TargetType="TextBlock" BasedOn="{StaticResource {x:Type TextBlock}}">
+                                                        <Style.Triggers>
+                                                            <DataTrigger Binding="{Binding PlannedOutput}" Value="">
+                                                                <Setter Property="Visibility" Value="Collapsed" />
+                                                            </DataTrigger>
+                                                            <DataTrigger Binding="{Binding PlannedOutput}" Value="{x:Null}">
+                                                                <Setter Property="Visibility" Value="Collapsed" />
+                                                            </DataTrigger>
+                                                        </Style.Triggers>
+                                                    </Style>
+                                                </TextBlock.Style>
+                                            </TextBlock>
                                         </StackPanel>
-                                        <StackPanel Margin="0,4,4,4" Visibility="{Binding IsActive, Converter={StaticResource Visible}}">
-                                            <StackPanel DataContext="{Binding Progress}">
-                                                <TextBlock Text="{Binding Stage}"
-                                                           TextTrimming="CharacterEllipsis"
-                                                           ToolTip="{Binding Stage}" />
-                                                <DockPanel Margin="0,6,0,0">
-                                                    <TextBlock Text="{Binding StageProgressText}"
-                                                               DockPanel.Dock="Right"
-                                                               Foreground="{StaticResource Accent}"
-                                                               FontSize="12"
-                                                               Margin="8,0,0,0" />
-                                                    <ProgressBar Value="{Binding StagePercent, Mode=OneWay}"
-                                                                 IsIndeterminate="{Binding IsIndeterminate}"
-                                                                 Height="6"
-                                                                 VerticalAlignment="Center"
-                                                                 AutomationProperties.Name="Current job stage progress" />
-                                                </DockPanel>
+                                    </DockPanel>
+                                </DataTemplate>
+                            </GridViewColumn.CellTemplate>
+                        </GridViewColumn>
+                        <GridViewColumn Header="Profile / Type" Width="180">
+                            <GridViewColumn.CellTemplate>
+                                <DataTemplate>
+                                    <TextBlock Text="{Binding Classification}"
+                                               Foreground="{Binding ClassificationColor}"
+                                               VerticalAlignment="Center"
+                                               Margin="10,0"
+                                               TextWrapping="Wrap" />
+                                </DataTemplate>
+                            </GridViewColumn.CellTemplate>
+                        </GridViewColumn>
+                        <GridViewColumn Header="Status / Action" Width="255">
+                            <GridViewColumn.CellTemplate>
+                                <DataTemplate>
+                                    <Grid VerticalAlignment="Center" Margin="6,0">
+                                        <Grid.ColumnDefinitions>
+                                            <ColumnDefinition Width="*" />
+                                            <ColumnDefinition Width="Auto" />
+                                        </Grid.ColumnDefinitions>
+                                        <StackPanel VerticalAlignment="Center">
+                                            <StackPanel Orientation="Horizontal" VerticalAlignment="Center">
+                                                <StackPanel.Style>
+                                                    <Style TargetType="StackPanel">
+                                                        <Style.Triggers>
+                                                            <DataTrigger Binding="{Binding IsActive}" Value="True">
+                                                                <Setter Property="Visibility" Value="Collapsed" />
+                                                            </DataTrigger>
+                                                            <DataTrigger Binding="{Binding Status}" Value="">
+                                                                <Setter Property="Visibility" Value="Collapsed" />
+                                                            </DataTrigger>
+                                                        </Style.Triggers>
+                                                    </Style>
+                                                </StackPanel.Style>
+                                                <TextBlock Text="{Binding Status}"
+                                                           TextWrapping="Wrap"
+                                                           VerticalAlignment="Center"
+                                                           ToolTip="{Binding Details}" />
+                                                <TextBlock Text="⚠"
+                                                           Foreground="#FFD166"
+                                                           FontWeight="SemiBold"
+                                                           Margin="6,0,0,0"
+                                                           VerticalAlignment="Center"
+                                                           Visibility="{Binding HasWarning, Converter={StaticResource Visible}}"
+                                                           ToolTip="{Binding Warning}"
+                                                           AutomationProperties.Name="Conversion warning" />
+                                            </StackPanel>
+                                            <StackPanel Margin="0,4,4,4" Visibility="{Binding IsActive, Converter={StaticResource Visible}}">
+                                                <StackPanel DataContext="{Binding Progress}">
+                                                    <TextBlock Text="{Binding Stage}"
+                                                               TextTrimming="CharacterEllipsis"
+                                                               ToolTip="{Binding Stage}" />
+                                                    <DockPanel Margin="0,6,0,0">
+                                                        <TextBlock Text="{Binding StageProgressText}"
+                                                                   DockPanel.Dock="Right"
+                                                                   Foreground="{StaticResource Accent}"
+                                                                   FontSize="12"
+                                                                   Margin="8,0,0,0" />
+                                                        <ProgressBar Value="{Binding StagePercent, Mode=OneWay}"
+                                                                     IsIndeterminate="{Binding IsIndeterminate}"
+                                                                     Height="6"
+                                                                     VerticalAlignment="Center"
+                                                                     AutomationProperties.Name="Current job stage progress" />
+                                                    </DockPanel>
+                                                </StackPanel>
                                             </StackPanel>
                                         </StackPanel>
-                                    </StackPanel>
-                                    <StackPanel Grid.Column="1" Orientation="Horizontal">
-                                        <Button Content="Cancel"
-                                                Padding="7,6"
-                                                Margin="4"
-                                                Visibility="{Binding IsActive, Converter={StaticResource Visible}}"
-                                                Command="{Binding DataContext.CancelFileCommand, RelativeSource={RelativeSource AncestorType=UserControl}}"
-                                                CommandParameter="{Binding}" />
-                                        <Button Content="Retry"
-                                                Padding="7,6"
-                                                Margin="4"
-                                                Visibility="{Binding CanRetryAnalysis, Converter={StaticResource Visible}}"
-                                                Command="{Binding DataContext.RetryAnalysisCommand, RelativeSource={RelativeSource AncestorType=UserControl}}"
-                                                CommandParameter="{Binding}" />
-                                        <Button Content="Inspect"
-                                                Padding="7,6"
-                                                Margin="4"
-                                                Visibility="{Binding CanInspectIncomplete, Converter={StaticResource Visible}}"
-                                                Command="{Binding DataContext.InspectIncompleteCommand, RelativeSource={RelativeSource AncestorType=UserControl}}"
-                                                CommandParameter="{Binding}" />
-                                        <Button Content="Open folder"
-                                                Padding="7,6"
-                                                Margin="4"
-                                                Visibility="{Binding CanOpenResult, Converter={StaticResource Visible}}"
-                                                Command="{Binding DataContext.OpenRowOutputCommand, RelativeSource={RelativeSource AncestorType=UserControl}}"
-                                                CommandParameter="{Binding}" />
-                                        <Button Content="Skip"
-                                                Padding="7,6"
-                                                Margin="4"
-                                                Visibility="{Binding IsPending, Converter={StaticResource Visible}}"
-                                                Command="{Binding DataContext.SkipCommand, RelativeSource={RelativeSource AncestorType=UserControl}}"
-                                                CommandParameter="{Binding}" />
-                                    </StackPanel>
-                                </Grid>
-                            </DataTemplate>
-                        </DataGridTemplateColumn.CellTemplate>
-                    </DataGridTemplateColumn>
-                </DataGrid.Columns>
-            </DataGrid>
+                                        <StackPanel Grid.Column="1" Orientation="Horizontal">
+                                            <Button Content="Cancel"
+                                                    Padding="7,6"
+                                                    Margin="4"
+                                                    Visibility="{Binding IsActive, Converter={StaticResource Visible}}"
+                                                    Command="{Binding DataContext.CancelFileCommand, RelativeSource={RelativeSource AncestorType=UserControl}}"
+                                                    CommandParameter="{Binding}" />
+                                            <Button Content="Retry"
+                                                    Padding="7,6"
+                                                    Margin="4"
+                                                    Visibility="{Binding CanRetryAnalysis, Converter={StaticResource Visible}}"
+                                                    Command="{Binding DataContext.RetryAnalysisCommand, RelativeSource={RelativeSource AncestorType=UserControl}}"
+                                                    CommandParameter="{Binding}" />
+                                            <Button Content="Inspect"
+                                                    Padding="7,6"
+                                                    Margin="4"
+                                                    Visibility="{Binding CanInspectIncomplete, Converter={StaticResource Visible}}"
+                                                    Command="{Binding DataContext.InspectIncompleteCommand, RelativeSource={RelativeSource AncestorType=UserControl}}"
+                                                    CommandParameter="{Binding}" />
+                                            <Button Content="Open folder"
+                                                    Padding="7,6"
+                                                    Margin="4"
+                                                    Visibility="{Binding CanOpenResult, Converter={StaticResource Visible}}"
+                                                    Command="{Binding DataContext.OpenRowOutputCommand, RelativeSource={RelativeSource AncestorType=UserControl}}"
+                                                    CommandParameter="{Binding}" />
+                                            <Button Content="Skip"
+                                                    Padding="7,6"
+                                                    Margin="4"
+                                                    Visibility="{Binding IsPending, Converter={StaticResource Visible}}"
+                                                    Command="{Binding DataContext.SkipCommand, RelativeSource={RelativeSource AncestorType=UserControl}}"
+                                                    CommandParameter="{Binding}" />
+                                        </StackPanel>
+                                    </Grid>
+                                </DataTemplate>
+                            </GridViewColumn.CellTemplate>
+                        </GridViewColumn>
+                    </GridView>
+                </ListView.View>
+            </ListView>
             <Border Grid.Column="2" Style="{StaticResource Card}">
                 <ScrollViewer VerticalScrollBarVisibility="Auto">
                     <StackPanel>
