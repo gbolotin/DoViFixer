@@ -191,15 +191,13 @@ public sealed class MediaRow(string path) : BindableBase
 
     public void ClearPlan()
     {
-        if (State != MediaRowState.PlanReady)
-        {
-            return;
-        }
-
         PlannedOutput = "";
         Warning = null;
-        Status = "";
-        State = MediaRowState.Scanned;
+        if (State == MediaRowState.PlanReady)
+        {
+            Status = "";
+            State = MediaRowState.Scanned;
+        }
     }
 
     public void SetConverted(OperationItemResult itemResult)
