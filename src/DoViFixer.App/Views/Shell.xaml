@@ -5,11 +5,11 @@
         Title="DoViFixer"
         MinWidth="800"
         MinHeight="600"
-        WindowStartupLocation="CenterScreen"
-        Style="{StaticResource {x:Type Window}}">
-    <DockPanel Background="{StaticResource Canvas}">
+        WindowStartupLocation="CenterScreen">
+    <DockPanel Background="{DynamicResource ApplicationBackgroundBrush}"
+               TextElement.Foreground="{DynamicResource TextFillColorPrimaryBrush}">
         <Border DockPanel.Dock="Top"
-                BorderBrush="{StaticResource Line}"
+                BorderBrush="{DynamicResource DividerStrokeColorDefaultBrush}"
                 BorderThickness="0,0,0,1"
                 Padding="26,20">
             <DockPanel>
@@ -24,10 +24,12 @@
                     <Button Content="Media"
                             Tag="Media"
                             Click="Navigate"
-                            BorderBrush="{StaticResource Accent}" />
+                            Margin="0,0,8,0"
+                            BorderBrush="{DynamicResource {x:Static SystemColors.AccentColorBrushKey}}" />
                     <Button Content="Backup &amp; Restore"
                             Tag="Archive"
-                            Click="Navigate" />
+                            Click="Navigate"
+                            Margin="0,0,8,0" />
                     <Button Content="Settings"
                             Tag="Settings"
                             Click="Navigate" />

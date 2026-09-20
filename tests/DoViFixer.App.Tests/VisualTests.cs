@@ -48,7 +48,8 @@ public sealed class VisualTests
     {
         var app = new System.Windows.Application
         {
-            ShutdownMode = ShutdownMode.OnExplicitShutdown
+            ShutdownMode = ShutdownMode.OnExplicitShutdown,
+            ThemeMode = ThemeMode.System
         };
         app.Resources.MergedDictionaries.Add(new ResourceDictionary
         {
@@ -187,7 +188,15 @@ public sealed class VisualTests
         view.UpdateLayout();
         await Dispatcher.Yield(DispatcherPriority.ApplicationIdle);
         view.UpdateLayout();
+        var backgroundVisual = new DrawingVisual();
+        using (var dc = backgroundVisual.RenderOpen())
+        {
+            var brush = (Brush)System.Windows.Application.Current.FindResource("ApplicationBackgroundBrush");
+            dc.DrawRectangle(brush, null, new Rect(0, 0, width, height));
+        }
+
         var bitmap = new RenderTargetBitmap(width, height, 96, 96, PixelFormats.Pbgra32);
+        bitmap.Render(backgroundVisual);
         bitmap.Render(view);
         var encoder = new PngBitmapEncoder();
         encoder.Frames.Add(BitmapFrame.Create(bitmap));

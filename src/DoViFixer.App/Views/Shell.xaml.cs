@@ -42,7 +42,14 @@ public partial class Shell : Window
         region.Activate(region.GetView(name));
         foreach (Button button in Navigation.Children)
         {
-            button.SetResourceReference(BorderBrushProperty, (string)button.Tag == name ? "Accent" : "Line");
+            if ((string)button.Tag == name)
+            {
+                button.SetResourceReference(BorderBrushProperty, SystemColors.AccentColorBrushKey);
+            }
+            else
+            {
+                button.ClearValue(BorderBrushProperty);
+            }
         }
 
         if (name == "Settings")

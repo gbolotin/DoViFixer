@@ -1,5 +1,11 @@
 <Project Sdk="Microsoft.NET.Sdk">
- <PropertyGroup><TargetFramework>net10.0-windows</TargetFramework><UseWPF>true</UseWPF><IsTestProject>true</IsTestProject><IsPackable>false</IsPackable></PropertyGroup>
+  <PropertyGroup>
+    <TargetFramework>net10.0-windows</TargetFramework>
+    <UseWPF>true</UseWPF>
+    <IsTestProject>true</IsTestProject>
+    <IsPackable>false</IsPackable>
+    <NoWarn>$(NoWarn);WPF0001</NoWarn>
+  </PropertyGroup>
  <ItemGroup><PackageReference Include="Microsoft.NET.Test.Sdk"/><PackageReference Include="MSTest.TestAdapter"/><PackageReference Include="MSTest.TestFramework"/>
  <ProjectReference Include="../../src/DoViFixer.App/DoViFixer.App.csproj"/></ItemGroup>
 </Project>

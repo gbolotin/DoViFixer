@@ -1,7 +1,7 @@
 <UserControl x:Class="DoViFixer.App.Views.SettingsView"
              xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
              xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
-             Style="{StaticResource {x:Type UserControl}}">
+             TextElement.Foreground="{DynamicResource TextFillColorPrimaryBrush}">
     <ScrollViewer VerticalScrollBarVisibility="Auto">
         <StackPanel>
             <TextBlock Text="Settings" Style="{StaticResource Heading}" />
@@ -42,14 +42,14 @@
                     <CheckBox Content="Automatically select convertible files after scan" IsChecked="{Binding AutoSelectAfterScan}" />
                     <TextBlock Text="When disabled, scans and inspections analyze files again. Successful results are still saved."
                                TextWrapping="Wrap"
-                               Foreground="{StaticResource Muted}" />
+                               Foreground="{DynamicResource TextFillColorSecondaryBrush}" />
                     <Button Content="Clear analysis cache"
                             Command="{Binding ClearCacheCommand}"
                             HorizontalAlignment="Left"
                             Margin="0,10,0,0" />
                     <TextBlock Text="Clears saved analysis only. Current displayed results remain; running scans may save new results."
                                TextWrapping="Wrap"
-                               Foreground="{StaticResource Muted}" />
+                               Foreground="{DynamicResource TextFillColorSecondaryBrush}" />
                     <Button Content="Save defaults"
                             Command="{Binding SaveCommand}"
                             Style="{StaticResource Primary}"
@@ -62,7 +62,9 @@
                                FontSize="20"
                                FontWeight="SemiBold" />
                     <StackPanel Orientation="Horizontal" Margin="0,14">
-                        <Button Content="Check tools" Command="{Binding CheckCommand}" />
+                        <Button Content="Check tools"
+                                Command="{Binding CheckCommand}"
+                                Margin="0,0,8,0" />
                         <Button Content="Dependency setup" Command="{Binding InstallCommand}" />
                     </StackPanel>
                     <ItemsControl ItemsSource="{Binding Tools}">
@@ -77,10 +79,10 @@
                                         <Run Text="{Binding Version}" />
                                     </TextBlock>
                                     <TextBlock Text="{Binding Path}"
-                                               Foreground="{StaticResource Muted}"
+                                               Foreground="{DynamicResource TextFillColorSecondaryBrush}"
                                                TextWrapping="Wrap" />
                                     <TextBlock Text="{Binding Diagnostic}"
-                                               Foreground="{StaticResource Muted}"
+                                               Foreground="{DynamicResource TextFillColorSecondaryBrush}"
                                                TextWrapping="Wrap" />
                                 </StackPanel>
                             </DataTemplate>
@@ -103,13 +105,15 @@
                                 Command="{Binding BrowseToolCommand}" />
                     </Grid>
                     <StackPanel Orientation="Horizontal">
-                        <Button Content="Validate and save path" Command="{Binding SetToolCommand}" />
+                        <Button Content="Validate and save path"
+                                Command="{Binding SetToolCommand}"
+                                Margin="0,0,8,0" />
                         <Button Content="Reset selected tool path" Command="{Binding ResetToolCommand}" />
                     </StackPanel>
                 </StackPanel>
             </Border>
             <TextBlock Text="DoViFixer · WPF&#xA;Operation history, audit and diagnostics: %LOCALAPPDATA%\DoViFixer\Logs"
-                       Foreground="{StaticResource Muted}"
+                       Foreground="{DynamicResource TextFillColorSecondaryBrush}"
                        Margin="0,20" />
             <ProgressBar Value="{Binding Percent, Mode=OneWay}"
                          IsIndeterminate="{Binding Indeterminate}"
