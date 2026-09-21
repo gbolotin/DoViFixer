@@ -596,6 +596,15 @@ public sealed class ViewModelTests
         Assert.IsFalse(model.ActiveProgressIndeterminate);
         Assert.AreEqual("Ready", model.ActiveProgressSummary);
 
+        var progressUpdated = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+        model.PropertyChanged += (_, args) =>
+        {
+            if (args.PropertyName == nameof(model.ActiveProgressPercent) && model.ActiveProgressPercent == 20)
+            {
+                progressUpdated.TrySetResult();
+            }
+        };
+
         var started = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
         runtime.DuringAnalysis = async token =>
         {
@@ -605,12 +614,13 @@ public sealed class ViewModelTests
 
         var task = model.AddAsync([@"C:\Media\Mountain.mkv", @"C:\Media\Ocean.mkv"]);
         await started.Task.WaitAsync(TimeSpan.FromSeconds(10));
+        await progressUpdated.Task.WaitAsync(TimeSpan.FromSeconds(10));
 
         Assert.IsTrue(model.IsBusy);
         Assert.IsTrue(model.BatchProgress.IsRunning);
         Assert.AreEqual("Scan", model.ActiveProgressTitle);
-        Assert.AreEqual("0%", model.ActiveProgressText);
-        Assert.AreEqual(0, model.ActiveProgressPercent);
+        Assert.AreEqual("20%", model.ActiveProgressText);
+        Assert.AreEqual(20, model.ActiveProgressPercent);
         Assert.IsFalse(model.ActiveProgressIndeterminate);
         Assert.AreEqual("0 of 2 files processed", model.ActiveProgressSummary);
         Assert.IsNotNull(model.ActiveProgressToolTip);

@@ -8,6 +8,54 @@ namespace DoViFixer.App.Tests;
 public sealed class BatchProgressTests
 {
     [TestMethod]
+    public void EachJobProgressIncrementUpdatesBatchPercentageAndNotifiesBindings()
+    {
+        var previous = SynchronizationContext.Current;
+        var context = new QueuedContext();
+        SynchronizationContext.SetSynchronizationContext(context);
+        try
+        {
+            var model = new BatchProgressViewModel();
+            model.Begin(4, "Scan");
+            model.Complete();
+            var row = new MediaRow("first.mkv");
+            var progress = model.Start(row, "Scanning");
+            var reportedPercentages = new List<double>();
+            model.PropertyChanged += (_, args) =>
+            {
+                if (args.PropertyName == nameof(model.Percent))
+                {
+                    reportedPercentages.Add(model.Percent);
+                }
+            };
+
+            progress.Report(new(Guid.Empty, "Scanning", row.Path, 20.5));
+            progress.Report(new(Guid.Empty, "Scanning", row.Path, 21.5));
+            context.Drain();
+
+            CollectionAssert.AreEqual(new[] { 30.125, 30.375 }, reportedPercentages);
+            Assert.AreEqual(1, model.Processed);
+            Assert.AreEqual("1 of 4 files processed", model.Summary);
+
+            model.Complete();
+            Assert.AreEqual(50, model.Percent);
+            var nextProgress = model.Start(new MediaRow("second.mkv"), "Scanning");
+            Assert.AreEqual(50, model.Percent);
+            nextProgress.Report(new(Guid.Empty, "Scanning", "second.mkv", 40));
+            context.Drain();
+            Assert.AreEqual(60, model.Percent);
+
+            model.End();
+            Assert.AreEqual(50, model.Percent);
+            Assert.AreEqual(50, reportedPercentages[^1]);
+        }
+        finally
+        {
+            SynchronizationContext.SetSynchronizationContext(previous);
+        }
+    }
+
+    [TestMethod]
     public void BatchCountsFinishedFilesSeparatelyFromStageProgressAndResetsForNextBatch()
     {
         var previous = SynchronizationContext.Current;
@@ -22,7 +70,7 @@ public sealed class BatchProgressTests
             var progress = model.Start(row, "Extracting video");
             progress.Report(new(Guid.NewGuid(), "Extracting video", row.Path, 75));
             context.Drain();
-            Assert.AreEqual(25, model.Percent);
+            Assert.AreEqual(43.75, model.Percent);
             Assert.AreEqual("1 of 4 files processed", model.Summary);
             Assert.AreEqual(75, row.Progress.StagePercent);
             Assert.AreSame(row, model.CurrentJob);

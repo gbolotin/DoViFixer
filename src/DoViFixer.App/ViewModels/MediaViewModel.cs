@@ -101,7 +101,7 @@ public sealed class MediaViewModel : OperationViewModel
         ? BatchProgress.Operation
         : (string.IsNullOrWhiteSpace(Stage) ? "Working…" : Stage);
     public string ActiveProgressText => BatchProgress.IsRunning
-        ? $"{BatchProgress.Percent:0}%"
+        ? $"{BatchProgress.Percent:0.##}%"
         : Progress.ProgressText;
     public string ActiveProgressSummary => BatchProgress.IsRunning
         ? BatchProgress.Summary
