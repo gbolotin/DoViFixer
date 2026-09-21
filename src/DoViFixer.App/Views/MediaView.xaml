@@ -310,6 +310,30 @@
                         <ColumnDefinition Width="Auto" />
                     </Grid.ColumnDefinitions>
                     <StackPanel Margin="0,0,24,0">
+                        <StackPanel Margin="0,0,0,16" Visibility="{Binding BatchProgress.IsRunning, Converter={StaticResource Visible}}">
+                            <TextBlock Text="Current job" FontWeight="SemiBold" />
+                            <DockPanel Margin="0,4,0,8">
+                                <TextBlock Text="{Binding BatchProgress.CurrentJob.Progress.ProgressText}"
+                                           DockPanel.Dock="Right"
+                                           Foreground="{DynamicResource {x:Static SystemColors.AccentColorBrushKey}}"
+                                           FontSize="16"
+                                           Margin="12,0,0,0" />
+                                <TextBlock Text="{Binding BatchProgress.CurrentJob.Progress.Stage}"
+                                           VerticalAlignment="Center"
+                                           FontSize="16"
+                                           TextTrimming="CharacterEllipsis"
+                                           Foreground="{DynamicResource TextFillColorSecondaryBrush}" />
+                            </DockPanel>
+                            <ProgressBar Value="{Binding BatchProgress.CurrentJob.Progress.Percent, Mode=OneWay, FallbackValue=0}"
+                                         IsIndeterminate="{Binding BatchProgress.CurrentJob.Progress.IsIndeterminate, FallbackValue=False}"
+                                         Height="8"
+                                         AutomationProperties.Name="Current job progress" />
+                            <TextBlock Text="{Binding BatchProgress.CurrentJob.Name}"
+                                       Margin="0,8,0,0"
+                                       TextTrimming="CharacterEllipsis"
+                                       Foreground="{DynamicResource TextFillColorSecondaryBrush}"
+                                       ToolTip="{Binding BatchProgress.CurrentJob.Path}" />
+                        </StackPanel>
                         <DockPanel Margin="0,0,0,8">
                             <TextBlock Text="{Binding ActiveProgressText}"
                                        DockPanel.Dock="Right"
