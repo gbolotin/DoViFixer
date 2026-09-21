@@ -67,11 +67,28 @@ public sealed class MediaViewModel : OperationViewModel
 
         CancelFileCommand = new DelegateCommand<MediaRow>(row =>
         {
-            if (row is not null)
+            if (row is not null && row.IsActive && !row.IsCancellationRequested && control is not null)
             {
-                control?.Cancel(row.Path);
+                row.IsCancellationRequested = true;
+                row.Status = "Cancelling…";
+                row.Progress.Update("Cancelling…", null);
+                control.Cancel(row.Path);
             }
-        });
+        }, row => row is not null && row.IsActive && !row.IsCancellationRequested);
+
+        PauseBatchCommand = new(() =>
+        {
+            if (control?.IsPaused == true)
+            {
+                control.Resume();
+            }
+            else
+            {
+                control?.Pause();
+            }
+
+            NotifyActiveProgress();
+        }, () => BatchProgress.IsRunning);
 
         OpenOutputCommand = new(() => dialogs.OpenFolder(Path.GetDirectoryName(Focused!.Result!.Output!)!), () => Focused?.Result?.Output is not null);
         OpenRowOutputCommand = new(row => dialogs.OpenFolder(Path.GetDirectoryName(row.Result!.Output!)!), row => row is not null && row.CanOpenResult);
@@ -94,6 +111,8 @@ public sealed class MediaViewModel : OperationViewModel
 
     public ObservableCollection<MediaRow> Files { get; } = [];
     public BatchProgressViewModel BatchProgress { get; } = new();
+    public DelegateCommand PauseBatchCommand { get; }
+    public string PauseBatchText => control?.IsPaused == true ? "Resume" : "Pause";
 
     public double ActiveProgressPercent => BatchProgress.IsRunning ? BatchProgress.Percent : Percent;
     public bool ActiveProgressIndeterminate => !BatchProgress.IsRunning && IsIndeterminate;
@@ -104,7 +123,9 @@ public sealed class MediaViewModel : OperationViewModel
         ? $"{BatchProgress.Percent:0.##}%"
         : Progress.ProgressText;
     public string ActiveProgressSummary => BatchProgress.IsRunning
-        ? BatchProgress.Summary
+        ? control?.IsPaused == true
+            ? $"{BatchProgress.Summary} · {(BatchProgress.CurrentJob is null ? "Paused" : "Pausing after current job")}"
+            : BatchProgress.Summary
         : Status;
     public string? ActiveProgressToolTip => BatchProgress.IsRunning
         ? "Processed includes completed, failed, cancelled and skipped files. Each file has equal weight in the batch."
@@ -112,6 +133,8 @@ public sealed class MediaViewModel : OperationViewModel
 
     private void NotifyActiveProgress()
     {
+        RaisePropertyChanged(nameof(PauseBatchText));
+        PauseBatchCommand.RaiseCanExecuteChanged();
         RaisePropertyChanged(nameof(ActiveProgressPercent));
         RaisePropertyChanged(nameof(ActiveProgressIndeterminate));
         RaisePropertyChanged(nameof(ActiveProgressTitle));
@@ -407,6 +430,11 @@ public sealed class MediaViewModel : OperationViewModel
             OpenOutputCommand.RaiseCanExecuteChanged();
         }
 
+        if (e.PropertyName is nameof(MediaRow.IsActive) or nameof(MediaRow.IsCancellationRequested))
+        {
+            CancelFileCommand.RaiseCanExecuteChanged();
+        }
+
         if (e.PropertyName is nameof(MediaRow.CanRetryAnalysis) or nameof(MediaRow.CanOpenResult) or nameof(MediaRow.CanInspectIncomplete))
         {
             InspectIncompleteCommand.RaiseCanExecuteChanged();
@@ -470,6 +498,7 @@ public sealed class MediaViewModel : OperationViewModel
 
         foreach (var row in rows)
         {
+            row.IsCancellationRequested = false;
             row.CurrentOperation = operationName == "Conversion planning" ? "Conversion planning" : null;
             row.CanRetryAnalysis = false;
             row.IsPending = true;
@@ -483,6 +512,7 @@ public sealed class MediaViewModel : OperationViewModel
         BatchProgress.End();
         control?.Dispose();
         control = null;
+        NotifyActiveProgress();
         foreach (var row in Files)
         {
             bool wasPending = row.IsPending;

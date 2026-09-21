@@ -19,7 +19,7 @@ public sealed class ControlledBatchService(ILogger<ControlledBatchService> logge
             OperationItemResult result;
             try
             {
-                var token = control.Start(key, cancellationToken);
+                var token = await control.StartAsync(key, cancellationToken);
                 result = token is null
                     ? new(key, OperationStatus.Skipped, null, "Deselected before starting.")
                     : await execute(item, token.Value);

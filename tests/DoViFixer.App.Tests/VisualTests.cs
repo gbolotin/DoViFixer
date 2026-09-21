@@ -1,6 +1,9 @@
 using System.Diagnostics;
 using System.Text;
 using System.Windows;
+using System.Windows.Automation.Peers;
+using System.Windows.Automation.Provider;
+using System.Windows.Controls;
 using System.Windows.Media;
 using System.Windows.Media.Imaging;
 using System.Windows.Threading;
@@ -153,8 +156,15 @@ public sealed class VisualTests
             Assert.AreEqual(45, model.Files[0].Progress.StagePercent);
             model.Files[1].IsSelected = false;
             Assert.AreEqual("Conversion skipped", model.Files[1].Status);
-            model.CancelFileCommand.Execute(model.Files[0]);
+            var cancelJob = FindButton(media, "Cancel job")!;
+            Assert.IsNotNull(cancelJob);
+            Assert.AreSame(model.Files[0], cancelJob.CommandParameter);
+            var peer = new ButtonAutomationPeer(cancelJob);
+            ((IInvokeProvider)peer.GetPattern(PatternInterface.Invoke)).Invoke();
             await recovering.Task;
+            await Dispatcher.Yield(DispatcherPriority.ApplicationIdle);
+            Assert.AreEqual("Cancelling…", model.Files[0].Progress.Stage);
+            Assert.IsFalse(cancelJob.IsEnabled);
             Assert.AreEqual(1, runtime.Conversions);
             releaseRecovery.SetResult();
             await operation;
@@ -177,6 +187,24 @@ public sealed class VisualTests
             PresentationTraceSources.DataBindingSource.Listeners.Remove(listener);
             app.Shutdown();
         }
+    }
+
+    private static Button? FindButton(DependencyObject parent, string content)
+    {
+        if (parent is Button button && Equals(button.Content, content))
+        {
+            return button;
+        }
+
+        for (int i = 0; i < VisualTreeHelper.GetChildrenCount(parent); i++)
+        {
+            if (FindButton(VisualTreeHelper.GetChild(parent, i), content) is { } match)
+            {
+                return match;
+            }
+        }
+
+        return null;
     }
 
     private static async Task RenderAsync(FrameworkElement view, string name, int width = 1400, int height = 825)

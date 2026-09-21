@@ -1,12 +1,42 @@
 namespace DoViFixer.Application.Operations;
-/// <summary>One operation's synchronized pending selection and current-file cancellation.</summary>
+/// <summary>One operation's synchronized pending selection, pause and current-file cancellation.</summary>
 public sealed class BatchControl : IDisposable
 {
     private readonly object gate = new();
     private readonly HashSet<string> pending;
     private CancellationTokenSource? current;
     private string? currentPath;
+    private TaskCompletionSource? resume;
     public BatchControl(IEnumerable<string> paths) => pending = new(paths, StringComparer.OrdinalIgnoreCase);
+
+    public bool IsPaused
+    {
+        get
+        {
+            lock (gate)
+            {
+                return resume is not null;
+            }
+        }
+    }
+
+    public void Pause()
+    {
+        lock (gate)
+        {
+            resume ??= new(TaskCreationOptions.RunContinuationsAsynchronously);
+        }
+    }
+
+    public void Resume()
+    {
+        lock (gate)
+        {
+            resume?.TrySetResult();
+            resume = null;
+        }
+    }
+
     public bool Skip(string path)
     {
         lock (gate)
@@ -29,19 +59,30 @@ public sealed class BatchControl : IDisposable
         }
     }
 
-    internal CancellationToken? Start(string path, CancellationToken batchToken)
+    internal async ValueTask<CancellationToken?> StartAsync(string path, CancellationToken batchToken)
     {
-        lock (gate)
+        while (true)
         {
-            batchToken.ThrowIfCancellationRequested();
-            if (!pending.Remove(path))
+            Task resumeTask;
+            lock (gate)
             {
-                return null;
+                batchToken.ThrowIfCancellationRequested();
+                if (resume is null)
+                {
+                    if (!pending.Remove(path))
+                    {
+                        return null;
+                    }
+
+                    current = CancellationTokenSource.CreateLinkedTokenSource(batchToken);
+                    currentPath = path;
+                    return current.Token;
+                }
+
+                resumeTask = resume.Task;
             }
 
-            current = CancellationTokenSource.CreateLinkedTokenSource(batchToken);
-            currentPath = path;
-            return current.Token;
+            await resumeTask.WaitAsync(batchToken);
         }
     }
 

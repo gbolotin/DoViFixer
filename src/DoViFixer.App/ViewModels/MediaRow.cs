@@ -9,6 +9,7 @@ public sealed class MediaRow(string path) : BindableBase
     private bool selectionEnabled = true;
     private bool pending;
     private bool active;
+    private bool cancellationRequested;
     private MediaRowState state = MediaRowState.NotScanned;
     private string status = "Not scanned";
     private bool canRetryAnalysis;
@@ -26,6 +27,11 @@ public sealed class MediaRow(string path) : BindableBase
     public string Path { get; } = path;
     public string Name => System.IO.Path.GetFileName(Path);
     public ProgressViewModel Progress { get; } = new();
+    public bool IsCancellationRequested
+    {
+        get => cancellationRequested;
+        set => SetProperty(ref cancellationRequested, value);
+    }
     public bool HasIncompleteScan => Analysis is not null
         && Analysis.Media.Profile == Domain.Media.DolbyVisionProfile.Profile7
         && Analysis.Verdict == AnalysisVerdict.Unknown

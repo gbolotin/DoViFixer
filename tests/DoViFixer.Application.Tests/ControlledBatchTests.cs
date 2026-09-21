@@ -7,6 +7,48 @@ namespace DoViFixer.Application.Tests;
 public sealed class ControlledBatchTests
 {
     [TestMethod]
+    [DataRow(false)]
+    [DataRow(true)]
+    public async Task PauseFinishesCurrentJobAndWaitsForResumeOrBatchCancellation(bool cancelBatch)
+    {
+        using var cancellation = new CancellationTokenSource();
+        using var control = new BatchControl(["a", "b", "c"]);
+        var visited = new List<string>();
+        var service = new ControlledBatchService(NullLogger<ControlledBatchService>.Instance);
+        var run = service.ExecuteAsync(new[] { "a", "b", "c" }, x => x, (path, token) =>
+        {
+            visited.Add(path);
+            if (path == "a")
+            {
+                control.Pause();
+                control.Pause();
+                Assert.IsFalse(token.IsCancellationRequested);
+            }
+
+            return Task.FromResult(new OperationItemResult(path, OperationStatus.Completed, null, "Done"));
+        }, control, null, cancellation.Token);
+
+        Assert.IsTrue(control.IsPaused);
+        Assert.IsFalse(run.IsCompleted);
+        CollectionAssert.AreEqual(new[] { "a" }, visited);
+        Assert.IsTrue(control.Skip("b"));
+        if (cancelBatch)
+        {
+            cancellation.Cancel();
+        }
+        else
+        {
+            control.Resume();
+            Assert.IsFalse(control.IsPaused);
+        }
+
+        var result = await run.WaitAsync(TimeSpan.FromSeconds(5));
+        Assert.AreEqual(OperationStatus.Completed, result.Items[0].Status);
+        CollectionAssert.AreEqual(cancelBatch ? new[] { "a" } : new[] { "a", "c" }, visited);
+        Assert.AreEqual(cancelBatch ? OperationStatus.Cancelled : OperationStatus.Skipped, result.Items[1].Status);
+    }
+
+    [TestMethod]
     public async Task CancelCurrentWaitsForRecoveryThenContinuesAndSkipNeverStarts()
     {
         using var control = new BatchControl(["a", "b", "c"]);

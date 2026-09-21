@@ -7,6 +7,57 @@ namespace DoViFixer.App.Tests;
 public sealed class ViewModelTests
 {
     [TestMethod]
+    [DataRow(false)]
+    [DataRow(true)]
+    public async Task PauseBatchCommandWaitsBetweenJobsAndResetsAfterCompletion(bool cancelBatch)
+    {
+        using var runtime = new TestRuntime();
+        var model = runtime.Container.Resolve<MediaViewModel>();
+        var release = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+        var started = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+        runtime.DuringAnalysis = async token =>
+        {
+            started.TrySetResult();
+            await release.Task.WaitAsync(token);
+        };
+        Assert.IsFalse(model.PauseBatchCommand.CanExecute());
+
+        var adding = model.AddAsync([@"C:\Media\Mountain.mkv", @"C:\Media\Ocean.mkv"]);
+        await started.Task.WaitAsync(TimeSpan.FromSeconds(10));
+        var paused = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+        model.PropertyChanged += (_, args) =>
+        {
+            if (args.PropertyName == nameof(model.ActiveProgressSummary) && model.ActiveProgressSummary.EndsWith("· Paused"))
+            {
+                paused.TrySetResult();
+            }
+        };
+        Assert.IsTrue(model.PauseBatchCommand.CanExecute());
+        model.PauseBatchCommand.Execute();
+        Assert.AreEqual("Resume", model.PauseBatchText);
+        StringAssert.Contains(model.ActiveProgressSummary, "Pausing after current job");
+        release.SetResult();
+        await paused.Task.WaitAsync(TimeSpan.FromSeconds(10));
+        Assert.AreEqual(1, runtime.Analyses);
+        Assert.IsFalse(adding.IsCompleted);
+
+        if (cancelBatch)
+        {
+            model.CancelCommand.Execute();
+        }
+        else
+        {
+            model.PauseBatchCommand.Execute();
+        }
+
+        await adding.WaitAsync(TimeSpan.FromSeconds(10));
+        Assert.AreEqual(cancelBatch ? 1 : 2, runtime.Analyses);
+        Assert.AreEqual("Pause", model.PauseBatchText);
+        Assert.IsFalse(model.PauseBatchCommand.CanExecute());
+        Assert.IsTrue(model.IsIdle);
+    }
+
+    [TestMethod]
     public async Task IncompleteScanExplainsSampleFailureAndInspectsOnlyClickedRow()
     {
         using var runtime = new TestRuntime();

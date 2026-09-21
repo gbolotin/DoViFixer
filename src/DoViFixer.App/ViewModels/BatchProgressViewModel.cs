@@ -55,7 +55,7 @@ public sealed class BatchProgressViewModel : BindableBase
         {
             lock (gate)
             {
-                if (!IsRunning || revision != jobRevision || CurrentJob != row)
+                if (!IsRunning || revision != jobRevision || CurrentJob != row || row.IsCancellationRequested)
                 {
                     return;
                 }
