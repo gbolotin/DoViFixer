@@ -48,7 +48,7 @@
                         <GridViewColumn Header="File" Width="238">
                             <GridViewColumn.HeaderTemplate>
                                 <DataTemplate>
-                                    <StackPanel Orientation="Horizontal">
+                                    <StackPanel Orientation="Horizontal" Margin="1,0,0,0">
                                         <CheckBox IsChecked="{Binding DataContext.AllFilesSelected, RelativeSource={RelativeSource AncestorType=ListView}, Mode=OneWay}"
                                                   Command="{Binding DataContext.ToggleSelectAllCommand, RelativeSource={RelativeSource AncestorType=ListView}}"
                                                   Margin="0,0,12,0"
@@ -61,7 +61,7 @@
                             </GridViewColumn.HeaderTemplate>
                             <GridViewColumn.CellTemplate>
                                 <DataTemplate>
-                                    <DockPanel Margin="12,8">
+                                    <DockPanel Margin="0,8">
                                         <CheckBox IsChecked="{Binding IsSelected, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}"
                                                   IsEnabled="{Binding SelectionEnabled}"
                                                   Margin="0,0,12,0"
@@ -97,20 +97,29 @@
                             </GridViewColumn.CellTemplate>
                         </GridViewColumn>
                         <GridViewColumn Header="Profile / Type" Width="180">
+                            <GridViewColumn.HeaderTemplate>
+                                <DataTemplate>
+                                    <TextBlock Text="Profile / Type" Margin="1,0,0,0" />
+                                </DataTemplate>
+                            </GridViewColumn.HeaderTemplate>
                             <GridViewColumn.CellTemplate>
                                 <DataTemplate>
                                     <TextBlock Text="{Binding Classification}"
                                                Foreground="{Binding ClassificationColor}"
                                                VerticalAlignment="Center"
-                                               Margin="10,0"
                                                TextWrapping="Wrap" />
                                 </DataTemplate>
                             </GridViewColumn.CellTemplate>
                         </GridViewColumn>
                         <GridViewColumn Header="Status / Action" Width="255">
+                            <GridViewColumn.HeaderTemplate>
+                                <DataTemplate>
+                                    <TextBlock Text="Status / Action" Margin="1,0,0,0" />
+                                </DataTemplate>
+                            </GridViewColumn.HeaderTemplate>
                             <GridViewColumn.CellTemplate>
                                 <DataTemplate>
-                                    <Grid VerticalAlignment="Center" Margin="6,0">
+                                    <Grid VerticalAlignment="Center">
                                         <Grid.ColumnDefinitions>
                                             <ColumnDefinition Width="*" />
                                             <ColumnDefinition Width="Auto" />
