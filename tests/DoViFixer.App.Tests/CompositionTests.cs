@@ -1,4 +1,5 @@
 using DoViFixer.App.Composition;
+using DoViFixer.App.Presentation;
 using DoViFixer.App.ViewModels;
 using DoViFixer.Application.Abstractions;
 using DoViFixer.Application.Backup;
@@ -29,7 +30,7 @@ public sealed class CompositionTests
         {
             ["DoViFixer:DataDirectory"] = root
         }).Build(), false);
-        Type[] services = [typeof(ScanService), typeof(InspectionService), typeof(ConversionPlanner), typeof(ConversionService), typeof(BatchConversionService), typeof(BackupService), typeof(RestoreService), typeof(CleanupService), typeof(DependencyService), typeof(SettingsService), typeof(ShellViewModel)];
+        Type[] services = [typeof(ScanService), typeof(InspectionService), typeof(ConversionPlanner), typeof(ConversionService), typeof(BatchConversionService), typeof(BackupService), typeof(RestoreService), typeof(CleanupService), typeof(DependencyService), typeof(SettingsService), typeof(ShellViewModel), typeof(IThemeService)];
         foreach (var type in services)
         {
             Assert.IsNotNull(container.Resolve(type));
@@ -37,6 +38,7 @@ public sealed class CompositionTests
 
         Assert.AreSame(container.Resolve<ISettingsStore>(), container.Resolve<ISettingsStore>());
         Assert.AreSame(container.Resolve<IToolCatalog>(), container.Resolve<IToolCatalog>());
+        Assert.AreSame(container.Resolve<IThemeService>(), container.Resolve<IThemeService>());
         Assert.AreNotSame(container.Resolve<MediaViewModel>(), container.Resolve<MediaViewModel>());
         Assert.AreNotSame(container.Resolve<ConversionService>(), container.Resolve<ConversionService>());
         Assert.IsFalse(Directory.Exists(root));

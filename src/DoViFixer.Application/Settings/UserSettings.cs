@@ -48,4 +48,10 @@ public sealed record UserSettings
         get;
         init;
     }
+    public AppTheme Theme
+    {
+        get;
+        init;
+    }
+    = AppTheme.System;
 }

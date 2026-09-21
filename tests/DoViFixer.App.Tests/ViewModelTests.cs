@@ -185,6 +185,40 @@ public sealed class ViewModelTests
     }
 
     [TestMethod]
+    public async Task SettingsLoadsAndAppliesThemeSelection()
+    {
+        using var runtime = new TestRuntime();
+        var settings = runtime.Container.Resolve<SettingsViewModel>();
+        await settings.LoadCommand.ExecuteAsync();
+        Assert.AreEqual(DoViFixer.Application.Settings.AppTheme.System, settings.SelectedTheme);
+        Assert.IsTrue(settings.IsSystemTheme);
+        Assert.IsFalse(settings.IsLightTheme);
+        Assert.IsFalse(settings.IsDarkTheme);
+        Assert.AreEqual(DoViFixer.Application.Settings.AppTheme.System, runtime.AppliedTheme);
+
+        settings.SelectedTheme = DoViFixer.Application.Settings.AppTheme.Dark;
+        Assert.AreEqual(DoViFixer.Application.Settings.AppTheme.Dark, settings.SelectedTheme);
+        Assert.IsFalse(settings.IsSystemTheme);
+        Assert.IsFalse(settings.IsLightTheme);
+        Assert.IsTrue(settings.IsDarkTheme);
+        Assert.AreEqual(DoViFixer.Application.Settings.AppTheme.Dark, runtime.AppliedTheme);
+
+        await settings.SaveCommand.ExecuteAsync();
+        Assert.AreEqual(DoViFixer.Application.Settings.AppTheme.Dark, runtime.Settings.Theme);
+
+        settings.IsLightTheme = true;
+        Assert.AreEqual(DoViFixer.Application.Settings.AppTheme.Light, settings.SelectedTheme);
+        Assert.IsTrue(settings.IsLightTheme);
+        Assert.AreEqual(DoViFixer.Application.Settings.AppTheme.Light, runtime.AppliedTheme);
+
+        await settings.SaveCommand.ExecuteAsync();
+        var newSettings = runtime.Container.Resolve<SettingsViewModel>();
+        await newSettings.LoadCommand.ExecuteAsync();
+        Assert.AreEqual(DoViFixer.Application.Settings.AppTheme.Light, newSettings.SelectedTheme);
+        Assert.AreEqual(DoViFixer.Application.Settings.AppTheme.Light, runtime.AppliedTheme);
+    }
+
+    [TestMethod]
     public async Task ClearedRowsCannotInvalidateNewConversionPlans()
     {
         using var runtime = new TestRuntime();

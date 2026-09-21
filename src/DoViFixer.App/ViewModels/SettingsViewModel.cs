@@ -8,6 +8,8 @@ using DoViFixer.Application.Abstractions;
 namespace DoViFixer.App.ViewModels;
 public sealed class SettingsViewModel : OperationViewModel
 {
+    private readonly SettingsService settings;
+    private readonly IThemeService themeService;
     private string temporary = "";
     private string destination = "";
     private bool otherFolder;
@@ -18,8 +20,12 @@ public sealed class SettingsViewModel : OperationViewModel
     private bool autoSelectAfterScan = true;
     private NativeTool selectedTool;
     private string toolPath = "";
-    public SettingsViewModel(SettingsService settings, DependencyService dependencies, DependencySetup setup, IUserDialogs dialogs, IAnalysisCache cache)
+    private AppTheme selectedTheme = AppTheme.System;
+
+    public SettingsViewModel(SettingsService settings, DependencyService dependencies, DependencySetup setup, IUserDialogs dialogs, IAnalysisCache cache, IThemeService themeService)
     {
+        this.settings = settings;
+        this.themeService = themeService;
         LoadCommand = new(() => RunAsync(async (token, _) =>
         {
             var value = await settings.ReadAsync(token);
@@ -31,6 +37,12 @@ public sealed class SettingsViewModel : OperationViewModel
             AutomaticallyScanAddedFiles = value.AutomaticallyScanAddedFiles;
             UseCachedResults = value.UseCachedResults;
             AutoSelectAfterScan = value.AutoSelectAfterScan;
+            selectedTheme = value.Theme;
+            RaisePropertyChanged(nameof(SelectedTheme));
+            RaisePropertyChanged(nameof(IsSystemTheme));
+            RaisePropertyChanged(nameof(IsLightTheme));
+            RaisePropertyChanged(nameof(IsDarkTheme));
+            themeService.ApplyTheme(value.Theme);
             Status = "Settings loaded.";
         }), () => IsIdle);
         BrowseTemporaryCommand = new(() => Temporary = dialogs.PickFolder() ?? Temporary);
@@ -43,7 +55,7 @@ public sealed class SettingsViewModel : OperationViewModel
                 throw new InvalidOperationException("Choose an output folder.");
             }
 
-            await Task.Run(() => settings.SetPreferencesAsync(Temporary, OtherFolder ? Destination : null, ReplaceOriginal, CreateArchive, token, AutomaticallyScanAddedFiles, UseCachedResults, AutoSelectAfterScan), token);
+            await Task.Run(() => settings.SetPreferencesAsync(Temporary, OtherFolder ? Destination : null, ReplaceOriginal, CreateArchive, token, AutomaticallyScanAddedFiles, UseCachedResults, AutoSelectAfterScan, SelectedTheme), token);
             Status = "Defaults saved. Each conversion still requires plan approval.";
         }), () => IsIdle);
         ClearCacheCommand = new(() => RunAsync(async (token, _) =>
@@ -83,6 +95,69 @@ public sealed class SettingsViewModel : OperationViewModel
             Status = "Tool override reset. Check tools to rediscover.";
         }), () => IsIdle);
     }
+
+    public AppTheme SelectedTheme
+    {
+        get => selectedTheme;
+        set
+        {
+            if (SetProperty(ref selectedTheme, value))
+            {
+                RaisePropertyChanged(nameof(IsSystemTheme));
+                RaisePropertyChanged(nameof(IsLightTheme));
+                RaisePropertyChanged(nameof(IsDarkTheme));
+                themeService.ApplyTheme(value);
+                _ = Task.Run(async () =>
+                {
+                    try
+                    {
+                        await settings.SetThemeAsync(value, CancellationToken.None);
+                    }
+                    catch
+                    {
+                    }
+                });
+            }
+        }
+    }
+
+    public bool IsSystemTheme
+    {
+        get => selectedTheme == AppTheme.System;
+        set
+        {
+            if (value)
+            {
+                SelectedTheme = AppTheme.System;
+            }
+        }
+    }
+
+    public bool IsLightTheme
+    {
+        get => selectedTheme == AppTheme.Light;
+        set
+        {
+            if (value)
+            {
+                SelectedTheme = AppTheme.Light;
+            }
+        }
+    }
+
+    public bool IsDarkTheme
+    {
+        get => selectedTheme == AppTheme.Dark;
+        set
+        {
+            if (value)
+            {
+                SelectedTheme = AppTheme.Dark;
+            }
+        }
+    }
+
+    public AppTheme[] Themes { get; } = [AppTheme.System, AppTheme.Light, AppTheme.Dark];
 
     public bool AutomaticallyScanAddedFiles
     {

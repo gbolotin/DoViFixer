@@ -1,5 +1,6 @@
 using DoViFixer.App.Composition;
 using DoViFixer.App.Dialogs;
+using DoViFixer.App.Presentation;
 using DoViFixer.Application.Abstractions;
 using DoViFixer.Application.Dependencies;
 using DoViFixer.Application.Operations;
@@ -12,7 +13,7 @@ using Prism.DryIoc;
 using Prism.Ioc;
 
 namespace DoViFixer.App.Tests;
-internal sealed class TestRuntime : IFileDiscovery, IFileOperations, IMediaProbe, ISettingsStore, IDependencyDetector, IDependencyInstaller, ITemporaryWorkspaceFactory, IAnalysisCache, IVideoProcessor, IMediaVerifier, IOutputPublisher, IUserDialogs, IDisposable
+internal sealed class TestRuntime : IFileDiscovery, IFileOperations, IMediaProbe, ISettingsStore, IDependencyDetector, IDependencyInstaller, ITemporaryWorkspaceFactory, IAnalysisCache, IVideoProcessor, IMediaVerifier, IOutputPublisher, IUserDialogs, IThemeService, IDisposable
 {
     public IContainerProvider Container
     {
@@ -81,7 +82,7 @@ internal sealed class TestRuntime : IFileDiscovery, IFileOperations, IMediaProbe
     {
         var container = new DryIocContainerExtension();
         AppComposition.Register(container, new ConfigurationBuilder().Build(), false);
-        Type[] contracts = [typeof(IFileDiscovery), typeof(IFileOperations), typeof(IMediaProbe), typeof(ISettingsStore), typeof(IDependencyDetector), typeof(IDependencyInstaller), typeof(ITemporaryWorkspaceFactory), typeof(IAnalysisCache), typeof(IVideoProcessor), typeof(IMediaVerifier), typeof(IOutputPublisher), typeof(IUserDialogs)];
+        Type[] contracts = [typeof(IFileDiscovery), typeof(IFileOperations), typeof(IMediaProbe), typeof(ISettingsStore), typeof(IDependencyDetector), typeof(IDependencyInstaller), typeof(ITemporaryWorkspaceFactory), typeof(IAnalysisCache), typeof(IVideoProcessor), typeof(IMediaVerifier), typeof(IOutputPublisher), typeof(IUserDialogs), typeof(IThemeService)];
         foreach (var contract in contracts)
         {
             container.RegisterInstance(contract, this);
@@ -217,6 +218,15 @@ internal sealed class TestRuntime : IFileDiscovery, IFileOperations, IMediaProbe
         Reviews.Add(content);
         return Approval;
     }
+
+    public AppTheme AppliedTheme
+    {
+        get;
+        set;
+    }
+    = AppTheme.System;
+    AppTheme IThemeService.CurrentTheme => AppliedTheme;
+    void IThemeService.ApplyTheme(AppTheme theme) => AppliedTheme = theme;
 
     private sealed class Workspace : ITemporaryWorkspace
     {

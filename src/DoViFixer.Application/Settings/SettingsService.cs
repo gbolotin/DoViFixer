@@ -7,7 +7,7 @@ namespace DoViFixer.Application.Settings;
 public sealed class SettingsService(ISettingsStore store, IDependencyDetector detector, IToolCatalog catalog, IFileOperations files, ILogger<SettingsService> logger)
 {
     public Task<UserSettings> ReadAsync(CancellationToken cancellationToken) => store.ReadAsync(cancellationToken);
-    public async Task SetPreferencesAsync(string? temporaryDirectory, string? outputDirectory, bool replaceOriginal, bool createElArchive, CancellationToken cancellationToken, bool? automaticallyScanAddedFiles = null, bool? useCachedResults = null, bool? autoSelectAfterScan = null)
+    public async Task SetPreferencesAsync(string? temporaryDirectory, string? outputDirectory, bool replaceOriginal, bool createElArchive, CancellationToken cancellationToken, bool? automaticallyScanAddedFiles = null, bool? useCachedResults = null, bool? autoSelectAfterScan = null, AppTheme? theme = null)
     {
         cancellationToken.ThrowIfCancellationRequested();
         string? temporary = string.IsNullOrWhiteSpace(temporaryDirectory) ? null : Path.GetFullPath(temporaryDirectory);
@@ -31,9 +31,20 @@ public sealed class SettingsService(ISettingsStore store, IDependencyDetector de
             CreateElArchive = createElArchive,
             AutomaticallyScanAddedFiles = automaticallyScanAddedFiles ?? s.AutomaticallyScanAddedFiles,
             UseCachedResults = useCachedResults ?? s.UseCachedResults,
-            AutoSelectAfterScan = autoSelectAfterScan ?? s.AutoSelectAfterScan
+            AutoSelectAfterScan = autoSelectAfterScan ?? s.AutoSelectAfterScan,
+            Theme = theme ?? s.Theme
         }, cancellationToken);
         OperationLog.Audit(logger, "SetConversionDefaults", full ?? "Same folder as source", "Completed");
+    }
+
+    public async Task SetThemeAsync(AppTheme theme, CancellationToken cancellationToken)
+    {
+        cancellationToken.ThrowIfCancellationRequested();
+        await store.UpdateAsync(s => s with
+        {
+            Theme = theme
+        }, cancellationToken);
+        OperationLog.Audit(logger, "SetTheme", theme.ToString(), "Completed");
     }
 
     public async Task SetToolAsync(NativeTool tool, string path, CancellationToken cancellationToken)

@@ -6,6 +6,22 @@
         <StackPanel>
             <TextBlock Text="Settings" Style="{StaticResource Heading}" />
             <Border Style="{StaticResource Card}">
+                <StackPanel>
+                    <TextBlock Text="Appearance"
+                               FontSize="20"
+                               FontWeight="SemiBold" />
+                    <TextBlock Text="App theme" Style="{StaticResource Label}" />
+                    <ComboBox ItemsSource="{Binding Themes}"
+                              SelectedItem="{Binding SelectedTheme}"
+                              Width="180"
+                              HorizontalAlignment="Left" />
+                    <TextBlock Text="Select whether DoViFixer follows your Windows system color theme, or uses Light or Dark theme."
+                               TextWrapping="Wrap"
+                               Foreground="{DynamicResource TextFillColorSecondaryBrush}"
+                               Margin="0,6,0,0" />
+                </StackPanel>
+            </Border>
+            <Border Style="{StaticResource Card}" Margin="0,18,0,0">
                 <StackPanel IsEnabled="{Binding IsIdle}">
                     <TextBlock Text="Storage and conversion defaults"
                                FontSize="20"

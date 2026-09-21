@@ -59,6 +59,11 @@ internal sealed class SettingsStore(StorageOptions options, ILogger<SettingsStor
                 logger.LogInformation("Setting {Setting} changed from {PreviousValue} to {NewValue} in {SettingsPath}", "TemporaryDirectory", previous.TemporaryDirectory, updated.TemporaryDirectory, options.SettingsPath);
             }
 
+            if (previous.Theme != updated.Theme)
+            {
+                logger.LogInformation("Setting {Setting} changed from {PreviousValue} to {NewValue} in {SettingsPath}", "Theme", previous.Theme, updated.Theme, options.SettingsPath);
+            }
+
             foreach (var tool in previous.ToolPaths.Keys.Union(updated.ToolPaths.Keys))
             {
                 string? before = previous.ToolPaths.GetValueOrDefault(tool);
