@@ -53,7 +53,7 @@ public sealed class VisualTests
         };
         app.Resources.MergedDictionaries.Add(new ResourceDictionary
         {
-            Source = new Uri("/DoViFixer.App;component/Resources/Studio.xaml", UriKind.Relative)
+            Source = new Uri("/DoViFixer.App;component/Resources/Common.xaml", UriKind.Relative)
         });
         var listener = new BindingErrors();
         PresentationTraceSources.DataBindingSource.Listeners.Add(listener);
