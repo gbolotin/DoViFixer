@@ -1,6 +1,7 @@
 using System.ComponentModel;
 using System.Windows;
 using System.Windows.Controls;
+using System.Windows.Controls.Primitives;
 using DoViFixer.App.ViewModels;
 using Prism.Navigation.Regions;
 
@@ -32,26 +33,24 @@ public partial class Shell : Window
 
     private async void Navigate(object sender, RoutedEventArgs e)
     {
+        if (!regions.Regions.ContainsRegionWithName("Workspace"))
+        {
+            return;
+        }
+
         if (!model.CanNavigate)
         {
             return;
         }
 
-        string name = (string)((Button)sender).Tag;
-        var region = regions.Regions["Workspace"];
-        region.Activate(region.GetView(name));
-        foreach (Button button in Navigation.Children)
+        if (sender is not ListBox listBox)
         {
-            if ((string)button.Tag == name)
-            {
-                button.SetResourceReference(BorderBrushProperty, SystemColors.AccentColorBrushKey);
-            }
-            else
-            {
-                button.ClearValue(BorderBrushProperty);
-            }
+            return;
         }
 
+        string name = (string)((ListBoxItem)listBox.SelectedItem).Tag;
+        var region = regions.Regions["Workspace"];
+        region.Activate(region.GetView(name));
         if (name == "Settings")
         {
             await model.Settings.LoadCommand.ExecuteAsync();

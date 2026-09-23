@@ -8,34 +8,23 @@
         WindowStartupLocation="CenterScreen">
     <DockPanel Background="{DynamicResource ApplicationBackgroundBrush}"
                TextElement.Foreground="{DynamicResource TextFillColorPrimaryBrush}">
-        <Border DockPanel.Dock="Top"
+        <Border DockPanel.Dock="Left"
                 BorderBrush="{DynamicResource DividerStrokeColorDefaultBrush}"
-                BorderThickness="0,0,0,1"
-                Padding="26,20">
+                BorderThickness="0,0,1,0"
+                Padding="0,0">
             <DockPanel>
-                <TextBlock Text="◈  DoViFixer"
-                           FontSize="28"
-                           FontWeight="SemiBold"
-                           DockPanel.Dock="Left"
-                           Margin="0,0,80,0" />
-                <StackPanel x:Name="Navigation"
-                            Orientation="Horizontal"
-                            IsEnabled="{Binding CanNavigate}">
-                    <Button Content="Media"
-                            Tag="Media"
-                            Click="Navigate"
-                            Margin="0,0,8,0"
-                            BorderBrush="{DynamicResource {x:Static SystemColors.AccentColorBrushKey}}" />
-                    <Button Content="Backup &amp; Restore"
-                            Tag="Archive"
-                            Click="Navigate"
-                            Margin="0,0,8,0" />
-                    <Button Content="Settings"
-                            Tag="Settings"
-                            Click="Navigate" />
-                </StackPanel>
+                <ListBox x:Name="Navigation"
+                         DockPanel.Dock="Top"
+                         SelectedIndex="0"
+                         SelectionChanged="Navigate"
+                         SelectionMode="Single"
+                         IsEnabled="{Binding CanNavigate}">
+                    <ListBoxItem Content="Media" Tag="Media" />
+                    <ListBoxItem Content="Backup &amp; Restore" Tag="Archive"/>
+                    <ListBoxItem Content="Settings" Tag="Settings"/>
+                </ListBox>
             </DockPanel>
         </Border>
-        <ContentControl prism:RegionManager.RegionName="Workspace" Margin="20" />
+        <ContentControl prism:RegionManager.RegionName="Workspace" Margin="8,0" />
     </DockPanel>
 </Window>
