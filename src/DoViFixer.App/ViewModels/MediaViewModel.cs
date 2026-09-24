@@ -33,6 +33,8 @@ public sealed class MediaViewModel : OperationViewModel
     private bool createArchive;
     private string destination = "";
     private string review = "";
+
+    private static string Summary(BatchResult result) => string.Join(" · ", result.Items.GroupBy(r => r.Status).Select(g => $"{g.Count()} {g.Key}"));
     public MediaViewModel(IFileDiscovery discovery, InspectionService inspection, ConversionPlanner planner, ConversionService conversion, ControlledBatchService batch, SettingsService settings, DependencySetup dependencies, IUserDialogs dialogs, ILogger<MediaViewModel> logger)
     {
         this.discovery = discovery;
@@ -44,11 +46,9 @@ public sealed class MediaViewModel : OperationViewModel
         this.dependencies = dependencies;
         this.dialogs = dialogs;
         this.logger = logger;
+
         AddFilesCommand = new(() => AddAsync(dialogs.PickFiles()), () => IsIdle);
-        AddFolderCommand = new(() => AddAsync(dialogs.PickFolder()is
-        {
-        }
-        folder ? [folder] : []), () => IsIdle);
+        AddFolderCommand = new(() => AddAsync(dialogs.PickFolder() is { } folder ? [folder] : []), () => IsIdle);
         ScanCommand = new(() => AnalyzeAsync(AnalysisMethod.SampledRpu), CanOperate);
         InspectCommand = new(() => AnalyzeAsync(AnalysisMethod.FullRpu), CanOperate);
         DeepInspectCommand = new(() => AnalyzeAsync(AnalysisMethod.DeepInspection), CanOperate);
@@ -108,7 +108,6 @@ public sealed class MediaViewModel : OperationViewModel
             }
         };
     }
-
     public ObservableCollection<MediaRow> Files { get; } = [];
     public BatchProgressViewModel BatchProgress { get; } = new();
     public DelegateCommand PauseBatchCommand { get; }
@@ -130,18 +129,6 @@ public sealed class MediaViewModel : OperationViewModel
     public string? ActiveProgressToolTip => BatchProgress.IsRunning
         ? "Processed includes completed, failed, cancelled and skipped files. Each file has equal weight in the batch."
         : null;
-
-    private void NotifyActiveProgress()
-    {
-        RaisePropertyChanged(nameof(PauseBatchText));
-        PauseBatchCommand.RaiseCanExecuteChanged();
-        RaisePropertyChanged(nameof(ActiveProgressPercent));
-        RaisePropertyChanged(nameof(ActiveProgressIndeterminate));
-        RaisePropertyChanged(nameof(ActiveProgressTitle));
-        RaisePropertyChanged(nameof(ActiveProgressText));
-        RaisePropertyChanged(nameof(ActiveProgressSummary));
-        RaisePropertyChanged(nameof(ActiveProgressToolTip));
-    }
 
     public MediaRow? Focused
     {
@@ -240,129 +227,31 @@ public sealed class MediaViewModel : OperationViewModel
             return $"{totalText} | {selectedText}";
         }
     }
-    public bool? AllFilesSelected => Files.Count == 0 || Files.All(row => !row.IsSelected)
-        ? false
-        : Files.All(row => row.IsSelected) ? true : null;
+    public bool? AllFilesSelected => Files.Count == 0 || Files.All(row => !row.IsSelected) ? false : Files.All(row => row.IsSelected) ? true : null;
 
-    public DelegateCommand ToggleSelectAllCommand
-    {
-        get;
-    }
-
-    public DelegateCommand ClearAllCommand
-    {
-        get;
-    }
-
-    private void ClearAll()
-    {
-        if (!IsIdle)
-        {
-            return;
-        }
-
-        foreach (var row in Files)
-        {
-            row.PropertyChanged -= OnRowPropertyChanged;
-        }
-
-        Files.Clear();
-        Focused = null;
-        OptionsOpen = false;
-        InvalidatePlan();
-        Status = "File list cleared.";
-        RaisePropertyChanged(nameof(SelectionSummary));
-        RaisePropertyChanged(nameof(AllFilesSelected));
-        CommandsChanged();
-    }
-
-    private void ToggleSelectAll()
-    {
-        if (!IsIdle)
-        {
-            return;
-        }
-
-        bool selectAll = AllFilesSelected != true;
-        foreach (var row in Files.Where(row => row.SelectionEnabled))
-        {
-            row.IsSelected = selectAll;
-        }
-
-        RaisePropertyChanged(nameof(AllFilesSelected));
-    }
-
+    public DelegateCommand ToggleSelectAllCommand { get; }
+    public DelegateCommand ClearAllCommand { get; }
     public bool CanInspect => CanOperate();
-    public AsyncCommand AddFilesCommand
-    {
-        get;
-    }
-    public AsyncCommand AddFolderCommand
-    {
-        get;
-    }
-    public AsyncCommand ScanCommand
-    {
-        get;
-    }
-    public AsyncCommand InspectCommand
-    {
-        get;
-    }
-    public AsyncCommand DeepInspectCommand
-    {
-        get;
-    }
-    public AsyncCommand ConvertCommand
-    {
-        get;
-    }
-    public AsyncCommand ReviewCommand
-    {
-        get;
-    }
-    public AsyncCommand ApproveCommand
-    {
-        get;
-    }
-    public DelegateCommand CloseOptionsCommand
-    {
-        get;
-    }
-    public DelegateCommand BrowseDestinationCommand
-    {
-        get;
-    }
-    public DelegateCommand<MediaRow> SkipCommand
-    {
-        get;
-    }
-    public DelegateCommand<MediaRow> CancelFileCommand
-    {
-        get;
-    }
-    public DelegateCommand OpenOutputCommand
-    {
-        get;
-    }
-    public DelegateCommand OpenLogsCommand
-    {
-        get;
-    }
+    public AsyncCommand AddFilesCommand  { get;}
+    public AsyncCommand AddFolderCommand  { get; }
+    public AsyncCommand ScanCommand { get; }
+    public AsyncCommand InspectCommand { get; }
+    public AsyncCommand DeepInspectCommand { get; }
+    public AsyncCommand ConvertCommand{ get; }
+    public AsyncCommand ReviewCommand { get; }
+    public AsyncCommand ApproveCommand { get; }
+    public DelegateCommand CloseOptionsCommand { get; }
+    public DelegateCommand BrowseDestinationCommand { get; }
+    public DelegateCommand<MediaRow> SkipCommand { get; }
+    public DelegateCommand<MediaRow> CancelFileCommand { get; }
+    public DelegateCommand OpenOutputCommand { get; }
+    public DelegateCommand OpenLogsCommand { get; }
+    public AsyncCommand<MediaRow> RetryAnalysisCommand { get; }
+    public AsyncCommand<MediaRow> InspectIncompleteCommand { get; }
+    public DelegateCommand<MediaRow> OpenRowOutputCommand { get;}
 
     private bool CanOperate() => IsIdle && Files.Any(f => f.IsSelected);
-    public AsyncCommand<MediaRow> RetryAnalysisCommand
-    {
-        get;
-    }
-    public AsyncCommand<MediaRow> InspectIncompleteCommand
-    {
-        get;
-    }
-    public DelegateCommand<MediaRow> OpenRowOutputCommand
-    {
-        get;
-    }
+
     protected override void CommandsChanged()
     {
         RaisePropertyChanged(nameof(CanInspect));
@@ -807,7 +696,55 @@ public sealed class MediaViewModel : OperationViewModel
             EndBatch();
         }
     });
-    private static string Summary(BatchResult result) => string.Join(" · ", result.Items.GroupBy(r => r.Status).Select(g => $"{g.Count()} {g.Key}"));
+
+    private void ClearAll()
+    {
+        if (!IsIdle)
+        {
+            return;
+        }
+
+        foreach (var row in Files)
+        {
+            row.PropertyChanged -= OnRowPropertyChanged;
+        }
+
+        Files.Clear();
+        Focused = null;
+        OptionsOpen = false;
+        InvalidatePlan();
+        Status = "File list cleared.";
+        RaisePropertyChanged(nameof(SelectionSummary));
+        RaisePropertyChanged(nameof(AllFilesSelected));
+        CommandsChanged();
+    }
+
+    private void ToggleSelectAll()
+    {
+        if (!IsIdle)
+        {
+            return;
+        }
+
+        bool selectAll = AllFilesSelected != true;
+        foreach (var row in Files.Where(row => row.SelectionEnabled))
+        {
+            row.IsSelected = selectAll;
+        }
+
+        RaisePropertyChanged(nameof(AllFilesSelected));
+    }
+    private void NotifyActiveProgress()
+    {
+        RaisePropertyChanged(nameof(PauseBatchText));
+        PauseBatchCommand.RaiseCanExecuteChanged();
+        RaisePropertyChanged(nameof(ActiveProgressPercent));
+        RaisePropertyChanged(nameof(ActiveProgressIndeterminate));
+        RaisePropertyChanged(nameof(ActiveProgressTitle));
+        RaisePropertyChanged(nameof(ActiveProgressText));
+        RaisePropertyChanged(nameof(ActiveProgressSummary));
+        RaisePropertyChanged(nameof(ActiveProgressToolTip));
+    }
 }
 
 internal sealed class InlineProgress<T>(Action<T> report) : IProgress<T>

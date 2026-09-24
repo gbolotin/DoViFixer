@@ -4,11 +4,8 @@
     <TargetFramework>net10.0-windows</TargetFramework>
     <UseWPF>true</UseWPF>
     <NoWarn>$(NoWarn);WPF0001</NoWarn>
-    <ApplicationIcon>dovifixer4.ico</ApplicationIcon>
+    <ApplicationIcon>dovifixer.ico</ApplicationIcon>
   </PropertyGroup>
-  <ItemGroup>
-    <Content Include="dovifixer4.ico" />
-  </ItemGroup>
   <ItemGroup>
     <PackageReference Include="Prism.DryIoc" />
     <PackageReference Include="Microsoft.Extensions.Hosting" />
@@ -16,8 +13,5 @@
     <PackageReference Include="Serilog.Sinks.File" />
     <ProjectReference Include="../DoViFixer.Application/DoViFixer.Application.csproj" />
     <ProjectReference Include="../DoViFixer.Infrastructure/DoViFixer.Infrastructure.csproj" />
-  </ItemGroup>
-  <ItemGroup>
-    <Folder Include="Views\MediaView\" />
   </ItemGroup>
 </Project>
