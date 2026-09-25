@@ -46,9 +46,9 @@ public sealed class MediaViewModel : OperationViewModel
         ConvertDv81Command = new(() => ConvertBatchAsync(ConversionTarget.Profile81), CanOperate);
         ConvertHdrCommand = new(() => ConvertBatchAsync(ConversionTarget.Hdr10), CanOperate);
 
-        SkipCommand = new DelegateCommand<MediaRow>(Skip);
+        SkipCommand = new RelayCommand<MediaRow>(Skip);
 
-        CancelFileCommand = new DelegateCommand<MediaRow>(row =>
+        CancelFileCommand = new RelayCommand<MediaRow>(row =>
         {
             if (row is not null && row.IsActive && !row.IsCancellationRequested && control is not null)
             {
@@ -93,7 +93,7 @@ public sealed class MediaViewModel : OperationViewModel
     }
     public ObservableCollection<MediaRow> Files { get; } = [];
     public BatchProgressViewModel BatchProgress { get; } = new();
-    public DelegateCommand PauseBatchCommand { get; }
+    public RelayCommand PauseBatchCommand { get; }
     public string PauseBatchText => control?.IsPaused == true ? "Resume" : "Pause";
 
     public double ActiveProgressPercent => BatchProgress.IsRunning ? BatchProgress.Percent : Percent;
@@ -141,8 +141,8 @@ public sealed class MediaViewModel : OperationViewModel
     }
     public bool? AllFilesSelected => Files.Count == 0 || Files.All(row => !row.IsSelected) ? false : Files.All(row => row.IsSelected) ? true : null;
 
-    public DelegateCommand ToggleSelectAllCommand { get; }
-    public DelegateCommand ClearAllCommand { get; }
+    public RelayCommand ToggleSelectAllCommand { get; }
+    public RelayCommand ClearAllCommand { get; }
     public bool CanInspect => CanOperate();
     public AsyncCommand AddFilesCommand { get; }
     public AsyncCommand AddFolderCommand { get; }
@@ -151,14 +151,14 @@ public sealed class MediaViewModel : OperationViewModel
     public AsyncCommand DeepInspectCommand { get; }
     public AsyncCommand ConvertDv81Command { get; }
     public AsyncCommand ConvertHdrCommand { get; }
-    public DelegateCommand<MediaRow> SkipCommand { get; }
-    public DelegateCommand<MediaRow> CancelFileCommand { get; }
-    public DelegateCommand OpenOutputCommand { get; }
-    public DelegateCommand OpenLogsCommand { get; }
+    public RelayCommand<MediaRow> SkipCommand { get; }
+    public RelayCommand<MediaRow> CancelFileCommand { get; }
+    public RelayCommand OpenOutputCommand { get; }
+    public RelayCommand OpenLogsCommand { get; }
     public AsyncCommand<MediaRow> RetryAnalysisCommand { get; }
     public AsyncCommand<MediaRow> InspectIncompleteCommand { get; }
-    public DelegateCommand<MediaRow> OpenRowOutputCommand { get; }
-    public DelegateCommand OpenSettingsCommand { get; }
+    public RelayCommand<MediaRow> OpenRowOutputCommand { get; }
+    public RelayCommand OpenSettingsCommand { get; }
     public event Action? RequestNavigateToSettings;
     public event Func<CancellationToken, Task>? ConversionStarting;
 

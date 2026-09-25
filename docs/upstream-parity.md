@@ -6,7 +6,7 @@ Behavioral baseline: cryptochrome/dovi_convert **8.2.0**, local commit `7b682ebb
 
 | Capability | Implemented behavior | Differences / validation |
 | --- | --- | --- |
-| Solution / DI | Four production projects, four test projects; .NET 10; Generic Host; shared registration extensions | No WPF/Prism assemblies until phase 4. Domain has no package dependencies. Container resolution/lifetimes/disposal are tested without native work. |
+| Solution / DI | Four production projects, four test projects; .NET 10; Generic Host; shared registration extensions | WPF is implemented in phase 4 with standard WPF and Microsoft DI. Domain has no package dependencies. Container resolution/lifetimes/disposal are tested without native work. |
 | Dependencies | Configured paths, managed locations, PATH and installed locations; bounded version/capability probes | Requires supported CLI identities and minimum major versions; GUI MediaInfo rejected before launch when PE subsystem identifies it. Explicit bad paths do not silently fall back. |
 | Installation | Exact plan, separate consent, per-package outcomes, independent re-detection and immediate persisted path refresh | x64 portable ZIP catalog. WinGet source/digest must match; otherwise verified direct download. Unsupported architectures return manual recovery guidance. Real installation is not part of the tests run. |
 | scan | File/directory input, recursive depth, ten sample positions, candidate filtering, typed results and JSON | Requires every requested sample to succeed for a classification. Unknown/failed evidence is distinct from complex FEL. No fallback MaxCLL guess. |
@@ -40,4 +40,4 @@ Fast tests cover pure rules, fake dependency/install coordination, parsing, plan
 
 The native tests convert MEL Profile 7 to 8.1 and HDR10, restore from a generated archive, and run the production verification path. They verify normalized BL and EL hashes, complete output RPU counts/profiles, Unicode paths, per-track timestamps, optional audio/subtitles, attachments, chapters and tags. They do not establish compatibility with every commercial FEL title or exercise real installers. Those checks require explicitly selected local media and an approved installation environment.
 
-WPF dependency setup, views/ViewModels, Prism/DryIoc integration and related tests remain phase 4, as requested.
+WPF dependency setup, views/ViewModels, Microsoft DI composition and related tests are implemented in phase 4; see [wpf.md](wpf.md).

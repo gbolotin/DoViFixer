@@ -4,7 +4,7 @@ Apply these rules together with the [common development rules](common-rules.md).
 
 ## Project architecture
 
-DoViFixer provides native Windows C#/.NET Console and WPF applications. The WPF application uses MVVM and Prism. Both applications share the same domain, application, and infrastructure code.
+DoViFixer provides native Windows C#/.NET Console and WPF applications. The WPF application uses MVVM and standard WPF. Both applications share the same domain, application, and infrastructure code.
 
 Main projects:
 
@@ -12,7 +12,7 @@ Main projects:
 - DoViFixer.Application: shared use cases, workflow coordination, requests, results, progress models, and interfaces for external capabilities.
 - DoViFixer.Infrastructure: repositories, persistence, configuration, file system, and other infrastructure.
 - DoViFixer.Console: console entry point, command parsing, interaction, rendering, and dependency injection composition.
-- DoViFixer.App: WPF entry point, views, ViewModels, commands, dialogs, Prism navigation, and dependency injection composition.
+- DoViFixer.App: WPF entry point, views, ViewModels, commands, dialogs, WPF navigation, and dependency injection composition.
 - DoViFixer.Common.Wpf: optional shared WPF utilities and reusable UI infrastructure; add when there is concrete reuse.
 
 ## Layering and media workflows
@@ -20,7 +20,7 @@ Main projects:
 - Keep domain logic in DoViFixer.Domain and use-case coordination in DoViFixer.Application.
 - Put interfaces needed by application workflows in DoViFixer.Application/Abstractions; keep domain-specific abstractions in Domain when appropriate.
 - DoViFixer.Infrastructure implements the inner layers' abstractions. Neither Domain nor Application may reference Infrastructure, Console, or App.
-- Keep Prism navigation, regions, dialogs, and ViewModels in DoViFixer.App. Common.Wpf must remain reusable presentation infrastructure.
+- Keep WPF navigation, dialogs, and ViewModels in DoViFixer.App. Common.Wpf must remain reusable presentation infrastructure.
 - ViewModels and console commands call application services; they must not implement conversion rules or low-level tool/file operations.
 - Neither DoViFixer.Console nor DoViFixer.App references the other. Shared functionality belongs in the shared libraries.
 - Keep media analysis, conversion policy, workflow coordination, tool execution, and UI presentation separated.
@@ -29,9 +29,9 @@ Main projects:
 ## Dependency injection choices
 
 - Use Microsoft.Extensions.DependencyInjection through the .NET Generic Host in DoViFixer.Console.
-- Use Prism with DryIoc in DoViFixer.App. Import shared IServiceCollection registrations through the supported Prism integration for the selected package versions.
+- Use Microsoft.Extensions.DependencyInjection in DoViFixer.App. Register shared services, ViewModels, and the shell in one IServiceCollection; build the root provider in WPF startup and dispose it on exit.
 - Define AddDoViFixerApplication and AddDoViFixerInfrastructure registration extensions in their respective libraries, using Microsoft.Extensions.DependencyInjection.Abstractions.
-- Do not create a separate Microsoft provider alongside Prism's container.
+- Do not build additional service providers inside registration extensions or alongside the application root.
 - WPF does not provide automatic per-job scopes; introduce explicit operation scopes only when scoped dependencies are introduced.
 
 ## Native dependencies

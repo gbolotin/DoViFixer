@@ -1,6 +1,6 @@
 using DoViFixer.App.ViewModels;
 using Microsoft.VisualStudio.TestTools.UnitTesting;
-using Prism.Ioc;
+using Microsoft.Extensions.DependencyInjection;
 
 namespace DoViFixer.App.Tests;
 
@@ -13,7 +13,7 @@ public sealed class ConversionReviewTests
         using var runtime = new TestRuntime();
         string nonExistentPath = Path.Combine(Path.GetTempPath(), "DoViFixer_NonExistentTemp_" + Guid.NewGuid());
         await runtime.UpdateAsync(settings => settings with { TemporaryDirectory = nonExistentPath }, default);
-        var model = runtime.Container.Resolve<MediaViewModel>();
+        var model = runtime.Container.GetRequiredService<MediaViewModel>();
         await model.AddAsync([@"C:\Media\Mountain.mkv"]);
 
         await model.ConvertDv81Command.ExecuteAsync();
@@ -33,7 +33,7 @@ public sealed class ConversionReviewTests
     public async Task ConvertDv81InBatchPreparesAndConvertsEligibleCandidatesAndSkipsFelByDefault()
     {
         using var runtime = new TestRuntime();
-        var model = runtime.Container.Resolve<MediaViewModel>();
+        var model = runtime.Container.GetRequiredService<MediaViewModel>();
         await model.AddAsync([@"C:\Media\Mountain.mkv", @"C:\Media\Ocean.mkv"]);
         model.Files[1].IsSelected = true;
 
@@ -54,7 +54,7 @@ public sealed class ConversionReviewTests
     {
         using var runtime = new TestRuntime();
         await runtime.UpdateAsync(settings => settings with { IncludeSimple = true }, default);
-        var model = runtime.Container.Resolve<MediaViewModel>();
+        var model = runtime.Container.GetRequiredService<MediaViewModel>();
         await model.AddAsync([@"C:\Media\Ocean.mkv", @"C:\Media\City.mkv"]);
         model.Files[1].IsSelected = true;
 
@@ -75,7 +75,7 @@ public sealed class ConversionReviewTests
     {
         using var runtime = new TestRuntime();
         await runtime.UpdateAsync(settings => settings with { ForceComplex = true }, default);
-        var model = runtime.Container.Resolve<MediaViewModel>();
+        var model = runtime.Container.GetRequiredService<MediaViewModel>();
         await model.AddAsync([@"C:\Media\City.mkv"]);
         model.Files[0].IsSelected = true;
 
@@ -91,7 +91,7 @@ public sealed class ConversionReviewTests
     public async Task ConvertHdrConvertsToHdrTargetDirectly()
     {
         using var runtime = new TestRuntime();
-        var model = runtime.Container.Resolve<MediaViewModel>();
+        var model = runtime.Container.GetRequiredService<MediaViewModel>();
         await model.AddAsync([@"C:\Media\Mountain.mkv"]);
 
         await model.ConvertHdrCommand.ExecuteAsync();
@@ -108,7 +108,7 @@ public sealed class ConversionReviewTests
     {
         using var runtime = new TestRuntime();
         runtime.FailAvailableSpace = true;
-        var model = runtime.Container.Resolve<MediaViewModel>();
+        var model = runtime.Container.GetRequiredService<MediaViewModel>();
         await model.AddAsync([@"C:\Media\Mountain.mkv"]);
 
         await model.ConvertDv81Command.ExecuteAsync();

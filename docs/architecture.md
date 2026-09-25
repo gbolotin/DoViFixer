@@ -4,11 +4,11 @@ Date: 2026-09-07
 
 Updated: 2026-09-08 (automatic dependency detection and installation requirement).
 
-Status: Console phases 1–3 implemented on 2026-09-08. WPF phase 4 implemented on 2026-09-11 using Studio v3 Media and v2 archive/settings mockups. `DoViFixer.App` uses Prism/DryIoc with the shared services, operation-scoped batch controls, plan approval, dependency setup and focused UI/composition tests. See [wpf.md](wpf.md) for implementation and verification and [upstream-parity.md](upstream-parity.md) for media integration limits. The design below remains the architecture reference; future labels in the original tree describe the original sequencing.
+Status: Console phases 1–3 implemented on 2026-09-08. WPF phase 4 implemented on 2026-09-11 using Studio v3 Media and v2 archive/settings mockups. `DoViFixer.App` uses standard WPF and Microsoft DI with the shared services, operation-scoped batch controls, plan approval, dependency setup and focused UI/composition tests. See [wpf.md](wpf.md) for implementation and verification and [upstream-parity.md](upstream-parity.md) for media integration limits. The design below remains the architecture reference; future labels in the original tree describe the original sequencing.
 
 ## Objective
 
-Port the workflows of cryptochrome/dovi_convert to a native Windows C# console application, then add a WPF application using MVVM and Prism. Both executable applications call the same shared services. The WPF application does not invoke or reference the console executable.
+Port the workflows of cryptochrome/dovi_convert to a native Windows C# console application, then add a WPF application using MVVM and standard WPF. Both executable applications call the same shared services. The WPF application does not invoke or reference the console executable.
 
 The baseline review covered the upstream Python source, changelog, roadmap, and all 14 pages listed in the documentation index. The local source examined identifies itself as version 8.2.0, at commit `7b682ebb4505b8c4a25a018881b640f74a4b383e`. Record that baseline in future parity work and recheck upstream before implementation.
 
@@ -96,7 +96,7 @@ Folders are organizational boundaries, not additional projects. Do not create em
 | Application | Scan, inspect, plan, convert, verify, backup, restore, cleanup, settings and update use cases; requests, results, progress; required external interfaces | Domain |
 | Infrastructure | Native-tool adapters, parsing, files, temporary workspaces, archive serialization, settings persistence and HTTP | Application, Domain |
 | Console | Entry point, DI composition, command parsing, prompts, rendering and exit-code mapping | Application, Infrastructure; Domain when directly using its models |
-| App | WPF entry point and DI composition, views, ViewModels, dialogs and Prism navigation | Application, Infrastructure; Domain when directly using its models; Common.Wpf if extracted |
+| App | WPF entry point and DI composition, views, ViewModels, dialogs and WPF navigation | Application, Infrastructure; Domain when directly using its models; Common.Wpf if extracted |
 | Common.Wpf | Reusable WPF controls, behaviors and converters | No DoViFixer business projects |
 
 Each test project references the code it exercises. Infrastructure and console tests can use inner-layer contracts and fixtures without introducing references from production code to tests.
@@ -120,10 +120,10 @@ The diagram shows the main reference direction. Executable references to Infrast
 ### Container choices
 
 - **Console:** .NET Generic Host with the built-in `Microsoft.Extensions.DependencyInjection` container.
-- **WPF:** Prism with DryIoc, using the supported Prism integration to import shared `IServiceCollection` registrations.
-- **Shared code:** constructor injection and standard DI registration abstractions. No dependency on DryIoc, Prism, or a concrete container implementation in Application or Domain.
+- **WPF:** standard WPF Application startup with one Microsoft.Extensions.DependencyInjection provider using the shared `IServiceCollection` registrations.
+- **Shared code:** constructor injection and standard DI registration abstractions. No dependency on a UI framework or concrete container implementation in Application or Domain.
 
-Sharing the workflows and registration methods does not require the two executables to use the same container implementation. This arrangement uses the normal .NET console hosting model and Prism's supported WPF container. Microsoft documents Generic Host's DI support; Prism documents DryIoc and `IServiceCollection` integration. [Generic Host](https://learn.microsoft.com/en-us/dotnet/core/extensions/generic-host), [Prism DI](https://docs.prismlibrary.com/docs/current/dependency-injection/).
+Both executables reuse the shared registration methods and Microsoft DI container. Console uses Generic Host; WPF owns its provider directly in App startup and exit.
 
 ### Shared registrations
 
@@ -145,9 +145,9 @@ builder.Services.AddDoViFixerInfrastructure(builder.Configuration);
 
 In the console composition root, configure provider validation, build one host, resolve the command dispatcher, and manage host startup, shutdown and disposal. Parse command-specific options separately from host configuration and map application results to exit codes at the console boundary.
 
-In WPF startup, prepare the same shared service registrations and import them into Prism's existing DryIoc container using the supported API for the chosen package versions. Register views, ViewModels, dialogs and navigation in the WPF project. Do not build a second Microsoft service provider or a separate Generic Host container beside Prism.
+In WPF startup, prepare the shared and presentation service registrations, build one provider with registration and scope validation, and resolve the shell. Dispose the provider on application exit. Keep all root resolution in startup and container-specific configuration in Composition.
 
-Choose and pin compatible package versions during scaffolding. Prove the WPF registration bridge with a small composition test when that phase starts; this plan does not prescribe unverified version-specific adapter calls. [Prism registration integration](https://docs.prismlibrary.com/docs/current/dependency-injection/servicecollection-supplement/).
+Pin package versions centrally. Composition tests verify service resolution, lifetimes, factory dependencies, disposal and absence of registration-time filesystem activity.
 
 ### Lifetimes and ownership
 
@@ -160,7 +160,7 @@ Choose and pin compatible package versions during scaffolding. Prove the WPF reg
 | A running process, cancellation source, temporary workspace or stream | Created and disposed by its operation; never global singleton state |
 | Future scoped persistence or operation dependencies | Explicit per-operation scope, created and disposed through a narrow factory/composition boundary |
 
-WPF does not automatically create per-job scopes. A future singleton queue must create independent operations and must not capture scoped dependencies. Avoid service locator usage in business services and ViewModels; keep any container-backed factory implementation at the composition boundary. [Prism lifetimes](https://docs.prismlibrary.com/docs/current/dependency-injection/registering-types/).
+WPF does not automatically create per-job scopes. A future singleton queue must create independent operations and must not capture scoped dependencies. Avoid service locator usage in business services and ViewModels; keep any container-backed factory implementation at the composition boundary.
 
 DI registration and validation must not launch native tools, scan media, create working folders, or initiate conversions. Dependency checks are an application operation invoked automatically before media workflows or explicitly through the dependency commands. Help and argument validation remain lightweight. Installation requires approval of a concrete dependency installation plan.
 
@@ -182,7 +182,7 @@ WPF ConversionViewModel ---+             |
 - Return structured results with status, output paths, warnings, verification findings and failure reasons. Only the console maps these to process exit codes.
 - Separate planning from execution. A plan identifies exact inputs, requested target, proposed output paths, archive/retention choices and estimated storage requirements. Each UI presents the plan and submits explicit execution choices.
 - Revalidate source identity, paths, available space and collisions before executing a prepared plan.
-- Keep prompts, colors, tables, dialogs, observable collections and UI dispatching in presentation. Shared services must not call Console, MessageBox, Dispatcher or Prism navigation APIs.
+- Keep prompts, colors, tables, dialogs, observable collections and UI dispatching in presentation. Shared services must not call Console, MessageBox, Dispatcher or WPF navigation APIs.
 
 Define interfaces at real external boundaries, such as `IMediaProbe`, `IVideoProcessor`, `IBackupArchiveStore`, `ITemporaryWorkspaceFactory` and `IOutputPublisher`. Keep native command construction and process-runner abstractions internal to Infrastructure when the application does not need them. Use `ILogger<T>` and `TimeProvider` where suitable instead of introducing redundant wrappers.
 
@@ -190,7 +190,7 @@ Define interfaces at real external boundaries, such as `IMediaProbe`, `IVideoPro
 
 Application and Infrastructure services use Microsoft `ILogger<T>` with structured message templates. `Application/Operations/OperationLog` defines history/audit event conventions and wraps operations with per-call scopes, monotonic elapsed timing, terminal status, and exception capture. It does not own a logger, access files, or create shared mutable operation state. Domain has no logging dependency.
 
-The console's composition root configures Serilog through the existing Generic Host; the host owns and disposes the provider. It keeps the static Serilog logger untouched and does not build another service provider. The future WPF composition root should use the same event conventions and an owned Serilog provider in its Prism container. Presentation logs the plan actually shown and the approval method; application services log execution outcomes. Infrastructure logs native processes, retry/cleanup diagnostics, and settings changes after atomic publication while holding the settings writer lock.
+The console's composition root configures Serilog through the existing Generic Host; the host owns and disposes the provider. It keeps the static Serilog logger untouched and does not build another service provider. The WPF composition root uses the same event conventions and an owned Serilog provider in its application service provider. Presentation logs the plan actually shown and the approval method; application services log execution outcomes. Infrastructure logs native processes, retry/cleanup diagnostics, and settings changes after atomic publication while holding the settings writer lock.
 
 Separate rolling JSON Lines sinks store operation history, audit, and diagnostics. Stable `LogKind` properties route history/audit independently of the diagnostic sink's minimum level. Session, command, batch, operation, plan, and native invocation IDs support correlation; failed batch items retain their exceptions while subsequent items continue. Logging neither authorizes execution nor changes verification rules. See the README for file locations, retention, configuration, and incident investigation.
 
@@ -282,7 +282,7 @@ Use .NET 10 LTS. The machine had SDK `10.0.400` installed when reviewed; pin the
 - App and Common.Wpf: `net10.0-windows`, with WPF enabled.
 - Tests: target the framework required by the projects under test.
 
-Use `Directory.Build.props` for shared compiler settings and `Directory.Packages.props` for central package versions. Keep Prism and its container package references in App; Console uses Microsoft hosting and DI packages.
+Use `Directory.Build.props` for shared compiler settings and `Directory.Packages.props` for central package versions. App uses standard WPF and Microsoft DI packages; Console uses Microsoft hosting and DI packages.
 
 Both applications use the same persisted user settings location, proposed as `%LOCALAPPDATA%\DoViFixer\settings.json`. Infrastructure handles serialization and atomic settings writes. An operation receives a validated settings snapshot; command-line overrides apply to that operation unless an explicit settings action persists them. Serialize or detect conflicting writes if both applications update settings concurrently.
 
@@ -293,11 +293,11 @@ Keep service instances shared within one process only. Running the console and W
 1. **Solution foundation:** create the four initial production projects and focused test projects; configure targets and package versions; implement DI registrations and console composition. Validate references, service resolution, lifetimes and disposal with inert test doubles.
 2. **Dependency setup and read-only media workflows:** dependency detection, approved automatic installation, post-install validation and current-process path refresh; then media probing, scan and inspect, pure classification rules, typed results, cancellation and console output. Test detection/installation coordination with fakes and validate media analysis against representative tool-output fixtures.
 3. **Media workflows:** conversion planning/execution, verification, publication, backup, restore and cleanup. Add batch coordination and settings persistence. Compare supported commands with the upstream parity checklist and run integration checks using explicitly selected media fixtures.
-4. **WPF presentation:** add Prism/DryIoc composition and verify the shared registration bridge. Build dependency setup, scan, inspection, conversion, backup/restore and settings views over existing services. Test cancellation/progress and add focused ViewModel/composition tests. Extract Common.Wpf only when reusable components emerge.
+4. **WPF presentation:** add standard WPF startup and Microsoft DI composition and verify shared registrations. Build dependency setup, scan, inspection, conversion, backup/restore and settings views over existing services. Test cancellation/progress and add focused ViewModel/composition tests. Extract Common.Wpf only when reusable components emerge.
 
 For native-media integration checks, cover supported profile/EL cases, spaces and punctuation in paths, output collisions, cancellation, missing tools, malformed output, verification failures and archive mismatches. Keep these separate from fast unit tests.
 
-Separate Prism module assemblies, a database, watch-folder processing, a background service, remote UI and a general plugin framework are deferred until required. A DI container does not require additional production projects or an interface for every class.
+Separate UI module assemblies, a database, watch-folder processing, a background service, remote UI and a general plugin framework are deferred until required. A DI container does not require additional production projects or an interface for every class.
 
 ## Documentation reviewed
 

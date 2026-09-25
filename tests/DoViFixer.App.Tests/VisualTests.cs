@@ -10,8 +10,7 @@ using System.Windows.Threading;
 using DoViFixer.App.ViewModels;
 using DoViFixer.App.Views;
 using Microsoft.VisualStudio.TestTools.UnitTesting;
-using Prism.Ioc;
-using Prism.Navigation.Regions;
+using Microsoft.Extensions.DependencyInjection;
 using DoViFixer.Application.Settings;
 
 namespace DoViFixer.App.Tests;
@@ -66,8 +65,7 @@ public sealed class VisualTests
         try
         {
             using var runtime = new TestRuntime();
-            ContainerLocator.SetContainerExtension((IContainerExtension)runtime.Container);
-            var shell = runtime.Container.Resolve<ShellViewModel>();
+            var shell = runtime.Container.GetRequiredService<ShellViewModel>();
             var model = shell.Media;
             var media = new MediaView(model);
             await RenderAsync(media, "01-media-empty");
@@ -83,7 +81,7 @@ public sealed class VisualTests
                 ForceComplex = true,
                 CreateElArchive = true
             });
-            var window = new Shell(shell, new RegionManager());
+            var window = new Shell(shell);
             var shellContent = (DockPanel)window.Content;
             var workspace = shellContent.Children.OfType<ContentControl>().Single();
             workspace.Content = media;
@@ -234,13 +232,36 @@ public sealed class VisualTests
             Assert.AreEqual("Cancelled; cleanup finished.", shell.Settings.Status);
             Assert.IsTrue(shell.CanNavigate);
             runtime.DuringDependencyCheck = null;
+            // Release the standalone settings bindings before exercising the shell's retained view.
+            settingsView.DataContext = null;
+            window.RaiseEvent(new RoutedEventArgs(FrameworkElement.LoadedEvent));
+            var navigation = (ListBox)window.FindName("Navigation");
+            var retainedMedia = workspace.Content;
+            var mediaItem = navigation.Items.Cast<ListBoxItem>().Single(item => Equals(item.Tag, "Media"));
+            var settingsItem = navigation.Items.Cast<ListBoxItem>().Single(item => Equals(item.Tag, "Settings"));
+            runtime.DuringDependencyCheck = token => Task.Delay(Timeout.Infinite, token);
+            checking = shell.Settings.CheckCommand.ExecuteAsync();
+            await Dispatcher.Yield(DispatcherPriority.ApplicationIdle);
+            Assert.IsFalse(navigation.IsEnabled);
+            navigation.SelectedItem = settingsItem;
+            Assert.AreSame(mediaItem, navigation.SelectedItem);
+            Assert.AreSame(retainedMedia, workspace.Content);
+            shell.Settings.CancelCommand.Execute();
+            await checking;
+            model.OpenSettingsCommand.Execute();
+            await Dispatcher.Yield(DispatcherPriority.ApplicationIdle);
+            Assert.AreSame(settingsItem, navigation.SelectedItem);
+            Assert.IsInstanceOfType<SettingsView>(workspace.Content);
+            Assert.AreSame(shell.Settings, ((SettingsView)workspace.Content).DataContext);
+            navigation.SelectedItem = mediaItem;
+            await Dispatcher.Yield(DispatcherPriority.ApplicationIdle);
+            Assert.AreSame(retainedMedia, workspace.Content);
             Assert.AreEqual("", listener.Errors.ToString(), "WPF binding errors");
         }
         finally
         {
             PresentationTraceSources.DataBindingSource.Listeners.Remove(listener);
             app.Shutdown();
-            ContainerLocator.ResetContainer();
         }
     }
 

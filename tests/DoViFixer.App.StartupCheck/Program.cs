@@ -1,10 +1,11 @@
 using System.IO;
 using System.Windows;
+using System.Windows.Controls;
 using System.Windows.Media;
 using System.Windows.Media.Imaging;
 using System.Windows.Threading;
 using DoViFixer.App.ViewModels;
-using Prism.Navigation.Regions;
+using DoViFixer.App.Views;
 
 namespace DoViFixer.App.StartupCheck;
 internal static class Program
@@ -25,39 +26,50 @@ internal static class Program
             var app = new DoViFixer.App.App();
             app.InitializeComponent();
             int result = 1;
-            app.Dispatcher.BeginInvoke(DispatcherPriority.ApplicationIdle, new Action(() =>
+            app.Dispatcher.BeginInvoke(DispatcherPriority.ApplicationIdle, new Action(async () =>
             {
                 try
                 {
-                    var shell = app.MainWindow ?? throw new InvalidOperationException("Prism did not create a shell.");
+                    var shell = app.MainWindow ?? throw new InvalidOperationException("WPF did not create a shell.");
                     if (shell.DataContext is not ShellViewModel model || !model.CanNavigate)
                     {
                         throw new InvalidOperationException("Invalid idle shell state.");
                     }
 
-                    var region = RegionManager.GetRegionManager(shell).Regions["Workspace"];
-                    if (region.Views.Count() != 3 || region.ActiveViews.Count() != 1)
+                    var navigation = (ListBox)shell.FindName("Navigation");
+                    var workspace = (ContentControl)shell.FindName("Workspace");
+                    if (navigation.Items.Count != 3 || workspace.Content is not MediaView media || !ReferenceEquals(media.DataContext, model.Media))
                     {
                         throw new InvalidOperationException("Workspace navigation did not initialize.");
                     }
 
-                    foreach (string name in new[]
+                    var visited = new Dictionary<string, object>();
+                    foreach (var (name, viewModel, viewType) in new (string, object, Type)[]
                     {
-                        "Media",
-                        "Archive",
-                        "Settings"
+                        ("Archive", model.Archive, typeof(ArchiveView)),
+                        ("Settings", model.Settings, typeof(SettingsView)),
+                        ("Media", model.Media, typeof(MediaView)),
+                        ("Archive", model.Archive, typeof(ArchiveView)),
+                        ("Settings", model.Settings, typeof(SettingsView)),
+                        ("Media", model.Media, typeof(MediaView))
                     }
-
                     )
                     {
-                        region.Activate(region.GetView(name));
-                        if (!region.ActiveViews.Contains(region.GetView(name)))
+                        navigation.SelectedItem = navigation.Items.Cast<ListBoxItem>().Single(item => Equals(item.Tag, name));
+                        await WaitForAsync(() => workspace.Content is FrameworkElement view && view.GetType() == viewType && ReferenceEquals(view.DataContext, viewModel));
+                        if (visited.TryGetValue(name, out var previous) && !ReferenceEquals(previous, workspace.Content))
                         {
-                            throw new InvalidOperationException("Navigation failed: " + name);
+                            throw new InvalidOperationException("Navigation recreated the view: " + name);
                         }
+
+                        visited[name] = workspace.Content;
+                        await WaitForAsync(() => model.CanNavigate);
                     }
 
-                    region.Activate(region.GetView("Media"));
+                    if (!ReferenceEquals(media, workspace.Content))
+                    {
+                        throw new InvalidOperationException("Navigation lost the original media view.");
+                    }
                     shell.UpdateLayout();
                     var content = (FrameworkElement)shell.Content;
                     var bitmap = new RenderTargetBitmap((int)content.ActualWidth, (int)content.ActualHeight, 96, 96, PixelFormats.Pbgra32);
@@ -70,7 +82,7 @@ internal static class Program
                         encoder.Save(file);
                     }
 
-                    System.Console.WriteLine("Prism startup, three workspace views and navigation passed.");
+                    System.Console.WriteLine("WPF startup, three workspace views and navigation passed.");
                     result = 0;
                 }
                 catch (Exception ex)
@@ -90,5 +102,16 @@ internal static class Program
             System.Console.Error.WriteLine(ex);
             return 1;
         }
+    }
+
+    private static async Task WaitForAsync(Func<bool> condition)
+    {
+        using var timeout = new CancellationTokenSource(TimeSpan.FromSeconds(10));
+        while (!condition())
+        {
+            await Task.Delay(10, timeout.Token);
+        }
+
+        await Dispatcher.Yield(DispatcherPriority.ApplicationIdle);
     }
 }

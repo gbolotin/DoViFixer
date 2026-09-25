@@ -2,7 +2,7 @@ using DoViFixer.App.ViewModels;
 using DoViFixer.Application.Operations;
 
 namespace DoViFixer.App.Presentation;
-public abstract class OperationViewModel : BindableBase
+public abstract class OperationViewModel : ObservableObject
 {
     private CancellationTokenSource? cancellation;
     private bool isBusy;
@@ -55,7 +55,7 @@ public abstract class OperationViewModel : BindableBase
     public double Percent => Progress.Percent;
     public bool IsIndeterminate => Progress.IsIndeterminate;
 
-    public DelegateCommand CancelCommand
+    public RelayCommand CancelCommand
     {
         get;
     }

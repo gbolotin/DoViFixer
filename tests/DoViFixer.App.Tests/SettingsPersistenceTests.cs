@@ -2,7 +2,7 @@ using DoViFixer.App.ViewModels;
 using DoViFixer.Application.Abstractions;
 using DoViFixer.Application.Settings;
 using Microsoft.VisualStudio.TestTools.UnitTesting;
-using Prism.Ioc;
+using Microsoft.Extensions.DependencyInjection;
 
 namespace DoViFixer.App.Tests;
 
@@ -15,8 +15,8 @@ public sealed class SettingsPersistenceTests
         using var runtime = new TestRuntime();
         await runtime.UpdateAsync(s => s with { ReplaceOriginal = true }, default);
         var store = new DelayedStore(runtime);
-        ((IContainerRegistry)runtime.Container).RegisterInstance<ISettingsStore>(store);
-        var shell = runtime.Container.Resolve<ShellViewModel>();
+        runtime.Services.AddSingleton<ISettingsStore>(store);
+        var shell = runtime.Container.GetRequiredService<ShellViewModel>();
         await shell.Settings.LoadCommand.ExecuteAsync();
         await shell.Media.AddAsync([@"C:\Media\Mountain.mkv"]);
 
@@ -46,8 +46,8 @@ public sealed class SettingsPersistenceTests
     {
         using var runtime = new TestRuntime();
         var store = new DelayedStore(runtime);
-        ((IContainerRegistry)runtime.Container).RegisterInstance<ISettingsStore>(store);
-        var shell = runtime.Container.Resolve<ShellViewModel>();
+        runtime.Services.AddSingleton<ISettingsStore>(store);
+        var shell = runtime.Container.GetRequiredService<ShellViewModel>();
         await shell.Settings.LoadCommand.ExecuteAsync();
 
         shell.Settings.IncludeSimple = true;
@@ -75,7 +75,7 @@ public sealed class SettingsPersistenceTests
     {
         using var runtime = new TestRuntime();
         await runtime.UpdateAsync(s => s with { ReplaceOriginal = true, TemporaryDirectory = Path.GetTempPath() }, default);
-        var shell = runtime.Container.Resolve<ShellViewModel>();
+        var shell = runtime.Container.GetRequiredService<ShellViewModel>();
         await shell.Settings.LoadCommand.ExecuteAsync();
         await shell.Media.AddAsync([@"C:\Media\Mountain.mkv"]);
 
@@ -103,7 +103,7 @@ public sealed class SettingsPersistenceTests
     public async Task DiscardRestoresLastSuccessfulSaveAndAllowsNavigationAndShutdownWithoutStorage()
     {
         using var runtime = new TestRuntime();
-        var shell = runtime.Container.Resolve<ShellViewModel>();
+        var shell = runtime.Container.GetRequiredService<ShellViewModel>();
         await shell.Settings.LoadCommand.ExecuteAsync();
         shell.Settings.IncludeSimple = true;
         await shell.Settings.SaveTask;

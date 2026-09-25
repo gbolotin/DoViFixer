@@ -2,7 +2,7 @@ using System.ComponentModel;
 using DoViFixer.App.Presentation;
 
 namespace DoViFixer.App.ViewModels;
-public sealed class ShellViewModel : BindableBase
+public sealed class ShellViewModel : ObservableObject
 {
     public ShellViewModel(MediaViewModel media, ArchiveViewModel archive, SettingsViewModel settings)
     {

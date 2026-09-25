@@ -2,7 +2,7 @@ using DoViFixer.Application.Operations;
 
 namespace DoViFixer.App.ViewModels;
 
-public sealed class BatchProgressViewModel : BindableBase
+public sealed class BatchProgressViewModel : ObservableObject
 {
     private readonly object gate = new();
     private int revision;

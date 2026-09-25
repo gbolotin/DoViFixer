@@ -4,22 +4,30 @@ using DoViFixer.App.Presentation;
 using DoViFixer.App.Views;
 using DoViFixer.Application.Settings;
 using Microsoft.Extensions.Configuration;
-using Prism.DryIoc;
-using Prism.Ioc;
+using Microsoft.Extensions.DependencyInjection;
 
 namespace DoViFixer.App;
-public partial class App : PrismApplication
+public partial class App : System.Windows.Application
 {
-    protected override Window CreateShell() => Container.Resolve<Shell>();
-    protected override void RegisterTypes(IContainerRegistry containerRegistry) => AppComposition.Register((IContainerExtension)containerRegistry, new ConfigurationBuilder().AddEnvironmentVariables().Build());
+    private ServiceProvider? services;
 
-    protected override async void OnInitialized()
+    protected override async void OnStartup(StartupEventArgs e)
     {
-        base.OnInitialized();
+        base.OnStartup(e);
+        var registrations = new ServiceCollection();
+        AppComposition.Register(registrations, new ConfigurationBuilder().AddEnvironmentVariables().Build());
+        services = registrations.BuildServiceProvider(new ServiceProviderOptions { ValidateOnBuild = true, ValidateScopes = true });
+        MainWindow = services.GetRequiredService<Shell>();
+        var settingsService = services.GetRequiredService<SettingsService>();
+        var themeService = services.GetRequiredService<IThemeService>();
+        MainWindow.Show();
         try
         {
-            var settings = await Container.Resolve<SettingsService>().ReadAsync(CancellationToken.None);
-            Container.Resolve<IThemeService>().ApplyTheme(settings.Theme);
+            var settings = await settingsService.ReadAsync(CancellationToken.None);
+            if (services is not null)
+            {
+                themeService.ApplyTheme(settings.Theme);
+            }
         }
         catch
         {
@@ -29,7 +37,8 @@ public partial class App : PrismApplication
 
     protected override void OnExit(ExitEventArgs e)
     {
-        Container.GetContainer().Dispose();
+        services?.Dispose();
+        services = null;
         base.OnExit(e);
     }
 }

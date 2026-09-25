@@ -127,15 +127,15 @@ public sealed class ArchiveViewModel : OperationViewModel
         get => allowLegacy;
         set => SetProperty(ref allowLegacy, value);
     }
-    public DelegateCommand BrowseInputCommand
+    public RelayCommand BrowseInputCommand
     {
         get;
     }
-    public DelegateCommand BrowseArchiveCommand
+    public RelayCommand BrowseArchiveCommand
     {
         get;
     }
-    public DelegateCommand BrowseOutputCommand
+    public RelayCommand BrowseOutputCommand
     {
         get;
     }

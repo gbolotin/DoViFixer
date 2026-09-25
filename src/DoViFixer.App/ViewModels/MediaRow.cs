@@ -2,7 +2,7 @@ using DoViFixer.Application.Operations;
 using DoViFixer.Domain.Analysis;
 
 namespace DoViFixer.App.ViewModels;
-public sealed class MediaRow(string path) : BindableBase
+public sealed class MediaRow(string path) : ObservableObject
 {
     #region Private fields
     private bool selected = true;

@@ -1,6 +1,6 @@
 using DoViFixer.App.ViewModels;
 using Microsoft.VisualStudio.TestTools.UnitTesting;
-using Prism.Ioc;
+using Microsoft.Extensions.DependencyInjection;
 
 namespace DoViFixer.App.Tests;
 [TestClass]
@@ -12,7 +12,7 @@ public sealed class ViewModelTests
     public async Task PauseBatchCommandWaitsBetweenJobsAndResetsAfterCompletion(bool cancelBatch)
     {
         using var runtime = new TestRuntime();
-        var model = runtime.Container.Resolve<MediaViewModel>();
+        var model = runtime.Container.GetRequiredService<MediaViewModel>();
         var release = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
         var started = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
         runtime.DuringAnalysis = async token =>
@@ -61,7 +61,7 @@ public sealed class ViewModelTests
     public async Task IncompleteScanExplainsSampleFailureAndInspectsOnlyClickedRow()
     {
         using var runtime = new TestRuntime();
-        var model = runtime.Container.Resolve<MediaViewModel>();
+        var model = runtime.Container.GetRequiredService<MediaViewModel>();
         await model.AddAsync([@"C:\Media\Mountain.mkv", @"C:\Media\Ocean.mkv"]);
         var row = model.Files[0];
         var evidence = row.Analysis!.Evidence with
@@ -98,7 +98,7 @@ public sealed class ViewModelTests
     public async Task RetryRepeatsOnlyFailedRowsAnalysisMethod(DoViFixer.Domain.Analysis.AnalysisMethod method)
     {
         using var runtime = new TestRuntime();
-        var model = runtime.Container.Resolve<MediaViewModel>();
+        var model = runtime.Container.GetRequiredService<MediaViewModel>();
         await model.AddAsync([@"C:\Media\Mountain.mkv", @"C:\Media\Ocean.mkv"]);
         var row = model.Files[0];
         model.Files[1].IsSelected = false;
@@ -131,7 +131,7 @@ public sealed class ViewModelTests
     public async Task OpenFolderUsesClickedRowRatherThanFocusedRow()
     {
         using var runtime = new TestRuntime();
-        var model = runtime.Container.Resolve<MediaViewModel>();
+        var model = runtime.Container.GetRequiredService<MediaViewModel>();
         await model.AddAsync([@"C:\Media\One\Mountain.mkv", @"C:\Media\Two\Ocean.mkv"]);
         await model.ConvertDv81Command.ExecuteAsync();
         model.Focused = model.Files[1];
@@ -156,7 +156,7 @@ public sealed class ViewModelTests
             started.TrySetResult();
             await Task.Delay(Timeout.Infinite, token);
         };
-        var model = runtime.Container.Resolve<MediaViewModel>();
+        var model = runtime.Container.GetRequiredService<MediaViewModel>();
         var adding = model.AddAsync([@"C:\Media\Mountain.mkv", @"C:\Media\Ocean.mkv"]);
         await started.Task.WaitAsync(TimeSpan.FromSeconds(10));
         Assert.HasCount(2, model.Files);
@@ -192,7 +192,7 @@ public sealed class ViewModelTests
     public async Task AutomaticScanUsesCacheWithoutToolsAndDoesNotRescanExistingRows()
     {
         using var runtime = new TestRuntime();
-        var model = runtime.Container.Resolve<MediaViewModel>();
+        var model = runtime.Container.GetRequiredService<MediaViewModel>();
         await model.AddAsync([@"C:\Media\Mountain.mkv"]);
         await model.AddAsync([@"C:\Media\Mountain.mkv", @"C:\Media\Ocean.mkv"]);
         Assert.HasCount(2, model.Files);
@@ -209,7 +209,7 @@ public sealed class ViewModelTests
     public async Task SettingsControlAutomaticScanningCacheReuseAndClearing()
     {
         using var runtime = new TestRuntime();
-        var settings = runtime.Container.Resolve<SettingsViewModel>();
+        var settings = runtime.Container.GetRequiredService<SettingsViewModel>();
         await settings.LoadCommand.ExecuteAsync();
         Assert.IsTrue(settings.AutomaticallyScanAddedFiles);
         Assert.IsTrue(settings.UseCachedResults);
@@ -218,7 +218,7 @@ public sealed class ViewModelTests
         await settings.SaveCommand.ExecuteAsync();
         Assert.IsFalse(runtime.Settings.AutomaticallyScanAddedFiles);
         Assert.IsFalse(runtime.Settings.UseCachedResults);
-        var model = runtime.Container.Resolve<MediaViewModel>();
+        var model = runtime.Container.GetRequiredService<MediaViewModel>();
         await model.AddAsync([@"C:\Media\Mountain.mkv"]);
         Assert.AreEqual(0, runtime.Analyses);
         await model.ScanCommand.ExecuteAsync();
@@ -238,7 +238,7 @@ public sealed class ViewModelTests
     public async Task SettingsLoadsAndAppliesThemeSelection()
     {
         using var runtime = new TestRuntime();
-        var settings = runtime.Container.Resolve<SettingsViewModel>();
+        var settings = runtime.Container.GetRequiredService<SettingsViewModel>();
         await settings.LoadCommand.ExecuteAsync();
         Assert.AreEqual(DoViFixer.Application.Settings.AppTheme.System, settings.SelectedTheme);
         Assert.IsTrue(settings.IsSystemTheme);
@@ -262,7 +262,7 @@ public sealed class ViewModelTests
         Assert.AreEqual(DoViFixer.Application.Settings.AppTheme.Light, runtime.AppliedTheme);
 
         await settings.SaveCommand.ExecuteAsync();
-        var newSettings = runtime.Container.Resolve<SettingsViewModel>();
+        var newSettings = runtime.Container.GetRequiredService<SettingsViewModel>();
         await newSettings.LoadCommand.ExecuteAsync();
         Assert.AreEqual(DoViFixer.Application.Settings.AppTheme.Light, newSettings.SelectedTheme);
         Assert.AreEqual(DoViFixer.Application.Settings.AppTheme.Light, runtime.AppliedTheme);
@@ -272,7 +272,7 @@ public sealed class ViewModelTests
     public async Task ClearedRowsCannotInvalidateNewConversionPlans()
     {
         using var runtime = new TestRuntime();
-        var model = runtime.Container.Resolve<MediaViewModel>();
+        var model = runtime.Container.GetRequiredService<MediaViewModel>();
         await model.AddAsync([@"C:\Media\Mountain.mkv"]);
         var removedRow = model.Files.Single();
         model.ClearAllCommand.Execute();
@@ -301,7 +301,7 @@ public sealed class ViewModelTests
             Approval = approve,
             InstallationSucceeds = succeeds
         };
-        var model = runtime.Container.Resolve<MediaViewModel>();
+        var model = runtime.Container.GetRequiredService<MediaViewModel>();
         await model.AddAsync([@"C:\Media\Mountain.mkv"]);
         Assert.AreEqual(installs, runtime.Installations);
         Assert.AreEqual(probes, runtime.Probes);
@@ -314,7 +314,7 @@ public sealed class ViewModelTests
     public async Task PreferencesValidateBeforeSavingAndBlankPathsResetDefaults()
     {
         using var runtime = new TestRuntime();
-        var settings = runtime.Container.Resolve<DoViFixer.Application.Settings.SettingsService>();
+        var settings = runtime.Container.GetRequiredService<DoViFixer.Application.Settings.SettingsService>();
         await settings.SetPreferencesAsync(@"C:\Scratch", @"C:\Output", true, true, default);
         Assert.IsTrue(runtime.Settings.ReplaceOriginal);
         var saved = runtime.Settings;
@@ -333,7 +333,7 @@ public sealed class ViewModelTests
     {
         using var runtime = new TestRuntime();
         await runtime.UpdateAsync(s => s with { AllowFel = true }, default);
-        var model = runtime.Container.Resolve<MediaViewModel>();
+        var model = runtime.Container.GetRequiredService<MediaViewModel>();
         await model.AddAsync([@"C:\Media\Ocean.mkv"]);
         Assert.AreEqual(0, runtime.FullAnalyses);
         Assert.AreEqual(0, runtime.Conversions);
@@ -357,7 +357,7 @@ public sealed class ViewModelTests
     {
         using var runtime = new TestRuntime();
         await runtime.UpdateAsync(s => s with { AllowFel = true }, default);
-        var model = runtime.Container.Resolve<MediaViewModel>();
+        var model = runtime.Container.GetRequiredService<MediaViewModel>();
         await model.AddAsync([@"C:\Media\Mountain.mkv", @"C:\Media\Ocean.mkv"]);
         await model.ConvertDv81Command.ExecuteAsync();
 
@@ -374,7 +374,7 @@ public sealed class ViewModelTests
     public async Task SelectionAndFocusAreIndependentAndCommandsUpdate()
     {
         using var runtime = new TestRuntime();
-        var model = runtime.Container.Resolve<MediaViewModel>();
+        var model = runtime.Container.GetRequiredService<MediaViewModel>();
         await model.AddAsync([@"C:\Media\Mountain.mkv", @"C:\Media\Ocean.mkv"]);
         model.Focused = model.Files[1];
         Assert.IsTrue(model.ConvertDv81Command.CanExecute(null));
@@ -390,7 +390,7 @@ public sealed class ViewModelTests
     public async Task ArchivePreparationCannotExecuteWithoutDisplayedPlanApproval()
     {
         using var runtime = new TestRuntime();
-        var model = runtime.Container.Resolve<ArchiveViewModel>();
+        var model = runtime.Container.GetRequiredService<ArchiveViewModel>();
         model.Input = @"C:\Media\Mountain.mkv";
         await model.BackupCommand.ExecuteAsync();
         Assert.HasCount(1, runtime.Reviews);
@@ -402,7 +402,7 @@ public sealed class ViewModelTests
     public async Task ScanAutoSelectsMelOnlyWithDefaultSettings()
     {
         using var runtime = new TestRuntime();
-        var model = runtime.Container.Resolve<MediaViewModel>();
+        var model = runtime.Container.GetRequiredService<MediaViewModel>();
         await model.AddAsync([
             @"C:\Media\Mountain.mkv",
             @"C:\Media\Ocean.mkv",
@@ -427,7 +427,7 @@ public sealed class ViewModelTests
     {
         using var runtime = new TestRuntime();
         await runtime.UpdateAsync(s => s with { IncludeSimple = true }, default);
-        var model = runtime.Container.Resolve<MediaViewModel>();
+        var model = runtime.Container.GetRequiredService<MediaViewModel>();
         await model.AddAsync([
             @"C:\Media\Mountain.mkv",
             @"C:\Media\Ocean.mkv",
@@ -445,7 +445,7 @@ public sealed class ViewModelTests
     {
         using var runtime = new TestRuntime();
         await runtime.UpdateAsync(s => s with { ForceComplex = true }, default);
-        var model = runtime.Container.Resolve<MediaViewModel>();
+        var model = runtime.Container.GetRequiredService<MediaViewModel>();
         await model.AddAsync([
             @"C:\Media\Mountain.mkv",
             @"C:\Media\Ocean.mkv",
@@ -462,7 +462,7 @@ public sealed class ViewModelTests
     public async Task ScanCommandProcessesAllFilesNotOnlySelected()
     {
         using var runtime = new TestRuntime();
-        var model = runtime.Container.Resolve<MediaViewModel>();
+        var model = runtime.Container.GetRequiredService<MediaViewModel>();
         await model.AddAsync([
             @"C:\Media\Mountain.mkv",
             @"C:\Media\Ocean.mkv",
@@ -495,9 +495,9 @@ public sealed class ViewModelTests
     public async Task ChangingFelSettingsKeepsScanningExplicit()
     {
         using var runtime = new TestRuntime();
-        var media = runtime.Container.Resolve<MediaViewModel>();
-        var settings = runtime.Container.Resolve<SettingsViewModel>();
-        var archive = runtime.Container.Resolve<ArchiveViewModel>();
+        var media = runtime.Container.GetRequiredService<MediaViewModel>();
+        var settings = runtime.Container.GetRequiredService<SettingsViewModel>();
+        var archive = runtime.Container.GetRequiredService<ArchiveViewModel>();
         var shell = new ShellViewModel(media, archive, settings);
 
         await media.AddAsync([
@@ -541,7 +541,7 @@ public sealed class ViewModelTests
             started.TrySetResult();
             await Task.Delay(Timeout.Infinite, token);
         };
-        var model = runtime.Container.Resolve<MediaViewModel>();
+        var model = runtime.Container.GetRequiredService<MediaViewModel>();
         var adding = model.AddAsync([@"C:\Media\Mountain.mkv", @"C:\Media\Ocean.mkv"]);
         await started.Task.WaitAsync(TimeSpan.FromSeconds(10));
         Assert.IsTrue(model.IsBusy);
@@ -560,7 +560,7 @@ public sealed class ViewModelTests
     public async Task InspectIncompletePromotesRowToSelectedWhenMel()
     {
         using var runtime = new TestRuntime();
-        var model = runtime.Container.Resolve<MediaViewModel>();
+        var model = runtime.Container.GetRequiredService<MediaViewModel>();
         await model.AddAsync([@"C:\Media\Mountain.mkv"]);
         var row = model.Files[0];
 
@@ -586,7 +586,7 @@ public sealed class ViewModelTests
     public async Task CachedScanResultsApplyIdenticalAutoSelection()
     {
         using var runtime = new TestRuntime();
-        var model = runtime.Container.Resolve<MediaViewModel>();
+        var model = runtime.Container.GetRequiredService<MediaViewModel>();
         await model.AddAsync([@"C:\Media\Mountain.mkv", @"C:\Media\City.mkv"]);
         Assert.IsTrue(model.Files[0].IsSelected);
         Assert.IsFalse(model.Files[1].IsSelected);
@@ -603,14 +603,14 @@ public sealed class ViewModelTests
     public async Task DisabledAutoSelectPreservesInitialSelection()
     {
         using var runtime = new TestRuntime();
-        var settings = runtime.Container.Resolve<SettingsViewModel>();
+        var settings = runtime.Container.GetRequiredService<SettingsViewModel>();
         await settings.LoadCommand.ExecuteAsync();
         Assert.IsTrue(settings.AutoSelectAfterScan);
         settings.AutoSelectAfterScan = false;
         await settings.SaveCommand.ExecuteAsync();
         Assert.IsFalse(runtime.Settings.AutoSelectAfterScan);
 
-        var model = runtime.Container.Resolve<MediaViewModel>();
+        var model = runtime.Container.GetRequiredService<MediaViewModel>();
         await model.AddAsync([@"C:\Media\Mountain.mkv", @"C:\Media\City.mkv"]);
         Assert.IsTrue(model.Files[0].IsSelected, "Mountain must remain selected when auto-select is disabled.");
         Assert.IsTrue(model.Files[1].IsSelected, "City must remain selected when auto-select is disabled.");
@@ -623,7 +623,7 @@ public sealed class ViewModelTests
     {
         using var runtime = new TestRuntime();
         await runtime.UpdateAsync(s => s with { IncludeSimple = true }, default);
-        var model = runtime.Container.Resolve<MediaViewModel>();
+        var model = runtime.Container.GetRequiredService<MediaViewModel>();
         await model.AddAsync([@"C:\Media\Mountain.mkv", @"C:\Media\Ocean.mkv"]);
 
         model.Files[0].IsSelected = false;
@@ -643,7 +643,7 @@ public sealed class ViewModelTests
     {
         using var runtime = new TestRuntime();
         await runtime.UpdateAsync(s => s with { AllowFel = true }, default);
-        var model = runtime.Container.Resolve<MediaViewModel>();
+        var model = runtime.Container.GetRequiredService<MediaViewModel>();
         await model.AddAsync([@"C:\Media\Mountain.mkv", @"C:\Media\Ocean.mkv"]);
 
         var started = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
@@ -682,7 +682,7 @@ public sealed class ViewModelTests
     {
         using var runtime = new TestRuntime();
         await runtime.UpdateAsync(s => s with { AllowFel = true }, default);
-        var model = runtime.Container.Resolve<MediaViewModel>();
+        var model = runtime.Container.GetRequiredService<MediaViewModel>();
         await model.AddAsync([@"C:\Media\Mountain.mkv", @"C:\Media\Ocean.mkv", @"C:\Media\City.mkv"]);
         model.Files[2].IsSelected = true;
 
@@ -717,7 +717,7 @@ public sealed class ViewModelTests
     {
         using var runtime = new TestRuntime();
         await runtime.UpdateAsync(s => s with { OutputDirectory = @"C:\Output", AllowFel = true }, default);
-        var model = runtime.Container.Resolve<MediaViewModel>();
+        var model = runtime.Container.GetRequiredService<MediaViewModel>();
         await model.AddAsync([@"C:\FolderA\Movie.mkv", @"C:\FolderB\Movie.mkv"]);
 
         await model.ConvertDv81Command.ExecuteAsync();
@@ -731,7 +731,7 @@ public sealed class ViewModelTests
     public async Task SettingsLoadsAndPersistsAllowFel()
     {
         using var runtime = new TestRuntime();
-        var settings = runtime.Container.Resolve<SettingsViewModel>();
+        var settings = runtime.Container.GetRequiredService<SettingsViewModel>();
         await settings.LoadCommand.ExecuteAsync();
         Assert.IsFalse(settings.AllowFel);
         Assert.IsFalse(runtime.Settings.AllowFel);
@@ -741,7 +741,7 @@ public sealed class ViewModelTests
         await settings.SaveCommand.ExecuteAsync();
         Assert.IsTrue(runtime.Settings.AllowFel);
 
-        var newSettings = runtime.Container.Resolve<SettingsViewModel>();
+        var newSettings = runtime.Container.GetRequiredService<SettingsViewModel>();
         await newSettings.LoadCommand.ExecuteAsync();
         Assert.IsTrue(newSettings.AllowFel);
     }
@@ -750,7 +750,7 @@ public sealed class ViewModelTests
     public async Task SettingsLoadsAndPersistsIncludeSimpleAndForceComplex()
     {
         using var runtime = new TestRuntime();
-        var settings = runtime.Container.Resolve<SettingsViewModel>();
+        var settings = runtime.Container.GetRequiredService<SettingsViewModel>();
         await settings.LoadCommand.ExecuteAsync();
         Assert.IsFalse(settings.IncludeSimple);
         Assert.IsFalse(settings.ForceComplex);
@@ -767,7 +767,7 @@ public sealed class ViewModelTests
         Assert.IsFalse(runtime.Settings.ForceComplex);
         Assert.IsTrue(runtime.Settings.AllowFel);
 
-        var newSettings1 = runtime.Container.Resolve<SettingsViewModel>();
+        var newSettings1 = runtime.Container.GetRequiredService<SettingsViewModel>();
         await newSettings1.LoadCommand.ExecuteAsync();
         Assert.IsTrue(newSettings1.IncludeSimple);
         Assert.IsFalse(newSettings1.ForceComplex);
@@ -782,7 +782,7 @@ public sealed class ViewModelTests
         Assert.IsTrue(runtime.Settings.ForceComplex);
         Assert.IsTrue(runtime.Settings.AllowFel);
 
-        var newSettings2 = runtime.Container.Resolve<SettingsViewModel>();
+        var newSettings2 = runtime.Container.GetRequiredService<SettingsViewModel>();
         await newSettings2.LoadCommand.ExecuteAsync();
         Assert.IsFalse(newSettings2.IncludeSimple);
         Assert.IsTrue(newSettings2.ForceComplex);
@@ -797,7 +797,7 @@ public sealed class ViewModelTests
         Assert.IsTrue(runtime.Settings.ForceComplex);
         Assert.IsTrue(runtime.Settings.AllowFel);
 
-        var newSettings3 = runtime.Container.Resolve<SettingsViewModel>();
+        var newSettings3 = runtime.Container.GetRequiredService<SettingsViewModel>();
         await newSettings3.LoadCommand.ExecuteAsync();
         Assert.IsTrue(newSettings3.IncludeSimple);
         Assert.IsTrue(newSettings3.ForceComplex);
@@ -809,7 +809,7 @@ public sealed class ViewModelTests
     {
         using var runtime = new TestRuntime();
         await runtime.UpdateAsync(s => s with { IncludeSimple = true }, default);
-        var model = runtime.Container.Resolve<MediaViewModel>();
+        var model = runtime.Container.GetRequiredService<MediaViewModel>();
 
         Assert.AreEqual("0 items", model.SelectionSummary);
 
@@ -835,7 +835,7 @@ public sealed class ViewModelTests
     public async Task ActiveProgressPropertiesReflectBatchAndNonBatchOperations()
     {
         using var runtime = new TestRuntime();
-        var model = runtime.Container.Resolve<MediaViewModel>();
+        var model = runtime.Container.GetRequiredService<MediaViewModel>();
 
         Assert.IsFalse(model.IsBusy);
         Assert.IsFalse(model.BatchProgress.IsRunning);
@@ -922,9 +922,9 @@ public sealed class ViewModelTests
     public async Task MediaViewModel_OutputSummary_ReflectsSettingsAndNotifiesOnSave()
     {
         using var runtime = new TestRuntime();
-        var media = runtime.Container.Resolve<MediaViewModel>();
-        var settings = runtime.Container.Resolve<SettingsViewModel>();
-        var archive = runtime.Container.Resolve<ArchiveViewModel>();
+        var media = runtime.Container.GetRequiredService<MediaViewModel>();
+        var settings = runtime.Container.GetRequiredService<SettingsViewModel>();
+        var archive = runtime.Container.GetRequiredService<ArchiveViewModel>();
         var shell = new ShellViewModel(media, archive, settings);
 
         await media.RefreshSettingsSummaryAsync();
@@ -947,7 +947,7 @@ public sealed class ViewModelTests
     public void MediaViewModel_OpenSettingsCommand_RaisesRequestNavigateToSettings()
     {
         using var runtime = new TestRuntime();
-        var media = runtime.Container.Resolve<MediaViewModel>();
+        var media = runtime.Container.GetRequiredService<MediaViewModel>();
         bool requested = false;
         media.RequestNavigateToSettings += () => requested = true;
 
@@ -1000,7 +1000,7 @@ public sealed class ViewModelTests
     public async Task SettingsAutoSavesOnPropertyChangesWithoutCallingSaveCommand()
     {
         using var runtime = new TestRuntime();
-        var settings = runtime.Container.Resolve<SettingsViewModel>();
+        var settings = runtime.Container.GetRequiredService<SettingsViewModel>();
         await settings.LoadCommand.ExecuteAsync();
 
         Assert.IsFalse(runtime.Settings.IncludeSimple);
@@ -1056,7 +1056,7 @@ public sealed class ViewModelTests
     public async Task SettingsAutoSaveStatusReflectsMissingDestinationWhenOtherFolderEnabled()
     {
         using var runtime = new TestRuntime();
-        var settings = runtime.Container.Resolve<SettingsViewModel>();
+        var settings = runtime.Container.GetRequiredService<SettingsViewModel>();
         await settings.LoadCommand.ExecuteAsync();
 
         settings.Destination = "";

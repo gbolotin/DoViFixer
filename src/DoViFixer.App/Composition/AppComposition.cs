@@ -1,11 +1,11 @@
 using DoViFixer.App.Dialogs;
 using DoViFixer.App.Presentation;
 using DoViFixer.App.ViewModels;
+using DoViFixer.App.Views;
 using DoViFixer.Application;
 using DoViFixer.Infrastructure;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
-using Prism.Ioc;
 using Serilog;
 using Serilog.Events;
 using Serilog.Formatting.Json;
@@ -13,9 +13,8 @@ using Serilog.Formatting.Json;
 namespace DoViFixer.App.Composition;
 public static class AppComposition
 {
-    public static void Register(IContainerExtension registry, IConfiguration configuration, bool fileLogging = true)
+    public static void Register(IServiceCollection services, IConfiguration configuration, bool fileLogging = true)
     {
-        var services = new ServiceCollection();
         services.AddLogging();
         if (fileLogging)
         {
@@ -32,8 +31,7 @@ public static class AppComposition
         services.AddTransient<ArchiveViewModel>();
         services.AddTransient<SettingsViewModel>();
         services.AddTransient<ShellViewModel>();
-        // Prism imports the descriptors into its existing DryIoc root, including owned factories.
-        registry.Populate(services);
+        services.AddTransient<Shell>();
     }
 
     private static void ConfigureLogging(LoggerConfiguration logging, IConfiguration configuration)

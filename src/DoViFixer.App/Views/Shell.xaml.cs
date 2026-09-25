@@ -1,23 +1,20 @@
 using System.ComponentModel;
 using System.Windows;
 using System.Windows.Controls;
-using System.Windows.Controls.Primitives;
 using System.Windows.Input;
 using DoViFixer.App.ViewModels;
-using Prism.Navigation.Regions;
 
 namespace DoViFixer.App.Views;
 public partial class Shell : Window
 {
     private readonly ShellViewModel model;
-    private readonly IRegionManager regions;
+    private readonly Dictionary<string, UserControl> views = new();
     private bool closing;
     private bool waitingToClose;
     private string activeView = "Media";
-    public Shell(ShellViewModel model, IRegionManager regions)
+    public Shell(ShellViewModel model)
     {
         this.model = model;
-        this.regions = regions;
         InitializeComponent();
         DataContext = model;
         model.Media.RequestNavigateToSettings += OnRequestNavigateToSettings;
@@ -40,26 +37,25 @@ public partial class Shell : Window
     private void OnLoaded(object sender, RoutedEventArgs e)
     {
         Loaded -= OnLoaded;
-        var region = regions.Regions["Workspace"];
-        region.Add(new MediaView(model.Media), "Media");
-        region.Add(new ArchiveView(model.Archive), "Archive");
-        region.Add(new SettingsView(model.Settings), "Settings");
-        region.Activate(region.GetView("Media"));
+        views.Add("Media", new MediaView(model.Media));
+        views.Add("Archive", new ArchiveView(model.Archive));
+        views.Add("Settings", new SettingsView(model.Settings));
+        Workspace.Content = views["Media"];
     }
 
     private async void Navigate(object sender, RoutedEventArgs e)
     {
-        if (!regions.Regions.ContainsRegionWithName("Workspace"))
+        if (views.Count == 0)
         {
             return;
         }
 
-        if (sender is not ListBox listBox)
+        if (sender is not ListBox listBox || !ReferenceEquals(e.OriginalSource, listBox) || listBox.SelectedItem is not ListBoxItem selected)
         {
             return;
         }
 
-        string name = (string)((ListBoxItem)listBox.SelectedItem).Tag;
+        string name = (string)selected.Tag;
         if (name == activeView)
         {
             return;
@@ -72,9 +68,8 @@ public partial class Shell : Window
         }
 
         await model.Settings.FlushAsync();
-        var region = regions.Regions["Workspace"];
         activeView = name;
-        region.Activate(region.GetView(name));
+        Workspace.Content = views[name];
         if (name == "Settings")
         {
             await model.Settings.LoadCommand.ExecuteAsync();

@@ -2,7 +2,7 @@ using DoViFixer.Application.Operations;
 
 namespace DoViFixer.App.ViewModels;
 
-public sealed class ProgressViewModel : BindableBase
+public sealed class ProgressViewModel : ObservableObject
 {
     private bool isRunning;
     private string stage = "";

@@ -507,7 +507,7 @@ public sealed class SettingsViewModel : OperationViewModel
     {
         get;
     }
-    public DelegateCommand DiscardChangesCommand { get; }
+    public RelayCommand DiscardChangesCommand { get; }
     public AsyncCommand CheckCommand
     {
         get;
@@ -524,15 +524,15 @@ public sealed class SettingsViewModel : OperationViewModel
     {
         get;
     }
-    public DelegateCommand BrowseTemporaryCommand
+    public RelayCommand BrowseTemporaryCommand
     {
         get;
     }
-    public DelegateCommand BrowseDestinationCommand
+    public RelayCommand BrowseDestinationCommand
     {
         get;
     }
-    public DelegateCommand BrowseToolCommand
+    public RelayCommand BrowseToolCommand
     {
         get;
     }

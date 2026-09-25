@@ -13,48 +13,46 @@ using DoViFixer.Application.Settings;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.VisualStudio.TestTools.UnitTesting;
-using Prism.DryIoc;
-using Prism.Ioc;
 
 namespace DoViFixer.App.Tests;
 [TestClass]
 public sealed class CompositionTests
 {
     [TestMethod]
-    public void SharedRegistrationsResolveInOnePrismRootWithoutSideEffects()
+    public void SharedRegistrationsResolveInOneRootWithoutSideEffects()
     {
         string root = Path.Combine(Path.GetTempPath(), "DoViFixer-composition-" + Guid.NewGuid());
-        var container = new DryIocContainerExtension();
-        using var rootContainer = ((IContainerProvider)container).GetContainer();
-        AppComposition.Register(container, new ConfigurationBuilder().AddInMemoryCollection(new Dictionary<string, string?>
+        var registrations = new ServiceCollection();
+        AppComposition.Register(registrations, new ConfigurationBuilder().AddInMemoryCollection(new Dictionary<string, string?>
         {
             ["DoViFixer:DataDirectory"] = root
         }).Build(), false);
+        using var container = registrations.BuildServiceProvider(new ServiceProviderOptions { ValidateOnBuild = true, ValidateScopes = true });
         Type[] services = [typeof(ScanService), typeof(InspectionService), typeof(ConversionPlanner), typeof(ConversionService), typeof(BatchConversionService), typeof(BackupService), typeof(RestoreService), typeof(CleanupService), typeof(DependencyService), typeof(SettingsService), typeof(ShellViewModel), typeof(IThemeService)];
         foreach (var type in services)
         {
-            Assert.IsNotNull(container.Resolve(type));
+            Assert.IsNotNull(container.GetRequiredService(type));
         }
 
-        Assert.AreSame(container.Resolve<ISettingsStore>(), container.Resolve<ISettingsStore>());
-        Assert.AreSame(container.Resolve<IToolCatalog>(), container.Resolve<IToolCatalog>());
-        Assert.AreSame(container.Resolve<IThemeService>(), container.Resolve<IThemeService>());
-        Assert.AreNotSame(container.Resolve<MediaViewModel>(), container.Resolve<MediaViewModel>());
-        Assert.AreNotSame(container.Resolve<ConversionService>(), container.Resolve<ConversionService>());
+        Assert.AreSame(container.GetRequiredService<ISettingsStore>(), container.GetRequiredService<ISettingsStore>());
+        Assert.AreSame(container.GetRequiredService<IToolCatalog>(), container.GetRequiredService<IToolCatalog>());
+        Assert.AreSame(container.GetRequiredService<IThemeService>(), container.GetRequiredService<IThemeService>());
+        Assert.AreNotSame(container.GetRequiredService<MediaViewModel>(), container.GetRequiredService<MediaViewModel>());
+        Assert.AreNotSame(container.GetRequiredService<ConversionService>(), container.GetRequiredService<ConversionService>());
         Assert.IsFalse(Directory.Exists(root));
     }
 
     [TestMethod]
-    public void ImportedFactoryUsesSameSingletonAndRootOwnsDisposal()
+    public void FactoryUsesSameSingletonAndRootOwnsDisposal()
     {
-        var container = new DryIocContainerExtension();
         var services = new ServiceCollection();
+        AppComposition.Register(services, new ConfigurationBuilder().Build(), false);
         services.AddSingleton<Owned>();
         services.AddTransient(p => new Consumer(p.GetRequiredService<Owned>()));
-        container.Populate(services);
-        var owned = container.Resolve<Owned>();
-        Assert.AreSame(owned, container.Resolve<Consumer>().Owned);
-        ((IContainerProvider)container).GetContainer().Dispose();
+        using var container = services.BuildServiceProvider(new ServiceProviderOptions { ValidateOnBuild = true, ValidateScopes = true });
+        var owned = container.GetRequiredService<Owned>();
+        Assert.AreSame(owned, container.GetRequiredService<Consumer>().Owned);
+        container.Dispose();
         Assert.IsTrue(owned.Disposed);
     }
 

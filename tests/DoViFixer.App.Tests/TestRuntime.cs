@@ -9,16 +9,14 @@ using DoViFixer.Domain.Analysis;
 using DoViFixer.Domain.Conversion;
 using DoViFixer.Domain.Media;
 using Microsoft.Extensions.Configuration;
-using Prism.DryIoc;
-using Prism.Ioc;
+using Microsoft.Extensions.DependencyInjection;
 
 namespace DoViFixer.App.Tests;
 internal sealed class TestRuntime : IFileDiscovery, IFileOperations, IMediaProbe, ISettingsStore, IDependencyDetector, IDependencyInstaller, ITemporaryWorkspaceFactory, IAnalysisCache, IVideoProcessor, IMediaVerifier, IOutputPublisher, IUserDialogs, IThemeService, IDisposable
 {
-    public IContainerProvider Container
-    {
-        get;
-    }
+    private ServiceProvider? container;
+    public IServiceCollection Services { get; } = new ServiceCollection();
+    public ServiceProvider Container => container ??= Services.BuildServiceProvider(new ServiceProviderOptions { ValidateOnBuild = true, ValidateScopes = true });
     public int Conversions
     {
         get;
@@ -80,18 +78,15 @@ internal sealed class TestRuntime : IFileDiscovery, IFileOperations, IMediaProbe
 
     public TestRuntime()
     {
-        var container = new DryIocContainerExtension();
-        AppComposition.Register(container, new ConfigurationBuilder().Build(), false);
+        AppComposition.Register(Services, new ConfigurationBuilder().Build(), false);
         Type[] contracts = [typeof(IFileDiscovery), typeof(IFileOperations), typeof(IMediaProbe), typeof(ISettingsStore), typeof(IDependencyDetector), typeof(IDependencyInstaller), typeof(ITemporaryWorkspaceFactory), typeof(IAnalysisCache), typeof(IVideoProcessor), typeof(IMediaVerifier), typeof(IOutputPublisher), typeof(IUserDialogs), typeof(IThemeService)];
         foreach (var contract in contracts)
         {
-            container.RegisterInstance(contract, this);
+            Services.AddSingleton(contract, this);
         }
-
-        Container = container;
     }
 
-    public void Dispose() => Container.GetContainer().Dispose();
+    public void Dispose() => container?.Dispose();
     public IReadOnlyList<string> Discover(string input, int recursiveDepth, bool cleanup = false) => [Path.GetFullPath(input)];
     public FileIdentity Identify(string path) => new(Path.GetFullPath(path), 40000000000, new DateTime(2026, 9, 11));
     public string PrepareOutputPath(string input, string? outputDirectory, string suffix, bool allowInput = false) => Path.Combine(outputDirectory ?? Path.GetDirectoryName(input)!, Path.GetFileNameWithoutExtension(input) + suffix);
