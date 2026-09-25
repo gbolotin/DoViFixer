@@ -34,10 +34,7 @@ internal sealed class FileOperations : IFileOperations, IFileDiscovery
                 throw new ArgumentException(cleanup ? "Cleanup accepts only .dovi and .bak.dovi_convert backups." : "Only MKV media is supported.");
             }
 
-            return new[]
-            {
-                full
-            };
+            return [full];
         }
 
         if (!Directory.Exists(full))
@@ -52,7 +49,7 @@ internal sealed class FileOperations : IFileOperations, IFileDiscovery
             IgnoreInaccessible = false,
             AttributesToSkip = FileAttributes.ReparsePoint
         };
-        return Directory.EnumerateFiles(full, "*", enumeration).Where(Matches).Order(StringComparer.OrdinalIgnoreCase).ToArray();
+        return [.. Directory.EnumerateFiles(full, "*", enumeration).Where(Matches).Order(StringComparer.OrdinalIgnoreCase)];
     }
 
     public string PrepareOutputPath(string input, string? outputDirectory, string suffix, bool allowInput = false)
@@ -127,10 +124,7 @@ internal sealed class FileOperations : IFileOperations, IFileDiscovery
 
     public void EnsureAvailableSpace(string directory, long requiredBytes)
     {
-        if (requiredBytes < 0)
-        {
-            throw new ArgumentOutOfRangeException(nameof(requiredBytes));
-        }
+        ArgumentOutOfRangeException.ThrowIfNegative(requiredBytes);
 
         string full = Path.GetFullPath(directory);
         RejectReparsePoints(full);

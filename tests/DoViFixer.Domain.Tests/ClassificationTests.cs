@@ -82,44 +82,55 @@ public sealed class ClassificationTests
     }
 
     [TestMethod]
-    public void ShouldAutoSelectAfterAnalysisSelectsOnlyMelAndSimpleFel()
+    public void ShouldAutoSelectAfterAnalysisRespectsIncludeSimpleAndForceComplex()
     {
         Assert.IsFalse(ConversionPolicy.ShouldAutoSelectAfterAnalysis(null));
+        Assert.IsFalse(ConversionPolicy.ShouldAutoSelectAfterAnalysis(null, includeSimple: true, forceComplex: true));
 
         var mel = MediaClassifier.Classify(Media(null), new(AnalysisMethod.FullRpu, EnhancementLayer.Mel, 24, null, 1, 1));
         Assert.IsTrue(ConversionPolicy.ShouldAutoSelectAfterAnalysis(mel));
+        Assert.IsTrue(ConversionPolicy.ShouldAutoSelectAfterAnalysis(mel, includeSimple: false, forceComplex: false));
+        Assert.IsTrue(ConversionPolicy.ShouldAutoSelectAfterAnalysis(mel, includeSimple: true, forceComplex: true));
 
         var simpleFel = MediaClassifier.Classify(Media(), new(AnalysisMethod.FullRpu, EnhancementLayer.Fel, 24, 1000, 1, 1));
-        Assert.IsTrue(ConversionPolicy.ShouldAutoSelectAfterAnalysis(simpleFel));
+        Assert.IsFalse(ConversionPolicy.ShouldAutoSelectAfterAnalysis(simpleFel));
+        Assert.IsFalse(ConversionPolicy.ShouldAutoSelectAfterAnalysis(simpleFel, includeSimple: false, forceComplex: false));
+        Assert.IsFalse(ConversionPolicy.ShouldAutoSelectAfterAnalysis(simpleFel, includeSimple: false, forceComplex: true));
+        Assert.IsTrue(ConversionPolicy.ShouldAutoSelectAfterAnalysis(simpleFel, includeSimple: true, forceComplex: false));
+        Assert.IsTrue(ConversionPolicy.ShouldAutoSelectAfterAnalysis(simpleFel, includeSimple: true, forceComplex: true));
 
         var complexFel = MediaClassifier.Classify(Media(), new(AnalysisMethod.FullRpu, EnhancementLayer.Fel, 24, 1100, 1, 1));
         Assert.IsFalse(ConversionPolicy.ShouldAutoSelectAfterAnalysis(complexFel));
+        Assert.IsFalse(ConversionPolicy.ShouldAutoSelectAfterAnalysis(complexFel, includeSimple: false, forceComplex: false));
+        Assert.IsFalse(ConversionPolicy.ShouldAutoSelectAfterAnalysis(complexFel, includeSimple: true, forceComplex: false));
+        Assert.IsTrue(ConversionPolicy.ShouldAutoSelectAfterAnalysis(complexFel, includeSimple: false, forceComplex: true));
+        Assert.IsTrue(ConversionPolicy.ShouldAutoSelectAfterAnalysis(complexFel, includeSimple: true, forceComplex: true));
 
         var unknown = MediaClassifier.Classify(Media(null), new(AnalysisMethod.FullRpu, EnhancementLayer.Fel, 24, 1000, 1, 1));
-        Assert.IsFalse(ConversionPolicy.ShouldAutoSelectAfterAnalysis(unknown));
+        Assert.IsFalse(ConversionPolicy.ShouldAutoSelectAfterAnalysis(unknown, includeSimple: true, forceComplex: true));
 
         var failed = MediaClassifier.Classify(Media(), new(AnalysisMethod.FullRpu, EnhancementLayer.Fel, 0, null, 0, 1, "failed"));
-        Assert.IsFalse(ConversionPolicy.ShouldAutoSelectAfterAnalysis(failed));
+        Assert.IsFalse(ConversionPolicy.ShouldAutoSelectAfterAnalysis(failed, includeSimple: true, forceComplex: true));
 
         var nonDvMedia = Media() with
         {
             Profile = DolbyVisionProfile.None
         };
         var nonDv = MediaClassifier.Classify(nonDvMedia, new(AnalysisMethod.FullRpu, EnhancementLayer.Mel, 24, null, 1, 1));
-        Assert.IsFalse(ConversionPolicy.ShouldAutoSelectAfterAnalysis(nonDv));
+        Assert.IsFalse(ConversionPolicy.ShouldAutoSelectAfterAnalysis(nonDv, includeSimple: true, forceComplex: true));
 
         var profile81Media = Media() with
         {
             Profile = DolbyVisionProfile.Profile81
         };
         var profile81 = MediaClassifier.Classify(profile81Media, new(AnalysisMethod.FullRpu, EnhancementLayer.Mel, 24, null, 1, 1));
-        Assert.IsFalse(ConversionPolicy.ShouldAutoSelectAfterAnalysis(profile81));
+        Assert.IsFalse(ConversionPolicy.ShouldAutoSelectAfterAnalysis(profile81, includeSimple: true, forceComplex: true));
 
         var nonHevcMedia = Media() with
         {
             VideoCodec = "AVC"
         };
         var nonHevc = MediaClassifier.Classify(nonHevcMedia, new(AnalysisMethod.FullRpu, EnhancementLayer.Mel, 24, null, 1, 1));
-        Assert.IsFalse(ConversionPolicy.ShouldAutoSelectAfterAnalysis(nonHevc));
+        Assert.IsFalse(ConversionPolicy.ShouldAutoSelectAfterAnalysis(nonHevc, includeSimple: true, forceComplex: true));
     }
 }

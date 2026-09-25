@@ -9,6 +9,8 @@ public sealed class ShellViewModel : BindableBase
         Media = media;
         Archive = archive;
         Settings = settings;
+        Settings.Saved += Media.UpdateSettingsSummary;
+        Media.ConversionStarting += Settings.FlushAsync;
         foreach (var operation in Operations)
         {
             operation.PropertyChanged += OperationChanged;
@@ -28,11 +30,11 @@ public sealed class ShellViewModel : BindableBase
         get;
     }
     public OperationViewModel[] Operations => [Media, Archive, Settings];
-    public bool CanNavigate => Operations.All(o => !o.IsBusy);
+    public bool CanNavigate => Operations.All(o => !o.IsBusy) && !Settings.IsSaving && Settings.SaveError is null;
 
     private void OperationChanged(object? sender, PropertyChangedEventArgs e)
     {
-        if (e.PropertyName == nameof(OperationViewModel.IsBusy))
+        if (e.PropertyName is nameof(OperationViewModel.IsBusy) or nameof(SettingsViewModel.IsSaving) or nameof(SettingsViewModel.SaveError))
         {
             RaisePropertyChanged(nameof(CanNavigate));
         }
@@ -46,5 +48,6 @@ public sealed class ShellViewModel : BindableBase
         }
 
         await Task.WhenAll(Operations.Select(o => o.Completion));
+        await Settings.FlushAsync();
     }
 }

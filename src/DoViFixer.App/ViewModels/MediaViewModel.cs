@@ -16,30 +16,20 @@ public sealed class MediaViewModel : OperationViewModel
 {
     private readonly IFileDiscovery discovery;
     private readonly InspectionService inspection;
-    private readonly ConversionPlanner planner;
     private readonly ConversionService conversion;
     private readonly ControlledBatchService batch;
     private readonly SettingsService settings;
     private readonly DependencySetup dependencies;
     private readonly IUserDialogs dialogs;
     private readonly ILogger<MediaViewModel> logger;
-    private readonly List<ConversionPlan> plans = [];
     private BatchControl? control;
     private MediaRow? focused;
-    private bool optionsOpen;
-    private bool hdr10;
-    private bool otherFolder;
-    private bool replaceOriginal;
-    private bool createArchive;
-    private string destination = "";
-    private string review = "";
 
     private static string Summary(BatchResult result) => string.Join(" · ", result.Items.GroupBy(r => r.Status).Select(g => $"{g.Count()} {g.Key}"));
-    public MediaViewModel(IFileDiscovery discovery, InspectionService inspection, ConversionPlanner planner, ConversionService conversion, ControlledBatchService batch, SettingsService settings, DependencySetup dependencies, IUserDialogs dialogs, ILogger<MediaViewModel> logger)
+    public MediaViewModel(IFileDiscovery discovery, InspectionService inspection, ConversionService conversion, ControlledBatchService batch, SettingsService settings, DependencySetup dependencies, IUserDialogs dialogs, ILogger<MediaViewModel> logger)
     {
         this.discovery = discovery;
         this.inspection = inspection;
-        this.planner = planner;
         this.conversion = conversion;
         this.batch = batch;
         this.settings = settings;
@@ -49,19 +39,12 @@ public sealed class MediaViewModel : OperationViewModel
 
         AddFilesCommand = new(() => AddAsync(dialogs.PickFiles()), () => IsIdle);
         AddFolderCommand = new(() => AddAsync(dialogs.PickFolder() is { } folder ? [folder] : []), () => IsIdle);
-        ScanCommand = new(() => AnalyzeAsync(AnalysisMethod.SampledRpu), CanOperate);
+        ScanCommand = new(ScanAllAsync, CanScan);
+        Files.CollectionChanged += (_, _) => CommandsChanged();
         InspectCommand = new(() => AnalyzeAsync(AnalysisMethod.FullRpu), CanOperate);
         DeepInspectCommand = new(() => AnalyzeAsync(AnalysisMethod.DeepInspection), CanOperate);
-        ConvertCommand = new(OpenConversionAsync, CanOperate);
-        ReviewCommand = new(PrepareAsync, CanOperate);
-        ApproveCommand = new(ConvertAsync, () => IsIdle && plans.Count > 0);
-        CloseOptionsCommand = new(() => OptionsOpen = false);
-        BrowseDestinationCommand = new(() => {
-            if (dialogs.PickFolder() is { } folder)
-            {
-                Destination = folder;
-            }
-        }, () => IsIdle);
+        ConvertDv81Command = new(() => ConvertBatchAsync(ConversionTarget.Profile81), CanOperate);
+        ConvertHdrCommand = new(() => ConvertBatchAsync(ConversionTarget.Hdr10), CanOperate);
 
         SkipCommand = new DelegateCommand<MediaRow>(Skip);
 
@@ -97,7 +80,7 @@ public sealed class MediaViewModel : OperationViewModel
         OpenLogsCommand = new(dialogs.OpenLogs);
         ToggleSelectAllCommand = new(ToggleSelectAll, () => IsIdle && Files.Any(row => row.SelectionEnabled));
         ClearAllCommand = new(ClearAll, () => IsIdle && Files.Count > 0);
-
+        OpenSettingsCommand = new(() => RequestNavigateToSettings?.Invoke(), () => IsIdle);
         BatchProgress.PropertyChanged += (_, _) => NotifyActiveProgress();
         Progress.PropertyChanged += (_, _) => NotifyActiveProgress();
         PropertyChanged += (_, e) =>
@@ -140,77 +123,6 @@ public sealed class MediaViewModel : OperationViewModel
         }
     }
 
-    public bool OptionsOpen
-    {
-        get => optionsOpen;
-        set => SetProperty(ref optionsOpen, value);
-    }
-
-    public bool Hdr10
-    {
-        get => hdr10;
-        set
-        {
-            if (SetProperty(ref hdr10, value))
-            {
-                InvalidatePlan();
-            }
-        }
-    }
-
-    public bool OtherFolder
-    {
-        get => otherFolder;
-        set
-        {
-            if (SetProperty(ref otherFolder, value))
-            {
-                InvalidatePlan();
-            }
-        }
-    }
-
-    public bool ReplaceOriginal
-    {
-        get => replaceOriginal;
-        set
-        {
-            if (SetProperty(ref replaceOriginal, value))
-            {
-                InvalidatePlan();
-            }
-        }
-    }
-
-    public bool CreateArchive
-    {
-        get => createArchive;
-        set
-        {
-            if (SetProperty(ref createArchive, value))
-            {
-                InvalidatePlan();
-            }
-        }
-    }
-
-    public string Destination
-    {
-        get => destination;
-        set
-        {
-            if (SetProperty(ref destination, value))
-            {
-                InvalidatePlan();
-            }
-        }
-    }
-
-    public string Review
-    {
-        get => review;
-        private set => SetProperty(ref review, value);
-    }
     public string SelectionSummary
     {
         get
@@ -232,24 +144,122 @@ public sealed class MediaViewModel : OperationViewModel
     public DelegateCommand ToggleSelectAllCommand { get; }
     public DelegateCommand ClearAllCommand { get; }
     public bool CanInspect => CanOperate();
-    public AsyncCommand AddFilesCommand  { get;}
-    public AsyncCommand AddFolderCommand  { get; }
+    public AsyncCommand AddFilesCommand { get; }
+    public AsyncCommand AddFolderCommand { get; }
     public AsyncCommand ScanCommand { get; }
     public AsyncCommand InspectCommand { get; }
     public AsyncCommand DeepInspectCommand { get; }
-    public AsyncCommand ConvertCommand{ get; }
-    public AsyncCommand ReviewCommand { get; }
-    public AsyncCommand ApproveCommand { get; }
-    public DelegateCommand CloseOptionsCommand { get; }
-    public DelegateCommand BrowseDestinationCommand { get; }
+    public AsyncCommand ConvertDv81Command { get; }
+    public AsyncCommand ConvertHdrCommand { get; }
     public DelegateCommand<MediaRow> SkipCommand { get; }
     public DelegateCommand<MediaRow> CancelFileCommand { get; }
     public DelegateCommand OpenOutputCommand { get; }
     public DelegateCommand OpenLogsCommand { get; }
     public AsyncCommand<MediaRow> RetryAnalysisCommand { get; }
     public AsyncCommand<MediaRow> InspectIncompleteCommand { get; }
-    public DelegateCommand<MediaRow> OpenRowOutputCommand { get;}
+    public DelegateCommand<MediaRow> OpenRowOutputCommand { get; }
+    public DelegateCommand OpenSettingsCommand { get; }
+    public event Action? RequestNavigateToSettings;
+    public event Func<CancellationToken, Task>? ConversionStarting;
 
+    private string outputSummary = "Output: Same folder";
+    public string OutputSummary
+    {
+        get => outputSummary;
+        private set => SetProperty(ref outputSummary, value);
+    }
+
+    private string outputSummaryToolTip = "";
+    public string OutputSummaryToolTip
+    {
+        get => outputSummaryToolTip;
+        private set => SetProperty(ref outputSummaryToolTip, value);
+    }
+
+    private bool isReplaceOriginalActive;
+    public bool IsReplaceOriginalActive
+    {
+        get => isReplaceOriginalActive;
+        private set => SetProperty(ref isReplaceOriginalActive, value);
+    }
+
+    private string retentionSummary = "Keep originals";
+    public string RetentionSummary
+    {
+        get => retentionSummary;
+        private set => SetProperty(ref retentionSummary, value);
+    }
+
+    private string felSummary = "FEL: Skip";
+    public string FelSummary
+    {
+        get => felSummary;
+        private set => SetProperty(ref felSummary, value);
+    }
+
+    private string archiveSummary = "EL archive: Off";
+    public string ArchiveSummary
+    {
+        get => archiveSummary;
+        private set => SetProperty(ref archiveSummary, value);
+    }
+
+    public void UpdateSettingsSummary(UserSettings s)
+    {
+        IsReplaceOriginalActive = s.ReplaceOriginal;
+        RetentionSummary = s.ReplaceOriginal ? "⚠ Replace originals" : "Keep originals";
+        FelSummary = (s.IncludeSimple, s.ForceComplex) switch
+        {
+            (true, true) => "FEL: Simple + Complex",
+            (true, false) => "FEL: Simple only",
+            (false, true) => "FEL: Complex only",
+            _ => "FEL: Skip"
+        };
+        ArchiveSummary = s.CreateElArchive ? "EL archive: On" : "EL archive: Off";
+        string destination = string.IsNullOrWhiteSpace(s.OutputDirectory)
+            ? "Same folder"
+            : s.OutputDirectory;
+
+        OutputSummary = s.ReplaceOriginal
+            ? $"Output: {destination} (Replace original)"
+            : $"Output: {destination}";
+
+        var sb = new System.Text.StringBuilder();
+        sb.AppendLine($"Destination: {(string.IsNullOrWhiteSpace(s.OutputDirectory) ? "Same folder as source file" : s.OutputDirectory)}");
+        sb.AppendLine($"Retention: {(s.ReplaceOriginal ? "Replace original after verification (Source file will be replaced!)" : "Keep original (Non-destructive)")}");
+        sb.AppendLine(FelSummary);
+        if (s.IncludeSimple || s.ForceComplex)
+        {
+            sb.AppendLine("FEL conversion discards enhancement-layer picture data.");
+        }
+        if (s.CreateElArchive)
+        {
+            sb.AppendLine("EL Archive: Enabled (.dovi backup file will be created)");
+        }
+
+        if (!string.IsNullOrWhiteSpace(s.TemporaryDirectory))
+        {
+            sb.AppendLine($"Temporary directory: {s.TemporaryDirectory}");
+        }
+
+        sb.AppendLine();
+        sb.Append("Click to view or change settings.");
+        OutputSummaryToolTip = sb.ToString();
+    }
+
+    public async Task RefreshSettingsSummaryAsync(CancellationToken token = default)
+    {
+        try
+        {
+            UpdateSettingsSummary(await settings.ReadAsync(token));
+        }
+        catch (Exception ex) when (ex is not OperationCanceledException)
+        {
+            logger.LogWarning(ex, "Failed to read settings for summary.");
+        }
+    }
+
+    private bool CanScan() => IsIdle && Files.Count > 0;
     private bool CanOperate() => IsIdle && Files.Any(f => f.IsSelected);
 
     protected override void CommandsChanged()
@@ -260,15 +270,14 @@ public sealed class MediaViewModel : OperationViewModel
         OpenRowOutputCommand?.RaiseCanExecuteChanged();
         ToggleSelectAllCommand?.RaiseCanExecuteChanged();
         ClearAllCommand?.RaiseCanExecuteChanged();
+        OpenSettingsCommand?.RaiseCanExecuteChanged();
         AddFilesCommand?.RaiseCanExecuteChanged();
         AddFolderCommand?.RaiseCanExecuteChanged();
         ScanCommand?.RaiseCanExecuteChanged();
         InspectCommand?.RaiseCanExecuteChanged();
         DeepInspectCommand?.RaiseCanExecuteChanged();
-        ConvertCommand?.RaiseCanExecuteChanged();
-        ReviewCommand?.RaiseCanExecuteChanged();
-        ApproveCommand?.RaiseCanExecuteChanged();
-        BrowseDestinationCommand?.RaiseCanExecuteChanged();
+        ConvertDv81Command?.RaiseCanExecuteChanged();
+        ConvertHdrCommand?.RaiseCanExecuteChanged();
     }
 
     public Task AddAsync(IEnumerable<string> inputs) => RunAsync(async (token, _) =>
@@ -292,7 +301,7 @@ public sealed class MediaViewModel : OperationViewModel
                     added.Add(row);
                 }
             }
-            catch (Exception ex)when (ex is not OperationCanceledException)
+            catch (Exception ex) when (ex is not OperationCanceledException)
             {
                 Status = $"Could not add {input}: {ex.Message}";
             }
@@ -304,7 +313,7 @@ public sealed class MediaViewModel : OperationViewModel
         RaisePropertyChanged(nameof(AllFilesSelected));
         if (added.Count > 0 && (await settings.ReadAsync(token)).AutomaticallyScanAddedFiles)
         {
-            await AnalyzeRowsAsync(added.ToArray(), AnalysisMethod.SampledRpu, token);
+            await AnalyzeRowsAsync([.. added], AnalysisMethod.SampledRpu, token);
         }
     });
     private void OnRowPropertyChanged(object? sender, PropertyChangedEventArgs e)
@@ -352,14 +361,10 @@ public sealed class MediaViewModel : OperationViewModel
 
     private void InvalidatePlan()
     {
-        plans.Clear();
         foreach (var row in Files)
         {
             row.ClearPlan();
         }
-
-        Review = "Review the current options to prepare exact output paths and warnings.";
-        ApproveCommand?.RaiseCanExecuteChanged();
     }
 
     private void Skip(MediaRow row)
@@ -433,9 +438,14 @@ public sealed class MediaViewModel : OperationViewModel
         return BatchProgress.Start(row, stage);
     }
 
+    public Task ScanAllAsync() => RunAsync(async (token, _) =>
+    {
+        await AnalyzeRowsAsync([.. Files], AnalysisMethod.SampledRpu, token);
+    });
+
     private Task AnalyzeAsync(AnalysisMethod method) => RunAsync(async (token, _) =>
     {
-        await AnalyzeRowsAsync(Files.Where(r => r.IsSelected).ToArray(), method, token);
+        await AnalyzeRowsAsync([.. Files.Where(r => r.IsSelected)], method, token);
     });
 
     private async Task AnalyzeRowsAsync(MediaRow[] rows, AnalysisMethod method, CancellationToken token)
@@ -498,7 +508,7 @@ public sealed class MediaViewModel : OperationViewModel
                     row.SetScanned();
                     if (autoSelect)
                     {
-                        row.IsSelected = ConversionPolicy.ShouldAutoSelectAfterAnalysis(row.Analysis);
+                        row.IsSelected = ConversionPolicy.ShouldAutoSelectAfterAnalysis(row.Analysis, userSettings.IncludeSimple, userSettings.ForceComplex);
                     }
                 }
                 else if (result.Status is OperationStatus.Failed or OperationStatus.Cancelled)
@@ -514,26 +524,44 @@ public sealed class MediaViewModel : OperationViewModel
         }
     }
 
-    private async Task OpenConversionAsync()
+    private Task ConvertBatchAsync(ConversionTarget target) => RunAsync(async (token, progress) =>
     {
-        await RunAsync(async (token, _) =>
+        if (ConversionStarting is not null)
         {
-            var defaults = await settings.ReadAsync(token);
-            OtherFolder = defaults.OutputDirectory is not null;
-            Destination = defaults.OutputDirectory ?? "";
-            ReplaceOriginal = defaults.ReplaceOriginal;
-            CreateArchive = defaults.CreateElArchive;
-            OptionsOpen = true;
-        });
-        await PrepareAsync();
-    }
+            foreach (Func<CancellationToken, Task> handler in ConversionStarting.GetInvocationList())
+            {
+                await handler(token);
+            }
+        }
 
-    private Task PrepareAsync() => RunAsync(async (token, progress) =>
-    {
         InvalidatePlan();
-        if (OtherFolder && string.IsNullOrWhiteSpace(Destination))
+        var userSettings = await settings.ReadAsync(token);
+        UpdateSettingsSummary(userSettings);
+        if (!string.IsNullOrWhiteSpace(userSettings.TemporaryDirectory))
         {
-            throw new InvalidOperationException("Choose an output folder.");
+            string tempPath = Path.GetFullPath(userSettings.TemporaryDirectory);
+            if (!Directory.Exists(tempPath))
+            {
+                dialogs.ShowMessage(
+                    $"The configured temporary storage folder does not exist:\n{tempPath}\n\nPlease check your Settings.",
+                    "Temporary storage folder not found");
+                return;
+            }
+        }
+
+        if (userSettings.OutputDirectory is not null && !Directory.Exists(userSettings.OutputDirectory))
+        {
+            try
+            {
+                Directory.CreateDirectory(userSettings.OutputDirectory);
+            }
+            catch (Exception ex)
+            {
+                dialogs.ShowMessage(
+                    $"The configured output folder cannot be created or accessed:\n{userSettings.OutputDirectory}\n\n{ex.Message}",
+                    "Output folder error");
+                return;
+            }
         }
 
         if (!await dependencies.EnsureAsync(progress, token))
@@ -548,148 +576,94 @@ public sealed class MediaViewModel : OperationViewModel
             return;
         }
 
+        string opName = target == ConversionTarget.Profile81 ? "Conversion to DV8.1" : "Conversion to HDR10";
         var outputs = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
-        var skippedResults = new List<OperationItemResult>();
-        bool targetHdr10 = Hdr10;
-        string? outputDir = OtherFolder ? Destination : null;
-        bool deleteBackup = ReplaceOriginal;
-        bool createArchive = CreateArchive;
 
-        BeginBatch(rows, "Conversion planning");
+        foreach (var row in rows)
+        {
+            row.LastAnalysisMethod = null;
+            row.Warning = null;
+            row.AnalysisError = null;
+            row.Notice = "";
+        }
+
+        BeginBatch(rows, opName);
         try
         {
-            var results = await batch.ExecuteAsync(rows, row => row.Path, async (row, itemToken) =>
+            var result = await batch.ExecuteAsync(rows, r => r.Path, async (row, itemToken) =>
             {
-                var jobProgress = Activate(row, "Planning");
+                var jobProgress = Activate(row, "Preparing conversion");
                 row.AnalysisError = null;
                 row.Notice = "";
                 row.Warning = null;
                 row.PlannedOutput = "";
                 try
                 {
-                    var request = new ConversionRequest(
+                    var req = new CandidateConversionRequest(
                         row.Path,
-                        Target: targetHdr10 ? ConversionTarget.Hdr10 : ConversionTarget.Profile81,
-                        OutputDirectory: outputDir,
-                        IncludeSimple: true,
-                        ForceComplex: true,
-                        CreateBackup: createArchive,
-                        DeleteBackup: deleteBackup
-                    );
-                    var prepared = await Task.Run(() => planner.PlanAsync(request, jobProgress, itemToken, existingOutputs: outputs), itemToken);
-                    if (prepared.Plans.Count > 0)
+                        target,
+                        userSettings.OutputDirectory,
+                        userSettings.TemporaryDirectory,
+                        userSettings.ReplaceOriginal,
+                        userSettings.CreateElArchive,
+                        userSettings.IncludeSimple,
+                        userSettings.ForceComplex,
+                        outputs);
+
+                    var prep = await Task.Run(() => conversion.PrepareCandidateAsync(req, jobProgress, itemToken), itemToken);
+                    if (prep is CandidatePreparationResult.Skipped skipped)
                     {
-                        var plan = prepared.Plans[0];
-                        plans.Add(plan);
-                        row.Analysis = plan.Analysis;
-                        string? warning = plan.Analysis.Verdict is AnalysisVerdict.SimpleFel or AnalysisVerdict.ComplexFel or AnalysisVerdict.FelUnclassified
-                            ? "Enhancement-layer picture data will be lost."
-                            : null;
-                        row.SetPlan(plan.Output, warning);
-                        return new OperationItemResult(row.Path, OperationStatus.Completed, plan.Output, plan.Decision);
+                        return new OperationItemResult(row.Path, OperationStatus.Skipped, null, skipped.Reason);
                     }
 
-                    if (prepared.Skipped.Count > 0)
+                    if (prep is CandidatePreparationResult.Failed failed)
                     {
-                        var skipped = prepared.Skipped[0];
-                        skippedResults.Add(skipped);
-                        return skipped;
+                        return new OperationItemResult(row.Path, OperationStatus.Failed, null, failed.Error);
                     }
 
-                    return new OperationItemResult(row.Path, OperationStatus.Failed, null, "Conversion planning produced no plan.");
+                    if (prep is CandidatePreparationResult.Success success)
+                    {
+                        row.Analysis = success.Plan.Analysis;
+                        row.SetPlan(success.Plan.Output, success.Warning);
+                        jobProgress.Report(new(success.Plan.Id, "Converting", row.Path));
+                        return await Task.Run(() => conversion.ExecuteAsync(success.Plan, jobProgress, itemToken), itemToken);
+                    }
+
+                    return new OperationItemResult(row.Path, OperationStatus.Failed, null, "Candidate preparation produced no result.");
                 }
                 finally
                 {
                     row.IsActive = false;
                 }
-            }, control!, new InlineProgress<OperationItemResult>(result =>
+            }, control!, new InlineProgress<OperationItemResult>(itemResult =>
             {
                 BatchProgress.Complete();
-                var row = rows.First(r => r.Path == result.Item);
+                var row = rows.First(r => r.Path == itemResult.Item);
                 row.CanRetryAnalysis = false;
-                if (result.Status == OperationStatus.Completed)
+                if (itemResult.Status is OperationStatus.Completed or OperationStatus.Partial)
                 {
-                    row.Status = "Ready to convert";
+                    row.SetConverted(itemResult);
                 }
                 else
                 {
-                    row.Status = $"Conversion planning {result.Status.ToString().ToLowerInvariant()}";
-                    row.Notice = result.Message;
-                    row.Warning = null;
-                    if (result.Status == OperationStatus.Failed)
+                    row.Result = itemResult;
+                    if (itemResult.Status == OperationStatus.Skipped)
                     {
-                        row.AnalysisError = result.Message;
+                        row.SetSkipped();
+                        row.Notice = itemResult.Message;
+                    }
+                    else if (itemResult.Status == OperationStatus.Failed)
+                    {
+                        row.SetFailed(itemResult.Message);
+                    }
+                    else
+                    {
+                        row.Status = $"Conversion {itemResult.Status.ToString().ToLowerInvariant()}";
                     }
                 }
             }), token);
 
-            string warnings = string.Join("\n", plans.Where(p => p.Analysis.Verdict is AnalysisVerdict.SimpleFel or AnalysisVerdict.ComplexFel or AnalysisVerdict.FelUnclassified).Select(p => $"WARNING — {Path.GetFileName(p.Analysis.Media.Source.Path)}: Enhancement-layer picture data will be lost."));
-            var planText = string.Join("\n\n", plans.Select(p =>
-            {
-                string tempFolder = Path.GetFullPath(string.IsNullOrWhiteSpace(p.TemporaryDirectory) ? Path.GetTempPath() : p.TemporaryDirectory);
-                return $"{p.Analysis.Media.Source.Path}\n→ {p.Output}\nTarget: {(p.Target == ConversionTarget.Profile81 ? "Profile 8.1" : "HDR10")}; original: {(p.DeleteBackup ? "replace after verification; original backup deleted" : "retained")}\n" +
-                    $"Temporary folder: {tempFolder}\n" +
-                    "A separate job subfolder is created here when conversion starts.\n" +
-                    $"Required scratch space for this file: {p.ScratchBytes / 1073741824d:0.0} GiB ({p.ScratchBytes:N0} bytes)\nOutput space is additional.\n" +
-                    (p.Archive is null ? "" : $"EL archive: {p.Archive}\n") + p.Decision;
-            }));
-            var skipText = string.Join("\n", skippedResults.Select(s => $"{s.Item}: {s.Status} — {s.Message}"));
-            Review = (warnings.Length == 0 ? "" : warnings + "\n\n") + planText + (planText.Length > 0 && skipText.Length > 0 ? "\n\n" : "") + skipText;
-            Status = $"{plans.Count} plans ready for approval.";
-        }
-        finally
-        {
-            EndBatch(deselectPending: true);
-            ApproveCommand?.RaiseCanExecuteChanged();
-        }
-    });
-    private Task ConvertAsync() => RunAsync(async (token, _) =>
-    {
-        var approved = plans.ToArray();
-        plans.Clear();
-        foreach (var plan in approved)
-        {
-            OperationLog.Audit(logger, "ApproveConversion", Review, "ApprovedByButton", plan.Id);
-        }
-
-        OptionsOpen = false;
-        var rows = Files.Where(r => approved.Any(p => p.Analysis.Media.Source.Path == r.Path)).ToArray();
-        foreach (var row in rows)
-        {
-            row.LastAnalysisMethod = null;
-            row.Warning = null;
-        }
-
-        BeginBatch(rows, "Conversion");
-        try
-        {
-            var result = await batch.ExecuteAsync(approved, p => p.Analysis.Media.Source.Path, async (plan, itemToken) =>
-            {
-                var row = rows.First(r => r.Path == plan.Analysis.Media.Source.Path);
-                var jobProgress = Activate(row, "Preparing conversion");
-                try
-                {
-                    return await Task.Run(() => conversion.ExecuteAsync(plan, jobProgress, itemToken), itemToken);
-                }
-                finally
-                {
-                    row.IsActive = false;
-                }
-            }, control!, new InlineProgress<OperationItemResult>(result =>
-            {
-                BatchProgress.Complete();
-                var row = rows.First(r => r.Path == result.Item);
-                if (result.Status is OperationStatus.Completed or OperationStatus.Partial)
-                {
-                    row.SetConverted(result);
-                }
-                else
-                {
-                    row.Result = result;
-                    row.Status = $"Conversion {result.Status.ToString().ToLowerInvariant()}";
-                }
-            }), token);
-            Status = $"Conversion: {Summary(result)}";
+            Status = $"{opName}: {Summary(result)}";
         }
         finally
         {
@@ -711,7 +685,6 @@ public sealed class MediaViewModel : OperationViewModel
 
         Files.Clear();
         Focused = null;
-        OptionsOpen = false;
         InvalidatePlan();
         Status = "File list cleared.";
         RaisePropertyChanged(nameof(SelectionSummary));

@@ -7,7 +7,7 @@ namespace DoViFixer.Application.Settings;
 public sealed class SettingsService(ISettingsStore store, IDependencyDetector detector, IToolCatalog catalog, IFileOperations files, ILogger<SettingsService> logger)
 {
     public Task<UserSettings> ReadAsync(CancellationToken cancellationToken) => store.ReadAsync(cancellationToken);
-    public async Task SetPreferencesAsync(string? temporaryDirectory, string? outputDirectory, bool replaceOriginal, bool createElArchive, CancellationToken cancellationToken, bool? automaticallyScanAddedFiles = null, bool? useCachedResults = null, bool? autoSelectAfterScan = null, AppTheme? theme = null)
+    public async Task SetPreferencesAsync(string? temporaryDirectory, string? outputDirectory, bool replaceOriginal, bool createElArchive, CancellationToken cancellationToken, bool? automaticallyScanAddedFiles = null, bool? useCachedResults = null, bool? autoSelectAfterScan = null, AppTheme? theme = null, bool? allowFel = null, bool? includeSimple = null, bool? forceComplex = null)
     {
         cancellationToken.ThrowIfCancellationRequested();
         string? temporary = string.IsNullOrWhiteSpace(temporaryDirectory) ? null : Path.GetFullPath(temporaryDirectory);
@@ -29,6 +29,8 @@ public sealed class SettingsService(ISettingsStore store, IDependencyDetector de
             OutputDirectory = full,
             ReplaceOriginal = replaceOriginal,
             CreateElArchive = createElArchive,
+            IncludeSimple = includeSimple ?? (allowFel is not null ? allowFel.Value : s.IncludeSimple),
+            ForceComplex = forceComplex ?? (allowFel is not null ? allowFel.Value : s.ForceComplex),
             AutomaticallyScanAddedFiles = automaticallyScanAddedFiles ?? s.AutomaticallyScanAddedFiles,
             UseCachedResults = useCachedResults ?? s.UseCachedResults,
             AutoSelectAfterScan = autoSelectAfterScan ?? s.AutoSelectAfterScan,

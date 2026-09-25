@@ -11,6 +11,8 @@ using DoViFixer.App.ViewModels;
 using DoViFixer.App.Views;
 using Microsoft.VisualStudio.TestTools.UnitTesting;
 using Prism.Ioc;
+using Prism.Navigation.Regions;
+using DoViFixer.Application.Settings;
 
 namespace DoViFixer.App.Tests;
 [TestClass]
@@ -64,6 +66,7 @@ public sealed class VisualTests
         try
         {
             using var runtime = new TestRuntime();
+            ContainerLocator.SetContainerExtension((IContainerExtension)runtime.Container);
             var shell = runtime.Container.Resolve<ShellViewModel>();
             var model = shell.Media;
             var media = new MediaView(model);
@@ -72,6 +75,30 @@ public sealed class VisualTests
             await model.ScanCommand.ExecuteAsync();
             model.Focused = model.Files[1];
             await RenderAsync(media, "02-scan-results");
+            model.UpdateSettingsSummary(new UserSettings
+            {
+                OutputDirectory = @"D:\Media\A very long destination folder\Another long folder\Converted movies",
+                ReplaceOriginal = true,
+                IncludeSimple = true,
+                ForceComplex = true,
+                CreateElArchive = true
+            });
+            var window = new Shell(shell, new RegionManager());
+            var shellContent = (DockPanel)window.Content;
+            var workspace = shellContent.Children.OfType<ContentControl>().Single();
+            workspace.Content = media;
+            media.ClearValue(FrameworkElement.WidthProperty);
+            media.ClearValue(FrameworkElement.HeightProperty);
+            // Exercise the actual shell layout, reserving space for window chrome at 800 x 600.
+            await RenderAsync(shellContent, "09-shell-minimum", 780, 560);
+            foreach (string caption in new[] { "⌕  Scan all", "▷  Convert to DV8.1", "▷  Convert to HDR10", "⚙ Settings" })
+            {
+                AssertInside(FindButton(shellContent, caption)!, shellContent);
+            }
+            AssertInside(FindText(shellContent, "⚠ Replace originals")!, shellContent);
+            AssertInside(FindText(shellContent, "FEL: Simple + Complex")!, shellContent);
+            workspace.Content = null;
+            model.UpdateSettingsSummary(runtime.Settings);
             var completeAnalysis = model.Files[1].Analysis!;
             model.Files[1].Analysis = DoViFixer.Domain.Analysis.MediaClassifier.Classify(completeAnalysis.Media, completeAnalysis.Evidence with
             {
@@ -118,11 +145,9 @@ public sealed class VisualTests
                 row.IsSelected = true;
             }
 
+            await runtime.UpdateAsync(s => s with { AllowFel = true }, default);
             await model.ScanCommand.ExecuteAsync();
             model.Files[2].IsSelected = true;
-            await model.ConvertCommand.ExecuteAsync();
-            await RenderAsync(media, "03-conversion-review");
-            await RenderAsync(media, "04-review-minimum", 1060, 685);
             var started = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
             var recovering = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
             var releaseRecovery = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
@@ -144,7 +169,7 @@ public sealed class VisualTests
                     await releaseRecovery.Task;
                 }
             };
-            var operation = model.ApproveCommand.ExecuteAsync();
+            var operation = model.ConvertDv81Command.ExecuteAsync();
             await started.Task;
             model.Focused = model.Files[1];
             Assert.IsFalse(shell.CanNavigate);
@@ -179,13 +204,43 @@ public sealed class VisualTests
             await RenderAsync(new ArchiveView(shell.Archive), "07-backup-restore");
             await shell.Settings.LoadCommand.ExecuteAsync();
             await shell.Settings.CheckCommand.ExecuteAsync();
-            await RenderAsync(new SettingsView(shell.Settings), "08-settings");
+            var settingsView = new SettingsView(shell.Settings);
+            await RenderAsync(settingsView, "08-settings");
+            shell.Settings.OtherFolder = true;
+            await shell.Settings.SaveTask;
+            var settingsScroll = ((DockPanel)settingsView.Content).Children.OfType<ScrollViewer>().Single();
+            await RenderAsync(settingsView, "08-settings-save-error", 620, 560);
+            Assert.AreEqual(Visibility.Visible, FindButton(settingsView, "Retry saving settings")!.Visibility);
+            Assert.AreEqual(Visibility.Visible, FindText(settingsView, "Choose an output folder.")!.Visibility);
+            AssertInside(FindButton(settingsView, "Retry saving settings")!, settingsView);
+            AssertInside(FindButton(settingsView, "Discard unsaved changes")!, settingsView);
+            settingsScroll.ScrollToEnd();
+            await RenderAsync(settingsView, "08-settings-save-error-scrolled", 620, 560);
+            AssertInside(FindButton(settingsView, "Discard unsaved changes")!, settingsView);
+
+            shell.Settings.DiscardChangesCommand.Execute();
+            Assert.IsFalse(shell.Settings.OtherFolder);
+            await Dispatcher.Yield(DispatcherPriority.ApplicationIdle);
+            Assert.IsFalse(FindButton(settingsView, "Retry saving settings")!.IsVisible);
+            runtime.DuringDependencyCheck = token => Task.Delay(Timeout.Infinite, token);
+            var checking = shell.Settings.CheckCommand.ExecuteAsync();
+            settingsScroll.ScrollToEnd();
+            await RenderAsync(settingsView, "08-settings-operation");
+            var cancelSettings = FindButton(settingsView, "Cancel operation")!;
+            Assert.AreEqual(Visibility.Visible, cancelSettings.Visibility);
+            Assert.IsTrue(cancelSettings.IsEnabled);
+            cancelSettings.Command.Execute(null);
+            await checking;
+            Assert.AreEqual("Cancelled; cleanup finished.", shell.Settings.Status);
+            Assert.IsTrue(shell.CanNavigate);
+            runtime.DuringDependencyCheck = null;
             Assert.AreEqual("", listener.Errors.ToString(), "WPF binding errors");
         }
         finally
         {
             PresentationTraceSources.DataBindingSource.Listeners.Remove(listener);
             app.Shutdown();
+            ContainerLocator.ResetContainer();
         }
     }
 
@@ -199,6 +254,33 @@ public sealed class VisualTests
         for (int i = 0; i < VisualTreeHelper.GetChildrenCount(parent); i++)
         {
             if (FindButton(VisualTreeHelper.GetChild(parent, i), content) is { } match)
+            {
+                return match;
+            }
+        }
+
+        return null;
+    }
+
+    private static void AssertInside(FrameworkElement element, FrameworkElement host)
+    {
+        Assert.IsNotNull(element);
+        var bounds = element.TransformToAncestor(host).TransformBounds(new Rect(element.RenderSize));
+        Assert.IsTrue(element.ActualWidth > 0 && element.ActualHeight > 0);
+        Assert.IsTrue(bounds.Left >= 0 && bounds.Top >= 0 && bounds.Right <= host.ActualWidth + 1 && bounds.Bottom <= host.ActualHeight + 1,
+            $"{element} is clipped: {bounds} inside {host.RenderSize}.");
+    }
+
+    private static TextBlock? FindText(DependencyObject parent, string text)
+    {
+        if (parent is TextBlock block && block.Text == text)
+        {
+            return block;
+        }
+
+        for (int i = 0; i < VisualTreeHelper.GetChildrenCount(parent); i++)
+        {
+            if (FindText(VisualTreeHelper.GetChild(parent, i), text) is { } match)
             {
                 return match;
             }

@@ -31,14 +31,14 @@ public static class ConversionPolicy
         };
     }
 
-    public static bool ShouldAutoSelectAfterAnalysis(MediaAnalysis? analysis)
+    public static bool ShouldAutoSelectAfterAnalysis(MediaAnalysis? analysis, bool includeSimple = false, bool forceComplex = false)
     {
-        if (analysis is null || analysis.Media.Profile != DolbyVisionProfile.Profile7 || !analysis.Media.VideoCodec.Contains("HEVC", StringComparison.OrdinalIgnoreCase))
+        if (analysis is null)
         {
             return false;
         }
 
-        return analysis.Verdict is AnalysisVerdict.Mel or AnalysisVerdict.SimpleFel;
+        return Evaluate(analysis, includeSimple, forceComplex).Allowed;
     }
 
     public static long RequiredScratchBytes(long sourceLength) => checked(sourceLength * 8 + (1L << 30));

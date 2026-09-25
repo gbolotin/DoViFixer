@@ -103,8 +103,18 @@ internal sealed class TestRuntime : IFileDiscovery, IFileOperations, IMediaProbe
     {
     }
 
+    public bool FailAvailableSpace
+    {
+        get;
+        set;
+    }
+
     public void EnsureAvailableSpace(string directory, long requiredBytes)
     {
+        if (FailAvailableSpace)
+        {
+            throw new IOException("Insufficient disk space");
+        }
     }
 
     public void EnsureWritableDirectory(string directory)
@@ -159,7 +169,16 @@ internal sealed class TestRuntime : IFileDiscovery, IFileOperations, IMediaProbe
         return Task.CompletedTask;
     }
 
-    public Task<DependencyReport> DetectAsync(IReadOnlyList<NativeTool> tools, CancellationToken cancellationToken, bool skipConfiguredPaths = false) => Task.FromResult(new DependencyReport(tools.Select(t => new DependencyStatus(t, Ready ? DependencyState.Ready : DependencyState.Missing, @"C:\Tools\" + t + ".exe", "test", "Fixture")).ToArray()));
+    public Func<CancellationToken, Task>? DuringDependencyCheck { get; set; }
+    public async Task<DependencyReport> DetectAsync(IReadOnlyList<NativeTool> tools, CancellationToken cancellationToken, bool skipConfiguredPaths = false)
+    {
+        if (DuringDependencyCheck is not null)
+        {
+            await DuringDependencyCheck(cancellationToken);
+        }
+
+        return new DependencyReport(tools.Select(t => new DependencyStatus(t, Ready ? DependencyState.Ready : DependencyState.Missing, @"C:\Tools\" + t + ".exe", "test", "Fixture")).ToArray());
+    }
     public Task<DependencyStatus> ValidatePathAsync(NativeTool tool, string path, CancellationToken cancellationToken) => Task.FromResult(new DependencyStatus(tool, DependencyState.Ready, path, "test", "Fixture"));
     public Task<InstallationPlan> PrepareAsync(DependencyReport report, CancellationToken cancellationToken) => Task.FromResult(new InstallationPlan(Guid.NewGuid(), [new InstallationItem("Fixture.Tools", "1.2.3", InstallationProvider.VerifiedZip, "https://example.invalid/tools.zip", @"C:\FixtureTools", "user", false, DependencyRequirements.All, new string ('a', 64))], []));
     public Task<IReadOnlyList<InstallationOutcome>> InstallAsync(InstallationPlan approvedPlan, IProgress<OperationProgress>? progress, CancellationToken cancellationToken)
@@ -217,6 +236,12 @@ internal sealed class TestRuntime : IFileDiscovery, IFileOperations, IMediaProbe
     {
         Reviews.Add(content);
         return Approval;
+    }
+
+    public List<string> Messages { get; } = [];
+    public void ShowMessage(string message, string title = "DoViFixer")
+    {
+        Messages.Add($"{title}: {message}");
     }
 
     public AppTheme AppliedTheme

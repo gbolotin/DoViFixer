@@ -11,10 +11,44 @@ namespace DoViFixer.Application.Conversion;
 public sealed record ConversionRequest(string Input, int RecursiveDepth = 0, ConversionTarget Target = ConversionTarget.Profile81, string? OutputDirectory = null, string? TemporaryDirectory = null, bool IncludeSimple = false, bool ForceComplex = false, bool CreateBackup = false, bool Safe = false, bool DeleteBackup = false, IReadOnlyList<string>? AdditionalInputs = null);
 public sealed record ConversionPlan(Guid Id, MediaAnalysis Analysis, ConversionTarget Target, string Output, string? Archive, string? TemporaryDirectory, long ScratchBytes, string Decision, bool Safe = false, bool DeleteBackup = false);
 public sealed record ConversionPlanningResult(IReadOnlyList<ConversionPlan> Plans, IReadOnlyList<OperationItemResult> Skipped);
+
+public sealed record CandidateConversionRequest(
+    string Path,
+    ConversionTarget Target,
+    string? OutputDirectory,
+    string? TemporaryDirectory,
+    bool ReplaceOriginal,
+    bool CreateElArchive,
+    bool IncludeSimple,
+    bool ForceComplex,
+    ISet<string>? ExistingOutputs = null)
+{
+    public CandidateConversionRequest(
+        string Path,
+        ConversionTarget Target,
+        string? OutputDirectory,
+        string? TemporaryDirectory,
+        bool ReplaceOriginal,
+        bool CreateElArchive,
+        bool AllowFel,
+        ISet<string>? ExistingOutputs = null)
+        : this(Path, Target, OutputDirectory, TemporaryDirectory, ReplaceOriginal, CreateElArchive, AllowFel, AllowFel, ExistingOutputs)
+    {
+    }
+
+    public bool AllowFel => IncludeSimple || ForceComplex;
+}
+
+public abstract record CandidatePreparationResult
+{
+    public sealed record Success(ConversionPlan Plan, string? Warning) : CandidatePreparationResult;
+    public sealed record Skipped(string Reason) : CandidatePreparationResult;
+    public sealed record Failed(string Error) : CandidatePreparationResult;
+}
 public sealed class ConversionPlanner(IFileDiscovery discovery, IFileOperations files, InspectionService inspection, ISettingsStore settings, ILogger<ConversionPlanner> logger)
 {
-    public Task<ConversionPlanningResult> PlanAsync(ConversionRequest request, IProgress<OperationProgress>? progress, CancellationToken cancellationToken, Func<MediaAnalysis, CancellationToken, Task<bool>>? approveFel = null, ISet<string>? existingOutputs = null) => OperationLog.RunAsync(logger, "PlanConversion", Guid.NewGuid(), request.Input, () => PlanCoreAsync(request, progress, cancellationToken, approveFel, existingOutputs), cancellationToken, result => result.Skipped.Any(f => f.Status == OperationStatus.Failed) ? (result.Plans.Count > 0 ? OperationStatus.Partial : OperationStatus.Failed) : (result.Plans.Count > 0 ? OperationStatus.Completed : OperationStatus.Skipped));
-    private async Task<ConversionPlanningResult> PlanCoreAsync(ConversionRequest request, IProgress<OperationProgress>? progress, CancellationToken cancellationToken, Func<MediaAnalysis, CancellationToken, Task<bool>>? approveFel, ISet<string>? existingOutputs)
+    public Task<ConversionPlanningResult> PlanAsync(ConversionRequest request, IProgress<OperationProgress>? progress, CancellationToken cancellationToken, Func<MediaAnalysis, CancellationToken, Task<bool>>? approveFel = null, ISet<string>? existingOutputs = null) => OperationLog.RunAsync(logger, "PlanConversion", Guid.NewGuid(), request.Input, () => PlanCoreAsync(request, progress, approveFel, existingOutputs, cancellationToken), cancellationToken, result => result.Skipped.Any(f => f.Status == OperationStatus.Failed) ? (result.Plans.Count > 0 ? OperationStatus.Partial : OperationStatus.Failed) : (result.Plans.Count > 0 ? OperationStatus.Completed : OperationStatus.Skipped));
+    private async Task<ConversionPlanningResult> PlanCoreAsync(ConversionRequest request, IProgress<OperationProgress>? progress, Func<MediaAnalysis, CancellationToken, Task<bool>>? approveFel, ISet<string>? existingOutputs, CancellationToken cancellationToken)
     {
         var plans = new List<ConversionPlan>();
         var skipped = new List<OperationItemResult>();
@@ -32,7 +66,7 @@ public sealed class ConversionPlanner(IFileDiscovery discovery, IFileOperations 
             {
                 paths.UnionWith(discovery.Discover(input, request.RecursiveDepth));
             }
-            catch (Exception ex)when (ex is IOException or UnauthorizedAccessException or ArgumentException)
+            catch (Exception ex) when (ex is IOException or UnauthorizedAccessException or ArgumentException)
             {
                 skipped.Add(new(input, OperationStatus.Failed, null, ex.Message));
                 OperationLog.Result(logger, skipped[^1]);
@@ -70,9 +104,12 @@ public sealed class ConversionPlanner(IFileDiscovery discovery, IFileOperations 
 
                 long scratch = ConversionPolicy.RequiredScratchBytes(analysis.Media.Source.Length);
                 plans.Add(new(Guid.NewGuid(), analysis, request.Target, output, archive, request.TemporaryDirectory ?? snapshot.TemporaryDirectory, scratch, decision.Reason, request.Safe, request.DeleteBackup));
-                logger.LogInformation("Prepared plan {PlanId}: {Input} to {Output}; target {Target}; archive {Archive}; scratch {ScratchBytes}; force {ForceComplex}; include simple {IncludeSimple}; {Decision}", plans[^1].Id, path, output, request.Target, archive, scratch, request.ForceComplex, request.IncludeSimple, decision.Reason);
+                if (logger.IsEnabled(LogLevel.Information))
+                {
+                    logger.LogInformation("Prepared plan {PlanId}: {Input} to {Output}; target {Target}; archive {Archive}; scratch {ScratchBytes}; force {ForceComplex}; include simple {IncludeSimple}; {Decision}", plans[^1].Id, path, output, request.Target, archive, scratch, request.ForceComplex, request.IncludeSimple, decision.Reason);
+                }
             }
-            catch (Exception ex)when (ex is not OperationCanceledException and not DependencyNotReadyException)
+            catch (Exception ex) when (ex is not OperationCanceledException and not DependencyNotReadyException)
             {
                 logger.LogError(ex, "Conversion planning failed for {Input}", path);
                 skipped.Add(new(path, OperationStatus.Failed, null, ex.Message));
@@ -84,8 +121,137 @@ public sealed class ConversionPlanner(IFileDiscovery discovery, IFileOperations 
     }
 }
 
-public sealed class ConversionService(DependencyService dependencies, IFileOperations files, ITemporaryWorkspaceFactory workspaces, IVideoProcessor processor, IMediaVerifier verifier, IOutputPublisher publisher, IBackupArchiveStore archives, ILogger<ConversionService> logger)
+public sealed class ConversionService(DependencyService dependencies, IFileOperations files, ITemporaryWorkspaceFactory workspaces, IVideoProcessor processor, IMediaVerifier verifier, IOutputPublisher publisher, IBackupArchiveStore archives, ILogger<ConversionService> logger, InspectionService? inspection = null)
 {
+    public async Task<CandidatePreparationResult> PrepareCandidateAsync(CandidateConversionRequest request, IProgress<OperationProgress>? progress, CancellationToken cancellationToken)
+    {
+        cancellationToken.ThrowIfCancellationRequested();
+        FileIdentity source;
+        try
+        {
+            source = files.Identify(request.Path);
+        }
+        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException or ArgumentException)
+        {
+            return new CandidatePreparationResult.Failed(ex.Message);
+        }
+
+        long scratchBytes = ConversionPolicy.RequiredScratchBytes(source.Length);
+        string tempDir = Path.GetFullPath(string.IsNullOrWhiteSpace(request.TemporaryDirectory) ? Path.GetTempPath() : request.TemporaryDirectory);
+        try
+        {
+            files.EnsureAvailableSpace(tempDir, scratchBytes);
+        }
+        catch (Exception ex) when (ex is IOException or System.ComponentModel.Win32Exception)
+        {
+            return new CandidatePreparationResult.Skipped($"Insufficient temporary disk space: requires {scratchBytes:N0} bytes.");
+        }
+
+        string suffix = request.ReplaceOriginal
+            ? Path.GetExtension(request.Path)
+            : (request.Target == ConversionTarget.Profile81 ? " - DV P8.1.mkv" : " - HDR10.mkv");
+        string output;
+        string? archive;
+        try
+        {
+            output = files.PrepareOutputPath(request.Path, request.OutputDirectory, suffix, allowInput: request.ReplaceOriginal);
+            archive = request.CreateElArchive ? files.PrepareOutputPath(request.Path, request.OutputDirectory, ".dovi") : null;
+        }
+        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException or ArgumentException)
+        {
+            return new CandidatePreparationResult.Skipped(ex.Message);
+        }
+
+        if (request.ExistingOutputs is not null)
+        {
+            if (request.ExistingOutputs.Contains(output) || (archive is not null && request.ExistingOutputs.Contains(archive)))
+            {
+                return new CandidatePreparationResult.Skipped("Multiple inputs resolve to the same output path.");
+            }
+        }
+
+        string outputDir = Path.GetDirectoryName(output)!;
+        long requiredOutputSpace = checked(source.Length * 2 + (1L << 30));
+        try
+        {
+            files.EnsureAvailableSpace(outputDir, requiredOutputSpace);
+        }
+        catch (Exception ex) when (ex is IOException or System.ComponentModel.Win32Exception)
+        {
+            return new CandidatePreparationResult.Skipped($"Insufficient output disk space: requires {requiredOutputSpace:N0} bytes.");
+        }
+
+        if (inspection is not null)
+        {
+            var cached = await inspection.ReadCachedAsync(request.Path, AnalysisMethod.FullRpu, cancellationToken)
+                ?? await inspection.ReadCachedAsync(request.Path, AnalysisMethod.SampledRpu, cancellationToken);
+            if (cached is not null)
+            {
+                if (cached.Media.Profile != DolbyVisionProfile.Profile7 || !cached.Media.VideoCodec.Contains("HEVC", StringComparison.OrdinalIgnoreCase))
+                {
+                    return new CandidatePreparationResult.Skipped("Only HEVC Dolby Vision Profile 7 MKV inputs are supported.");
+                }
+
+                if (cached.Verdict == AnalysisVerdict.SimpleFel && !request.IncludeSimple)
+                {
+                    return new CandidatePreparationResult.Skipped("Simple FEL conversion requires enabling 'Include Simple FEL' in Settings.");
+                }
+
+                if ((cached.Verdict is AnalysisVerdict.ComplexFel or AnalysisVerdict.FelUnclassified) && !request.ForceComplex)
+                {
+                    return new CandidatePreparationResult.Skipped("Complex FEL conversion requires enabling 'Force Complex FEL' in Settings.");
+                }
+            }
+        }
+
+        MediaAnalysis analysis;
+        if (inspection is null)
+        {
+            return new CandidatePreparationResult.Failed("Inspection service is not available.");
+        }
+
+        try
+        {
+            progress?.Report(new(Guid.Empty, "Inspecting", request.Path));
+            analysis = await inspection.InspectAsync(request.Path, AnalysisMethod.FullRpu, request.TemporaryDirectory, cancellationToken, progress);
+        }
+        catch (Exception ex) when (ex is not OperationCanceledException and not DependencyNotReadyException)
+        {
+            logger.LogError(ex, "Inspection failed for {Input}", request.Path);
+            return new CandidatePreparationResult.Failed(ex.Message);
+        }
+
+        var decision = ConversionPolicy.Evaluate(analysis, request.IncludeSimple, request.ForceComplex);
+        if (!decision.Allowed)
+        {
+            return new CandidatePreparationResult.Skipped(decision.Reason);
+        }
+
+        request.ExistingOutputs?.Add(output);
+        if (archive is not null)
+        {
+            request.ExistingOutputs?.Add(archive);
+        }
+
+        string? warning = analysis.Verdict is AnalysisVerdict.SimpleFel or AnalysisVerdict.ComplexFel or AnalysisVerdict.FelUnclassified
+            ? "Enhancement-layer picture data will be lost."
+            : null;
+
+        var plan = new ConversionPlan(
+            Guid.NewGuid(),
+            analysis,
+            request.Target,
+            output,
+            archive,
+            request.TemporaryDirectory,
+            scratchBytes,
+            decision.Reason,
+            Safe: false,
+            DeleteBackup: request.ReplaceOriginal);
+
+        return new CandidatePreparationResult.Success(plan, warning);
+    }
+
     public Task<OperationItemResult> ExecuteAsync(ConversionPlan approvedPlan, IProgress<OperationProgress>? progress, CancellationToken cancellationToken) => OperationLog.RunAsync(logger, "Convert", approvedPlan.Id, approvedPlan.Analysis.Media.Source.Path, async () =>
     {
         var result = await ExecuteCoreAsync(approvedPlan, progress, cancellationToken);
@@ -95,7 +261,10 @@ public sealed class ConversionService(DependencyService dependencies, IFileOpera
     private async Task<OperationItemResult> ExecuteCoreAsync(ConversionPlan approvedPlan, IProgress<OperationProgress>? progress, CancellationToken cancellationToken)
     {
         var media = approvedPlan.Analysis.Media;
-        logger.LogInformation("Executing plan {PlanId}: target {Target}; output {Output}; archive {Archive}; scratch {ScratchBytes}; temporary directory {TemporaryDirectory}; {Decision}", approvedPlan.Id, approvedPlan.Target, approvedPlan.Output, approvedPlan.Archive, approvedPlan.ScratchBytes, approvedPlan.TemporaryDirectory, approvedPlan.Decision);
+        if (logger.IsEnabled(LogLevel.Information))
+        {
+            logger.LogInformation("Executing plan {PlanId}: target {Target}; output {Output}; archive {Archive}; scratch {ScratchBytes}; temporary directory {TemporaryDirectory}; {Decision}", approvedPlan.Id, approvedPlan.Target, approvedPlan.Output, approvedPlan.Archive, approvedPlan.ScratchBytes, approvedPlan.TemporaryDirectory, approvedPlan.Decision);
+        }
         await dependencies.RequireAsync(DependencyRequirements.All, cancellationToken);
         files.EnsureAvailableSpace(Path.GetDirectoryName(approvedPlan.Output)!, checked(media.Source.Length * 2 + (1L << 30)));
         await using var workspace = await workspaces.CreateAsync(approvedPlan.ScratchBytes, approvedPlan.TemporaryDirectory, cancellationToken);

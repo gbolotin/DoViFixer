@@ -469,6 +469,92 @@ public sealed class WorkflowTests
         Assert.AreEqual(0, runtime.Deleted);
     }
 
+    [TestMethod]
+    public async Task PrepareCandidateAsyncSkipsWhenInsufficientDiskSpaceBeforeInspection()
+    {
+        var runtime = new Runtime { FailAvailableSpace = true };
+        var cache = new MemoryCache();
+        var inspection = new InspectionService(runtime.Dependencies(), runtime, runtime, runtime, runtime, NullLogger<InspectionService>.Instance, cache);
+        var conversion = runtime.Conversion(inspection);
+
+        var request = new CandidateConversionRequest("good.mkv", ConversionTarget.Profile81, null, null, false, false, false);
+        var result = await conversion.PrepareCandidateAsync(request, null, default);
+
+        Assert.IsInstanceOfType<CandidatePreparationResult.Skipped>(result);
+        var skipped = (CandidatePreparationResult.Skipped)result;
+        StringAssert.Contains(skipped.Reason, "Insufficient temporary disk space");
+        Assert.AreEqual(0, runtime.AnalyzeCalls, "Pre-check must avoid inspection when scratch space check fails.");
+    }
+
+    [TestMethod]
+    public async Task PrepareCandidateAsyncSkipsWhenOutputCollisionDetected()
+    {
+        var runtime = new Runtime();
+        var cache = new MemoryCache();
+        var inspection = new InspectionService(runtime.Dependencies(), runtime, runtime, runtime, runtime, NullLogger<InspectionService>.Instance, cache);
+        var conversion = runtime.Conversion(inspection);
+
+        string expectedOutput = runtime.PrepareOutputPath("good.mkv", null, " - DV P8.1.mkv");
+        var existingOutputs = new HashSet<string>(StringComparer.OrdinalIgnoreCase) { expectedOutput };
+        var request = new CandidateConversionRequest("good.mkv", ConversionTarget.Profile81, null, null, false, false, false, existingOutputs);
+        var result = await conversion.PrepareCandidateAsync(request, null, default);
+
+        Assert.IsInstanceOfType<CandidatePreparationResult.Skipped>(result);
+        var skipped = (CandidatePreparationResult.Skipped)result;
+        StringAssert.Contains(skipped.Reason, "Multiple inputs resolve to the same output path");
+        Assert.AreEqual(0, runtime.AnalyzeCalls, "Pre-check must avoid inspection when output collision is detected.");
+    }
+
+    [TestMethod]
+    public async Task PrepareCandidateAsyncSkipsCachedFelWhenIncludeSimpleOrForceComplexIsFalse()
+    {
+        var runtime = new Runtime();
+        var cache = new MemoryCache();
+        var inspection = new InspectionService(runtime.Dependencies(), runtime, runtime, runtime, runtime, NullLogger<InspectionService>.Instance, cache);
+        var conversion = runtime.Conversion(inspection);
+
+        var simpleMedia = Plan("simple_fel.mkv").Analysis.Media with { MaxCll = 1000 };
+        var simpleFelAnalysis = MediaClassifier.Classify(simpleMedia, new(AnalysisMethod.SampledRpu, EnhancementLayer.Fel, 24, 1000, 10, 10));
+        await cache.WriteAsync(simpleFelAnalysis, default);
+
+        var complexMedia = Plan("complex_fel.mkv").Analysis.Media with { MaxCll = 800 };
+        var complexFelAnalysis = MediaClassifier.Classify(complexMedia, new(AnalysisMethod.SampledRpu, EnhancementLayer.Fel, 24, 1200, 10, 10));
+        await cache.WriteAsync(complexFelAnalysis, default);
+
+        // Simple FEL skipped when IncludeSimple is false
+        var requestSimple = new CandidateConversionRequest("simple_fel.mkv", ConversionTarget.Profile81, null, null, false, false, IncludeSimple: false, ForceComplex: false);
+        var resultSimple = await conversion.PrepareCandidateAsync(requestSimple, null, default);
+        Assert.IsInstanceOfType<CandidatePreparationResult.Skipped>(resultSimple);
+        StringAssert.Contains(((CandidatePreparationResult.Skipped)resultSimple).Reason, "Include Simple FEL");
+
+        // Complex FEL skipped when IncludeSimple is true but ForceComplex is false
+        var requestComplex = new CandidateConversionRequest("complex_fel.mkv", ConversionTarget.Profile81, null, null, false, false, IncludeSimple: true, ForceComplex: false);
+        var resultComplex = await conversion.PrepareCandidateAsync(requestComplex, null, default);
+        Assert.IsInstanceOfType<CandidatePreparationResult.Skipped>(resultComplex);
+        StringAssert.Contains(((CandidatePreparationResult.Skipped)resultComplex).Reason, "Force Complex FEL");
+
+        Assert.AreEqual(0, runtime.AnalyzeCalls, "Full inspection must be skipped when cached analysis indicates FEL and policy flags are not enabled.");
+    }
+
+    [TestMethod]
+    public async Task PrepareCandidateAsyncSucceedsForMelCandidate()
+    {
+        var runtime = new Runtime();
+        var cache = new MemoryCache();
+        var inspection = new InspectionService(runtime.Dependencies(), runtime, runtime, runtime, runtime, NullLogger<InspectionService>.Instance, cache);
+        var conversion = runtime.Conversion(inspection);
+
+        var request = new CandidateConversionRequest("good.mkv", ConversionTarget.Profile81, null, null, false, false, AllowFel: false);
+        var result = await conversion.PrepareCandidateAsync(request, null, default);
+
+        Assert.IsInstanceOfType<CandidatePreparationResult.Success>(result);
+        var success = (CandidatePreparationResult.Success)result;
+        Assert.IsNotNull(success.Plan);
+        Assert.IsNull(success.Warning);
+        Assert.IsTrue(success.Plan.Output.EndsWith(" - DV P8.1.mkv"));
+        Assert.AreEqual(1, runtime.AnalyzeCalls);
+    }
+
     private static ConversionPlan Plan(string name)
     {
         string path = Path.GetFullPath(name);
@@ -608,7 +694,7 @@ public sealed class WorkflowTests
 
         private readonly Dictionary<NativeTool, string> catalog = new();
         public DependencyService Dependencies() => new(this, this, this, this, NullLogger<DependencyService>.Instance);
-        public ConversionService Conversion() => new(Dependencies(), this, this, this, this, this, this, ConversionLog);
+        public ConversionService Conversion(InspectionService? inspection = null) => new(Dependencies(), this, this, this, this, this, this, ConversionLog, inspection);
         public RecordingLogger<ConversionService> ConversionLog
         {
             get;
@@ -686,8 +772,19 @@ public sealed class WorkflowTests
         }
 
         public string PrepareOutputPath(string input, string? outputDirectory, string suffix, bool allowInput = false) => Path.Combine(outputDirectory ?? Path.GetDirectoryName(Path.GetFullPath(input))!, Path.GetFileNameWithoutExtension(input) + suffix);
+
+        public bool FailAvailableSpace
+        {
+            get;
+            set;
+        }
+
         public void EnsureAvailableSpace(string directory, long requiredBytes)
         {
+            if (FailAvailableSpace)
+            {
+                throw new IOException("Insufficient space");
+            }
         }
 
         public void EnsureWritableDirectory(string directory)

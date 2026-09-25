@@ -24,6 +24,11 @@ public sealed class UserDialogs(string logDirectory) : IUserDialogs
         }
     }
 
+    public void ShowMessage(string message, string title = "DoViFixer")
+    {
+        MessageBox.Show(System.Windows.Application.Current?.MainWindow ?? null!, message, title, MessageBoxButton.OK, MessageBoxImage.Warning);
+    }
+
     public string[] PickFiles(string filter = "Matroska media|*.mkv")
     {
         var dialog = new OpenFileDialog

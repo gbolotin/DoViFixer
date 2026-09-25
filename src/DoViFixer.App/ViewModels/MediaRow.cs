@@ -66,6 +66,7 @@ public sealed class MediaRow(string path) : BindableBase
         {
             SetProperty(ref warning, value);
             RaisePropertyChanged(nameof(HasWarning));
+            RaisePropertyChanged(nameof(StatusToolTip));
         }
     }
     public bool HasWarning => !string.IsNullOrWhiteSpace(warning);
@@ -104,6 +105,7 @@ public sealed class MediaRow(string path) : BindableBase
         {
             SetProperty(ref status, value);
             RaisePropertyChanged(nameof(CanOpenResult));
+            RaisePropertyChanged(nameof(StatusToolTip));
         }
     }
     public string PlannedOutput
@@ -119,6 +121,35 @@ public sealed class MediaRow(string path) : BindableBase
         {
             SetProperty(ref notice, value);
             RaisePropertyChanged(nameof(Details));
+            RaisePropertyChanged(nameof(StatusToolTip));
+        }
+    }
+
+    public string? StatusToolTip
+    {
+        get
+        {
+            if (!string.IsNullOrWhiteSpace(Notice))
+            {
+                return Notice;
+            }
+
+            if (!string.IsNullOrWhiteSpace(Warning))
+            {
+                return Warning;
+            }
+
+            if (!string.IsNullOrWhiteSpace(Result?.Message))
+            {
+                return Result.Message;
+            }
+
+            if (!string.IsNullOrWhiteSpace(AnalysisError))
+            {
+                return AnalysisError;
+            }
+
+            return string.IsNullOrWhiteSpace(Status) ? null : Status;
         }
     }
 
@@ -131,6 +162,7 @@ public sealed class MediaRow(string path) : BindableBase
             RaisePropertyChanged(nameof(Classification));
             RaisePropertyChanged(nameof(ClassificationColor));
             RaisePropertyChanged(nameof(Details));
+            RaisePropertyChanged(nameof(StatusToolTip));
         }
     }
 
@@ -142,6 +174,7 @@ public sealed class MediaRow(string path) : BindableBase
             SetProperty(ref result, value);
             RaisePropertyChanged(nameof(ResultDetails));
             RaisePropertyChanged(nameof(CanOpenResult));
+            RaisePropertyChanged(nameof(StatusToolTip));
         }
     }
 
@@ -209,7 +242,10 @@ public sealed class MediaRow(string path) : BindableBase
     public void SetConverted(OperationItemResult itemResult)
     {
         Result = itemResult;
-        Status = itemResult.Status == OperationStatus.Partial || HasWarning ? "Converted with warnings" : "Converted";
+        Warning = itemResult.Status == OperationStatus.Partial
+            ? (string.IsNullOrWhiteSpace(itemResult.Message) ? "Conversion completed with warnings." : itemResult.Message)
+            : null;
+        Status = itemResult.Status == OperationStatus.Partial ? "Converted with warnings" : "Converted";
         State = MediaRowState.Converted;
     }
 

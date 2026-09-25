@@ -9,6 +9,7 @@ public partial class MediaView : UserControl
     {
         InitializeComponent();
         DataContext = model;
+        Loaded += async (_, _) => await model.RefreshSettingsSummaryAsync();
     }
 
     private void ShowInspectionMenu(object sender, RoutedEventArgs e)

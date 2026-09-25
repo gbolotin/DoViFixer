@@ -6,20 +6,59 @@
     <UserControl.Resources>
 
         <DataTemplate x:Key="MediaToolBarTemplate" DataType="{x:Type viewModels:MediaViewModel}">
-            <StackPanel Orientation="Horizontal">
-                <Button Content="＋  Add files" Command="{Binding AddFilesCommand}" Margin="0,0,8,0" />
-                <Button Content="▱  Add folder" Command="{Binding AddFolderCommand}" Margin="0,0,8,0" />
-                <Button Content="Clear all" Command="{Binding ClearAllCommand}" Margin="0,0,8,0" />
-                <Button Content="⌕  Scan" Command="{Binding ScanCommand}" Margin="0,0,8,0" />
-                <Button Content="◎  Inspect ▾" Click="ShowInspectionMenu" IsEnabled="{Binding CanInspect}" Margin="0,0,8,0">
-                    <Button.ContextMenu>
-                        <ContextMenu>
-                            <MenuItem Header="Standard inspection" Command="{Binding InspectCommand}" />
-                            <MenuItem Header="Deep inspection" Command="{Binding DeepInspectCommand}" />
-                        </ContextMenu>
-                    </Button.ContextMenu>
-                </Button>
-                <Button Content="▷  Convert" Command="{Binding ConvertCommand}" />
+            <StackPanel>
+                <WrapPanel>
+                    <Button Content="＋  Add files"
+                            Command="{Binding AddFilesCommand}"
+                            Margin="0,0,8,8" />
+                    <Button Content="▱  Add folder"
+                            Command="{Binding AddFolderCommand}"
+                            Margin="0,0,8,8" />
+                    <Button Content="Clear all"
+                            Command="{Binding ClearAllCommand}"
+                            Margin="0,0,8,8" />
+                    <Button Content="⌕  Scan all"
+                            Command="{Binding ScanCommand}"
+                            ToolTip="Scan every file in the list. If automatic selection is enabled, selections are updated using the conversion policy in Settings."
+                            Margin="0,0,8,8" />
+                    <Button Content="◎  Inspect ▾"
+                            Click="ShowInspectionMenu"
+                            IsEnabled="{Binding CanInspect}"
+                            Margin="0,0,8,8">
+                        <Button.ContextMenu>
+                            <ContextMenu>
+                                <MenuItem Header="Standard inspection" Command="{Binding InspectCommand}" />
+                                <MenuItem Header="Deep inspection" Command="{Binding DeepInspectCommand}" />
+                            </ContextMenu>
+                        </Button.ContextMenu>
+                    </Button>
+                    <Button Content="▷  Convert to DV8.1"
+                            Command="{Binding ConvertDv81Command}"
+                            ToolTip="{Binding OutputSummaryToolTip}"
+                            Margin="0,0,8,8" />
+                    <Button Content="▷  Convert to HDR10"
+                            Command="{Binding ConvertHdrCommand}"
+                            ToolTip="{Binding OutputSummaryToolTip}"
+                            Margin="0,0,0,8" />
+                </WrapPanel>
+                <DockPanel Margin="0,0,0,4">
+                    <Button Content="⚙ Settings"
+                            DockPanel.Dock="Right"
+                            Command="{Binding OpenSettingsCommand}"
+                            ToolTip="{Binding OutputSummaryToolTip}"
+                            Margin="8,0,0,0" />
+                    <TextBlock Text="{Binding OutputSummary}"
+                               TextTrimming="CharacterEllipsis"
+                               ToolTip="{Binding OutputSummaryToolTip}"
+                               VerticalAlignment="Center" />
+                </DockPanel>
+                <WrapPanel>
+                    <TextBlock Text="{Binding RetentionSummary}"
+                               FontWeight="SemiBold"
+                               Margin="0,0,16,4" />
+                    <TextBlock Text="{Binding FelSummary}" Margin="0,0,16,4" />
+                    <TextBlock Text="{Binding ArchiveSummary}" Margin="0,0,0,4" />
+                </WrapPanel>
             </StackPanel>
         </DataTemplate>
 
@@ -123,7 +162,7 @@
                                                 <TextBlock Text="{Binding Status}"
                                                            TextWrapping="Wrap"
                                                            VerticalAlignment="Center"
-                                                           ToolTip="{Binding Details}" />
+                                                           ToolTip="{Binding StatusToolTip}" />
                                                 <TextBlock Text="⚠"
                                                            Foreground="#FFD166"
                                                            FontWeight="SemiBold"
@@ -240,81 +279,13 @@
             </Grid>
         </DataTemplate>
 
-        <DataTemplate x:Key="MediaConversionOptionTemplate" DataType="{x:Type viewModels:MediaViewModel}">
-            <Border Style="{StaticResource Card}">
-                <StackPanel>
-                    <TextBlock Text="Conversion options" Style="{StaticResource Heading}" />
-                    <Grid IsEnabled="{Binding IsIdle}">
-                        <Grid.ColumnDefinitions>
-                            <ColumnDefinition />
-                            <ColumnDefinition Width="1.25*" />
-                            <ColumnDefinition Width="1.2*" />
-                        </Grid.ColumnDefinitions>
-                        <StackPanel Margin="0,0,20,0">
-                            <TextBlock Text="Target" FontWeight="SemiBold" />
-                            <RadioButton Content="Profile 8.1"
-                                 GroupName="Target"
-                                 IsChecked="{Binding Hdr10, Converter={StaticResource Inverse}}" />
-                            <RadioButton Content="HDR10"
-                                 GroupName="Target"
-                                 IsChecked="{Binding Hdr10}" />
-                        </StackPanel>
-                        <StackPanel Grid.Column="1" Margin="0,0,20,0">
-                            <TextBlock Text="Destination" FontWeight="SemiBold" />
-                            <RadioButton Content="Same folder as source"
-                                 GroupName="Destination"
-                                 IsChecked="{Binding OtherFolder, Converter={StaticResource Inverse}}" />
-                            <RadioButton Content="Other folder"
-                                 GroupName="Destination"
-                                 IsChecked="{Binding OtherFolder}" />
-                            <DockPanel IsEnabled="{Binding OtherFolder}">
-                                <Button Content="Browse"
-                                Command="{Binding BrowseDestinationCommand}"
-                                DockPanel.Dock="Right"
-                                Margin="8,0,0,0"
-                                Padding="10,6" />
-                                <TextBox Text="{Binding Destination, UpdateSourceTrigger=PropertyChanged}" AutomationProperties.Name="Output folder" />
-                            </DockPanel>
-                        </StackPanel>
-                        <StackPanel Grid.Column="2">
-                            <TextBlock Text="File handling" FontWeight="SemiBold" />
-                            <RadioButton Content="Keep original"
-                                 GroupName="Retention"
-                                 IsChecked="{Binding ReplaceOriginal, Converter={StaticResource Inverse}}" />
-                            <RadioButton Content="Replace original after verification"
-                                 GroupName="Retention"
-                                 IsChecked="{Binding ReplaceOriginal}" />
-                            <CheckBox Content="Create enhancement-layer archive (EL)" IsChecked="{Binding CreateArchive}" />
-                        </StackPanel>
-                    </Grid>
-                    <ScrollViewer MaxHeight="180"
-                          VerticalScrollBarVisibility="Auto"
-                          Margin="0,12">
-                        <TextBlock Text="{Binding Review}"
-                           Foreground="#FFD166"
-                           TextWrapping="Wrap" />
-                    </ScrollViewer>
-                    <StackPanel Orientation="Horizontal" HorizontalAlignment="Right">
-                        <Button Content="Close options"
-                        Command="{Binding CloseOptionsCommand}"
-                        Margin="0,0,8,0" />
-                        <Button Content="Review changes"
-                        Command="{Binding ReviewCommand}"
-                        Margin="0,0,8,0" />
-                        <Button Content="▷  Approve and start"
-                        Style="{StaticResource Primary}"
-                        Command="{Binding ApproveCommand}" />
-                    </StackPanel>
-                </StackPanel>
-            </Border>
-        </DataTemplate>
 
         <DataTemplate x:Key="MediaStatusTemplate" DataType="{x:Type viewModels:MediaViewModel}">
-            <StackPanel Orientation="Horizontal" TextBlock.Foreground="{DynamicResource TextFillColorSecondaryBrush}">
-                <TextBlock Text="{Binding SelectionSummary}" />
-                <TextBlock Text=" | " />
-                <TextBlock Text="{Binding Status}" TextWrapping="Wrap" />
-            </StackPanel>
+            <TextBlock TextWrapping="Wrap" Foreground="{DynamicResource TextFillColorSecondaryBrush}">
+                <Run Text="{Binding SelectionSummary, Mode=OneWay}" />
+                <Run Text=" | " />
+                <Run Text="{Binding Status, Mode=OneWay}" />
+            </TextBlock>
         </DataTemplate>
 
         <DataTemplate x:Key="MediaCurrentJobProgressTemplate" DataType="{x:Type viewModels:MediaViewModel}">
@@ -432,7 +403,6 @@
             <RowDefinition Height="*" />
             <RowDefinition Height="Auto" />
             <RowDefinition Height="Auto" />
-            <RowDefinition Height="Auto" />
         </Grid.RowDefinitions>
         <ContentControl Content="{Binding}"
                         ContentTemplate="{StaticResource MediaToolBarTemplate}"
@@ -441,18 +411,13 @@
                         ContentTemplate="{StaticResource MediaListWithDetailsTemplate}"
                         Grid.Row="1"/>
         <ContentControl Content="{Binding}"
-                        ContentTemplate="{StaticResource MediaConversionOptionTemplate}"
-                        Grid.Row="2"
-                        Margin="0,14,0,0"
-                        Visibility="{Binding OptionsOpen, Converter={StaticResource Visible}}"/>
-        <ContentControl Content="{Binding}"
                         ContentTemplate="{StaticResource MediaProgressTemplate}"
                         Margin="0,8,0,0"
-                        Grid.Row="3"
+                        Grid.Row="2"
                         Visibility="{Binding IsBusy, Converter={StaticResource Visible}}"/>
         <ContentControl Content="{Binding}"
                         ContentTemplate="{StaticResource MediaStatusTemplate}"
-                        Grid.Row="4"
+                        Grid.Row="3"
                         Margin="0,8,0,0"/>
     </Grid>
 

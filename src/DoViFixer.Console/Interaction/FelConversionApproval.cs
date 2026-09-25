@@ -51,6 +51,6 @@ public sealed class FelConversionApproval(ConsoleRenderer renderer, Func<string,
             }
         }
 
-        return plans.Where(plan => approved.Contains(plan.Id)).ToArray();
+        return [.. plans.Where(plan => approved.Contains(plan.Id))];
     }
 }

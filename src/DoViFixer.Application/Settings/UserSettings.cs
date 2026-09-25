@@ -1,4 +1,5 @@
 using System.Collections.Immutable;
+using System.Text.Json.Serialization;
 using DoViFixer.Application.Dependencies;
 
 namespace DoViFixer.Application.Settings;
@@ -47,6 +48,26 @@ public sealed record UserSettings
     {
         get;
         init;
+    }
+    public bool IncludeSimple
+    {
+        get;
+        init;
+    }
+    public bool ForceComplex
+    {
+        get;
+        init;
+    }
+    [JsonIgnore]
+    public bool AllowFel
+    {
+        get => IncludeSimple || ForceComplex;
+        init
+        {
+            IncludeSimple = value;
+            ForceComplex = value;
+        }
     }
     public AppTheme Theme
     {

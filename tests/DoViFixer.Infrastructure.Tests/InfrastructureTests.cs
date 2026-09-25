@@ -335,6 +335,39 @@ public sealed class InfrastructureTests
     }
 
     [TestMethod]
+    public async Task SettingsStorePersistsIncludeSimpleAndForceComplexIndependently()
+    {
+        var options = new StorageOptions(Path.Combine(directory, "settings-fel"));
+        var store = new SettingsStore(options, NullLogger<SettingsStore>.Instance);
+
+        // Change only IncludeSimple to true
+        await store.UpdateAsync(s => s with { IncludeSimple = true, ForceComplex = false }, default);
+        var loaded1 = await store.ReadAsync(default);
+        Assert.IsTrue(loaded1.IncludeSimple);
+        Assert.IsFalse(loaded1.ForceComplex);
+        Assert.IsTrue(loaded1.AllowFel);
+
+        // Change only ForceComplex to true and IncludeSimple to false
+        await store.UpdateAsync(s => s with { IncludeSimple = false, ForceComplex = true }, default);
+        var loaded2 = await store.ReadAsync(default);
+        Assert.IsFalse(loaded2.IncludeSimple);
+        Assert.IsTrue(loaded2.ForceComplex);
+        Assert.IsTrue(loaded2.AllowFel);
+
+        // Verify AllowFel is not serialized into settings.json
+        string json = await File.ReadAllTextAsync(options.SettingsPath);
+        Assert.IsFalse(json.Contains("\"AllowFel\""), "AllowFel must not be serialized into settings.json");
+
+        // Manually inject AllowFel: true into settings.json with ForceComplex: false to test legacy tolerance
+        string modifiedJson = json.Replace("\"ForceComplex\": true", "\"ForceComplex\": false,\n  \"AllowFel\": true");
+        await File.WriteAllTextAsync(options.SettingsPath, modifiedJson);
+
+        var loaded3 = await store.ReadAsync(default);
+        Assert.IsFalse(loaded3.IncludeSimple);
+        Assert.IsFalse(loaded3.ForceComplex);
+    }
+
+    [TestMethod]
     public async Task RpuParserUsesLevel1OnlyAndIsInsensitiveToWhitespace()
     {
         const string data = """
