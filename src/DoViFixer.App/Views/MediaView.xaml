@@ -270,7 +270,7 @@
             <GridSplitter Grid.Column="1"
                           VerticalAlignment="Stretch"
                           Background="Transparent"
-                          Width="6"
+                         
                           ShowsPreview="False"
                           ResizeDirection="Columns"
                           ResizeBehavior="PreviousAndNext">
