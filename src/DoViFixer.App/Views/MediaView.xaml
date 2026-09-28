@@ -262,11 +262,23 @@
     <DataTemplate x:Key="MediaListWithDetailsTemplate" DataType="{x:Type viewModels:MediaViewModel}">
         <Grid>
             <Grid.ColumnDefinitions>
-                <ColumnDefinition Width="2.2*" />
-                <ColumnDefinition Width="16" />
+                <ColumnDefinition Width="2.2*" MinWidth="240" />
+                <ColumnDefinition Width="Auto" />
                 <ColumnDefinition Width="*" MinWidth="280" />
             </Grid.ColumnDefinitions>
             <ContentControl Content="{Binding}" ContentTemplate="{StaticResource MediaListTemplate}" />
+            <GridSplitter Grid.Column="1"
+                          VerticalAlignment="Stretch"
+                          Background="Transparent"
+                          Width="6"
+                          ShowsPreview="False"
+                          ResizeDirection="Columns"
+                          ResizeBehavior="PreviousAndNext">
+                <GridSplitter.Resources>
+                    <SolidColorBrush x:Key="GridsplitterBackgroundPointerOver" Color="Transparent" />
+                    <SolidColorBrush x:Key="GridsplitterBackgroundPressed" Color="Transparent" />
+                </GridSplitter.Resources>
+            </GridSplitter>
             <ContentControl Content="{Binding}" ContentTemplate="{StaticResource MediaDetailsTemplate}" Grid.Column="2"/>
         </Grid>
     </DataTemplate>

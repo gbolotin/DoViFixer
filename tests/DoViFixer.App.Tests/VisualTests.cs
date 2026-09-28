@@ -4,6 +4,7 @@ using System.Windows;
 using System.Windows.Automation.Peers;
 using System.Windows.Automation.Provider;
 using System.Windows.Controls;
+using System.Windows.Controls.Primitives;
 using System.Windows.Media;
 using System.Windows.Media.Imaging;
 using System.Windows.Threading;
@@ -93,6 +94,19 @@ public sealed class VisualTests
             var fileColumn = ((GridView)list.View).Columns[0];
             double originalWidth = fileColumn.Width;
             fileColumn.Width = 400;
+            var splitter = Descendants<GridSplitter>(mediaView).Single();
+            var columns = ((Grid)splitter.Parent).ColumnDefinitions;
+            var originalListWidth = columns[0].Width;
+            var originalDetailsWidth = columns[2].Width;
+            double listWidth = columns[0].ActualWidth;
+            double detailsWidth = columns[2].ActualWidth;
+            Assert.IsTrue(splitter.IsVisible && splitter.Focusable);
+            DragSplitter(splitter, 80);
+            await LayoutAsync(window);
+            Assert.AreEqual(listWidth + 80, columns[0].ActualWidth, 1);
+            Assert.AreEqual(detailsWidth - 80, columns[2].ActualWidth, 1);
+            double resizedListWidth = columns[0].ActualWidth;
+            double resizedDetailsWidth = columns[2].ActualWidth;
             var retainedRoots = new Dictionary<object, DependencyObject>
             {
                 [media] = VisualTreeHelper.GetChild(mediaView, 0)
@@ -153,6 +167,16 @@ public sealed class VisualTests
             Assert.IsFalse(media.Files[0].IsSelected);
             Assert.AreSame(list, Descendants<ListView>(mediaView).Single());
             Assert.AreEqual(400, fileColumn.Width, "Media must retain resized columns.");
+            Assert.AreEqual(resizedListWidth, columns[0].ActualWidth, 1, "Navigation must retain the panel split.");
+            Assert.AreEqual(resizedDetailsWidth, columns[2].ActualWidth, 1);
+            DragSplitter(splitter, 10000);
+            await LayoutAsync(window);
+            Assert.AreEqual(280, columns[2].ActualWidth, 1, "Details must keep their minimum width.");
+            DragSplitter(splitter, -10000);
+            await LayoutAsync(window);
+            Assert.AreEqual(240, columns[0].ActualWidth, 1, "The list must keep its minimum width.");
+            columns[0].Width = originalListWidth;
+            columns[2].Width = originalDetailsWidth;
             fileColumn.Width = originalWidth;
             Assert.AreSame(media.Files, list.ItemsSource);
             Assert.AreSame(media.Focused, list.SelectedItem);
@@ -162,6 +186,7 @@ public sealed class VisualTests
             window.Height = 600;
             await LayoutAsync(window);
             var content = (FrameworkElement)window.Content;
+            AssertInside(splitter, content);
             foreach (string caption in new[] { "⌕  Scan all", "◎  Inspect", "◎  Deep Inspect", "▷  Convert to DV8.1", "▷  Convert to HDR10", "⚙ Settings" })
             {
                 AssertInside(Button(mediaView, caption), content);
@@ -496,6 +521,13 @@ public sealed class VisualTests
         window.Close();
         await LayoutAsync(window);
         Assert.IsTrue(closed, "Closing must succeed after recovery.");
+    }
+
+    private static void DragSplitter(GridSplitter splitter, double horizontalChange)
+    {
+        splitter.RaiseEvent(new DragStartedEventArgs(0, 0) { RoutedEvent = Thumb.DragStartedEvent });
+        splitter.RaiseEvent(new DragDeltaEventArgs(horizontalChange, 0) { RoutedEvent = Thumb.DragDeltaEvent });
+        splitter.RaiseEvent(new DragCompletedEventArgs(horizontalChange, 0, false) { RoutedEvent = Thumb.DragCompletedEvent });
     }
 
     private static Button Button(DependencyObject parent, string caption) => Descendants<Button>(parent).Single(button => Equals(button.Content, caption));
