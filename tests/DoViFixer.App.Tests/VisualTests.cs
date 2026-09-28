@@ -83,6 +83,7 @@ public sealed class VisualTests
             Assert.AreSame(media, navigation.SelectedItem);
             Assert.HasCount(3, navigation.Items);
 
+            await VerifyEmptyMediaAsync(runtime, media, window, navigation, mediaView);
             await media.AddAsync([@"C:\Media\Mountain.mkv", @"C:\Media\Mountain2.mkv"]);
             media.Focused = media.Files[1];
             media.Files[0].IsSelected = false;
@@ -180,6 +181,144 @@ public sealed class VisualTests
             source.Switch.Level = previousLevel;
             app.Shutdown();
         }
+    }
+
+    private static async Task VerifyEmptyMediaAsync(TestRuntime runtime, MediaViewModel media, Window window, ListBox navigation, DependencyObject mediaView)
+    {
+        var panel = Descendants<StackPanel>(mediaView).Single(element => element.Name == "EmptyMediaPanel");
+        var status = Descendants<TextBlock>(panel).Single(element => element.Name == "EmptyMediaStatus");
+        var addFiles = Button(panel, "Add files");
+        var addFolder = Button(panel, "Add folder");
+        Assert.IsTrue(panel.IsVisible);
+        Assert.IsFalse(status.IsVisible, "Ready must not clutter the empty state.");
+        Assert.IsTrue(navigation.IsVisible && navigation.IsEnabled);
+        Assert.AreSame(media.AddFilesCommand, addFiles.Command);
+        Assert.AreSame(media.AddFolderCommand, addFolder.Command);
+        Assert.IsTrue(addFiles.IsEnabled && addFolder.IsEnabled);
+        Assert.IsTrue(addFiles.Focus());
+        Assert.IsTrue(addFolder.Focus());
+        CollectionAssert.AreEquivalent(new[] { addFiles, addFolder }, Descendants<Button>(mediaView).Where(button => button.IsVisible).ToArray());
+
+        window.Width = 800;
+        window.Height = 600;
+        await LayoutAsync(window);
+        var content = (FrameworkElement)window.Content;
+        AssertInside(panel, content);
+        AssertInside(addFiles, content);
+        AssertInside(addFolder, content);
+        foreach (var text in Descendants<TextBlock>(panel).Where(text => text.IsVisible))
+        {
+            AssertInside(text, content);
+        }
+        SaveRender(content, "media-empty-minimum");
+
+        // Cancelled pickers leave the same usable empty state.
+        foreach (var button in new[] { addFiles, addFolder })
+        {
+            Invoke(button);
+            await LayoutAsync(window);
+            await media.Completion;
+            Assert.IsEmpty(media.Files);
+            Assert.IsTrue(panel.IsVisible);
+            Assert.IsTrue(addFiles.IsEnabled && addFolder.IsEnabled);
+        }
+
+        runtime.PickedFolder = @"C:\Media";
+        runtime.DiscoverFiles = _ => [];
+        Invoke(addFolder);
+        await LayoutAsync(window);
+        await media.Completion;
+        await LayoutAsync(window);
+        Assert.IsEmpty(media.Files);
+        Assert.IsTrue(panel.IsVisible);
+
+        runtime.DiscoverFiles = _ => throw new IOException("Folder unavailable");
+        Invoke(addFolder);
+        await LayoutAsync(window);
+        await media.Completion;
+        await LayoutAsync(window);
+        Assert.IsTrue(status.IsVisible);
+        Assert.AreEqual(@"Could not add C:\Media: Folder unavailable", status.Text);
+        AssertInside(status, content);
+
+        var started = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+        using var release = new ManualResetEventSlim();
+        runtime.DiscoverFiles = _ =>
+        {
+            started.TrySetResult();
+            // IFileDiscovery is synchronous; hold its worker while checking the UI.
+            if (!release.Wait(TimeSpan.FromSeconds(10)))
+            {
+                throw new TimeoutException("Discovery was not released by the visual test.");
+            }
+            return [];
+        };
+        var discovering = media.AddFolderCommand.ExecuteAsync();
+        try
+        {
+            await started.Task.WaitAsync(TimeSpan.FromSeconds(10));
+            await LayoutAsync(window);
+            Assert.IsTrue(panel.IsVisible);
+            Assert.IsFalse(addFiles.IsEnabled || addFolder.IsEnabled);
+            Assert.IsTrue(Descendants<ProgressBar>(mediaView).Any(progress => progress.IsVisible));
+            var cancel = Button(mediaView, "Cancel batch");
+            Assert.IsTrue(cancel.IsVisible);
+            Assert.AreSame(media.CancelCommand, cancel.Command);
+            AssertInside(cancel, content);
+            Invoke(cancel);
+            await LayoutAsync(window);
+        }
+        finally
+        {
+            release.Set();
+            await discovering.WaitAsync(TimeSpan.FromSeconds(10));
+            runtime.DiscoverFiles = null;
+        }
+        await LayoutAsync(window);
+        Assert.IsTrue(addFiles.IsEnabled && addFolder.IsEnabled);
+
+        runtime.PickedFiles = [@"C:\Media\Mountain.mkv"];
+        Invoke(addFiles);
+        await LayoutAsync(window);
+        await media.Completion;
+        await LayoutAsync(window);
+        Assert.HasCount(1, media.Files);
+        Assert.IsFalse(panel.IsVisible);
+        Assert.IsFalse(addFiles.Focus());
+        var list = Descendants<ListView>(mediaView).Single();
+        Assert.IsTrue(list.IsVisible);
+        var fileColumn = ((GridView)list.View).Columns[0];
+        double originalWidth = fileColumn.Width;
+        fileColumn.Width = 400;
+
+        Invoke(Button(mediaView, "Clear all"));
+        await LayoutAsync(window);
+        Assert.IsEmpty(media.Files);
+        Assert.IsTrue(panel.IsVisible);
+        Assert.IsFalse(status.IsVisible, "Clearing should restore the neutral empty state.");
+        Assert.IsFalse(list.IsVisible);
+        CollectionAssert.AreEquivalent(new[] { addFiles, addFolder }, Descendants<Button>(mediaView).Where(button => button.IsVisible).ToArray());
+        foreach (var hidden in Descendants<Control>(mediaView).Where(control => !control.IsVisible && control.Focusable && control.IsEnabled))
+        {
+            Assert.IsFalse(hidden.Focus(), "Hidden media controls must not receive focus.");
+        }
+
+        Invoke(addFolder);
+        await LayoutAsync(window);
+        await media.Completion;
+        await LayoutAsync(window);
+        Assert.HasCount(1, media.Files);
+        Assert.IsFalse(panel.IsVisible);
+        Assert.IsTrue(list.IsVisible);
+        Assert.AreSame(list, Descendants<ListView>(mediaView).Single());
+        Assert.AreEqual(400, fileColumn.Width, "Clearing and adding must retain column widths.");
+        fileColumn.Width = originalWidth;
+        media.ClearAllCommand.Execute();
+        runtime.PickedFiles = [];
+        runtime.PickedFolder = null;
+        window.Width = 1400;
+        window.Height = 900;
+        await LayoutAsync(window);
     }
 
     private static async Task VerifyRowActionsAsync(TestRuntime runtime, MediaViewModel media, ListView list, Window window, ListBox navigation, DependencyObject mediaView)

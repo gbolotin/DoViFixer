@@ -386,6 +386,14 @@
         </Border>
     </DataTemplate>
 
+    <Style x:Key="PopulatedMediaContent" TargetType="ContentControl">
+        <Style.Triggers>
+            <DataTrigger Binding="{Binding Files.Count}" Value="0">
+                <Setter Property="Visibility" Value="Collapsed" />
+            </DataTrigger>
+        </Style.Triggers>
+    </Style>
+
     <DataTemplate DataType="{x:Type viewModels:MediaViewModel}">
         <Grid>
             <Grid.RowDefinitions>
@@ -394,10 +402,68 @@
                 <RowDefinition Height="Auto" />
                 <RowDefinition Height="Auto" />
             </Grid.RowDefinitions>
+            <StackPanel x:Name="EmptyMediaPanel"
+                        Grid.RowSpan="2"
+                        HorizontalAlignment="Center"
+                        VerticalAlignment="Center"
+                        MaxWidth="440"
+                        Margin="24">
+                <StackPanel.Style>
+                    <Style TargetType="StackPanel">
+                        <Setter Property="Visibility" Value="Collapsed" />
+                        <Style.Triggers>
+                            <DataTrigger Binding="{Binding Files.Count}" Value="0">
+                                <Setter Property="Visibility" Value="Visible" />
+                            </DataTrigger>
+                        </Style.Triggers>
+                    </Style>
+                </StackPanel.Style>
+                <TextBlock Text="No media files"
+                           Style="{StaticResource Heading}"
+                           TextAlignment="Center"
+                           TextWrapping="Wrap" />
+                <TextBlock Text="Add files or choose a folder to get started."
+                           Foreground="{DynamicResource TextFillColorSecondaryBrush}"
+                           TextAlignment="Center"
+                           TextWrapping="Wrap" />
+                <WrapPanel HorizontalAlignment="Center" Margin="0,20,0,0">
+                    <Button Content="Add files"
+                            Command="{Binding AddFilesCommand}"
+                            Style="{StaticResource Primary}"
+                            Margin="4" />
+                    <Button Content="Add folder"
+                            Command="{Binding AddFolderCommand}"
+                            Margin="4" />
+                </WrapPanel>
+                <TextBlock x:Name="EmptyMediaStatus"
+                           Text="{Binding Status}"
+                           TextAlignment="Center"
+                           TextWrapping="Wrap"
+                           Foreground="{DynamicResource TextFillColorSecondaryBrush}"
+                           Margin="0,16,0,0">
+                    <TextBlock.Style>
+                        <Style TargetType="TextBlock">
+                            <Style.Triggers>
+                                <DataTrigger Binding="{Binding Status}" Value="Ready">
+                                    <Setter Property="Visibility" Value="Collapsed" />
+                                </DataTrigger>
+                                <DataTrigger Binding="{Binding Status}" Value="File list cleared.">
+                                    <Setter Property="Visibility" Value="Collapsed" />
+                                </DataTrigger>
+                                <DataTrigger Binding="{Binding Status}" Value="">
+                                    <Setter Property="Visibility" Value="Collapsed" />
+                                </DataTrigger>
+                            </Style.Triggers>
+                        </Style>
+                    </TextBlock.Style>
+                </TextBlock>
+            </StackPanel>
             <ContentControl Content="{Binding}"
+                    Style="{StaticResource PopulatedMediaContent}"
                     ContentTemplate="{StaticResource MediaToolBarTemplate}"
                     Margin="0,0,0,16"/>
             <ContentControl Content="{Binding}"
+                    Style="{StaticResource PopulatedMediaContent}"
                     ContentTemplate="{StaticResource MediaListWithDetailsTemplate}"
                     Grid.Row="1"/>
             <ContentControl Content="{Binding}"
@@ -406,6 +472,7 @@
                     Grid.Row="2"
                     Visibility="{Binding IsBusy, Converter={StaticResource Visible}}"/>
             <ContentControl Content="{Binding}"
+                    Style="{StaticResource PopulatedMediaContent}"
                     ContentTemplate="{StaticResource MediaStatusTemplate}"
                     Grid.Row="3"
                     Margin="0,8,0,0"/>

@@ -87,7 +87,8 @@ internal sealed class TestRuntime : IFileDiscovery, IFileOperations, IMediaProbe
     }
 
     public void Dispose() => container?.Dispose();
-    public IReadOnlyList<string> Discover(string input, int recursiveDepth, bool cleanup = false) => [Path.GetFullPath(input)];
+    public Func<string, IReadOnlyList<string>>? DiscoverFiles { get; set; }
+    public IReadOnlyList<string> Discover(string input, int recursiveDepth, bool cleanup = false) => DiscoverFiles?.Invoke(input) ?? [Path.GetFullPath(input)];
     public FileIdentity Identify(string path) => new(Path.GetFullPath(path), 40000000000, new DateTime(2026, 9, 11));
     public string PrepareOutputPath(string input, string? outputDirectory, string suffix, bool allowInput = false) => Path.Combine(outputDirectory ?? Path.GetDirectoryName(input)!, Path.GetFileNameWithoutExtension(input) + suffix);
     public FileIdentity RenameOriginal(FileIdentity identity) => identity with
@@ -211,8 +212,10 @@ internal sealed class TestRuntime : IFileDiscovery, IFileOperations, IMediaProbe
     public Task RestoreAsync(MediaInfo media, ArchiveManifest? manifest, ITemporaryWorkspace workspace, string stagedOutput, CancellationToken cancellationToken) => Task.CompletedTask;
     public Task<IReadOnlyList<string>> VerifyAsync(MediaInfo source, string output, DolbyVisionProfile expectedProfile, ITemporaryWorkspace workspace, CancellationToken cancellationToken, IProgress<OperationProgress>? progress = null, Guid operationId = default) => Task.FromResult<IReadOnlyList<string>>([]);
     public IStagedOutput Stage(string destination) => new Staged(destination);
-    public string[] PickFiles(string filter = "Matroska media|*.mkv") => [];
-    public string? PickFolder() => null;
+    public string[] PickedFiles { get; set; } = [];
+    public string? PickedFolder { get; set; }
+    public string[] PickFiles(string filter = "Matroska media|*.mkv") => PickedFiles;
+    public string? PickFolder() => PickedFolder;
     public string? OpenedFolder
     {
         get;
