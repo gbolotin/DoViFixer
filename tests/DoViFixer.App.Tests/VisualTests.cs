@@ -91,6 +91,7 @@ public sealed class VisualTests
             media.Files[0].IsSelected = false;
             await LayoutAsync(window);
             var list = Descendants<ListView>(mediaView).Single();
+            await VerifyLastColumnSizingAsync(list, window);
             var fileColumn = ((GridView)list.View).Columns[0];
             double originalWidth = fileColumn.Width;
             fileColumn.Width = 400;
@@ -207,6 +208,56 @@ public sealed class VisualTests
             source.Switch.Level = previousLevel;
             app.Shutdown();
         }
+    }
+
+    private static async Task VerifyLastColumnSizingAsync(ListView list, Window window)
+    {
+        var grid = (GridView)list.View;
+        var scroll = Descendants<ScrollViewer>(list).First();
+        double originalWindowWidth = window.Width;
+        double originalColumnWidth = grid.Columns[0].Width;
+        var originalPadding = list.Padding;
+        var originalScrollVisibility = scroll.VerticalScrollBarVisibility;
+        window.Width = 1800;
+        await LayoutAsync(window);
+        Assert.IsTrue(grid.Columns[^1].Width > 255, "The last column must expand into spare space.");
+        Assert.AreEqual(0, scroll.ScrollableWidth, 0.1, "Filling must not introduce horizontal overflow.");
+
+        double wideWidth = grid.Columns[^1].Width;
+        grid.Columns[0].Width += 80;
+        await LayoutAsync(window);
+        Assert.AreEqual(wideWidth - 80, grid.Columns[^1].Width, 0.1, "Resizing another column must resize the last one.");
+
+        window.Width -= 100;
+        await LayoutAsync(window);
+        Assert.IsTrue(grid.Columns[^1].Width < wideWidth - 80, "The last column must shrink with the window.");
+        double withoutScrollbar = grid.Columns[^1].Width;
+        scroll.VerticalScrollBarVisibility = ScrollBarVisibility.Visible;
+        await LayoutAsync(window);
+        Assert.IsTrue(grid.Columns[^1].Width < withoutScrollbar, "Reserve space for the Fluent scrollbar overlay.");
+
+        list.Padding = new Thickness(13, 0, 19, 0);
+        await LayoutAsync(window);
+        Assert.AreEqual(0, scroll.ScrollableWidth, 0.1, "List and row padding must not cause horizontal overflow.");
+        var viewport = (ScrollContentPresenter)scroll.Template.FindName("PART_ScrollContentPresenter", scroll);
+        var bar = (ScrollBar)scroll.Template.FindName("PART_VerticalScrollBar", scroll);
+        var row = Descendants<GridViewRowPresenter>(list).First();
+        double columnsRight = row.TranslatePoint(new Point(grid.Columns.Sum(column => column.ActualWidth), 0), viewport).X;
+        double scrollbarLeft = bar.TranslatePoint(new Point(), viewport).X;
+        Assert.IsTrue(columnsRight <= scrollbarLeft && scrollbarLeft - columnsRight < 20,
+            $"Columns must fill the usable viewport without overlapping the scrollbar: {columnsRight} / {scrollbarLeft}.");
+        SaveRender((FrameworkElement)window.Content, "media-column-fill");
+
+        grid.Columns[0].Width = 2000;
+        await LayoutAsync(window);
+        Assert.AreEqual(255, grid.Columns[^1].Width, 0.1, "Keep actions usable when there is insufficient space.");
+        Assert.IsTrue(scroll.ScrollableWidth > 0, "Narrow layouts must remain horizontally scrollable.");
+
+        grid.Columns[0].Width = originalColumnWidth;
+        list.Padding = originalPadding;
+        scroll.VerticalScrollBarVisibility = originalScrollVisibility;
+        window.Width = originalWindowWidth;
+        await LayoutAsync(window);
     }
 
     private static async Task VerifyEmptyMediaAsync(TestRuntime runtime, MediaViewModel media, Window window, ListBox navigation, DependencyObject mediaView)

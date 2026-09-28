@@ -56,7 +56,9 @@
     </DataTemplate>
 
     <DataTemplate x:Key="MediaListTemplate" DataType="{x:Type viewModels:MediaViewModel}">
-        <ListView ItemsSource="{Binding Files}" SelectedItem="{Binding Focused}">
+        <ListView ItemsSource="{Binding Files}"
+                  SelectedItem="{Binding Focused}"
+                  p:GridViewSizing.LastColumnMinimumWidth="255">
             <ListView.View>
                 <GridView>
                     <GridViewColumn Header="File" Width="238">
