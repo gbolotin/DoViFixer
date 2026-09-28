@@ -44,7 +44,11 @@ public sealed class MediaViewModel : OperationViewModel, INavigationPage, IIniti
         AddFilesCommand = new(() => AddAsync(dialogs.PickFiles()), () => IsIdle);
         AddFolderCommand = new(() => AddAsync(dialogs.PickFolder() is { } folder ? [folder] : []), () => IsIdle);
         ScanCommand = new(ScanAllAsync, CanScan);
-        Files.CollectionChanged += (_, _) => CommandsChanged();
+        Files.CollectionChanged += (_, _) =>
+        {
+            RaisePropertyChanged(nameof(IsFileListEmpty));
+            CommandsChanged();
+        };
         InspectCommand = new(() => AnalyzeAsync(AnalysisMethod.FullRpu), CanOperate);
         DeepInspectCommand = new(() => AnalyzeAsync(AnalysisMethod.DeepInspection), CanOperate);
         ConvertDv81Command = new(() => ConvertBatchAsync(ConversionTarget.Profile81), CanOperate);
@@ -89,13 +93,14 @@ public sealed class MediaViewModel : OperationViewModel, INavigationPage, IIniti
         Progress.PropertyChanged += (_, _) => NotifyActiveProgress();
         PropertyChanged += (_, e) =>
         {
-            if (e.PropertyName is nameof(Status) or nameof(IsBusy))
+            if (e.PropertyName is nameof(StatusMessage) or nameof(IsBusy))
             {
                 NotifyActiveProgress();
             }
         };
     }
     public ObservableCollection<MediaRow> Files { get; } = [];
+    public bool IsFileListEmpty => Files.Count == 0;
     public BatchProgressViewModel BatchProgress { get; } = new();
     public RelayCommand PauseBatchCommand { get; }
     public string PauseBatchText => control?.IsPaused == true ? "Resume" : "Pause";
@@ -112,7 +117,7 @@ public sealed class MediaViewModel : OperationViewModel, INavigationPage, IIniti
         ? control?.IsPaused == true
             ? $"{BatchProgress.Summary} · {(BatchProgress.CurrentJob is null ? "Paused" : "Pausing after current job")}"
             : BatchProgress.Summary
-        : Status;
+        : StatusMessage;
     public string? ActiveProgressToolTip => BatchProgress.IsRunning
         ? "Processed includes completed, failed, cancelled and skipped files. Each file has equal weight in the batch."
         : null;
@@ -309,7 +314,7 @@ public sealed class MediaViewModel : OperationViewModel, INavigationPage, IIniti
             }
             catch (Exception ex) when (ex is not OperationCanceledException)
             {
-                Status = $"Could not add {input}: {ex.Message}";
+                SetStatus(ViewStatus.Error, $"Could not add {input}: {ex.Message}");
             }
         }
 
@@ -390,7 +395,7 @@ public sealed class MediaViewModel : OperationViewModel, INavigationPage, IIniti
     {
         control = new(rows.Select(r => r.Path));
         BatchProgress.Begin(rows.Length, operationName);
-        Status = $"{operationName} batch in progress.";
+        SetStatus(ViewStatus.Progress, $"{operationName} batch in progress.");
         foreach (var row in Files)
         {
             row.SelectionEnabled = false;
@@ -522,7 +527,7 @@ public sealed class MediaViewModel : OperationViewModel, INavigationPage, IIniti
                     row.IsSelected = false;
                 }
             }), token);
-            Status = $"{(method == AnalysisMethod.SampledRpu ? "Scan" : "Inspection")}: {Summary(results)}";
+            SetStatus(ViewStatus.Result, $"{(method == AnalysisMethod.SampledRpu ? "Scan" : "Inspection")}: {Summary(results)}");
         }
         finally
         {
@@ -572,7 +577,7 @@ public sealed class MediaViewModel : OperationViewModel, INavigationPage, IIniti
 
         if (!await dependencies.EnsureAsync(progress, token))
         {
-            Status = "Required tools are unavailable.";
+            SetStatus(ViewStatus.ToolsUnavailable);
             return;
         }
 
@@ -669,7 +674,7 @@ public sealed class MediaViewModel : OperationViewModel, INavigationPage, IIniti
                 }
             }), token);
 
-            Status = $"{opName}: {Summary(result)}";
+            SetStatus(ViewStatus.Result, $"{opName}: {Summary(result)}");
         }
         finally
         {
@@ -692,7 +697,7 @@ public sealed class MediaViewModel : OperationViewModel, INavigationPage, IIniti
         Files.Clear();
         Focused = null;
         InvalidatePlan();
-        Status = "File list cleared.";
+        SetStatus(ViewStatus.FileListCleared);
         RaisePropertyChanged(nameof(SelectionSummary));
         RaisePropertyChanged(nameof(AllFilesSelected));
         CommandsChanged();

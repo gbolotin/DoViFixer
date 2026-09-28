@@ -1,4 +1,5 @@
 using DoViFixer.App.ViewModels;
+using DoViFixer.App.Presentation;
 using Microsoft.VisualStudio.TestTools.UnitTesting;
 using Microsoft.Extensions.DependencyInjection;
 
@@ -6,6 +7,30 @@ namespace DoViFixer.App.Tests;
 [TestClass]
 public sealed class ViewModelTests
 {
+    [TestMethod]
+    public void EmptyFileListNotifiesBindingsOnAddRemoveAndClear()
+    {
+        using var runtime = new TestRuntime();
+        var model = runtime.Container.GetRequiredService<MediaViewModel>();
+        var states = new List<bool>();
+        model.PropertyChanged += (_, e) =>
+        {
+            if (e.PropertyName == nameof(MediaViewModel.IsFileListEmpty))
+            {
+                states.Add(model.IsFileListEmpty);
+            }
+        };
+
+        Assert.IsTrue(model.IsFileListEmpty);
+        model.Files.Add(new MediaRow(@"C:\Media\Mountain.mkv"));
+        model.Files.RemoveAt(0);
+        model.Files.Add(new MediaRow(@"C:\Media\Ocean.mkv"));
+        model.ClearAllCommand.Execute();
+
+        CollectionAssert.AreEqual(new[] { false, true, false, true }, states);
+        Assert.IsTrue(model.IsFileListEmpty);
+    }
+
     [TestMethod]
     public async Task ShellNavigationLoadsSettingsAndRetainsPageState()
     {
@@ -456,7 +481,7 @@ public sealed class ViewModelTests
         await model.BackupCommand.ExecuteAsync();
         Assert.HasCount(1, runtime.Reviews);
         Assert.IsTrue(runtime.Reviews[0].Contains(@"C:\Media\Mountain.dovi"));
-        Assert.AreEqual("Backup not approved.", model.Status);
+        Assert.AreEqual(ViewStatus.BackupNotApproved, model.Status);
     }
 
     [TestMethod]
@@ -902,7 +927,7 @@ public sealed class ViewModelTests
         Assert.IsFalse(model.BatchProgress.IsRunning);
         Assert.AreEqual(0, model.ActiveProgressPercent);
         Assert.IsFalse(model.ActiveProgressIndeterminate);
-        Assert.AreEqual("Ready", model.ActiveProgressSummary);
+        Assert.AreEqual("", model.ActiveProgressSummary);
 
         var progressUpdated = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
         model.PropertyChanged += (_, args) =>
@@ -1124,13 +1149,14 @@ public sealed class ViewModelTests
         settings.OtherFolder = true;
         await settings.SaveTask;
 
-        Assert.AreEqual("Choose an output folder.", settings.Status);
+        Assert.AreEqual(ViewStatus.Error, settings.Status);
+        Assert.AreEqual("Choose an output folder.", settings.StatusMessage);
         Assert.IsNull(runtime.Settings.OutputDirectory);
 
         settings.Destination = @"C:\Media\Chosen";
         await settings.SaveTask;
 
-        Assert.AreEqual("Settings saved.", settings.Status);
+        Assert.AreEqual(ViewStatus.SettingsSaved, settings.Status);
         Assert.AreEqual(@"C:\Media\Chosen", runtime.Settings.OutputDirectory);
     }
 }

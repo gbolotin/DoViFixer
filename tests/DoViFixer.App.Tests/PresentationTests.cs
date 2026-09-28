@@ -10,6 +10,17 @@ namespace DoViFixer.App.Tests;
 public sealed class PresentationTests
 {
     [TestMethod]
+    public void InverseVisibilityShowsOnlyFalse()
+    {
+        var converter = new InverseBooleanToVisibilityConverter();
+        Assert.AreEqual(Visibility.Visible, converter.Convert(false, typeof(Visibility), null!, CultureInfo.InvariantCulture));
+        foreach (object value in new object[] { true, null!, DependencyProperty.UnsetValue })
+        {
+            Assert.AreEqual(Visibility.Collapsed, converter.Convert(value, typeof(Visibility), null!, CultureInfo.InvariantCulture));
+        }
+    }
+
+    [TestMethod]
     public void PageVisibilityRequiresTheSameAvailableObject()
     {
         var converter = new ReferenceEqualsToVisibilityConverter();

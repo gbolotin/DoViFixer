@@ -1,4 +1,5 @@
 using DoViFixer.App.ViewModels;
+using DoViFixer.App.Presentation;
 using DoViFixer.Application.Abstractions;
 using DoViFixer.Application.Settings;
 using Microsoft.VisualStudio.TestTools.UnitTesting;
@@ -62,7 +63,8 @@ public sealed class SettingsPersistenceTests
         await store.Started.Task.WaitAsync(TimeSpan.FromSeconds(10));
         store.Release.SetException(new IOException("Settings unavailable"));
         await shell.NavigationTask.WaitAsync(TimeSpan.FromSeconds(10));
-        Assert.AreEqual("Settings unavailable", shell.Settings.Status);
+        Assert.AreEqual(ViewStatus.Error, shell.Settings.Status);
+        Assert.AreEqual("Settings unavailable", shell.Settings.StatusMessage);
         Assert.IsTrue(shell.CanNavigate);
         var archive = shell.Pages.OfType<ArchiveViewModel>().Single();
         shell.CurrentPage = archive;
@@ -170,12 +172,14 @@ public sealed class SettingsPersistenceTests
         shell.Settings.ReplaceOriginal = false;
         await shell.Settings.SaveTask;
         Assert.AreEqual("Directory unavailable", shell.Settings.SaveError);
-        Assert.AreEqual(shell.Settings.SaveError, shell.Settings.Status);
+        Assert.AreEqual(ViewStatus.Error, shell.Settings.Status);
+        Assert.AreEqual(shell.Settings.SaveError, shell.Settings.StatusMessage);
         Assert.IsFalse(shell.CanNavigate);
 
         await media.ConvertDv81Command.ExecuteAsync();
         Assert.AreEqual(0, runtime.Conversions);
-        Assert.AreEqual("Directory unavailable", media.Status);
+        Assert.AreEqual(ViewStatus.Error, media.Status);
+        Assert.AreEqual("Directory unavailable", media.StatusMessage);
         await Assert.ThrowsAsync<InvalidOperationException>(() => shell.CancelAndWaitAsync());
 
         runtime.FailDirectoryValidation = false;

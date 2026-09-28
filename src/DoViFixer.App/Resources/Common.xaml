@@ -5,6 +5,7 @@
         <ResourceDictionary Source="pack://application:,,,/PresentationFramework.Fluent;component/Themes/Fluent.xaml" />
     </ResourceDictionary.MergedDictionaries>
     <BooleanToVisibilityConverter x:Key="Visible" />
+    <p:InverseBooleanToVisibilityConverter x:Key="InverseVisible" />
     <p:InverseBooleanConverter x:Key="Inverse" />
     <p:ReferenceEqualsToVisibilityConverter x:Key="ReferenceEqualsToVisibility" />
     <SolidColorBrush x:Key="Accent" Color="{DynamicResource {x:Static SystemColors.AccentColorKey}}" />

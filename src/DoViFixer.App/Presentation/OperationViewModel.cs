@@ -4,9 +4,30 @@ using DoViFixer.Application.Operations;
 namespace DoViFixer.App.Presentation;
 public abstract class OperationViewModel : ObservableObject
 {
+    private static readonly Dictionary<ViewStatus, string> statusTexts = new()
+    {
+        [ViewStatus.Ready] = "Ready",
+        [ViewStatus.FileListCleared] = "File list cleared.",
+        [ViewStatus.Cancelled] = "Cancelled; cleanup finished.",
+        [ViewStatus.ToolsUnavailable] = "Required tools are unavailable.",
+        [ViewStatus.BackupNotApproved] = "Backup not approved.",
+        [ViewStatus.RestoreNotApproved] = "Restore not approved.",
+        [ViewStatus.CleanupNotApproved] = "Cleanup not approved.",
+        [ViewStatus.NoBackupsFound] = "No retained backup files found.",
+        [ViewStatus.SettingsLoaded] = "Settings loaded.",
+        [ViewStatus.SettingsSaved] = "Settings saved.",
+        [ViewStatus.SettingsDiscarded] = "Unsaved changes discarded. Using the last saved settings.",
+        [ViewStatus.ToolsReady] = "All tools ready.",
+        [ViewStatus.ToolsNeedAttention] = "Tools need attention. Set a validated path or open dependency setup.",
+        [ViewStatus.DependencySetupIncomplete] = "Dependency setup incomplete.",
+        [ViewStatus.ToolPathSaved] = "Validated tool path saved and applied.",
+        [ViewStatus.ToolOverrideReset] = "Tool override reset. Check tools to rediscover."
+    };
+
     private CancellationTokenSource? cancellation;
     private bool isBusy;
-    private string status = "Ready";
+    private ViewStatus status = ViewStatus.Ready;
+    private string statusMessage = "";
 
     public ProgressViewModel Progress { get; } = new();
 
@@ -45,10 +66,28 @@ public abstract class OperationViewModel : ObservableObject
     }
 
     public bool IsIdle => !IsBusy;
-    public string Status
+    public ViewStatus Status => status;
+    public string StatusMessage => statusMessage;
+    public string StatusText => statusTexts.TryGetValue(Status, out string? text) ? text : StatusMessage;
+
+    public void SetStatus(ViewStatus value, string message = "")
     {
-        get => status;
-        set => SetProperty(ref status, value);
+        bool statusChanged = status != value;
+        bool messageChanged = statusMessage != message;
+        status = value;
+        statusMessage = message;
+        if (statusChanged)
+        {
+            RaisePropertyChanged(nameof(Status));
+        }
+        if (messageChanged)
+        {
+            RaisePropertyChanged(nameof(StatusMessage));
+        }
+        if (statusChanged || messageChanged)
+        {
+            RaisePropertyChanged(nameof(StatusText));
+        }
     }
 
     public string Stage => Progress.Stage;
@@ -99,7 +138,7 @@ public abstract class OperationViewModel : ObservableObject
                 return;
             }
 
-            Status = string.IsNullOrWhiteSpace(p.Item) ? p.Stage : $"{p.Stage}  {p.Item}";
+            SetStatus(ViewStatus.Progress, string.IsNullOrWhiteSpace(p.Item) ? p.Stage : $"{p.Stage}  {p.Item}");
             Progress.Update(p);
             OnProgress(p);
         });
@@ -109,11 +148,11 @@ public abstract class OperationViewModel : ObservableObject
         }
         catch (OperationCanceledException)
         {
-            Status = "Cancelled; cleanup finished.";
+            SetStatus(ViewStatus.Cancelled);
         }
         catch (Exception ex)
         {
-            Status = ex.Message;
+            SetStatus(ViewStatus.Error, ex.Message);
         }
         finally
         {

@@ -35,7 +35,7 @@ public sealed class ArchiveViewModel : OperationViewModel, INavigationPage
         {
             if (!await dependencies.EnsureAsync(progress, token))
             {
-                Status = "Required tools are unavailable.";
+                SetStatus(ViewStatus.ToolsUnavailable);
                 return;
             }
 
@@ -43,19 +43,19 @@ public sealed class ArchiveViewModel : OperationViewModel, INavigationPage
             string review = $"Input: {plan.Media.Source.Path}\nArchive: {plan.Output}\nScratch: {plan.ScratchBytes / 1073741824d:0.0} GiB\nOriginal retained.";
             if (!dialogs.Review("Review enhancement-layer backup", review, "Approve and start"))
             {
-                Status = "Backup not approved.";
+                SetStatus(ViewStatus.BackupNotApproved);
                 return;
             }
 
             OperationLog.Audit(logger, "ApproveBackup", review, "ApprovedByDialog", plan.Id);
             var result = await Task.Run(() => backup.ExecuteAsync(plan, progress, token), token);
-            Status = $"{result.Status}\n{result.Output}\n{result.Message}";
+            SetStatus(ViewStatus.Result, $"{result.Status}\n{result.Output}\n{result.Message}");
         }), () => IsIdle && !string.IsNullOrWhiteSpace(Input));
         RestoreCommand = new(() => RunAsync(async (token, progress) =>
         {
             if (!await dependencies.EnsureAsync(progress, token))
             {
-                Status = "Required tools are unavailable.";
+                SetStatus(ViewStatus.ToolsUnavailable);
                 return;
             }
 
@@ -63,13 +63,13 @@ public sealed class ArchiveViewModel : OperationViewModel, INavigationPage
             string review = $"Base file: {plan.Media.Source.Path}\nArchive: {plan.Archive.Path}\nOutput: {plan.Output}\nScratch: {plan.ScratchBytes / 1073741824d:0.0} GiB\n" + (plan.AllowLegacy ? "WARNING: Legacy archives lack verified source pairing.\n" : "Verified source pairing required.\n") + "Original retained.";
             if (!dialogs.Review("Review restoration", review, "Approve and start"))
             {
-                Status = "Restore not approved.";
+                SetStatus(ViewStatus.RestoreNotApproved);
                 return;
             }
 
             OperationLog.Audit(logger, "ApproveRestore", review, "ApprovedByDialog", plan.Id);
             var result = await Task.Run(() => restore.ExecuteAsync(plan, progress, token), token);
-            Status = $"{result.Status}\n{result.Output}\n{result.Message}";
+            SetStatus(ViewStatus.Result, $"{result.Status}\n{result.Output}\n{result.Message}");
         }), () => IsIdle && !string.IsNullOrWhiteSpace(Input) && !string.IsNullOrWhiteSpace(Archive));
         CleanupCommand = new(() => RunAsync(async (token, _) =>
         {
@@ -82,7 +82,7 @@ public sealed class ArchiveViewModel : OperationViewModel, INavigationPage
             var plan = await Task.Run(() => cleanup.Plan(folder, 100), token);
             if (plan.Files.Count == 0)
             {
-                Status = "No retained backup files found.";
+                SetStatus(ViewStatus.NoBackupsFound);
                 return;
             }
 
@@ -90,13 +90,13 @@ public sealed class ArchiveViewModel : OperationViewModel, INavigationPage
             string code = "APPROVE " + plan.Id.ToString("N")[..8].ToUpperInvariant();
             if (!dialogs.Review("Review cleanup", review, "Delete displayed backups", code))
             {
-                Status = "Cleanup not approved.";
+                SetStatus(ViewStatus.CleanupNotApproved);
                 return;
             }
 
             OperationLog.Audit(logger, "ApproveCleanup", review, "ApprovedByExactCode", plan.Id);
             var result = await Task.Run(() => cleanup.ExecuteAsync(plan, token), token);
-            Status = string.Join("\n", result.Items.Select(f => $"{f.Item}: {f.Status} — {f.Message}"));
+            SetStatus(ViewStatus.Result, string.Join("\n", result.Items.Select(f => $"{f.Item}: {f.Status} — {f.Message}")));
         }), () => IsIdle);
     }
 

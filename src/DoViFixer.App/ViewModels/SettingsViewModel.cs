@@ -67,7 +67,7 @@ public sealed class SettingsViewModel : OperationViewModel, INavigationPage
             await FlushAsync(token);
             lastSavedSettings = await settings.ReadAsync(token);
             ApplyPreferences(lastSavedSettings);
-            Status = "Settings loaded.";
+            SetStatus(ViewStatus.SettingsLoaded);
         }), () => IsIdle);
         BrowseTemporaryCommand = new(() => Temporary = dialogs.PickFolder() ?? Temporary);
         BrowseDestinationCommand = new(() => Destination = dialogs.PickFolder() ?? Destination);
@@ -77,7 +77,7 @@ public sealed class SettingsViewModel : OperationViewModel, INavigationPage
         ClearCacheCommand = new(() => RunAsync(async (token, _) =>
         {
             int removed = await Task.Run(() => cache.ClearAsync(token), token);
-            Status = $"Cleared {removed} cached analysis results. Future scans will analyze those files again.";
+            SetStatus(ViewStatus.Result, $"Cleared {removed} cached analysis results. Future scans will analyze those files again.");
         }), () => IsIdle);
         CheckCommand = new(() => RunAsync(async (token, _) =>
         {
@@ -88,11 +88,11 @@ public sealed class SettingsViewModel : OperationViewModel, INavigationPage
                 Tools.Add(tool);
             }
 
-            Status = report.Ready ? "All tools ready." : "Tools need attention. Set a validated path or open dependency setup.";
+            SetStatus(report.Ready ? ViewStatus.ToolsReady : ViewStatus.ToolsNeedAttention);
         }), () => IsIdle);
         InstallCommand = new(() => RunAsync(async (token, progress) =>
         {
-            Status = await setup.EnsureAsync(progress, token) ? "Tools ready." : "Dependency setup incomplete.";
+            SetStatus(await setup.EnsureAsync(progress, token) ? ViewStatus.ToolsReady : ViewStatus.DependencySetupIncomplete);
             var report = await dependencies.CheckAsync(DependencyRequirements.All, token);
             Tools.Clear();
             foreach (var tool in report.Tools)
@@ -103,12 +103,12 @@ public sealed class SettingsViewModel : OperationViewModel, INavigationPage
         SetToolCommand = new(() => RunAsync(async (token, _) =>
         {
             await settings.SetToolAsync(SelectedTool, ToolPath, token);
-            Status = "Validated tool path saved and applied.";
+            SetStatus(ViewStatus.ToolPathSaved);
         }), () => IsIdle && !string.IsNullOrWhiteSpace(ToolPath));
         ResetToolCommand = new(() => RunAsync(async (token, _) =>
         {
             await settings.ResetToolAsync(SelectedTool, token);
-            Status = "Tool override reset. Check tools to rediscover.";
+            SetStatus(ViewStatus.ToolOverrideReset);
         }), () => IsIdle);
     }
 
@@ -150,7 +150,7 @@ public sealed class SettingsViewModel : OperationViewModel, INavigationPage
         // Recovery must work even while the settings store or a folder is unavailable.
         ApplyPreferences(lastSavedSettings);
         SaveError = null;
-        Status = "Unsaved changes discarded. Using the last saved settings.";
+        SetStatus(ViewStatus.SettingsDiscarded);
         Saved?.Invoke(lastSavedSettings);
     }
 
@@ -387,7 +387,7 @@ public sealed class SettingsViewModel : OperationViewModel, INavigationPage
             catch (Exception ex)
             {
                 SaveError = ex.Message;
-                Status = ex.Message;
+                SetStatus(ViewStatus.Error, ex.Message);
             }
             finally
             {
@@ -474,7 +474,7 @@ public sealed class SettingsViewModel : OperationViewModel, INavigationPage
             forceComplex: snapshot.ForceComplex), token);
 
         lastSavedSettings = snapshot;
-        Status = "Settings saved.";
+        SetStatus(ViewStatus.SettingsSaved);
         Saved?.Invoke(snapshot);
     }
     public NativeTool SelectedTool

@@ -3,6 +3,7 @@ using System.Windows;
 using System.Windows.Controls;
 using System.Windows.Input;
 using DoViFixer.App.ViewModels;
+using DoViFixer.App.Presentation;
 using DoViFixer.App.Navigation;
 
 namespace DoViFixer.App.Views;
@@ -50,7 +51,7 @@ public partial class Shell : Window
         }
         catch (Exception ex)
         {
-            model.Settings.Status = ex.Message;
+            model.Settings.SetStatus(ViewStatus.Error, ex.Message);
         }
         finally
         {

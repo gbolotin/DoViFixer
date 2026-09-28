@@ -24,7 +24,9 @@ public sealed class OperationViewModelTests
         Assert.AreEqual(0, model.Percent);
         Assert.IsFalse(model.IsIndeterminate);
         Assert.AreEqual("", model.Stage);
-        Assert.AreEqual("Ready", model.Status);
+        Assert.AreEqual(ViewStatus.Ready, model.Status);
+        Assert.AreEqual("Ready", model.StatusText);
+        Assert.AreEqual("", model.StatusMessage);
 
         TaskCompletionSource step1 = new();
         TaskCompletionSource step2 = new();
@@ -49,7 +51,8 @@ public sealed class OperationViewModelTests
         Assert.AreEqual(25, model.Progress.Percent);
         Assert.AreEqual("Demuxing", model.Stage);
         Assert.AreEqual("Demuxing", model.Progress.Stage);
-        Assert.AreEqual("Demuxing  movie.mkv", model.Status);
+        Assert.AreEqual(ViewStatus.Progress, model.Status);
+        Assert.AreEqual("Demuxing  movie.mkv", model.StatusMessage);
         Assert.IsFalse(model.IsIndeterminate);
         CollectionAssert.Contains(changed, nameof(model.Percent));
         CollectionAssert.Contains(changed, nameof(model.Stage));
@@ -62,7 +65,8 @@ public sealed class OperationViewModelTests
         }
 
         Assert.AreEqual("Encoding", model.Stage);
-        Assert.AreEqual("Encoding", model.Status);
+        Assert.AreEqual(ViewStatus.Progress, model.Status);
+        Assert.AreEqual("Encoding", model.StatusMessage);
         Assert.IsTrue(model.IsIndeterminate);
 
         step2.SetResult();
@@ -93,7 +97,47 @@ public sealed class OperationViewModelTests
         await task;
 
         Assert.IsFalse(model.IsBusy);
-        Assert.AreEqual("Cancelled; cleanup finished.", model.Status);
+        Assert.AreEqual(ViewStatus.Cancelled, model.Status);
+        Assert.AreEqual("Cancelled; cleanup finished.", model.StatusText);
+        Assert.AreEqual("", model.StatusMessage);
         Assert.IsFalse(model.Progress.IsRunning);
+    }
+
+    [TestMethod]
+    public async Task ErrorsPreserveDetailsAndTypedStatusChangesClearOldMessages()
+    {
+        var model = new TestOperationViewModel();
+        await model.ExecuteAsync((_, _) => throw new IOException("Folder unavailable"));
+        Assert.AreEqual(ViewStatus.Error, model.Status);
+        Assert.AreEqual("Folder unavailable", model.StatusMessage);
+        Assert.AreEqual("Folder unavailable", model.StatusText);
+
+        var notifications = new List<string?>();
+        model.PropertyChanged += (_, e) =>
+        {
+            notifications.Add(e.PropertyName);
+            Assert.AreEqual(ViewStatus.FileListCleared, model.Status);
+            Assert.AreEqual("", model.StatusMessage, "Observers must see the new state and message together.");
+            Assert.AreEqual("File list cleared.", model.StatusText);
+        };
+        model.SetStatus(ViewStatus.FileListCleared);
+        CollectionAssert.AreEquivalent(new[] { nameof(model.Status), nameof(model.StatusMessage), nameof(model.StatusText) }, notifications);
+    }
+
+    [TestMethod]
+    public void StatusTextNotifiesWhenOnlyTheMessageChanges()
+    {
+        var model = new TestOperationViewModel();
+        model.SetStatus(ViewStatus.Progress, "Scanning first file");
+        var notifications = new List<string?>();
+        model.PropertyChanged += (_, e) => notifications.Add(e.PropertyName);
+
+        model.SetStatus(ViewStatus.Progress, "Scanning second file");
+        Assert.AreEqual("Scanning second file", model.StatusText);
+        CollectionAssert.AreEquivalent(new[] { nameof(model.StatusMessage), nameof(model.StatusText) }, notifications);
+
+        notifications.Clear();
+        model.SetStatus(ViewStatus.Progress, "Scanning second file");
+        Assert.IsEmpty(notifications);
     }
 }

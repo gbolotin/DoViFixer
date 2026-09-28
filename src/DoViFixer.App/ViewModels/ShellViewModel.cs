@@ -88,7 +88,7 @@ public sealed class ShellViewModel : ObservableObject, IInitializeAsync
         }
         catch (Exception ex)
         {
-            Settings.Status = ex.Message;
+            Settings.SetStatus(ViewStatus.Error, ex.Message);
         }
         finally
         {
