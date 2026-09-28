@@ -216,6 +216,27 @@
                                                 Visibility="{Binding IsPending, Converter={StaticResource Visible}}"
                                                 Command="{Binding DataContext.SkipCommand, RelativeSource={RelativeSource AncestorType=ListView}}"
                                                 CommandParameter="{Binding}" />
+                                        <Button Background="Transparent"
+                                                BorderThickness="0"
+                                                Padding="7,6"
+                                                Margin="4"
+                                                VerticalAlignment="Center"
+                                                ToolTip="Remove from list"
+                                                AutomationProperties.Name="Remove from list"
+                                                Command="{Binding DataContext.RemoveFileCommand, RelativeSource={RelativeSource AncestorType=ListView}}"
+                                                CommandParameter="{Binding}">
+                                            <Button.Style>
+                                                <Style TargetType="Button" BasedOn="{StaticResource {x:Type Button}}">
+                                                    <Setter Property="Visibility" Value="Hidden" />
+                                                    <Style.Triggers>
+                                                        <DataTrigger Binding="{Binding IsMouseOver, RelativeSource={RelativeSource AncestorType=ListViewItem}}" Value="True">
+                                                            <Setter Property="Visibility" Value="Visible" />
+                                                        </DataTrigger>
+                                                    </Style.Triggers>
+                                                </Style>
+                                            </Button.Style>
+                                            <TextBlock Text="&#xE74D;" FontFamily="Segoe Fluent Icons" />
+                                        </Button>
                                     </StackPanel>
                                 </Grid>
                             </DataTemplate>
@@ -270,7 +291,6 @@
             <GridSplitter Grid.Column="1"
                           VerticalAlignment="Stretch"
                           Background="Transparent"
-                         
                           ShowsPreview="False"
                           ResizeDirection="Columns"
                           ResizeBehavior="PreviousAndNext">

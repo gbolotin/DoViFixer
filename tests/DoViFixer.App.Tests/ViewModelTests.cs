@@ -8,6 +8,60 @@ namespace DoViFixer.App.Tests;
 public sealed class ViewModelTests
 {
     [TestMethod]
+    public async Task RemoveFileUpdatesSelectionAndDetailsAndRejectsRemovalWhileBusy()
+    {
+        using var runtime = new TestRuntime();
+        var model = runtime.Container.GetRequiredService<MediaViewModel>();
+        await model.AddAsync([@"C:\Media\Mountain.mkv", @"C:\Media\Ocean.mkv"]);
+        var first = model.Files[0];
+        var second = model.Files[1];
+        first.IsSelected = false;
+        model.Focused = first;
+        await runtime.ClearAsync(default);
+        var started = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+        runtime.DuringAnalysis = async token =>
+        {
+            started.TrySetResult();
+            await Task.Delay(Timeout.Infinite, token);
+        };
+        var scanning = model.ScanCommand.ExecuteAsync();
+        try
+        {
+            await started.Task.WaitAsync(TimeSpan.FromSeconds(10));
+            Assert.IsFalse(model.RemoveFileCommand.CanExecute(first));
+            model.RemoveFileCommand.Execute(first);
+            Assert.HasCount(2, model.Files);
+        }
+        finally
+        {
+            model.CancelCommand.Execute();
+            await scanning.WaitAsync(TimeSpan.FromSeconds(10));
+        }
+
+        second.IsSelected = true;
+        var changes = new List<string?>();
+        model.PropertyChanged += (_, e) => changes.Add(e.PropertyName);
+        Assert.IsTrue(model.RemoveFileCommand.CanExecute(first));
+        model.RemoveFileCommand.Execute(first);
+        Assert.AreSame(second, model.Files.Single());
+        Assert.AreSame(second, model.Focused);
+        Assert.AreEqual("1 item | 1 item selected", model.SelectionSummary);
+        Assert.AreEqual(true, model.AllFilesSelected);
+        CollectionAssert.Contains(changes, nameof(MediaViewModel.SelectionSummary));
+        CollectionAssert.Contains(changes, nameof(MediaViewModel.AllFilesSelected));
+        Assert.IsFalse(model.RemoveFileCommand.CanExecute(first));
+        changes.Clear();
+        first.IsSelected = !first.IsSelected;
+        Assert.IsEmpty(changes, "Removed rows must no longer notify the page.");
+
+        model.RemoveFileCommand.Execute(second);
+        Assert.IsTrue(model.IsFileListEmpty);
+        Assert.IsNull(model.Focused);
+        Assert.AreEqual(ViewStatus.FileListCleared, model.Status);
+        Assert.IsFalse(model.ScanCommand.CanExecute(null));
+    }
+
+    [TestMethod]
     public void EmptyFileListNotifiesBindingsOnAddRemoveAndClear()
     {
         using var runtime = new TestRuntime();

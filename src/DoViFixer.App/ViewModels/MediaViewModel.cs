@@ -88,6 +88,7 @@ public sealed class MediaViewModel : OperationViewModel, INavigationPage, IIniti
         OpenLogsCommand = new(dialogs.OpenLogs);
         ToggleSelectAllCommand = new(ToggleSelectAll, () => IsIdle && Files.Any(row => row.SelectionEnabled));
         ClearAllCommand = new(ClearAll, () => IsIdle && Files.Count > 0);
+        RemoveFileCommand = new(RemoveFile, row => IsIdle && Files.Contains(row));
         OpenSettingsCommand = new(() => RequestNavigateToSettings?.Invoke(), () => IsIdle);
         BatchProgress.PropertyChanged += (_, _) => NotifyActiveProgress();
         Progress.PropertyChanged += (_, _) => NotifyActiveProgress();
@@ -152,6 +153,7 @@ public sealed class MediaViewModel : OperationViewModel, INavigationPage, IIniti
 
     public RelayCommand ToggleSelectAllCommand { get; }
     public RelayCommand ClearAllCommand { get; }
+    public RelayCommand<MediaRow> RemoveFileCommand { get; }
     public bool CanInspect => CanOperate();
     public AsyncCommand AddFilesCommand { get; }
     public AsyncCommand AddFolderCommand { get; }
@@ -281,6 +283,7 @@ public sealed class MediaViewModel : OperationViewModel, INavigationPage, IIniti
         OpenRowOutputCommand?.RaiseCanExecuteChanged();
         ToggleSelectAllCommand?.RaiseCanExecuteChanged();
         ClearAllCommand?.RaiseCanExecuteChanged();
+        RemoveFileCommand?.RaiseCanExecuteChanged();
         OpenSettingsCommand?.RaiseCanExecuteChanged();
         AddFilesCommand?.RaiseCanExecuteChanged();
         AddFolderCommand?.RaiseCanExecuteChanged();
@@ -681,6 +684,30 @@ public sealed class MediaViewModel : OperationViewModel, INavigationPage, IIniti
             EndBatch();
         }
     });
+
+    private void RemoveFile(MediaRow row)
+    {
+        if (!RemoveFileCommand.CanExecute(row))
+        {
+            return;
+        }
+
+        row.PropertyChanged -= OnRowPropertyChanged;
+        bool wasFocused = ReferenceEquals(Focused, row);
+        Files.Remove(row);
+        if (wasFocused)
+        {
+            Focused = Files.FirstOrDefault();
+        }
+
+        InvalidatePlan();
+        if (IsFileListEmpty)
+        {
+            SetStatus(ViewStatus.FileListCleared);
+        }
+        RaisePropertyChanged(nameof(SelectionSummary));
+        RaisePropertyChanged(nameof(AllFilesSelected));
+    }
 
     private void ClearAll()
     {

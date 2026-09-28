@@ -382,6 +382,19 @@ public sealed class VisualTests
         await LayoutAsync(window);
         var row = media.Files[0];
         var container = (ListViewItem)list.ItemContainerGenerator.ContainerFromItem(row);
+        var remove = Descendants<Button>(container).Single(button => Equals(button.ToolTip, "Remove from list"));
+        Assert.AreSame(media.RemoveFileCommand, remove.Command);
+        Assert.AreSame(row, remove.CommandParameter);
+        Assert.AreEqual("Remove from list", System.Windows.Automation.AutomationProperties.GetName(remove));
+        Assert.AreEqual("\uE74D", ((TextBlock)remove.Content).Text);
+        Assert.IsFalse(remove.IsVisible);
+        container.IsSelected = true;
+        await LayoutAsync(window);
+        Assert.IsTrue(remove.IsVisible, "Selecting a row must show delete even without hovering.");
+        container.IsSelected = false;
+        media.Focused = media.Files[1];
+        await LayoutAsync(window);
+        Assert.IsFalse(remove.IsVisible, "An unselected row without hover must hide delete.");
         foreach (var (caption, command) in new (string, object)[]
         {
             ("Cancel", media.CancelFileCommand), ("Retry", media.RetryAnalysisCommand),
