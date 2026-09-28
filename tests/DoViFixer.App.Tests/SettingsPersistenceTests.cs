@@ -10,6 +10,91 @@ namespace DoViFixer.App.Tests;
 public sealed class SettingsPersistenceTests
 {
     [TestMethod]
+    [DataRow(false)]
+    [DataRow(true)]
+    public async Task NavigationWaitsForPageReadAndRejectsOverlappingRequests(bool settingsPage)
+    {
+        using var runtime = new TestRuntime();
+        var store = new DelayedReadStore(runtime);
+        runtime.Services.AddSingleton<ISettingsStore>(store);
+        var shell = runtime.Container.GetRequiredService<ShellViewModel>();
+        var media = shell.Pages.OfType<MediaViewModel>().Single();
+        var archive = shell.Pages.OfType<ArchiveViewModel>().Single();
+        shell.CurrentPage = archive;
+        shell.CurrentPage = settingsPage ? shell.Settings : media;
+        var navigating = shell.NavigationTask;
+        Task closing = Task.CompletedTask;
+        try
+        {
+            await store.Started.Task.WaitAsync(TimeSpan.FromSeconds(10));
+            Assert.IsFalse(navigating.IsCompleted);
+            Assert.IsFalse(shell.CanNavigate);
+            var currentPage = shell.CurrentPage;
+            shell.CurrentPage = archive;
+            Assert.AreSame(currentPage, shell.CurrentPage);
+            Assert.AreSame(navigating, shell.NavigationTask);
+            if (!settingsPage)
+            {
+                closing = shell.CancelAndWaitAsync();
+                Assert.IsFalse(closing.IsCompleted, "Shutdown must also wait for a media summary refresh.");
+            }
+        }
+        finally
+        {
+            store.Release.TrySetResult();
+            await navigating.WaitAsync(TimeSpan.FromSeconds(10));
+            await closing.WaitAsync(TimeSpan.FromSeconds(10));
+        }
+        Assert.IsTrue(shell.CanNavigate);
+        Assert.AreEqual(1, store.Reads);
+        shell.CurrentPage = shell.CurrentPage;
+        Assert.AreEqual(1, store.Reads, "Selecting the current page must not reload it.");
+    }
+
+    [TestMethod]
+    public async Task FailedPageLoadReportsErrorAndReenablesNavigation()
+    {
+        using var runtime = new TestRuntime();
+        var store = new DelayedReadStore(runtime);
+        runtime.Services.AddSingleton<ISettingsStore>(store);
+        var shell = runtime.Container.GetRequiredService<ShellViewModel>();
+        shell.CurrentPage = shell.Settings;
+        await store.Started.Task.WaitAsync(TimeSpan.FromSeconds(10));
+        store.Release.SetException(new IOException("Settings unavailable"));
+        await shell.NavigationTask.WaitAsync(TimeSpan.FromSeconds(10));
+        Assert.AreEqual("Settings unavailable", shell.Settings.Status);
+        Assert.IsTrue(shell.CanNavigate);
+        var archive = shell.Pages.OfType<ArchiveViewModel>().Single();
+        shell.CurrentPage = archive;
+        await shell.NavigationTask;
+        Assert.AreSame(archive, shell.CurrentPage);
+    }
+
+    [TestMethod]
+    public async Task InitializationWaitsForTheInitialSummaryAndReadsOnlyOnce()
+    {
+        using var runtime = new TestRuntime();
+        var store = new DelayedReadStore(runtime);
+        runtime.Services.AddSingleton<ISettingsStore>(store);
+        var shell = runtime.Container.GetRequiredService<ShellViewModel>();
+        Assert.AreEqual(0, store.Reads, "Constructing the shell must not launch asynchronous work.");
+        var initializing = shell.InitializeAsync();
+        try
+        {
+            await store.Started.Task.WaitAsync(TimeSpan.FromSeconds(10));
+            Assert.IsFalse(initializing.IsCompleted);
+        }
+        finally
+        {
+            store.Release.TrySetResult();
+            await initializing.WaitAsync(TimeSpan.FromSeconds(10));
+        }
+        Assert.IsFalse(string.IsNullOrEmpty(shell.Pages.OfType<MediaViewModel>().Single().OutputSummaryToolTip));
+        await shell.InitializeAsync();
+        Assert.AreEqual(1, store.Reads);
+    }
+
+    [TestMethod]
     public async Task ConversionWaitsForAutosaveAndKeepsOriginalAfterReplacementIsDisabled()
     {
         using var runtime = new TestRuntime();
@@ -17,12 +102,13 @@ public sealed class SettingsPersistenceTests
         var store = new DelayedStore(runtime);
         runtime.Services.AddSingleton<ISettingsStore>(store);
         var shell = runtime.Container.GetRequiredService<ShellViewModel>();
+        var media = shell.Pages.OfType<MediaViewModel>().Single();
         await shell.Settings.LoadCommand.ExecuteAsync();
-        await shell.Media.AddAsync([@"C:\Media\Mountain.mkv"]);
+        await media.AddAsync([@"C:\Media\Mountain.mkv"]);
 
         shell.Settings.ReplaceOriginal = false;
         await store.Started.Task.WaitAsync(TimeSpan.FromSeconds(10));
-        var converting = shell.Media.ConvertDv81Command.ExecuteAsync();
+        var converting = media.ConvertDv81Command.ExecuteAsync();
         try
         {
             Assert.IsFalse(shell.CanNavigate);
@@ -37,7 +123,7 @@ public sealed class SettingsPersistenceTests
         }
 
         Assert.IsFalse(runtime.Settings.ReplaceOriginal);
-        Assert.AreEqual(@"C:\Media\Mountain - DV P8.1.mkv", shell.Media.Files[0].Result!.Output);
+        Assert.AreEqual(@"C:\Media\Mountain - DV P8.1.mkv", media.Files[0].Result!.Output);
         Assert.IsTrue(shell.CanNavigate);
     }
 
@@ -76,8 +162,9 @@ public sealed class SettingsPersistenceTests
         using var runtime = new TestRuntime();
         await runtime.UpdateAsync(s => s with { ReplaceOriginal = true, TemporaryDirectory = Path.GetTempPath() }, default);
         var shell = runtime.Container.GetRequiredService<ShellViewModel>();
+        var media = shell.Pages.OfType<MediaViewModel>().Single();
         await shell.Settings.LoadCommand.ExecuteAsync();
-        await shell.Media.AddAsync([@"C:\Media\Mountain.mkv"]);
+        await media.AddAsync([@"C:\Media\Mountain.mkv"]);
 
         runtime.FailDirectoryValidation = true;
         shell.Settings.ReplaceOriginal = false;
@@ -86,9 +173,9 @@ public sealed class SettingsPersistenceTests
         Assert.AreEqual(shell.Settings.SaveError, shell.Settings.Status);
         Assert.IsFalse(shell.CanNavigate);
 
-        await shell.Media.ConvertDv81Command.ExecuteAsync();
+        await media.ConvertDv81Command.ExecuteAsync();
         Assert.AreEqual(0, runtime.Conversions);
-        Assert.AreEqual("Directory unavailable", shell.Media.Status);
+        Assert.AreEqual("Directory unavailable", media.Status);
         await Assert.ThrowsAsync<InvalidOperationException>(() => shell.CancelAndWaitAsync());
 
         runtime.FailDirectoryValidation = false;
@@ -104,6 +191,7 @@ public sealed class SettingsPersistenceTests
     {
         using var runtime = new TestRuntime();
         var shell = runtime.Container.GetRequiredService<ShellViewModel>();
+        var media = shell.Pages.OfType<MediaViewModel>().Single();
         await shell.Settings.LoadCommand.ExecuteAsync();
         shell.Settings.IncludeSimple = true;
         await shell.Settings.SaveTask;
@@ -127,10 +215,27 @@ public sealed class SettingsPersistenceTests
         Assert.IsTrue(shell.Settings.IncludeSimple);
         Assert.IsFalse(shell.Settings.ReplaceOriginal);
         Assert.AreEqual(saved.Theme, runtime.AppliedTheme);
-        Assert.AreEqual("FEL: Simple only", shell.Media.FelSummary);
+        Assert.AreEqual("FEL: Simple only", media.FelSummary);
         Assert.IsFalse(shell.Settings.DiscardChangesCommand.CanExecute());
         Assert.IsTrue(shell.CanNavigate);
         await shell.CancelAndWaitAsync();
+    }
+
+    private sealed class DelayedReadStore(TestRuntime runtime) : ISettingsStore
+    {
+        public TaskCompletionSource Started { get; } = new(TaskCreationOptions.RunContinuationsAsynchronously);
+        public TaskCompletionSource Release { get; } = new(TaskCreationOptions.RunContinuationsAsynchronously);
+        public int Reads { get; private set; }
+
+        public async Task<UserSettings> ReadAsync(CancellationToken token)
+        {
+            Reads++;
+            Started.TrySetResult();
+            await Release.Task.WaitAsync(token);
+            return await runtime.ReadAsync(token);
+        }
+
+        public Task UpdateAsync(Func<UserSettings, UserSettings> update, CancellationToken token) => runtime.UpdateAsync(update, token);
     }
 
     private sealed class DelayedStore(TestRuntime runtime) : ISettingsStore

@@ -1,3 +1,4 @@
+using DoViFixer.App.Navigation;
 using System.Collections.ObjectModel;
 using System.ComponentModel;
 using DoViFixer.App.Dialogs;
@@ -12,8 +13,11 @@ using DoViFixer.Domain.Conversion;
 using Microsoft.Extensions.Logging;
 
 namespace DoViFixer.App.ViewModels;
-public sealed class MediaViewModel : OperationViewModel
+public sealed class MediaViewModel : OperationViewModel, INavigationPage, IInitializeAsync
 {
+    public string NavigationName => "Media";
+    public string? NavigationIcon => "\uE714";
+
     private readonly IFileDiscovery discovery;
     private readonly InspectionService inspection;
     private readonly ConversionService conversion;
@@ -246,6 +250,8 @@ public sealed class MediaViewModel : OperationViewModel
         sb.Append("Click to view or change settings.");
         OutputSummaryToolTip = sb.ToString();
     }
+
+    public Task InitializeAsync(CancellationToken token = default) => RefreshSettingsSummaryAsync(token);
 
     public async Task RefreshSettingsSummaryAsync(CancellationToken token = default)
     {

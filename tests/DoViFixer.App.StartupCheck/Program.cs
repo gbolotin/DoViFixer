@@ -5,7 +5,6 @@ using System.Windows.Media;
 using System.Windows.Media.Imaging;
 using System.Windows.Threading;
 using DoViFixer.App.ViewModels;
-using DoViFixer.App.Views;
 
 namespace DoViFixer.App.StartupCheck;
 internal static class Program
@@ -36,39 +35,50 @@ internal static class Program
                         throw new InvalidOperationException("Invalid idle shell state.");
                     }
 
-                    var navigation = (ListBox)shell.FindName("Navigation");
-                    var workspace = (ContentControl)shell.FindName("Workspace");
-                    if (navigation.Items.Count != 3 || workspace.Content is not MediaView media || !ReferenceEquals(media.DataContext, model.Media))
+                    var media = model.Pages.OfType<MediaViewModel>().Single();
+                    await WaitForAsync(() => media.OutputSummaryToolTip.Length > 0);
+                    shell.UpdateLayout();
+                    var navigation = Descendants<ListBox>(shell).Single(list => ReferenceEquals(list.ItemsSource, model.Pages));
+                    var pageHost = Descendants<ItemsControl>(shell).Single(control => control.Name == "PageHost");
+                    var mediaView = (ContentPresenter)pageHost.ItemContainerGenerator.ContainerFromItem(media);
+                    if (navigation.Items.Count != 3 || !mediaView.IsVisible || !ReferenceEquals(navigation.SelectedItem, media))
                     {
                         throw new InvalidOperationException("Workspace navigation did not initialize.");
                     }
 
-                    var visited = new Dictionary<string, object>();
-                    foreach (var (name, viewModel, viewType) in new (string, object, Type)[]
+                    var retainedRoots = new Dictionary<object, DependencyObject>
                     {
-                        ("Archive", model.Archive, typeof(ArchiveView)),
-                        ("Settings", model.Settings, typeof(SettingsView)),
-                        ("Media", model.Media, typeof(MediaView)),
-                        ("Archive", model.Archive, typeof(ArchiveView)),
-                        ("Settings", model.Settings, typeof(SettingsView)),
-                        ("Media", model.Media, typeof(MediaView))
-                    }
-                    )
+                        [media] = VisualTreeHelper.GetChild(mediaView, 0)
+                    };
+                    foreach (var page in model.Pages.Skip(1).Append(media).Concat(model.Pages.Skip(1).Append(media)))
                     {
-                        navigation.SelectedItem = navigation.Items.Cast<ListBoxItem>().Single(item => Equals(item.Tag, name));
-                        await WaitForAsync(() => workspace.Content is FrameworkElement view && view.GetType() == viewType && ReferenceEquals(view.DataContext, viewModel));
-                        if (visited.TryGetValue(name, out var previous) && !ReferenceEquals(previous, workspace.Content))
+                        navigation.SelectedItem = page;
+                        var workspace = (ContentPresenter)pageHost.ItemContainerGenerator.ContainerFromItem(page);
+                        await WaitForAsync(() => ReferenceEquals(model.CurrentPage, page) && workspace.IsVisible && model.CanNavigate);
+                        shell.UpdateLayout();
+                        var containers = model.Pages.Select(item => (ContentPresenter)pageHost.ItemContainerGenerator.ContainerFromItem(item));
+                        if (containers.Count(container => container.IsVisible) != 1)
                         {
-                            throw new InvalidOperationException("Navigation recreated the view: " + name);
+                            throw new InvalidOperationException("Exactly one page must be visible.");
                         }
-
-                        visited[name] = workspace.Content;
-                        await WaitForAsync(() => model.CanNavigate);
+                        var root = VisualTreeHelper.GetChild(workspace, 0);
+                        if (retainedRoots.TryGetValue(page, out var previousRoot) && !ReferenceEquals(previousRoot, root))
+                        {
+                            throw new InvalidOperationException("Navigation recreated the page controls: " + page.NavigationName);
+                        }
+                        retainedRoots[page] = root;
+                        bool rendered = page is MediaViewModel
+                            ? Descendants<ListView>(workspace).Any(list => ReferenceEquals(list.ItemsSource, media.Files))
+                            : Descendants<TextBlock>(workspace).Any(text => text.Text == page.NavigationName && ReferenceEquals(text.DataContext, page));
+                        if (!rendered)
+                        {
+                            throw new InvalidOperationException("Page template did not render: " + page.NavigationName);
+                        }
                     }
 
-                    if (!ReferenceEquals(media, workspace.Content))
+                    if (!ReferenceEquals(mediaView, pageHost.ItemContainerGenerator.ContainerFromItem(media)) || !mediaView.IsVisible)
                     {
-                        throw new InvalidOperationException("Navigation lost the original media view.");
+                        throw new InvalidOperationException("Navigation lost the original media page.");
                     }
                     shell.UpdateLayout();
                     var content = (FrameworkElement)shell.Content;
@@ -82,7 +92,7 @@ internal static class Program
                         encoder.Save(file);
                     }
 
-                    System.Console.WriteLine("WPF startup, three workspace views and navigation passed.");
+                    System.Console.WriteLine("WPF startup, three retained workspace views and navigation passed.");
                     result = 0;
                 }
                 catch (Exception ex)
@@ -113,5 +123,22 @@ internal static class Program
         }
 
         await Dispatcher.Yield(DispatcherPriority.ApplicationIdle);
+    }
+
+    private static IEnumerable<T> Descendants<T>(DependencyObject parent) where T : DependencyObject
+    {
+        for (int i = 0; i < VisualTreeHelper.GetChildrenCount(parent); i++)
+        {
+            var child = VisualTreeHelper.GetChild(parent, i);
+            if (child is T match)
+            {
+                yield return match;
+            }
+
+            foreach (var descendant in Descendants<T>(child))
+            {
+                yield return descendant;
+            }
+        }
     }
 }

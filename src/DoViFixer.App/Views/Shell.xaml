@@ -1,29 +1,69 @@
 <Window x:Class="DoViFixer.App.Views.Shell"
         xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
         xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        xmlns:viewModels="clr-namespace:DoViFixer.App.ViewModels"
         Title="DoViFixer"
         MinWidth="800"
         MinHeight="600"
         WindowStartupLocation="CenterScreen">
-    <DockPanel Background="{DynamicResource ApplicationBackgroundBrush}"
-               TextElement.Foreground="{DynamicResource TextFillColorPrimaryBrush}">
-        <Border DockPanel.Dock="Left"
-                BorderBrush="{DynamicResource DividerStrokeColorDefaultBrush}"
-                BorderThickness="0,0,1,0"
-                Padding="0,0">
-            <DockPanel>
-                <ListBox x:Name="Navigation"
-                         DockPanel.Dock="Top"
-                         SelectedIndex="0"
-                         SelectionChanged="Navigate"
-                         SelectionMode="Single"
-                         IsEnabled="{Binding CanNavigate}">
-                    <ListBoxItem Content="Media" Tag="Media" />
-                    <ListBoxItem Content="Backup &amp; Restore" Tag="Archive"/>
-                    <ListBoxItem Content="Settings" Tag="Settings"/>
-                </ListBox>
-            </DockPanel>
-        </Border>
-        <ContentControl x:Name="Workspace" Margin="8,0" />
-    </DockPanel>
+    <Window.Resources>
+        <ResourceDictionary>
+            <ResourceDictionary.MergedDictionaries>
+                <ResourceDictionary Source="/DoViFixer.App;component/Views/MediaView.xaml" />
+                <ResourceDictionary Source="/DoViFixer.App;component/Views/SettingsView.xaml" />
+                <ResourceDictionary Source="/DoViFixer.App;component/Views/ArchiveView.xaml" />
+            </ResourceDictionary.MergedDictionaries>
+
+            <DataTemplate DataType="{x:Type viewModels:ShellViewModel}">
+                <DockPanel Background="{DynamicResource ApplicationBackgroundBrush}"
+                           TextElement.Foreground="{DynamicResource TextFillColorPrimaryBrush}">
+                    <ListBox ItemsSource="{Binding Pages}"
+                             SelectedItem="{Binding CurrentPage}"
+                             IsEnabled="{Binding CanNavigate}"
+                             DockPanel.Dock="Left"
+                             BorderBrush="{DynamicResource DividerStrokeColorDefaultBrush}"
+                             BorderThickness="0,0,1,0"
+                             Padding="8"
+                             KeyboardNavigation.DirectionalNavigation="Cycle">
+                        <ListBox.ItemTemplate>
+                            <DataTemplate>
+                                <StackPanel Orientation="Horizontal">
+                                    <TextBlock Text="{Binding NavigationIcon}"
+                                               FontFamily="Segoe Fluent Icons"
+                                               VerticalAlignment="Center"
+                                               Margin="0,0,8,0" />
+                                    <TextBlock Text="{Binding NavigationName}" VerticalAlignment="Center" />
+                                </StackPanel>
+                            </DataTemplate>
+                        </ListBox.ItemTemplate>
+                    </ListBox>
+                    <ItemsControl x:Name="PageHost"
+                                  ItemsSource="{Binding Pages}"
+                                  Margin="8,0">
+                        <ItemsControl.ItemsPanel>
+                            <ItemsPanelTemplate>
+                                <Grid />
+                            </ItemsPanelTemplate>
+                        </ItemsControl.ItemsPanel>
+                        <ItemsControl.ItemContainerStyle>
+                            <Style TargetType="ContentPresenter">
+                                <Setter Property="Visibility">
+                                    <Setter.Value>
+                                        <MultiBinding Converter="{StaticResource ReferenceEqualsToVisibility}">
+                                            <Binding Path="Content" RelativeSource="{RelativeSource Self}" />
+                                            <Binding Path="DataContext.CurrentPage" RelativeSource="{RelativeSource AncestorType=Window}" />
+                                        </MultiBinding>
+                                    </Setter.Value>
+                                </Setter>
+                            </Style>
+                        </ItemsControl.ItemContainerStyle>
+                    </ItemsControl>
+                </DockPanel>
+            </DataTemplate>
+
+        </ResourceDictionary>
+    </Window.Resources>
+
+    <ContentControl Content="{Binding}" />
+
 </Window>

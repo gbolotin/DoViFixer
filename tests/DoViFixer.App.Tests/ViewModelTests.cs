@@ -7,6 +7,67 @@ namespace DoViFixer.App.Tests;
 public sealed class ViewModelTests
 {
     [TestMethod]
+    public async Task ShellNavigationLoadsSettingsAndRetainsPageState()
+    {
+        using var runtime = new TestRuntime();
+        await runtime.UpdateAsync(value => value with { IncludeSimple = true }, default);
+        var shell = runtime.Container.GetRequiredService<ShellViewModel>();
+        var media = shell.Pages.OfType<MediaViewModel>().Single();
+        var archive = shell.Pages.OfType<ArchiveViewModel>().Single();
+        Assert.AreSame(media, shell.CurrentPage);
+        await media.AddAsync([@"C:\Media\Mountain.mkv"]);
+        var row = media.Files.Single();
+        row.IsSelected = false;
+        archive.Input = row.Path;
+
+        media.OpenSettingsCommand.Execute();
+        await shell.Settings.Completion;
+        Assert.AreSame(shell.Settings, shell.CurrentPage);
+        Assert.IsTrue(shell.Settings.IncludeSimple);
+        shell.CurrentPage = archive;
+        Assert.AreEqual(row.Path, archive.Input);
+        shell.CurrentPage = media;
+        Assert.AreSame(row, media.Files.Single());
+        Assert.AreSame(row, media.Focused);
+        Assert.IsFalse(row.IsSelected);
+        Assert.AreEqual(1, runtime.Analyses, "Navigation must not launch a new scan.");
+    }
+
+    [TestMethod]
+    public async Task ShellRejectsNavigationDuringOperationsAndUntilSaveErrorIsDiscarded()
+    {
+        using var runtime = new TestRuntime();
+        var shell = runtime.Container.GetRequiredService<ShellViewModel>();
+        var media = shell.CurrentPage;
+        var archive = shell.Pages.OfType<ArchiveViewModel>().Single();
+        runtime.DuringDependencyCheck = token => Task.Delay(Timeout.Infinite, token);
+        var checking = shell.Settings.CheckCommand.ExecuteAsync();
+        try
+        {
+            Assert.IsFalse(shell.CanNavigate);
+            shell.CurrentPage = archive;
+            Assert.AreSame(media, shell.CurrentPage);
+        }
+        finally
+        {
+            shell.Settings.CancelCommand.Execute();
+            await checking.WaitAsync(TimeSpan.FromSeconds(10));
+        }
+
+        shell.CurrentPage = shell.Settings;
+        await shell.Settings.Completion;
+        shell.Settings.OtherFolder = true;
+        await shell.Settings.SaveTask;
+        shell.CurrentPage = archive;
+        Assert.AreSame(shell.Settings, shell.CurrentPage);
+        Assert.IsFalse(shell.CanNavigate);
+        shell.Settings.DiscardChangesCommand.Execute();
+        shell.CurrentPage = archive;
+        Assert.AreSame(archive, shell.CurrentPage);
+        Assert.IsTrue(shell.CanNavigate);
+    }
+
+    [TestMethod]
     [DataRow(false)]
     [DataRow(true)]
     public async Task PauseBatchCommandWaitsBetweenJobsAndResetsAfterCompletion(bool cancelBatch)

@@ -1,3 +1,5 @@
+using System.Globalization;
+using System.Windows;
 using System.Windows.Input;
 using DoViFixer.App.Presentation;
 using Microsoft.VisualStudio.TestTools.UnitTesting;
@@ -7,6 +9,23 @@ namespace DoViFixer.App.Tests;
 [TestClass]
 public sealed class PresentationTests
 {
+    [TestMethod]
+    public void PageVisibilityRequiresTheSameAvailableObject()
+    {
+        var converter = new ReferenceEqualsToVisibilityConverter();
+        var page = new object();
+
+        Assert.AreEqual(Visibility.Visible, converter.Convert([page, page], typeof(Visibility), null!, CultureInfo.InvariantCulture));
+        foreach (object[] values in new object[][]
+        {
+            [page, new object()], [], [page], [null!, null!],
+            [DependencyProperty.UnsetValue, DependencyProperty.UnsetValue]
+        })
+        {
+            Assert.AreEqual(Visibility.Collapsed, converter.Convert(values, typeof(Visibility), null!, CultureInfo.InvariantCulture));
+        }
+    }
+
     [TestMethod]
     public void PropertyChangesNotifyOnlyWhenValueChanges()
     {

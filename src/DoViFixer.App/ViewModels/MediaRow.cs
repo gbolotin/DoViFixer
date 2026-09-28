@@ -5,6 +5,7 @@ namespace DoViFixer.App.ViewModels;
 public sealed class MediaRow(string path) : ObservableObject
 {
     #region Private fields
+
     private bool selected = true;
     private bool selectionEnabled = true;
     private bool pending;
@@ -220,6 +221,8 @@ public sealed class MediaRow(string path) : ObservableObject
     a ? Path + "\n" + Notice : $"{Path}\n\n{Classification}\n{a.Media.Width} × {a.Media.Height} · {a.Media.FramesPerSecond:0.###} fps\n" + $"{TimeSpan.FromSeconds(a.Media.DurationSeconds ?? 0):g} · {a.Media.Source.Length / 1073741824d:0.00} GiB\n\n" + $"Evidence: {EvidenceName(a.Evidence.Method)}\nFrames: {a.Evidence.Frames:N0}\nSamples: {a.Evidence.SuccessfulSamples}/{a.Evidence.RequestedSamples}\n\n{a.Reason}\n{a.Evidence.SampleDiagnostics}\n" + (HasIncompleteScan ? "\nSuggested action: Inspect. Standard inspection examines the full RPU metadata stream instead of short samples. It may take longer; missing metadata may still prevent classification.\n" : "") + $"\n{Notice}";
     public string ResultDetails => Result is null ? "" : $"Last conversion result\n{Result.Status}\n{Result.Output}\n{Result.Message}";
 
+    #endregion
+
     public void SetPlan(string plannedOutput, string? warning)
     {
         PlannedOutput = plannedOutput;
@@ -290,8 +293,6 @@ public sealed class MediaRow(string path) : ObservableObject
         Status = statusText ?? $"{OperationName} failed";
         State = MediaRowState.Failed;
     }
-
-    #endregion
 
     private static string EvidenceName(AnalysisMethod method) => method switch
     {

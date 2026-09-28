@@ -9,17 +9,19 @@ using System.Windows.Media.Imaging;
 using System.Windows.Threading;
 using DoViFixer.App.ViewModels;
 using DoViFixer.App.Views;
-using Microsoft.VisualStudio.TestTools.UnitTesting;
 using Microsoft.Extensions.DependencyInjection;
-using DoViFixer.Application.Settings;
+using Microsoft.VisualStudio.TestTools.UnitTesting;
 
 namespace DoViFixer.App.Tests;
+
 [TestClass]
 public sealed class VisualTests
 {
     [TestMethod]
-    public async Task RenderStudioViewsAndExerciseActiveBatchOnDispatcher()
+    public async Task ShellTemplatesSupportNavigationRowActionsAndShutdownRecovery()
     {
+        // WPF allows only one Application per process. Exercise the real templates
+        // together on one STA dispatcher, using fake media services throughout.
         var finished = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
         var thread = new Thread(() =>
         {
@@ -29,12 +31,12 @@ public sealed class VisualTests
             {
                 try
                 {
-                    await RenderAsync();
-                    finished.SetResult();
+                    await ExerciseShellAsync();
+                    finished.TrySetResult();
                 }
                 catch (Exception ex)
                 {
-                    finished.SetException(ex);
+                    finished.TrySetException(ex);
                 }
                 finally
                 {
@@ -42,302 +44,338 @@ public sealed class VisualTests
                 }
             }));
             Dispatcher.Run();
-        });
+        }) { IsBackground = true };
         thread.SetApartmentState(ApartmentState.STA);
         thread.Start();
         await finished.Task.WaitAsync(TimeSpan.FromSeconds(45));
     }
 
-    private static async Task RenderAsync()
+    private static async Task ExerciseShellAsync()
     {
-        var app = new System.Windows.Application
-        {
-            ShutdownMode = ShutdownMode.OnExplicitShutdown,
-            ThemeMode = ThemeMode.System
-        };
+        var app = new System.Windows.Application { ShutdownMode = ShutdownMode.OnExplicitShutdown, ThemeMode = ThemeMode.System };
         app.Resources.MergedDictionaries.Add(new ResourceDictionary
         {
             Source = new Uri("/DoViFixer.App;component/Resources/Common.xaml", UriKind.Relative)
         });
-        var listener = new BindingErrors();
-        PresentationTraceSources.DataBindingSource.Listeners.Add(listener);
-        PresentationTraceSources.DataBindingSource.Switch.Level = SourceLevels.Error;
+        using var errors = new BindingErrors();
+        var source = PresentationTraceSources.DataBindingSource;
+        var previousLevel = source.Switch.Level;
+        source.Listeners.Add(errors);
+        source.Switch.Level = SourceLevels.Error;
+        using var runtime = new TestRuntime();
+        var window = runtime.Container.GetRequiredService<Shell>();
+        var shell = (ShellViewModel)window.DataContext;
+        var media = shell.Pages.OfType<MediaViewModel>().Single();
+        window.Width = 1400;
+        window.Height = 900;
+        window.ShowInTaskbar = false;
+        window.WindowStartupLocation = WindowStartupLocation.Manual;
+        window.Left = -10000;
+        window.Top = -10000;
         try
         {
-            using var runtime = new TestRuntime();
-            var shell = runtime.Container.GetRequiredService<ShellViewModel>();
-            var model = shell.Media;
-            var media = new MediaView(model);
-            await RenderAsync(media, "01-media-empty");
-            await model.AddAsync([@"D:\Media\Mountain.mkv", @"D:\Media\Ocean.mkv", @"D:\Media\City.mkv"]);
-            await model.ScanCommand.ExecuteAsync();
-            model.Focused = model.Files[1];
-            await RenderAsync(media, "02-scan-results");
-            model.UpdateSettingsSummary(new UserSettings
-            {
-                OutputDirectory = @"D:\Media\A very long destination folder\Another long folder\Converted movies",
-                ReplaceOriginal = true,
-                IncludeSimple = true,
-                ForceComplex = true,
-                CreateElArchive = true
-            });
-            var window = new Shell(shell);
-            var shellContent = (DockPanel)window.Content;
-            var workspace = shellContent.Children.OfType<ContentControl>().Single();
-            workspace.Content = media;
-            media.ClearValue(FrameworkElement.WidthProperty);
-            media.ClearValue(FrameworkElement.HeightProperty);
-            // Exercise the actual shell layout, reserving space for window chrome at 800 x 600.
-            await RenderAsync(shellContent, "09-shell-minimum", 780, 560);
-            foreach (string caption in new[] { "⌕  Scan all", "▷  Convert to DV8.1", "▷  Convert to HDR10", "⚙ Settings" })
-            {
-                AssertInside(FindButton(shellContent, caption)!, shellContent);
-            }
-            AssertInside(FindText(shellContent, "⚠ Replace originals")!, shellContent);
-            AssertInside(FindText(shellContent, "FEL: Simple + Complex")!, shellContent);
-            workspace.Content = null;
-            model.UpdateSettingsSummary(runtime.Settings);
-            var completeAnalysis = model.Files[1].Analysis!;
-            model.Files[1].Analysis = DoViFixer.Domain.Analysis.MediaClassifier.Classify(completeAnalysis.Media, completeAnalysis.Evidence with
-            {
-                SuccessfulSamples = 9,
-                SampleDiagnostics = "Sample 10/10 at 01:39:51: No RPU was found in input file"
-            });
-            await RenderAsync(media, "02-incomplete-scan");
-            model.Files[1].Analysis = completeAnalysis;
-            foreach (var command in new[] { model.ScanCommand, model.InspectCommand, model.DeepInspectCommand })
-            {
-                await runtime.ClearAsync(default);
-                model.ToggleSelectAllCommand.Execute();
-                if (model.AllFilesSelected != true)
-                {
-                    model.ToggleSelectAllCommand.Execute();
-                }
+            window.Show();
+            await shell.InitializeAsync();
+            await LayoutAsync(window);
+            var navigation = Descendants<ListBox>(window).Single(list => ReferenceEquals(list.ItemsSource, shell.Pages));
+            var pageHost = Descendants<ItemsControl>(window).Single(control => control.Name == "PageHost");
+            var mediaView = (ContentPresenter)pageHost.ItemContainerGenerator.ContainerFromItem(media);
+            Assert.AreSame(media, navigation.SelectedItem);
+            Assert.HasCount(3, navigation.Items);
 
-                var analyzing = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
-                var releaseAnalysis = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
-                int analyses = 0;
-                runtime.DuringAnalysis = async token =>
-                {
-                    if (++analyses == 2)
-                    {
-                        analyzing.SetResult();
-                        await releaseAnalysis.Task.WaitAsync(token);
-                    }
-                };
-                var analysisOperation = command.ExecuteAsync();
-                await analyzing.Task;
-                Assert.AreEqual(1, model.BatchProgress.Processed);
-                Assert.AreEqual(3, model.BatchProgress.Total);
-                await RenderAsync(media, $"02-{model.BatchProgress.Operation}-progress", 1060, 685);
-                Assert.AreEqual(40, model.BatchProgress.CurrentJob!.Progress.StagePercent);
-                releaseAnalysis.SetResult();
-                await analysisOperation;
-                Assert.AreEqual(100, model.BatchProgress.Percent);
-                runtime.DuringAnalysis = null;
-            }
-
-            await runtime.ClearAsync(default);
-            foreach (var row in model.Files)
+            await media.AddAsync([@"C:\Media\Mountain.mkv", @"C:\Media\Mountain2.mkv"]);
+            media.Focused = media.Files[1];
+            media.Files[0].IsSelected = false;
+            await LayoutAsync(window);
+            var list = Descendants<ListView>(mediaView).Single();
+            var fileColumn = ((GridView)list.View).Columns[0];
+            double originalWidth = fileColumn.Width;
+            fileColumn.Width = 400;
+            var retainedRoots = new Dictionary<object, DependencyObject>
             {
-                row.IsSelected = true;
-            }
-
-            await runtime.UpdateAsync(s => s with { AllowFel = true }, default);
-            await model.ScanCommand.ExecuteAsync();
-            model.Files[2].IsSelected = true;
-            var started = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
-            var recovering = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
-            var releaseRecovery = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
-            runtime.DuringConversion = async token =>
-            {
-                if (runtime.Conversions != 1)
-                {
-                    return;
-                }
-
-                started.SetResult();
-                try
-                {
-                    await Task.Delay(Timeout.Infinite, token);
-                }
-                finally
-                {
-                    recovering.SetResult();
-                    await releaseRecovery.Task;
-                }
+                [media] = VisualTreeHelper.GetChild(mediaView, 0)
             };
-            var operation = model.ConvertDv81Command.ExecuteAsync();
-            await started.Task;
-            model.Focused = model.Files[1];
-            Assert.IsFalse(shell.CanNavigate);
-            Assert.IsTrue(model.Files[0].IsActive);
-            Assert.IsFalse(model.Files[0].SelectionEnabled);
-            await RenderAsync(media, "05-conversion-progress");
-            await RenderAsync(media, "05-conversion-progress-minimum", 1060, 685);
-            Assert.AreSame(model.Files[0], model.BatchProgress.CurrentJob);
-            Assert.AreEqual(45, model.Files[0].Progress.StagePercent);
-            model.Files[1].IsSelected = false;
-            Assert.AreEqual("Conversion skipped", model.Files[1].Status);
-            var cancelJob = FindButton(media, "Cancel job")!;
-            Assert.IsNotNull(cancelJob);
-            Assert.AreSame(model.Files[0], cancelJob.CommandParameter);
-            var peer = new ButtonAutomationPeer(cancelJob);
-            ((IInvokeProvider)peer.GetPattern(PatternInterface.Invoke)).Invoke();
-            await recovering.Task;
-            await Dispatcher.Yield(DispatcherPriority.ApplicationIdle);
-            Assert.AreEqual("Cancelling…", model.Files[0].Progress.Stage);
-            Assert.IsFalse(cancelJob.IsEnabled);
-            Assert.AreEqual(1, runtime.Conversions);
-            releaseRecovery.SetResult();
-            await operation;
-            Assert.AreEqual(2, runtime.Conversions);
-            Assert.AreEqual("Conversion cancelled", model.Files[0].Status);
-            Assert.AreEqual("Converted", model.Files[2].Status);
-            Assert.AreEqual(3, model.BatchProgress.Processed, "Cancelled, skipped and completed files all finish their batch slot.");
-            Assert.AreEqual(100, model.BatchProgress.Percent);
-            Assert.IsTrue(shell.CanNavigate);
-            model.Focused = model.Files[2];
-            await RenderAsync(media, "06-results");
-            await RenderAsync(new ArchiveView(shell.Archive), "07-backup-restore");
-            await shell.Settings.LoadCommand.ExecuteAsync();
-            await shell.Settings.CheckCommand.ExecuteAsync();
-            var settingsView = new SettingsView(shell.Settings);
-            await RenderAsync(settingsView, "08-settings");
-            shell.Settings.OtherFolder = true;
-            await shell.Settings.SaveTask;
-            var settingsScroll = ((DockPanel)settingsView.Content).Children.OfType<ScrollViewer>().Single();
-            await RenderAsync(settingsView, "08-settings-save-error", 620, 560);
-            Assert.AreEqual(Visibility.Visible, FindButton(settingsView, "Retry saving settings")!.Visibility);
-            Assert.AreEqual(Visibility.Visible, FindText(settingsView, "Choose an output folder.")!.Visibility);
-            AssertInside(FindButton(settingsView, "Retry saving settings")!, settingsView);
-            AssertInside(FindButton(settingsView, "Discard unsaved changes")!, settingsView);
-            settingsScroll.ScrollToEnd();
-            await RenderAsync(settingsView, "08-settings-save-error-scrolled", 620, 560);
-            AssertInside(FindButton(settingsView, "Discard unsaved changes")!, settingsView);
+            double? settingsOffset = null;
+            foreach (var page in shell.Pages.Skip(1).Append(media).Concat(shell.Pages.Skip(1).Append(media)))
+            {
+                navigation.SelectedItem = page;
+                await shell.NavigationTask;
+                await LayoutAsync(window);
+                var workspace = (ContentPresenter)pageHost.ItemContainerGenerator.ContainerFromItem(page);
+                Assert.AreSame(page, shell.CurrentPage);
+                Assert.AreSame(page, workspace.Content);
+                Assert.IsTrue(Descendants<FrameworkElement>(workspace).Any(element => ReferenceEquals(element.DataContext, page) && element.ActualHeight > 0));
+                var root = VisualTreeHelper.GetChild(workspace, 0);
+                if (retainedRoots.TryGetValue(page, out var previousRoot))
+                {
+                    Assert.AreSame(previousRoot, root, "Navigation must retain each page's visual tree.");
+                }
+                retainedRoots[page] = root;
+                var containers = shell.Pages.Select(item => (ContentPresenter)pageHost.ItemContainerGenerator.ContainerFromItem(item)).ToArray();
+                Assert.AreEqual(1, containers.Count(container => container.IsVisible));
+                Assert.IsTrue(workspace.IsVisible);
+                foreach (var hidden in containers.Where(container => !ReferenceEquals(container, workspace)))
+                {
+                    Assert.AreEqual(Visibility.Collapsed, hidden.Visibility);
+                    foreach (var control in Descendants<Control>(hidden).Where(control => control.Focusable && control.IsEnabled))
+                    {
+                        Assert.IsFalse(control.Focus(), "Controls on a collapsed page must not receive focus.");
+                    }
+                    Assert.IsFalse(hidden.IsKeyboardFocusWithin);
+                }
+                if (ReferenceEquals(page, shell.Settings))
+                {
+                    var scroll = Descendants<ScrollViewer>(workspace).Single(view => view.Content is StackPanel);
+                    if (settingsOffset is { } offset)
+                    {
+                        Assert.AreEqual(offset, scroll.VerticalOffset, 0.1, "Settings must retain its scroll position.");
+                    }
+                    else
+                    {
+                        scroll.ScrollToEnd();
+                        await LayoutAsync(window);
+                        settingsOffset = scroll.VerticalOffset;
+                        Assert.IsTrue(settingsOffset > 0, "The test must exercise a scrolled page.");
+                    }
+                }
 
-            shell.Settings.DiscardChangesCommand.Execute();
-            Assert.IsFalse(shell.Settings.OtherFolder);
-            await Dispatcher.Yield(DispatcherPriority.ApplicationIdle);
-            Assert.IsFalse(FindButton(settingsView, "Retry saving settings")!.IsVisible);
-            runtime.DuringDependencyCheck = token => Task.Delay(Timeout.Infinite, token);
-            var checking = shell.Settings.CheckCommand.ExecuteAsync();
-            settingsScroll.ScrollToEnd();
-            await RenderAsync(settingsView, "08-settings-operation");
-            var cancelSettings = FindButton(settingsView, "Cancel operation")!;
-            Assert.AreEqual(Visibility.Visible, cancelSettings.Visibility);
-            Assert.IsTrue(cancelSettings.IsEnabled);
-            cancelSettings.Command.Execute(null);
-            await checking;
-            Assert.AreEqual("Cancelled; cleanup finished.", shell.Settings.Status);
-            Assert.IsTrue(shell.CanNavigate);
-            runtime.DuringDependencyCheck = null;
-            // Release the standalone settings bindings before exercising the shell's retained view.
-            settingsView.DataContext = null;
-            window.RaiseEvent(new RoutedEventArgs(FrameworkElement.LoadedEvent));
-            var navigation = (ListBox)window.FindName("Navigation");
-            var retainedMedia = workspace.Content;
-            var mediaItem = navigation.Items.Cast<ListBoxItem>().Single(item => Equals(item.Tag, "Media"));
-            var settingsItem = navigation.Items.Cast<ListBoxItem>().Single(item => Equals(item.Tag, "Settings"));
-            runtime.DuringDependencyCheck = token => Task.Delay(Timeout.Infinite, token);
-            checking = shell.Settings.CheckCommand.ExecuteAsync();
-            await Dispatcher.Yield(DispatcherPriority.ApplicationIdle);
-            Assert.IsFalse(navigation.IsEnabled);
-            navigation.SelectedItem = settingsItem;
-            Assert.AreSame(mediaItem, navigation.SelectedItem);
-            Assert.AreSame(retainedMedia, workspace.Content);
-            shell.Settings.CancelCommand.Execute();
-            await checking;
-            model.OpenSettingsCommand.Execute();
-            await Dispatcher.Yield(DispatcherPriority.ApplicationIdle);
-            Assert.AreSame(settingsItem, navigation.SelectedItem);
-            Assert.IsInstanceOfType<SettingsView>(workspace.Content);
-            Assert.AreSame(shell.Settings, ((SettingsView)workspace.Content).DataContext);
-            navigation.SelectedItem = mediaItem;
-            await Dispatcher.Yield(DispatcherPriority.ApplicationIdle);
-            Assert.AreSame(retainedMedia, workspace.Content);
-            Assert.AreEqual("", listener.Errors.ToString(), "WPF binding errors");
+                var navigationTask = shell.NavigationTask;
+                navigation.UnselectAll();
+                await LayoutAsync(window);
+                Assert.AreSame(page, shell.CurrentPage, "Deselecting the sidebar must not clear the current page.");
+                Assert.AreSame(page, workspace.Content);
+                Assert.AreSame(page, navigation.SelectedItem, "The sidebar must restore its current selection.");
+                Assert.AreSame(navigationTask, shell.NavigationTask, "Rejecting null must not start another navigation.");
+            }
+            Assert.AreSame(media.Files[1], media.Focused);
+            Assert.IsFalse(media.Files[0].IsSelected);
+            Assert.AreSame(list, Descendants<ListView>(mediaView).Single());
+            Assert.AreEqual(400, fileColumn.Width, "Media must retain resized columns.");
+            fileColumn.Width = originalWidth;
+            Assert.AreSame(media.Files, list.ItemsSource);
+            Assert.AreSame(media.Focused, list.SelectedItem);
+
+            await VerifyRowActionsAsync(runtime, media, list, window, navigation, mediaView);
+            window.Width = 800;
+            window.Height = 600;
+            await LayoutAsync(window);
+            var content = (FrameworkElement)window.Content;
+            foreach (string caption in new[] { "⌕  Scan all", "◎  Inspect", "◎  Deep Inspect", "▷  Convert to DV8.1", "▷  Convert to HDR10", "⚙ Settings" })
+            {
+                AssertInside(Button(mediaView, caption), content);
+            }
+            SaveRender(content, "media-minimum");
+
+            Invoke(Button(mediaView, "⚙ Settings"));
+            await LayoutAsync(window);
+            await shell.NavigationTask;
+            Assert.AreSame(shell.Settings, navigation.SelectedItem);
+            var settingsView = (ContentPresenter)pageHost.ItemContainerGenerator.ContainerFromItem(shell.Settings);
+            await VerifySettingsRecoveryAsync(runtime, shell, window, navigation, settingsView);
+            Assert.AreEqual("", errors.Errors.ToString(), "WPF binding errors were reported.");
         }
         finally
         {
-            PresentationTraceSources.DataBindingSource.Listeners.Remove(listener);
+            source.Listeners.Remove(errors);
+            source.Switch.Level = previousLevel;
             app.Shutdown();
         }
     }
 
-    private static Button? FindButton(DependencyObject parent, string content)
+    private static async Task VerifyRowActionsAsync(TestRuntime runtime, MediaViewModel media, ListView list, Window window, ListBox navigation, DependencyObject mediaView)
     {
-        if (parent is Button button && Equals(button.Content, content))
+        await LayoutAsync(window);
+        var row = media.Files[0];
+        var container = (ListViewItem)list.ItemContainerGenerator.ContainerFromItem(row);
+        foreach (var (caption, command) in new (string, object)[]
         {
-            return button;
+            ("Cancel", media.CancelFileCommand), ("Retry", media.RetryAnalysisCommand),
+            ("Inspect", media.InspectIncompleteCommand), ("Open folder", media.OpenRowOutputCommand), ("Skip", media.SkipCommand)
+        })
+        {
+            var button = Button(container, caption);
+            Assert.AreSame(command, button.Command, caption + " must resolve through the actual page template.");
+            Assert.AreSame(row, button.CommandParameter);
         }
 
+        // A failed analysis must be retryable from the row even when another row is focused.
+        await runtime.ClearAsync(default);
+        runtime.DuringAnalysis = _ => throw new IOException("Analysis unavailable");
+        await media.ScanCommand.ExecuteAsync();
+        runtime.DuringAnalysis = null;
+        Assert.IsTrue(row.CanRetryAnalysis);
+        await LayoutAsync(window);
+        Invoke(Button(container, "Retry"));
+        await LayoutAsync(window);
+        await media.Completion;
+        Assert.IsFalse(row.CanRetryAnalysis);
+        Assert.IsTrue(media.Files[1].CanRetryAnalysis, "Retry must affect only the clicked row.");
+
+        var analysis = row.Analysis!;
+        row.Analysis = DoViFixer.Domain.Analysis.MediaClassifier.Classify(analysis.Media, analysis.Evidence with { SuccessfulSamples = 9 });
+        await LayoutAsync(window);
+        int fullAnalyses = runtime.FullAnalyses;
+        Invoke(Button(container, "Inspect"));
+        await LayoutAsync(window);
+        await media.Completion;
+        Assert.AreEqual(fullAnalyses + 1, runtime.FullAnalyses);
+        Assert.IsFalse(row.CanInspectIncomplete);
+
+        media.Files[1].IsSelected = true;
+        var started = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+        var recovering = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+        var release = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+        runtime.DuringConversion = async token =>
+        {
+            started.TrySetResult();
+            try
+            {
+                await Task.Delay(Timeout.Infinite, token);
+            }
+            finally
+            {
+                recovering.TrySetResult();
+                await release.Task;
+            }
+        };
+        var converting = media.ConvertDv81Command.ExecuteAsync();
+        try
+        {
+            await started.Task.WaitAsync(TimeSpan.FromSeconds(10));
+            await LayoutAsync(window);
+            Assert.IsFalse(navigation.IsEnabled);
+            Assert.AreSame(row, media.BatchProgress.CurrentJob);
+            Assert.AreEqual(45, row.Progress.StagePercent);
+            var pending = (ListViewItem)list.ItemContainerGenerator.ContainerFromItem(media.Files[1]);
+            Invoke(Button(pending, "Skip"));
+            await LayoutAsync(window);
+            Assert.AreEqual("Conversion skipped", media.Files[1].Status);
+            Assert.IsFalse(media.Files[1].IsPending);
+            var cancel = Button(container, "Cancel");
+            Invoke(cancel);
+            await recovering.Task.WaitAsync(TimeSpan.FromSeconds(10));
+            await LayoutAsync(window);
+            Assert.AreEqual("Cancelling…", row.Progress.Stage);
+            Assert.IsFalse(cancel.IsEnabled);
+            Assert.IsFalse(Button(mediaView, "Cancel job").IsEnabled);
+            SaveRender((FrameworkElement)window.Content, "cancelling-job");
+        }
+        finally
+        {
+            media.CancelCommand.Execute();
+            release.TrySetResult();
+            await converting.WaitAsync(TimeSpan.FromSeconds(10));
+            runtime.DuringConversion = null;
+        }
+
+        row.IsSelected = true;
+        await media.ConvertDv81Command.ExecuteAsync();
+        await LayoutAsync(window);
+        Invoke(Button(container, "Open folder"));
+        await LayoutAsync(window);
+        Assert.AreEqual(@"C:\Media", runtime.OpenedFolder);
+    }
+
+    private static async Task VerifySettingsRecoveryAsync(TestRuntime runtime, ShellViewModel shell, Window window, ListBox navigation, DependencyObject settingsView)
+    {
+        shell.Settings.OtherFolder = true;
+        await shell.Settings.SaveTask;
+        await LayoutAsync(window);
+        var discard = Button(settingsView, "Discard unsaved changes");
+        Assert.IsTrue(discard.IsVisible);
+        AssertInside(discard, (FrameworkElement)window.Content);
+        var scroll = Descendants<ScrollViewer>(settingsView).Single(view => view.Content is StackPanel);
+        scroll.ScrollToEnd();
+        await LayoutAsync(window);
+        AssertInside(discard, (FrameworkElement)window.Content);
+        SaveRender((FrameworkElement)window.Content, "settings-save-error");
+
+        bool closed = false;
+        window.Closed += (_, _) => closed = true;
+        window.Close();
+        await LayoutAsync(window);
+        Assert.IsFalse(closed, "A failed settings save must leave the window open for recovery.");
+        Assert.IsTrue(window.IsEnabled);
+        Assert.AreEqual("Choose an output folder.", shell.Settings.Status);
+        Invoke(discard);
+        await LayoutAsync(window);
+        Assert.IsNull(shell.Settings.SaveError);
+        Assert.IsFalse(shell.Settings.OtherFolder);
+
+        runtime.DuringDependencyCheck = token => Task.Delay(Timeout.Infinite, token);
+        var checking = shell.Settings.CheckCommand.ExecuteAsync();
+        try
+        {
+            await LayoutAsync(window);
+            Assert.IsFalse(navigation.IsEnabled);
+            var cancel = Button(settingsView, "Cancel operation");
+            Assert.IsTrue(cancel.IsVisible);
+            Invoke(cancel);
+            await LayoutAsync(window);
+            await checking.WaitAsync(TimeSpan.FromSeconds(10));
+            Assert.AreEqual("Cancelled; cleanup finished.", shell.Settings.Status);
+        }
+        finally
+        {
+            shell.Settings.CancelCommand.Execute();
+            await checking.WaitAsync(TimeSpan.FromSeconds(10));
+        }
+        window.Close();
+        await LayoutAsync(window);
+        Assert.IsTrue(closed, "Closing must succeed after recovery.");
+    }
+
+    private static Button Button(DependencyObject parent, string caption) => Descendants<Button>(parent).Single(button => Equals(button.Content, caption));
+
+    private static void Invoke(Button button)
+    {
+        Assert.IsTrue(button.IsEnabled, $"{button.Content} must be enabled.");
+        ((IInvokeProvider)new ButtonAutomationPeer(button).GetPattern(PatternInterface.Invoke)).Invoke();
+    }
+
+    private static IEnumerable<T> Descendants<T>(DependencyObject parent) where T : DependencyObject
+    {
         for (int i = 0; i < VisualTreeHelper.GetChildrenCount(parent); i++)
         {
-            if (FindButton(VisualTreeHelper.GetChild(parent, i), content) is { } match)
+            var child = VisualTreeHelper.GetChild(parent, i);
+            if (child is T match)
             {
-                return match;
+                yield return match;
+            }
+            foreach (var descendant in Descendants<T>(child))
+            {
+                yield return descendant;
             }
         }
+    }
 
-        return null;
+    private static async Task LayoutAsync(Window window)
+    {
+        await Dispatcher.Yield(DispatcherPriority.ApplicationIdle);
+        window.UpdateLayout();
     }
 
     private static void AssertInside(FrameworkElement element, FrameworkElement host)
     {
-        Assert.IsNotNull(element);
         var bounds = element.TransformToAncestor(host).TransformBounds(new Rect(element.RenderSize));
         Assert.IsTrue(element.ActualWidth > 0 && element.ActualHeight > 0);
         Assert.IsTrue(bounds.Left >= 0 && bounds.Top >= 0 && bounds.Right <= host.ActualWidth + 1 && bounds.Bottom <= host.ActualHeight + 1,
             $"{element} is clipped: {bounds} inside {host.RenderSize}.");
     }
 
-    private static TextBlock? FindText(DependencyObject parent, string text)
+    private static void SaveRender(FrameworkElement content, string name)
     {
-        if (parent is TextBlock block && block.Text == text)
-        {
-            return block;
-        }
-
-        for (int i = 0; i < VisualTreeHelper.GetChildrenCount(parent); i++)
-        {
-            if (FindText(VisualTreeHelper.GetChild(parent, i), text) is { } match)
-            {
-                return match;
-            }
-        }
-
-        return null;
-    }
-
-    private static async Task RenderAsync(FrameworkElement view, string name, int width = 1400, int height = 825)
-    {
-        view.Width = width;
-        view.Height = height;
-        view.Measure(new Size(width, height));
-        view.Arrange(new Rect(0, 0, width, height));
-        view.UpdateLayout();
-        await Dispatcher.Yield(DispatcherPriority.ApplicationIdle);
-        view.UpdateLayout();
-        var backgroundVisual = new DrawingVisual();
-        using (var dc = backgroundVisual.RenderOpen())
-        {
-            var brush = (Brush)System.Windows.Application.Current.FindResource("ApplicationBackgroundBrush");
-            dc.DrawRectangle(brush, null, new Rect(0, 0, width, height));
-        }
-
-        var bitmap = new RenderTargetBitmap(width, height, 96, 96, PixelFormats.Pbgra32);
-        bitmap.Render(backgroundVisual);
-        bitmap.Render(view);
+        var bitmap = new RenderTargetBitmap((int)content.ActualWidth, (int)content.ActualHeight, 96, 96, PixelFormats.Pbgra32);
+        bitmap.Render(content);
         var encoder = new PngBitmapEncoder();
         encoder.Frames.Add(BitmapFrame.Create(bitmap));
-        var directory = new DirectoryInfo(AppContext.BaseDirectory);
-        while (directory is not null && !File.Exists(Path.Combine(directory.FullName, "DoViFixer.sln")))
+        var root = new DirectoryInfo(AppContext.BaseDirectory);
+        while (root is not null && !File.Exists(Path.Combine(root.FullName, "DoViFixer.sln")))
         {
-            directory = directory.Parent;
+            root = root.Parent;
         }
-
-        string output = Path.Combine(directory!.FullName, "artifacts", "wpf");
+        Assert.IsNotNull(root);
+        string output = Path.Combine(root.FullName, "artifacts", "wpf-template-navigation");
         Directory.CreateDirectory(output);
         using var file = File.Create(Path.Combine(output, name + ".png"));
         encoder.Save(file);
@@ -345,12 +383,7 @@ public sealed class VisualTests
 
     private sealed class BindingErrors : TraceListener
     {
-        public StringBuilder Errors
-        {
-            get;
-        }
-        = new();
-
+        public StringBuilder Errors { get; } = new();
         public override void Write(string? message) => Errors.Append(message);
         public override void WriteLine(string? message) => Errors.AppendLine(message);
     }

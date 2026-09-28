@@ -1,6 +1,7 @@
 using System.Windows;
 using DoViFixer.App.Composition;
 using DoViFixer.App.Presentation;
+using DoViFixer.App.ViewModels;
 using DoViFixer.App.Views;
 using DoViFixer.Application.Settings;
 using Microsoft.Extensions.Configuration;
@@ -31,7 +32,12 @@ public partial class App : System.Windows.Application
         }
         catch
         {
-            // If settings cannot be loaded, default theme remains active.
+            // If settings cannot be loaded, keep the default theme.
+        }
+
+        if (MainWindow.DataContext is IInitializeAsync initializable)
+        {
+            await initializable.InitializeAsync();
         }
     }
 

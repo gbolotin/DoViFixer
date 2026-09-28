@@ -1,3 +1,4 @@
+using DoViFixer.App.Navigation;
 using System.Collections.ObjectModel;
 using DoViFixer.App.Dialogs;
 using DoViFixer.App.Presentation;
@@ -6,8 +7,11 @@ using DoViFixer.Application.Settings;
 using DoViFixer.Application.Abstractions;
 
 namespace DoViFixer.App.ViewModels;
-public sealed class SettingsViewModel : OperationViewModel
+public sealed class SettingsViewModel : OperationViewModel, INavigationPage
 {
+    public string NavigationName => "Settings";
+    public string? NavigationIcon => "\uE713";
+
     private readonly SettingsService settings;
     private readonly IThemeService themeService;
     private string temporary = "";

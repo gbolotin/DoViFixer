@@ -1,3 +1,4 @@
+using DoViFixer.App.Navigation;
 using DoViFixer.App.Dialogs;
 using DoViFixer.App.Presentation;
 using DoViFixer.Application.Backup;
@@ -7,8 +8,11 @@ using DoViFixer.Application.Operations;
 using Microsoft.Extensions.Logging;
 
 namespace DoViFixer.App.ViewModels;
-public sealed class ArchiveViewModel : OperationViewModel
+public sealed class ArchiveViewModel : OperationViewModel, INavigationPage
 {
+    public string NavigationName => "Backup & Restore";
+    public string? NavigationIcon => "\uE8B7";
+
     private string input = "";
     private string archive = "";
     private string output = "";
