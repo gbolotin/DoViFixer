@@ -1,4 +1,4 @@
-using DoViFixer.App.Presentation;
+using DoViFixer.App.Presentation.Application;
 using DoViFixer.Application.Operations;
 using Microsoft.VisualStudio.TestTools.UnitTesting;
 

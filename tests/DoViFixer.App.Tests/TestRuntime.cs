@@ -1,6 +1,6 @@
 using DoViFixer.App.Composition;
 using DoViFixer.App.Dialogs;
-using DoViFixer.App.Presentation;
+using DoViFixer.App.Presentation.Application;
 using DoViFixer.Application.Abstractions;
 using DoViFixer.Application.Dependencies;
 using DoViFixer.Application.Operations;

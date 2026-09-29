@@ -1,5 +1,5 @@
 using DoViFixer.App.ViewModels;
-using DoViFixer.App.Presentation;
+using DoViFixer.App.Presentation.Application;
 using Microsoft.VisualStudio.TestTools.UnitTesting;
 using Microsoft.Extensions.DependencyInjection;
 

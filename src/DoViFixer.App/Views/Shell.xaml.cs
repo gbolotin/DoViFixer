@@ -3,7 +3,7 @@ using System.Windows;
 using System.Windows.Controls;
 using System.Windows.Input;
 using DoViFixer.App.ViewModels;
-using DoViFixer.App.Presentation;
+using DoViFixer.App.Presentation.Application;
 using DoViFixer.App.Navigation;
 
 namespace DoViFixer.App.Views;

@@ -1,6 +1,7 @@
 using System.ComponentModel;
 using DoViFixer.App.Navigation;
-using DoViFixer.App.Presentation;
+using DoViFixer.App.Presentation.Common;
+using DoViFixer.App.Presentation.Application;
 
 namespace DoViFixer.App.ViewModels;
 public sealed class ShellViewModel : ObservableObject, IInitializeAsync

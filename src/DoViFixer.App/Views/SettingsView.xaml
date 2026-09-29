@@ -81,19 +81,21 @@
                             <TextBlock TextWrapping="Wrap"
                                        Foreground="{DynamicResource TextFillColorSecondaryBrush}"
                                        Margin="20,2,0,8">
-                                <Run Text="⚠ Warning: "
+                                <Run Text="&#xE730;"
+                                     FontFamily="{StaticResource SymbolThemeFontFamily}"
                                      FontWeight="SemiBold"
-                                     Foreground="#FFD166" />
+                                     Foreground="{DynamicResource SystemFillColorCautionBrush}"/>
                                 <Run Text="Enhancement-layer picture data will be discarded. Simple FEL contains minimal picture data and does not expand dynamic range beyond the base layer, but the original enhancement-layer video track is not retained in the converted file." />
                             </TextBlock>
                             <CheckBox Content="Force Complex FEL conversion" IsChecked="{Binding ForceComplex}" />
                             <TextBlock TextWrapping="Wrap"
                                        Foreground="{DynamicResource TextFillColorSecondaryBrush}"
                                        Margin="20,2,0,8">
-                        <Run Text="⚠ Warning: "
-                             FontWeight="SemiBold"
-                             Foreground="#FFD166" />
-                        <Run Text="Active enhancement-layer picture data will be permanently lost. Complex FEL contains video data that expands dynamic range and brightness beyond the base layer. Discarding it during conversion removes this visual detail." />
+                                <Run Text="&#xE730;"
+                                     FontFamily="{StaticResource SymbolThemeFontFamily}"
+                                     FontWeight="SemiBold"
+                                     Foreground="{DynamicResource SystemFillColorCautionBrush}" />
+                                <Run Text="Active enhancement-layer picture data will be permanently lost. Complex FEL contains video data that expands dynamic range and brightness beyond the base layer. Discarding it during conversion removes this visual detail." />
                             </TextBlock>
                         </StackPanel>
                     </Border>

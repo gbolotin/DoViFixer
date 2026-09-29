@@ -1,6 +1,6 @@
 using System.Windows.Input;
 
-namespace DoViFixer.App.Presentation;
+namespace DoViFixer.App.Presentation.Common;
 public sealed class AsyncCommand(Func<Task> execute, Func<bool>? canExecute = null) : ICommand
 {
     private bool running;

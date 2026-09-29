@@ -1,5 +1,5 @@
 using DoViFixer.App.ViewModels;
-using DoViFixer.App.Presentation;
+using DoViFixer.App.Presentation.Application;
 using DoViFixer.Application.Abstractions;
 using DoViFixer.Application.Settings;
 using Microsoft.VisualStudio.TestTools.UnitTesting;

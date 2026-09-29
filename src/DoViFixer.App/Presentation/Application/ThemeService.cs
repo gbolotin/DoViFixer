@@ -1,7 +1,7 @@
 using System.Windows;
 using DoViFixer.Application.Settings;
 
-namespace DoViFixer.App.Presentation;
+namespace DoViFixer.App.Presentation.Application;
 
 public interface IThemeService
 {

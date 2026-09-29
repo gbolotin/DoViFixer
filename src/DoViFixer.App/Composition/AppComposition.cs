@@ -1,6 +1,6 @@
 using DoViFixer.App.Dialogs;
 using DoViFixer.App.Navigation;
-using DoViFixer.App.Presentation;
+using DoViFixer.App.Presentation.Application;
 using DoViFixer.App.ViewModels;
 using DoViFixer.App.Views;
 using DoViFixer.Application;

@@ -1,6 +1,7 @@
 using DoViFixer.App.Navigation;
 using DoViFixer.App.Dialogs;
-using DoViFixer.App.Presentation;
+using DoViFixer.App.Presentation.Common;
+using DoViFixer.App.Presentation.Application;
 using DoViFixer.Application.Backup;
 using DoViFixer.Application.Cleanup;
 using DoViFixer.Application.Restore;

@@ -3,7 +3,7 @@ using System.Windows.Controls;
 using System.Windows.Controls.Primitives;
 using System.Windows.Media;
 
-namespace DoViFixer.App.Presentation;
+namespace DoViFixer.App.Presentation.Common;
 
 public static class GridViewSizing
 {

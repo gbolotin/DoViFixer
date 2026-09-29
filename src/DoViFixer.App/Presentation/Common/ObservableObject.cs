@@ -1,7 +1,7 @@
 using System.ComponentModel;
 using System.Runtime.CompilerServices;
 
-namespace DoViFixer.App.Presentation;
+namespace DoViFixer.App.Presentation.Common;
 
 public abstract class ObservableObject : INotifyPropertyChanged
 {

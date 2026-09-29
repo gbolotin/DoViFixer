@@ -1,7 +1,7 @@
 using System.Globalization;
 using System.Windows;
 using System.Windows.Input;
-using DoViFixer.App.Presentation;
+using DoViFixer.App.Presentation.Common;
 using Microsoft.VisualStudio.TestTools.UnitTesting;
 
 namespace DoViFixer.App.Tests;

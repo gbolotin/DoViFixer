@@ -3,7 +3,7 @@ using DoViFixer.Application.Dependencies;
 using DoViFixer.Application.Operations;
 using Microsoft.Extensions.Logging;
 
-namespace DoViFixer.App.Presentation;
+namespace DoViFixer.App.Presentation.Application;
 public sealed class DependencySetup(DependencyService dependencies, IUserDialogs dialogs, ILogger<DependencySetup> logger)
 {
     public async Task<bool> EnsureAsync(IProgress<OperationProgress> progress, CancellationToken token)

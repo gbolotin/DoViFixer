@@ -1,7 +1,8 @@
 using DoViFixer.App.Navigation;
 using System.Collections.ObjectModel;
 using DoViFixer.App.Dialogs;
-using DoViFixer.App.Presentation;
+using DoViFixer.App.Presentation.Common;
+using DoViFixer.App.Presentation.Application;
 using DoViFixer.Application.Dependencies;
 using DoViFixer.Application.Settings;
 using DoViFixer.Application.Abstractions;

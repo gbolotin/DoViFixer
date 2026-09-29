@@ -2,7 +2,7 @@ using System.Globalization;
 using System.Windows;
 using System.Windows.Data;
 
-namespace DoViFixer.App.Presentation;
+namespace DoViFixer.App.Presentation.Common;
 
 public sealed class InverseBooleanToVisibilityConverter : IValueConverter
 {

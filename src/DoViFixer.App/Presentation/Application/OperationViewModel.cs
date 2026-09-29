@@ -1,7 +1,7 @@
 using DoViFixer.App.ViewModels;
 using DoViFixer.Application.Operations;
 
-namespace DoViFixer.App.Presentation;
+namespace DoViFixer.App.Presentation.Application;
 public abstract class OperationViewModel : ObservableObject
 {
     private static readonly Dictionary<ViewStatus, string> statusTexts = new()

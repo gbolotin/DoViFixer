@@ -1,4 +1,4 @@
-namespace DoViFixer.App.Presentation;
+namespace DoViFixer.App.Presentation.Application;
 
 public enum ViewStatus
 {

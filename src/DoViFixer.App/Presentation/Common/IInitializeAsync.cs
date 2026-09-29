@@ -1,4 +1,4 @@
-namespace DoViFixer.App.Presentation;
+namespace DoViFixer.App.Presentation.Common;
 
 public interface IInitializeAsync
 {
