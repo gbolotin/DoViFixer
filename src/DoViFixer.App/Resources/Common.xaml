@@ -1,9 +1,6 @@
 <ResourceDictionary xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
                     xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
                     xmlns:p="clr-namespace:DoViFixer.App.Presentation">
-    <ResourceDictionary.MergedDictionaries>
-        <ResourceDictionary Source="pack://application:,,,/PresentationFramework.Fluent;component/Themes/Fluent.xaml" />
-    </ResourceDictionary.MergedDictionaries>
     <BooleanToVisibilityConverter x:Key="Visible" />
     <p:InverseBooleanToVisibilityConverter x:Key="InverseVisible" />
     <p:InverseBooleanConverter x:Key="Inverse" />
@@ -32,4 +29,16 @@
     <Style x:Key="Primary"
            TargetType="Button"
            BasedOn="{StaticResource AccentButtonStyle}" />
+    <Style x:Key="TransparentButton"
+           TargetType="Button"
+           BasedOn="{StaticResource {x:Type Button}}">
+        <Style.Resources>
+            <SolidColorBrush x:Key="ButtonBackgroundPointerOver" Color="Transparent" />
+            <SolidColorBrush x:Key="ButtonBackgroundPressed" Color="Transparent" />
+            <SolidColorBrush x:Key="ButtonBackgroundDisabled" Color="Transparent" />
+            <SolidColorBrush x:Key="ButtonForeground" Color="{StaticResource ControlStrongFillColorDefault}" />
+        </Style.Resources>
+        <Setter Property="Background" Value="Transparent" />
+        <Setter Property="BorderThickness" Value="0" />
+    </Style>
 </ResourceDictionary>

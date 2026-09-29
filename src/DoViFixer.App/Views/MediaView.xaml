@@ -85,7 +85,6 @@
                                           AutomationProperties.Name="Include file" />
                                     <StackPanel VerticalAlignment="Center">
                                         <TextBlock Text="{Binding Name}"
-                                                   FontWeight="SemiBold"
                                                    TextTrimming="CharacterEllipsis"
                                                    ToolTip="{Binding Path}" />
                                         <TextBlock Text="{Binding PlannedOutput}"
@@ -218,17 +217,17 @@
                                                 Visibility="{Binding IsPending, Converter={StaticResource Visible}}"
                                                 Command="{Binding DataContext.SkipCommand, RelativeSource={RelativeSource AncestorType=ListView}}"
                                                 CommandParameter="{Binding}" />
-                                        <Button Background="Transparent"
-                                                BorderThickness="0"
-                                                Padding="7,6"
+                                        <Button Padding="7,6"
                                                 Margin="4"
                                                 VerticalAlignment="Center"
-                                                ToolTip="Remove from list"
+                                                ToolTip="Remove"
                                                 AutomationProperties.Name="Remove from list"
                                                 Command="{Binding DataContext.RemoveFileCommand, RelativeSource={RelativeSource AncestorType=ListView}}"
-                                                CommandParameter="{Binding}">
+                                                CommandParameter="{Binding}"
+                                                Content="&#xE74D;" 
+                                                FontFamily="{StaticResource SymbolThemeFontFamily}">
                                             <Button.Style>
-                                                <Style TargetType="Button" BasedOn="{StaticResource {x:Type Button}}">
+                                                <Style TargetType="Button" BasedOn="{StaticResource TransparentButton}">
                                                     <Setter Property="Visibility" Value="Hidden" />
                                                     <Style.Triggers>
                                                         <DataTrigger Binding="{Binding IsMouseOver, RelativeSource={RelativeSource AncestorType=ListViewItem}}" Value="True">
@@ -237,7 +236,6 @@
                                                     </Style.Triggers>
                                                 </Style>
                                             </Button.Style>
-                                            <TextBlock Text="&#xE74D;" FontFamily="Segoe Fluent Icons" />
                                         </Button>
                                     </StackPanel>
                                 </Grid>

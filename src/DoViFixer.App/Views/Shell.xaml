@@ -29,7 +29,7 @@
                             <DataTemplate>
                                 <StackPanel Orientation="Horizontal">
                                     <TextBlock Text="{Binding NavigationIcon}"
-                                               FontFamily="Segoe Fluent Icons"
+                                               FontFamily="{StaticResource SymbolThemeFontFamily}"
                                                VerticalAlignment="Center"
                                                Margin="0,0,8,0" />
                                     <TextBlock Text="{Binding NavigationName}" VerticalAlignment="Center" />
