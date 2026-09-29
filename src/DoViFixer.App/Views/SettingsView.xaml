@@ -180,9 +180,6 @@
                     <ProgressBar Value="{Binding Percent, Mode=OneWay}"
                                  IsIndeterminate="{Binding IsIndeterminate}"
                                  Visibility="{Binding IsBusy, Converter={StaticResource Visible}}" />
-                    <TextBlock Text="{Binding StatusText}"
-                               TextWrapping="Wrap"
-                               Margin="0,12" />
                     <Button Content="Cancel operation"
                             Command="{Binding CancelCommand}"
                             Visibility="{Binding IsBusy, Converter={StaticResource Visible}}"

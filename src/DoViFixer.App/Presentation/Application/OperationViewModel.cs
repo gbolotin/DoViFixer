@@ -69,6 +69,7 @@ public abstract class OperationViewModel : ObservableObject
     public ViewStatus Status => status;
     public string StatusMessage => statusMessage;
     public string StatusText => statusTexts.TryGetValue(Status, out string? text) ? text : StatusMessage;
+    public virtual IReadOnlyList<string> StatusItems => [StatusText];
 
     public void SetStatus(ViewStatus value, string message = "")
     {
@@ -87,6 +88,7 @@ public abstract class OperationViewModel : ObservableObject
         if (statusChanged || messageChanged)
         {
             RaisePropertyChanged(nameof(StatusText));
+            RaisePropertyChanged(nameof(StatusItems));
         }
     }
 

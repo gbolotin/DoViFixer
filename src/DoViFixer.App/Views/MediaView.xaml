@@ -1,7 +1,6 @@
 ﻿<ResourceDictionary xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
                     xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
                     xmlns:p="clr-namespace:DoViFixer.App.Presentation.Common"
-                    xmlns:application="clr-namespace:DoViFixer.App.Presentation.Application"
                     xmlns:viewModels="clr-namespace:DoViFixer.App.ViewModels"
                     xmlns:analysis="clr-namespace:DoViFixer.Domain.Analysis;assembly=DoViFixer.Domain">
 
@@ -334,31 +333,6 @@
         </Grid>
     </DataTemplate>
 
-    <DataTemplate x:Key="MediaStatusTemplate" DataType="{x:Type viewModels:MediaViewModel}">
-        <DockPanel TextElement.Foreground="{DynamicResource TextFillColorSecondaryBrush}">
-            <TextBlock x:Name="MediaSelectionSummary"
-                       Text="{Binding SelectionSummary}"
-                       Visibility="{Binding IsFileListEmpty, Converter={StaticResource InverseVisible}}"
-                       Margin="0,0,16,0" />
-            <TextBlock x:Name="MediaStatus"
-                       Text="{Binding StatusText}"
-                       TextWrapping="Wrap">
-                <TextBlock.Style>
-                    <Style TargetType="TextBlock">
-                        <Style.Triggers>
-                            <DataTrigger Binding="{Binding Status}" Value="{x:Static application:ViewStatus.Ready}">
-                                <Setter Property="Visibility" Value="Collapsed" />
-                            </DataTrigger>
-                            <DataTrigger Binding="{Binding Status}" Value="{x:Static application:ViewStatus.FileListCleared}">
-                                <Setter Property="Visibility" Value="Collapsed" />
-                            </DataTrigger>
-                        </Style.Triggers>
-                    </Style>
-                </TextBlock.Style>
-            </TextBlock>
-        </DockPanel>
-    </DataTemplate>
-
     <DataTemplate x:Key="MediaCurrentJobProgressTemplate" DataType="{x:Type viewModels:MediaViewModel}">
         <DockPanel>
             <Button DockPanel.Dock="Right"
@@ -497,7 +471,6 @@
                 <RowDefinition Height="Auto" />
                 <RowDefinition Height="*" />
                 <RowDefinition Height="Auto" />
-                <RowDefinition Height="Auto" />
             </Grid.RowDefinitions>
             <ContentControl Content="{Binding}"
                             ContentTemplate="{StaticResource EmptyMediaPanelTemplate}"
@@ -518,10 +491,6 @@
                             Margin="0,8,0,0"
                             Grid.Row="2"
                             Visibility="{Binding IsBusy, Converter={StaticResource Visible}}"/>
-            <ContentControl Content="{Binding}"
-                            ContentTemplate="{StaticResource MediaStatusTemplate}"
-                            Grid.Row="3"
-                            Margin="0,8,0,0" />
         </Grid>
     </DataTemplate>
 </ResourceDictionary>

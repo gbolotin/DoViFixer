@@ -18,6 +18,7 @@ public sealed class MediaViewModel : OperationViewModel, INavigationPage, IIniti
 {
     public string NavigationName => "Media";
     public string? NavigationIcon => "\uE714";
+    public override IReadOnlyList<string> StatusItems => [SelectionSummary, StatusText];
 
     private readonly IFileDiscovery discovery;
     private readonly InspectionService inspection;
@@ -95,6 +96,11 @@ public sealed class MediaViewModel : OperationViewModel, INavigationPage, IIniti
         Progress.PropertyChanged += (_, _) => NotifyActiveProgress();
         PropertyChanged += (_, e) =>
         {
+            if (e.PropertyName == nameof(SelectionSummary))
+            {
+                RaisePropertyChanged(nameof(StatusItems));
+            }
+
             if (e.PropertyName is nameof(StatusMessage) or nameof(IsBusy))
             {
                 NotifyActiveProgress();

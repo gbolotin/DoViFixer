@@ -88,11 +88,15 @@ public sealed class VisualTests
             Assert.HasCount(3, navigation.Items);
 
             await VerifyEmptyMediaAsync(runtime, media, window, navigation, mediaView);
+            shell.Pages.OfType<ArchiveViewModel>().Single().SetStatus(ViewStatus.Result, "Archive status retained.");
+            await LayoutAsync(window);
+            Assert.AreEqual(media.StatusText, StatusItem(window, 1).Text, "Inactive pages must not overwrite the visible status.");
             await media.AddAsync([@"C:\Media\Mountain.mkv", @"C:\Media\Mountain2.mkv"]);
             media.Focused = media.Files[1];
             media.Files[0].IsSelected = false;
             await LayoutAsync(window);
             var list = Descendants<ListView>(mediaView).Single();
+            Assert.AreEqual("2 items | 1 item selected", StatusItem(window, 0).Text);
             await VerifyClassificationColorsAsync(runtime, list);
             await VerifyLastColumnSizingAsync(list, window);
             var fileColumn = ((GridView)list.View).Columns[0];
@@ -123,6 +127,9 @@ public sealed class VisualTests
                 await LayoutAsync(window);
                 var workspace = (ContentPresenter)pageHost.ItemContainerGenerator.ContainerFromItem(page);
                 Assert.AreSame(page, shell.CurrentPage);
+                var statusBar = Descendants<StatusBar>(window).Single();
+                CollectionAssert.AreEqual(page.StatusItems.ToArray(), Descendants<TextBlock>(statusBar).Select(text => text.Text).ToArray());
+                AssertInside(statusBar, (FrameworkElement)window.Content);
                 Assert.AreSame(page, workspace.Content);
                 Assert.IsTrue(Descendants<FrameworkElement>(workspace).Any(element => ReferenceEquals(element.DataContext, page) && element.ActualHeight > 0));
                 var root = VisualTreeHelper.GetChild(workspace, 0);
@@ -305,13 +312,13 @@ public sealed class VisualTests
     private static async Task VerifyEmptyMediaAsync(TestRuntime runtime, MediaViewModel media, Window window, ListBox navigation, DependencyObject mediaView)
     {
         var panel = Descendants<StackPanel>(mediaView).Single(element => element.Name == "EmptyMediaPanel");
-        var status = Descendants<TextBlock>(mediaView).Single(element => element.Name == "MediaStatus");
-        var selection = Descendants<TextBlock>(mediaView).Single(element => element.Name == "MediaSelectionSummary");
+        TextBlock Status() => StatusItem(window, 1);
+        TextBlock Selection() => StatusItem(window, 0);
         var addFiles = Button(panel, "Add files");
         var addFolder = Button(panel, "Add folder");
         Assert.IsTrue(panel.IsVisible);
-        Assert.IsFalse(status.IsVisible, "Ready must not clutter the empty state.");
-        Assert.IsFalse(selection.IsVisible, "An empty list must not show a selection count.");
+        Assert.IsTrue(Status().IsVisible);
+        Assert.AreEqual("0 items", Selection().Text);
         Assert.IsTrue(navigation.IsVisible && navigation.IsEnabled);
         Assert.AreSame(media.AddFilesCommand, addFiles.Command);
         Assert.AreSame(media.AddFolderCommand, addFolder.Command);
@@ -320,22 +327,22 @@ public sealed class VisualTests
         Assert.IsTrue(addFolder.Focus());
         CollectionAssert.AreEquivalent(new[] { addFiles, addFolder }, Descendants<Button>(mediaView).Where(button => button.IsVisible).ToArray());
 
-        // Visibility follows the enum even if a message matches former hidden text.
+        // Every status, including errors matching neutral messages, remains visible in the shell.
         foreach (string message in new[] { "Ready", "File list cleared." })
         {
             media.SetStatus(ViewStatus.Error, message);
             await LayoutAsync(window);
-            Assert.IsTrue(status.IsVisible);
-            Assert.AreEqual(message, status.Text);
+            Assert.IsTrue(Status().IsVisible);
+            Assert.AreEqual(message, Status().Text);
         }
         media.SetStatus(ViewStatus.Cancelled);
         await LayoutAsync(window);
-        Assert.IsTrue(status.IsVisible);
-        Assert.AreEqual("Cancelled; cleanup finished.", status.Text);
+        Assert.IsTrue(Status().IsVisible);
+        Assert.AreEqual("Cancelled; cleanup finished.", Status().Text);
         media.SetStatus(ViewStatus.Ready);
         await LayoutAsync(window);
-        Assert.IsFalse(status.IsVisible);
-        Assert.AreEqual("Ready", status.Text);
+        Assert.IsTrue(Status().IsVisible);
+        Assert.AreEqual("Ready", Status().Text);
 
         window.Width = 800;
         window.Height = 600;
@@ -349,6 +356,14 @@ public sealed class VisualTests
             AssertInside(text, content);
         }
         SaveRender(content, "media-empty-minimum");
+
+        string longError = string.Join(" ", Enumerable.Repeat("Long operation error with file details.", 20));
+        media.SetStatus(ViewStatus.Error, longError);
+        await LayoutAsync(window);
+        Assert.AreEqual(longError, Status().Text);
+        Assert.AreEqual(longError, Status().ToolTip);
+        Assert.AreEqual(TextTrimming.CharacterEllipsis, Status().TextTrimming);
+        AssertInside(Status(), content);
 
         // Cancelled pickers leave the same usable empty state.
         foreach (var button in new[] { addFiles, addFolder })
@@ -375,9 +390,9 @@ public sealed class VisualTests
         await LayoutAsync(window);
         await media.Completion;
         await LayoutAsync(window);
-        Assert.IsTrue(status.IsVisible);
-        Assert.AreEqual(@"Could not add C:\Media: Folder unavailable", status.Text);
-        AssertInside(status, content);
+        Assert.IsTrue(Status().IsVisible);
+        Assert.AreEqual(@"Could not add C:\Media: Folder unavailable", Status().Text);
+        AssertInside(Status(), content);
         SaveRender(content, "media-empty-error");
 
         var started = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
@@ -423,13 +438,13 @@ public sealed class VisualTests
         await LayoutAsync(window);
         Assert.HasCount(1, media.Files);
         Assert.IsFalse(panel.IsVisible);
-        Assert.IsTrue(selection.IsVisible);
-        Assert.AreEqual(media.SelectionSummary, selection.Text);
+        Assert.IsTrue(Selection().IsVisible);
+        Assert.AreEqual(media.SelectionSummary, Selection().Text);
         media.SetStatus(ViewStatus.Error, "Media operation failed.");
         await LayoutAsync(window);
-        Assert.IsTrue(status.IsVisible);
-        Assert.AreEqual(media.StatusMessage, status.Text, "Populated and empty lists must use the same status element.");
-        AssertInside(status, content);
+        Assert.IsTrue(Status().IsVisible);
+        Assert.AreEqual(media.StatusMessage, Status().Text, "Populated and empty lists must use the same status element.");
+        AssertInside(Status(), content);
         Assert.IsFalse(addFiles.Focus());
         var list = Descendants<ListView>(mediaView).Single();
         Assert.IsTrue(list.IsVisible);
@@ -441,10 +456,10 @@ public sealed class VisualTests
         await LayoutAsync(window);
         Assert.IsEmpty(media.Files);
         Assert.IsTrue(panel.IsVisible);
-        Assert.IsFalse(status.IsVisible, "Clearing should restore the neutral empty state.");
+        Assert.IsTrue(Status().IsVisible);
         Assert.AreEqual(ViewStatus.FileListCleared, media.Status);
-        Assert.AreEqual("File list cleared.", status.Text);
-        Assert.IsFalse(selection.IsVisible);
+        Assert.AreEqual("File list cleared.", Status().Text);
+        Assert.AreEqual("0 items", Selection().Text);
         Assert.IsFalse(list.IsVisible);
         CollectionAssert.AreEquivalent(new[] { addFiles, addFolder }, Descendants<Button>(mediaView).Where(button => button.IsVisible).ToArray());
         foreach (var hidden in Descendants<Control>(mediaView).Where(control => !control.IsVisible && control.Focusable && control.IsEnabled))
@@ -616,7 +631,8 @@ public sealed class VisualTests
             await LayoutAsync(window);
             await checking.WaitAsync(TimeSpan.FromSeconds(10));
             Assert.AreEqual(ViewStatus.Cancelled, shell.Settings.Status);
-            var status = Descendants<TextBlock>(settingsView).Single(text => text.GetBindingExpression(TextBlock.TextProperty)?.ParentBinding.Path.Path == nameof(OperationViewModel.StatusText));
+            await LayoutAsync(window);
+            var status = StatusItem(window, 0);
             Assert.AreEqual("Cancelled; cleanup finished.", status.Text);
         }
         finally
@@ -637,6 +653,9 @@ public sealed class VisualTests
     }
 
     private static Button Button(DependencyObject parent, string caption) => Descendants<Button>(parent).Single(button => Equals(button.Content, caption));
+
+    private static TextBlock StatusItem(DependencyObject window, int index) =>
+        Descendants<TextBlock>(Descendants<StatusBar>(window).Single()).ElementAt(index);
 
     private static void Invoke(Button button)
     {

@@ -4,4 +4,5 @@ public interface INavigationPage
 {
     string NavigationName { get; }
     string? NavigationIcon { get; }
+    IReadOnlyList<string> StatusItems { get; }
 }

@@ -70,7 +70,6 @@
                              Value="{Binding Percent, Mode=OneWay}"
                              IsIndeterminate="{Binding IsIndeterminate}"
                              Visibility="{Binding IsBusy, Converter={StaticResource Visible}}" />
-                <TextBlock Text="{Binding StatusText}" TextWrapping="Wrap" />
                 <Button Content="Cancel operation"
                         Command="{Binding CancelCommand}"
                         Visibility="{Binding IsBusy, Converter={StaticResource Visible}}"

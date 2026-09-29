@@ -17,6 +17,28 @@
             <DataTemplate DataType="{x:Type viewModels:ShellViewModel}">
                 <DockPanel Background="{DynamicResource ApplicationBackgroundBrush}"
                            TextElement.Foreground="{DynamicResource TextFillColorPrimaryBrush}">
+                    <StatusBar ItemsSource="{Binding CurrentPage.StatusItems}"
+                               DockPanel.Dock="Bottom"
+                               Background="{DynamicResource ApplicationBackgroundBrush}"
+                               Foreground="{DynamicResource TextFillColorSecondaryBrush}"
+                               BorderBrush="{DynamicResource DividerStrokeColorDefaultBrush}"
+                               BorderThickness="0,1,0,0"
+                               Padding="8,4"
+                               AutomationProperties.Name="Page status">
+                        <StatusBar.ItemContainerStyle>
+                            <Style TargetType="StatusBarItem">
+                                <Setter Property="HorizontalContentAlignment" Value="Stretch" />
+                                <Setter Property="Padding" Value="4,0,12,0" />
+                            </Style>
+                        </StatusBar.ItemContainerStyle>
+                        <StatusBar.ItemTemplate>
+                            <DataTemplate>
+                                <TextBlock Text="{Binding}"
+                                           TextTrimming="CharacterEllipsis"
+                                           ToolTip="{Binding}" />
+                            </DataTemplate>
+                        </StatusBar.ItemTemplate>
+                    </StatusBar>
                     <ListBox ItemsSource="{Binding Pages}"
                              SelectedItem="{Binding CurrentPage}"
                              IsEnabled="{Binding CanNavigate}"
