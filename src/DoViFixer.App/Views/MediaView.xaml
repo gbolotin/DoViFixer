@@ -1,4 +1,4 @@
-﻿<ResourceDictionary xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+<ResourceDictionary xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
                     xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
                     xmlns:p="clr-namespace:DoViFixer.App.Presentation.Common"
                     xmlns:viewModels="clr-namespace:DoViFixer.App.ViewModels"
@@ -7,36 +7,54 @@
     <DataTemplate x:Key="MediaToolBarTemplate" DataType="{x:Type viewModels:MediaViewModel}">
         <StackPanel>
             <WrapPanel>
-                <Button Content="＋  Add files"
+                <Button Content="Add files"
+                        Tag="&#xE710;"
+                        ContentTemplate="{StaticResource IconButtonContent}"
                         Command="{Binding AddFilesCommand}"
                         Margin="0,0,8,8" />
-                <Button Content="▱  Add folder"
+                <Button Content="Add folder"
+                        Tag="&#xE8B7;"
+                        ContentTemplate="{StaticResource IconButtonContent}"
                         Command="{Binding AddFolderCommand}"
                         Margin="0,0,8,8" />
                 <Button Content="Clear all"
+                        Tag="&#xEA99;"
+                        ContentTemplate="{StaticResource IconButtonContent}"
                         Command="{Binding ClearAllCommand}"
                         Margin="0,0,8,8" />
-                <Button Content="⌕  Rescan"
+                <Button Content="Rescan"
+                        Tag="&#xE72C;"
+                        ContentTemplate="{StaticResource IconButtonContent}"
                         Command="{Binding ScanCommand}"
                         ToolTip="Scan every file in the list. If automatic selection is enabled, selections are updated using the conversion policy in Settings."
                         Margin="0,0,8,8" />
-                <Button Content="◎  Inspect"
+                <Button Content="Inspect"
+                        Tag="&#xE721;"
+                        ContentTemplate="{StaticResource IconButtonContent}"
                         Command="{Binding InspectCommand}"
                         Margin="0,0,8,8"/>
-                <Button Content="◎  Deep Inspect"
+                <Button Content="Deep Inspect"
+                        Tag="&#xE9D9;"
+                        ContentTemplate="{StaticResource IconButtonContent}"
                         Command="{Binding DeepInspectCommand}"
                         Margin="0,0,8,8"/>
-                <Button Content="▷  Convert to DV8.1"
+                <Button Content="Convert to DV8.1"
+                        Tag="&#xE768;"
+                        ContentTemplate="{StaticResource IconButtonContent}"
                         Command="{Binding ConvertDv81Command}"
                         ToolTip="{Binding OutputSummaryToolTip}"
                         Margin="0,0,8,8" />
-                <Button Content="▷  Convert to HDR10"
+                <Button Content="Convert to HDR10"
+                        Tag="&#xE768;"
+                        ContentTemplate="{StaticResource IconButtonContent}"
                         Command="{Binding ConvertHdrCommand}"
                         ToolTip="{Binding OutputSummaryToolTip}"
                         Margin="0,0,0,8" />
             </WrapPanel>
             <DockPanel Margin="0,0,0,4">
-                <Button Content="⚙ Settings"
+                <Button Content="Settings"
+                        Tag="&#xE713;"
+                        ContentTemplate="{StaticResource IconButtonContent}"
                         DockPanel.Dock="Right"
                         Command="{Binding OpenSettingsCommand}"
                         ToolTip="{Binding OutputSummaryToolTip}"
@@ -218,30 +236,40 @@
                                     </StackPanel>
                                     <StackPanel Grid.Column="1" Orientation="Horizontal">
                                         <Button Content="Cancel"
+                                                Tag="&#xE711;"
+                                                ContentTemplate="{StaticResource IconButtonContent}"
                                                 Padding="7,6"
                                                 Margin="4"
                                                 Visibility="{Binding IsActive, Converter={StaticResource Visible}}"
                                                 Command="{Binding DataContext.CancelFileCommand, RelativeSource={RelativeSource AncestorType=ListView}}"
                                                 CommandParameter="{Binding}" />
                                         <Button Content="Retry"
+                                                Tag="&#xE72C;"
+                                                ContentTemplate="{StaticResource IconButtonContent}"
                                                 Padding="7,6"
                                                 Margin="4"
                                                 Visibility="{Binding CanRetryAnalysis, Converter={StaticResource Visible}}"
                                                 Command="{Binding DataContext.RetryAnalysisCommand, RelativeSource={RelativeSource AncestorType=ListView}}"
                                                 CommandParameter="{Binding}" />
                                         <Button Content="Inspect"
+                                                Tag="&#xE721;"
+                                                ContentTemplate="{StaticResource IconButtonContent}"
                                                 Padding="7,6"
                                                 Margin="4"
                                                 Visibility="{Binding CanInspectIncomplete, Converter={StaticResource Visible}}"
                                                 Command="{Binding DataContext.InspectIncompleteCommand, RelativeSource={RelativeSource AncestorType=ListView}}"
                                                 CommandParameter="{Binding}" />
                                         <Button Content="Open folder"
+                                                Tag="&#xE8B7;"
+                                                ContentTemplate="{StaticResource IconButtonContent}"
                                                 Padding="7,6"
                                                 Margin="4"
                                                 Visibility="{Binding CanOpenResult, Converter={StaticResource Visible}}"
                                                 Command="{Binding DataContext.OpenRowOutputCommand, RelativeSource={RelativeSource AncestorType=ListView}}"
                                                 CommandParameter="{Binding}" />
                                         <Button Content="Skip"
+                                                Tag="&#xE893;"
+                                                ContentTemplate="{StaticResource IconButtonContent}"
                                                 Padding="7,6"
                                                 Margin="4"
                                                 Visibility="{Binding IsPending, Converter={StaticResource Visible}}"
@@ -308,10 +336,14 @@
                     </Border>
                     <WrapPanel Margin="0,16,0,0">
                         <Button Content="Open output folder"
+                                Tag="&#xE8B7;"
+                                ContentTemplate="{StaticResource IconButtonContent}"
                                 Command="{Binding OpenOutputCommand}"
                                 Margin="0,0,8,8"
                                 Padding="10,8" />
                         <Button Content="View logs"
+                                Tag="&#xE9F9;"
+                                ContentTemplate="{StaticResource IconButtonContent}"
                                 Command="{Binding OpenLogsCommand}"
                                 Margin="0,0,0,8"
                                 Padding="10,8" />
@@ -349,6 +381,8 @@
             <Button DockPanel.Dock="Right"
                     VerticalAlignment="Center"
                     Content="Cancel job"
+                    Tag="&#xE711;"
+                    ContentTemplate="{StaticResource IconButtonContent}"
                     Command="{Binding CancelFileCommand}"
                     CommandParameter="{Binding BatchProgress.CurrentJob}"
                     Margin="8,0,0,0" />
@@ -381,9 +415,13 @@
                         Orientation="Horizontal"
                         VerticalAlignment="Center">
                 <Button Content="Cancel batch"
+                        Tag="&#xE711;"
+                        ContentTemplate="{StaticResource IconButtonContent}"
                         Command="{Binding CancelCommand}"
                         Margin="8,0,0,0" />
                 <Button Content="{Binding PauseBatchText}"
+                        Tag="{Binding PauseBatchIcon}"
+                        ContentTemplate="{StaticResource IconButtonContent}"
                         Command="{Binding PauseBatchCommand}"
                         Visibility="{Binding BatchProgress.IsRunning, Converter={StaticResource Visible}}"
                         ToolTip="Pause before the next job starts, or resume the batch."
@@ -466,10 +504,14 @@
                        TextWrapping="Wrap" />
             <WrapPanel HorizontalAlignment="Center" Margin="0,20,0,0">
                 <Button Content="Add files"
+                        Tag="&#xE710;"
+                        ContentTemplate="{StaticResource IconButtonContent}"
                         Command="{Binding AddFilesCommand}"
                         Style="{StaticResource Primary}"
                         Margin="4" />
                 <Button Content="Add folder"
+                        Tag="&#xE8B7;"
+                        ContentTemplate="{StaticResource IconButtonContent}"
                         Command="{Binding AddFolderCommand}"
                         Margin="4" />
             </WrapPanel>

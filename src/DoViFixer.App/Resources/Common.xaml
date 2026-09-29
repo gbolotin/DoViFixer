@@ -7,6 +7,16 @@
     <p:ReferenceEqualsToVisibilityConverter x:Key="ReferenceEqualsToVisibility" />
     <SolidColorBrush x:Key="Accent" Color="{DynamicResource {x:Static SystemColors.AccentColorKey}}" />
     <SolidColorBrush x:Key="Muted" Color="#808080" />
+    <DataTemplate x:Key="IconButtonContent">
+        <StackPanel Orientation="Horizontal">
+            <TextBlock Text="{Binding Tag, RelativeSource={RelativeSource AncestorType=Button}}"
+                       FontFamily="{StaticResource SymbolThemeFontFamily}"
+                       FontSize="16"
+                       Margin="0,0,8,0"
+                       VerticalAlignment="Center" />
+            <TextBlock Text="{Binding}" VerticalAlignment="Center" />
+        </StackPanel>
+    </DataTemplate>
     <Style x:Key="Heading"
            TargetType="TextBlock"
            BasedOn="{StaticResource TitleTextBlockStyle}">

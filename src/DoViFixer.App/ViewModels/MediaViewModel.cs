@@ -112,6 +112,7 @@ public sealed class MediaViewModel : OperationViewModel, INavigationPage, IIniti
     public BatchProgressViewModel BatchProgress { get; } = new();
     public RelayCommand PauseBatchCommand { get; }
     public string PauseBatchText => control?.IsPaused == true ? "Resume" : "Pause";
+    public string PauseBatchIcon => control?.IsPaused == true ? "\uE768" : "\uE769";
 
     public double ActiveProgressPercent => BatchProgress.IsRunning ? BatchProgress.Percent : Percent;
     public bool ActiveProgressIndeterminate => !BatchProgress.IsRunning && IsIndeterminate;
@@ -744,6 +745,7 @@ public sealed class MediaViewModel : OperationViewModel, INavigationPage, IIniti
     private void NotifyActiveProgress()
     {
         RaisePropertyChanged(nameof(PauseBatchText));
+        RaisePropertyChanged(nameof(PauseBatchIcon));
         PauseBatchCommand.RaiseCanExecuteChanged();
         RaisePropertyChanged(nameof(ActiveProgressPercent));
         RaisePropertyChanged(nameof(ActiveProgressIndeterminate));

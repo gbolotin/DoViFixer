@@ -86,6 +86,8 @@ public sealed class VisualTests
             var mediaView = (ContentPresenter)pageHost.ItemContainerGenerator.ContainerFromItem(media);
             Assert.AreSame(media, navigation.SelectedItem);
             Assert.HasCount(3, navigation.Items);
+            VerifyCommandIcons(mediaView);
+            SaveRender((FrameworkElement)window.Content, "command-icons-empty");
 
             await VerifyEmptyMediaAsync(runtime, media, window, navigation, mediaView);
             shell.Pages.OfType<ArchiveViewModel>().Single().SetStatus(ViewStatus.Result, "Archive status retained.");
@@ -192,19 +194,22 @@ public sealed class VisualTests
             Assert.AreSame(media.Files, list.ItemsSource);
             Assert.AreSame(media.Focused, list.SelectedItem);
 
+            await LayoutAsync(window);
+            VerifyCommandIcons(mediaView);
+            SaveRender((FrameworkElement)window.Content, "command-icons-toolbar");
             await VerifyRowActionsAsync(runtime, media, list, window, navigation, mediaView);
             window.Width = 800;
             window.Height = 600;
             await LayoutAsync(window);
             var content = (FrameworkElement)window.Content;
             AssertInside(splitter, content);
-            foreach (string caption in new[] { "⌕  Scan all", "◎  Inspect", "◎  Deep Inspect", "▷  Convert to DV8.1", "▷  Convert to HDR10", "⚙ Settings" })
+            foreach (string caption in new[] { "Rescan", "Inspect", "Deep Inspect", "Convert to DV8.1", "Convert to HDR10", "Settings" })
             {
                 AssertInside(Button(mediaView, caption), content);
             }
             SaveRender(content, "media-minimum");
 
-            Invoke(Button(mediaView, "⚙ Settings"));
+            Invoke(Button(mediaView, "Settings"));
             await LayoutAsync(window);
             await shell.NavigationTask;
             Assert.AreSame(shell.Settings, navigation.SelectedItem);
@@ -676,6 +681,22 @@ public sealed class VisualTests
             {
                 yield return descendant;
             }
+        }
+    }
+
+    private static void VerifyCommandIcons(DependencyObject root)
+    {
+        var buttons = Descendants<Button>(root).Where(button => button.IsVisible && button.Tag is string && button.ContentTemplate is not null).ToArray();
+        Assert.IsNotEmpty(buttons);
+        foreach (var button in buttons)
+        {
+            var glyph = (string)button.Tag;
+            var icon = Descendants<TextBlock>(button).Single(text => text.Text == glyph);
+            Assert.AreEqual(button.FindResource("SymbolThemeFontFamily"), icon.FontFamily);
+            Assert.IsTrue(new Typeface(icon.FontFamily, icon.FontStyle, icon.FontWeight, icon.FontStretch).TryGetGlyphTypeface(out var font));
+            Assert.IsTrue(font.CharacterToGlyphMap.ContainsKey(glyph[0]), $"Missing icon for {button.Content}.");
+            Assert.AreEqual(button.Content, new ButtonAutomationPeer(button).GetName());
+            AssertInside(icon, button);
         }
     }
 

@@ -161,6 +161,7 @@ public sealed class ViewModelTests
             await release.Task.WaitAsync(token);
         };
         Assert.IsFalse(model.PauseBatchCommand.CanExecute());
+        Assert.AreEqual("\uE769", model.PauseBatchIcon);
 
         var adding = model.AddAsync([@"C:\Media\Mountain.mkv", @"C:\Media\Ocean.mkv"]);
         await started.Task.WaitAsync(TimeSpan.FromSeconds(10));
@@ -175,6 +176,7 @@ public sealed class ViewModelTests
         Assert.IsTrue(model.PauseBatchCommand.CanExecute());
         model.PauseBatchCommand.Execute();
         Assert.AreEqual("Resume", model.PauseBatchText);
+        Assert.AreEqual("\uE768", model.PauseBatchIcon);
         StringAssert.Contains(model.ActiveProgressSummary, "Pausing after current job");
         release.SetResult();
         await paused.Task.WaitAsync(TimeSpan.FromSeconds(10));
@@ -193,6 +195,7 @@ public sealed class ViewModelTests
         await adding.WaitAsync(TimeSpan.FromSeconds(10));
         Assert.AreEqual(cancelBatch ? 1 : 2, runtime.Analyses);
         Assert.AreEqual("Pause", model.PauseBatchText);
+        Assert.AreEqual("\uE769", model.PauseBatchIcon);
         Assert.IsFalse(model.PauseBatchCommand.CanExecute());
         Assert.IsTrue(model.IsIdle);
     }
