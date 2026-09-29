@@ -11,6 +11,8 @@ using System.Windows.Threading;
 using DoViFixer.App.ViewModels;
 using DoViFixer.App.Presentation.Application;
 using DoViFixer.App.Views;
+using DoViFixer.Domain.Analysis;
+using DoViFixer.Domain.Media;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.VisualStudio.TestTools.UnitTesting;
 
@@ -91,6 +93,7 @@ public sealed class VisualTests
             media.Files[0].IsSelected = false;
             await LayoutAsync(window);
             var list = Descendants<ListView>(mediaView).Single();
+            await VerifyClassificationColorsAsync(runtime, list);
             await VerifyLastColumnSizingAsync(list, window);
             var fileColumn = ((GridView)list.View).Columns[0];
             double originalWidth = fileColumn.Width;
@@ -208,6 +211,45 @@ public sealed class VisualTests
             source.Switch.Level = previousLevel;
             app.Shutdown();
         }
+    }
+
+    private static async Task VerifyClassificationColorsAsync(TestRuntime runtime, ListView list)
+    {
+        var row = new MediaRow(@"C:\Media\Classification.mkv");
+        var text = (TextBlock)((GridView)list.View).Columns[1].CellTemplate.LoadContent();
+        text.DataContext = row;
+        var media = await runtime.ProbeAsync(row.Path, default);
+        var evidence = new RpuEvidence(AnalysisMethod.FullRpu, EnhancementLayer.Mel, 1000, null, 1, 1);
+
+        async Task AssertColorAsync(string expected)
+        {
+            await Dispatcher.Yield(DispatcherPriority.ApplicationIdle);
+            Assert.AreEqual((Color)ColorConverter.ConvertFromString(expected), ((SolidColorBrush)text.Foreground).Color);
+        }
+
+        await AssertColorAsync("#A6B6C3");
+        foreach (var (verdict, color) in new[]
+        {
+            (AnalysisVerdict.Mel, "#66D94B"),
+            (AnalysisVerdict.SimpleFel, "#29AEFA"),
+            (AnalysisVerdict.ComplexFel, "#FF625A"),
+            (AnalysisVerdict.AnalysisFailed, "#FF625A"),
+            (AnalysisVerdict.Unknown, "#FFD166"),
+            (AnalysisVerdict.FelUnclassified, "#FFD166"),
+            (AnalysisVerdict.NotApplicable, "#A6B6C3")
+        })
+        {
+            row.Analysis = new MediaAnalysis(media, evidence, verdict, "Test classification");
+            await AssertColorAsync(color);
+            row.AnalysisError = "";
+            await AssertColorAsync("#FF625A");
+            row.AnalysisError = null;
+            await AssertColorAsync(color);
+        }
+        row.Analysis = null;
+        await AssertColorAsync("#A6B6C3");
+        row.AnalysisError = "Analysis failed";
+        await AssertColorAsync("#FF625A");
     }
 
     private static async Task VerifyLastColumnSizingAsync(ListView list, Window window)

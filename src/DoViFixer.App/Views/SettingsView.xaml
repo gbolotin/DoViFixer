@@ -81,7 +81,7 @@
                             <TextBlock TextWrapping="Wrap"
                                        Foreground="{DynamicResource TextFillColorSecondaryBrush}"
                                        Margin="20,2,0,8">
-                                <Run Text="&#xE730;"
+                                <Run Text="&#xE7BA;"
                                      FontFamily="{StaticResource SymbolThemeFontFamily}"
                                      FontWeight="SemiBold"
                                      Foreground="{DynamicResource SystemFillColorCautionBrush}"/>
@@ -91,7 +91,7 @@
                             <TextBlock TextWrapping="Wrap"
                                        Foreground="{DynamicResource TextFillColorSecondaryBrush}"
                                        Margin="20,2,0,8">
-                                <Run Text="&#xE730;"
+                                <Run Text="&#xE7BA;"
                                      FontFamily="{StaticResource SymbolThemeFontFamily}"
                                      FontWeight="SemiBold"
                                      Foreground="{DynamicResource SystemFillColorCautionBrush}" />

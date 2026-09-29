@@ -2,7 +2,8 @@
                     xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
                     xmlns:p="clr-namespace:DoViFixer.App.Presentation.Common"
                     xmlns:application="clr-namespace:DoViFixer.App.Presentation.Application"
-                    xmlns:viewModels="clr-namespace:DoViFixer.App.ViewModels">
+                    xmlns:viewModels="clr-namespace:DoViFixer.App.ViewModels"
+                    xmlns:analysis="clr-namespace:DoViFixer.Domain.Analysis;assembly=DoViFixer.Domain">
 
     <DataTemplate x:Key="MediaToolBarTemplate" DataType="{x:Type viewModels:MediaViewModel}">
         <StackPanel>
@@ -121,9 +122,37 @@
                         <GridViewColumn.CellTemplate>
                             <DataTemplate>
                                 <TextBlock Text="{Binding Classification}"
-                                           Foreground="{Binding ClassificationColor}"
                                            VerticalAlignment="Center"
-                                           TextWrapping="Wrap" />
+                                           TextWrapping="Wrap">
+                                    <TextBlock.Style>
+                                        <Style TargetType="TextBlock">
+                                            <Setter Property="Foreground" Value="#A6B6C3" />
+                                            <Style.Triggers>
+                                                <DataTrigger Binding="{Binding Analysis.Verdict}" Value="{x:Static analysis:AnalysisVerdict.Mel}">
+                                                    <Setter Property="Foreground" Value="#66D94B" />
+                                                </DataTrigger>
+                                                <DataTrigger Binding="{Binding Analysis.Verdict}" Value="{x:Static analysis:AnalysisVerdict.SimpleFel}">
+                                                    <Setter Property="Foreground" Value="#29AEFA" />
+                                                </DataTrigger>
+                                                <DataTrigger Binding="{Binding Analysis.Verdict}" Value="{x:Static analysis:AnalysisVerdict.ComplexFel}">
+                                                    <Setter Property="Foreground" Value="#FF625A" />
+                                                </DataTrigger>
+                                                <DataTrigger Binding="{Binding Analysis.Verdict}" Value="{x:Static analysis:AnalysisVerdict.AnalysisFailed}">
+                                                    <Setter Property="Foreground" Value="#FF625A" />
+                                                </DataTrigger>
+                                                <DataTrigger Binding="{Binding Analysis.Verdict}" Value="{x:Static analysis:AnalysisVerdict.Unknown}">
+                                                    <Setter Property="Foreground" Value="#FFD166" />
+                                                </DataTrigger>
+                                                <DataTrigger Binding="{Binding Analysis.Verdict}" Value="{x:Static analysis:AnalysisVerdict.FelUnclassified}">
+                                                    <Setter Property="Foreground" Value="#FFD166" />
+                                                </DataTrigger>
+                                                <DataTrigger Binding="{Binding HasAnalysisError}" Value="True">
+                                                    <Setter Property="Foreground" Value="#FF625A" />
+                                                </DataTrigger>
+                                            </Style.Triggers>
+                                        </Style>
+                                    </TextBlock.Style>
+                                </TextBlock>
                             </DataTemplate>
                         </GridViewColumn.CellTemplate>
                     </GridViewColumn>

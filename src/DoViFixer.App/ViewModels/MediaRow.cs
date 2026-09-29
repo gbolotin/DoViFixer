@@ -161,7 +161,7 @@ public sealed class MediaRow(string path) : ObservableObject
         {
             SetProperty(ref analysisError, value);
             RaisePropertyChanged(nameof(Classification));
-            RaisePropertyChanged(nameof(ClassificationColor));
+            RaisePropertyChanged(nameof(HasAnalysisError));
             RaisePropertyChanged(nameof(Details));
             RaisePropertyChanged(nameof(StatusToolTip));
         }
@@ -188,7 +188,6 @@ public sealed class MediaRow(string path) : ObservableObject
             RaisePropertyChanged(nameof(HasIncompleteScan));
             RaisePropertyChanged(nameof(CanInspectIncomplete));
             RaisePropertyChanged(nameof(Classification));
-            RaisePropertyChanged(nameof(ClassificationColor));
             RaisePropertyChanged(nameof(Details));
         }
     }
@@ -209,14 +208,7 @@ public sealed class MediaRow(string path) : ObservableObject
             _ => "Other / unknown profile"
         }
     };
-    public string ClassificationColor => AnalysisError is not null ? "#FF625A" : Analysis?.Verdict switch
-    {
-        AnalysisVerdict.Mel => "#66D94B",
-        AnalysisVerdict.SimpleFel => "#29AEFA",
-        AnalysisVerdict.ComplexFel or AnalysisVerdict.AnalysisFailed => "#FF625A",
-        AnalysisVerdict.Unknown or AnalysisVerdict.FelUnclassified => "#FFD166",
-        _ => "#A6B6C3"
-    };
+    public bool HasAnalysisError => AnalysisError is not null;
     public string Details => AnalysisError is not null ? $"{Path}\n\nAnalysis failed\n{AnalysisError}" : Analysis is not{ }
     a ? Path + "\n" + Notice : $"{Path}\n\n{Classification}\n{a.Media.Width} × {a.Media.Height} · {a.Media.FramesPerSecond:0.###} fps\n" + $"{TimeSpan.FromSeconds(a.Media.DurationSeconds ?? 0):g} · {a.Media.Source.Length / 1073741824d:0.00} GiB\n\n" + $"Evidence: {EvidenceName(a.Evidence.Method)}\nFrames: {a.Evidence.Frames:N0}\nSamples: {a.Evidence.SuccessfulSamples}/{a.Evidence.RequestedSamples}\n\n{a.Reason}\n{a.Evidence.SampleDiagnostics}\n" + (HasIncompleteScan ? "\nSuggested action: Inspect. Standard inspection examines the full RPU metadata stream instead of short samples. It may take longer; missing metadata may still prevent classification.\n" : "") + $"\n{Notice}";
     public string ResultDetails => Result is null ? "" : $"Last conversion result\n{Result.Status}\n{Result.Output}\n{Result.Message}";
