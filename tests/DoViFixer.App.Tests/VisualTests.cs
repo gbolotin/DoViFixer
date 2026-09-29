@@ -239,7 +239,7 @@ public sealed class VisualTests
             AssertInside(splitter, content);
             foreach (string caption in new[] { "Rescan", "Inspect", "Deep Inspect", "Convert to DV8.1", "Convert to HDR10", "Settings" })
             {
-                AssertInside(Button(mediaView, caption), content);
+                AssertInside(Descendants<Button>(mediaView).Single(button => Equals(button.Content, caption) && button.IsVisible), content);
             }
             SaveRender(content, "media-minimum");
 
@@ -603,15 +603,34 @@ public sealed class VisualTests
         await LayoutAsync(window);
         var row = media.Files[0];
         var container = (ListViewItem)list.ItemContainerGenerator.ContainerFromItem(row);
-        var remove = Descendants<Button>(container).Single(button => Equals(button.ToolTip, "Remove from list"));
+        var remove = Descendants<Button>(container).Single(button => Equals(button.ToolTip, "Remove"));
+        var convert = Descendants<Button>(container).Single(button => Equals(button.ToolTip, "Convert to DV8.1"));
+        Assert.AreSame(media.ConvertRowDv81Command, convert.Command);
+        Assert.AreSame(row, convert.CommandParameter);
+        Assert.AreEqual("Convert to DV8.1", System.Windows.Automation.AutomationProperties.GetName(convert));
+        Assert.AreEqual("\uE8AB", convert.Content);
+        var actions = (StackPanel)remove.Parent;
+        Assert.AreSame(convert, actions.Children[actions.Children.IndexOf(remove) - 1]);
+        Assert.AreEqual(Visibility.Hidden, convert.Visibility);
+        var originalAnalysis = row.Analysis!;
+        row.Analysis = originalAnalysis with { Media = originalAnalysis.Media with { Profile = DolbyVisionProfile.Profile81 } };
+        await LayoutAsync(window);
+        Assert.AreEqual(Visibility.Collapsed, convert.Visibility);
+        row.Analysis = null;
+        await LayoutAsync(window);
+        Assert.AreEqual(Visibility.Collapsed, convert.Visibility);
+        row.Analysis = originalAnalysis;
+        await LayoutAsync(window);
+        Assert.AreEqual(Visibility.Hidden, convert.Visibility);
         Assert.AreSame(media.RemoveFileCommand, remove.Command);
         Assert.AreSame(row, remove.CommandParameter);
         Assert.AreEqual("Remove from list", System.Windows.Automation.AutomationProperties.GetName(remove));
-        Assert.AreEqual("\uE74D", ((TextBlock)remove.Content).Text);
+        Assert.AreEqual("\uE74D", remove.Content);
         Assert.IsFalse(remove.IsVisible);
         container.IsSelected = true;
         await LayoutAsync(window);
-        Assert.IsTrue(remove.IsVisible, "Selecting a row must show delete even without hovering.");
+        Assert.IsFalse(remove.IsVisible, "Selecting a row without hovering must keep hover actions hidden.");
+        Assert.IsFalse(convert.IsVisible);
         container.IsSelected = false;
         media.Focused = media.Files[1];
         await LayoutAsync(window);

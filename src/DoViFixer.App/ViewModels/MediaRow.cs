@@ -28,6 +28,7 @@ public sealed class MediaRow(string path) : ObservableObject
     public string Path { get; } = path;
     public string Name => System.IO.Path.GetFileName(Path);
     public ProgressViewModel Progress { get; } = new();
+    public bool IsProfile7 => Analysis?.Media.Profile == Domain.Media.DolbyVisionProfile.Profile7;
     public bool IsCancellationRequested
     {
         get => cancellationRequested;
@@ -191,6 +192,7 @@ public sealed class MediaRow(string path) : ObservableObject
         set
         {
             SetProperty(ref analysis, value);
+            RaisePropertyChanged(nameof(IsProfile7));
             RaisePropertyChanged(nameof(HasIncompleteScan));
             RaisePropertyChanged(nameof(CanInspectIncomplete));
             RaisePropertyChanged(nameof(Classification));

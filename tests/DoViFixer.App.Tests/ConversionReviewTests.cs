@@ -9,6 +9,62 @@ namespace DoViFixer.App.Tests;
 public sealed class ConversionReviewTests
 {
     [TestMethod]
+    public async Task ConvertRowDv81ConvertsOnlyClickedProfile7AndPreservesSelection()
+    {
+        using var runtime = new TestRuntime();
+        var model = runtime.Container.GetRequiredService<MediaViewModel>();
+        await model.AddAsync([@"C:\Media\Mountain.mkv", @"C:\Media\Mountain2.mkv", @"C:\Media\P81.mkv", @"C:\Media\Sdr.mkv"]);
+        var row = model.Files[0];
+        row.IsSelected = false;
+        model.Focused = model.Files[1];
+        bool[] selections = model.Files.Select(file => file.IsSelected).ToArray();
+        var command = model.ConvertRowDv81Command;
+        Assert.IsTrue(command.CanExecute(row));
+        Assert.IsFalse(command.CanExecute(model.Files[2]));
+        Assert.IsFalse(command.CanExecute(model.Files[3]));
+        Assert.IsFalse(command.CanExecute(new MediaRow(row.Path) { Analysis = row.Analysis }));
+        var analysis = row.Analysis;
+        row.Analysis = null;
+        Assert.IsFalse(command.CanExecute(row));
+        row.Analysis = analysis;
+        bool startingCalled = false;
+        model.ConversionStarting += _ =>
+        {
+            startingCalled = true;
+            Assert.IsFalse(command.CanExecute(model.Files[1]), "Other row conversions must be disabled while busy.");
+            return Task.CompletedTask;
+        };
+
+        await command.ExecuteAsync(row);
+
+        Assert.IsTrue(startingCalled, "Single-file conversion must use the existing settings flush hook.");
+        Assert.AreEqual(1, runtime.Conversions);
+        Assert.AreEqual(MediaRowState.Converted, row.State);
+        Assert.IsTrue(row.PlannedOutput.EndsWith(" - DV P8.1.mkv"));
+        Assert.IsNull(model.Files[1].Result);
+        Assert.AreSame(model.Files[1], model.Focused);
+        CollectionAssert.AreEqual(selections, model.Files.Select(file => file.IsSelected).ToArray());
+        Assert.AreEqual(1, model.BatchProgress.Total);
+        Assert.IsTrue(command.CanExecute(model.Files[1]));
+    }
+
+    [TestMethod]
+    public async Task ConvertRowDv81HonorsFelPolicyWithoutSelection()
+    {
+        using var runtime = new TestRuntime();
+        var model = runtime.Container.GetRequiredService<MediaViewModel>();
+        await model.AddAsync([@"C:\Media\Ocean.mkv"]);
+        var row = model.Files.Single();
+        row.IsSelected = false;
+
+        await model.ConvertRowDv81Command.ExecuteAsync(row);
+
+        Assert.AreEqual(0, runtime.Conversions);
+        Assert.AreEqual(MediaRowState.Skipped, row.State);
+        StringAssert.Contains(row.Notice, "Include Simple FEL");
+    }
+
+    [TestMethod]
     [DataRow(false)]
     [DataRow(true)]
     public async Task CancelConversionClearsPlanAndKeepsOriginalBatchTotal(bool cancelBatch)
@@ -22,12 +78,22 @@ public sealed class ConversionReviewTests
         var started = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
         var nextStarted = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
         var release = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+        var recovering = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+        var releaseCleanup = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
         runtime.DuringConversion = async token =>
         {
             if (runtime.Conversions == 1)
             {
                 started.TrySetResult();
-                await Task.Delay(Timeout.Infinite, token);
+                try
+                {
+                    await Task.Delay(Timeout.Infinite, token);
+                }
+                finally
+                {
+                    recovering.TrySetResult();
+                    await releaseCleanup.Task;
+                }
             }
             else
             {
@@ -49,6 +115,14 @@ public sealed class ConversionReviewTests
             else
             {
                 model.CancelFileCommand.Execute(first);
+            }
+
+            await recovering.Task.WaitAsync(TimeSpan.FromSeconds(10));
+            Assert.IsFalse(first.HasWarning, "Cancellation must clear the warning before cleanup finishes.");
+            Assert.AreEqual("", first.PlannedOutput);
+            releaseCleanup.TrySetResult();
+            if (!cancelBatch)
+            {
                 await nextStarted.Task.WaitAsync(TimeSpan.FromSeconds(10));
                 Assert.AreEqual("1 of 2 files processed · 1 cancelled", model.ActiveProgressSummary);
                 release.TrySetResult();
@@ -80,6 +154,7 @@ public sealed class ConversionReviewTests
         finally
         {
             model.CancelCommand.Execute();
+            releaseCleanup.TrySetResult();
             release.TrySetResult();
             await conversion.WaitAsync(TimeSpan.FromSeconds(10));
         }

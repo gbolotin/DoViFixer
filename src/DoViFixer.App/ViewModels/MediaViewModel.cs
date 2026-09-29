@@ -64,6 +64,7 @@ public sealed class MediaViewModel : OperationViewModel, INavigationPage, IIniti
         InspectCommand = new(() => AnalyzeAsync(AnalysisMethod.FullRpu), CanOperate);
         DeepInspectCommand = new(() => AnalyzeAsync(AnalysisMethod.DeepInspection), CanOperate);
         ConvertDv81Command = new(() => ConvertBatchAsync(ConversionTarget.Profile81), CanOperate);
+        ConvertRowDv81Command = new(row => ConvertBatchAsync(ConversionTarget.Profile81, [row]), row => IsIdle && Files.Contains(row) && row.IsProfile7);
         ConvertHdrCommand = new(() => ConvertBatchAsync(ConversionTarget.Hdr10), CanOperate);
 
         SkipCommand = new RelayCommand<MediaRow>(Skip);
@@ -310,6 +311,7 @@ public sealed class MediaViewModel : OperationViewModel, INavigationPage, IIniti
     public AsyncCommand InspectCommand { get; }
     public AsyncCommand DeepInspectCommand { get; }
     public AsyncCommand ConvertDv81Command { get; }
+    public AsyncCommand<MediaRow> ConvertRowDv81Command { get; }
     public AsyncCommand ConvertHdrCommand { get; }
     public RelayCommand<MediaRow> SkipCommand { get; }
     public RelayCommand<MediaRow> CancelFileCommand { get; }
@@ -441,6 +443,7 @@ public sealed class MediaViewModel : OperationViewModel, INavigationPage, IIniti
         InspectCommand?.RaiseCanExecuteChanged();
         DeepInspectCommand?.RaiseCanExecuteChanged();
         ConvertDv81Command?.RaiseCanExecuteChanged();
+        ConvertRowDv81Command?.RaiseCanExecuteChanged();
         ConvertHdrCommand?.RaiseCanExecuteChanged();
     }
 
@@ -494,6 +497,11 @@ public sealed class MediaViewModel : OperationViewModel, INavigationPage, IIniti
         if (e.PropertyName == nameof(MediaRow.Result))
         {
             OpenOutputCommand.RaiseCanExecuteChanged();
+        }
+
+        if (e.PropertyName == nameof(MediaRow.IsProfile7))
+        {
+            ConvertRowDv81Command.RaiseCanExecuteChanged();
         }
 
         if (e.PropertyName is nameof(MediaRow.IsActive) or nameof(MediaRow.IsCancellationRequested))
@@ -683,7 +691,7 @@ public sealed class MediaViewModel : OperationViewModel, INavigationPage, IIniti
         }
     }
 
-    private Task ConvertBatchAsync(ConversionTarget target) => RunAsync(async (token, progress) =>
+    private Task ConvertBatchAsync(ConversionTarget target, MediaRow[]? rows = null) => RunAsync(async (token, progress) =>
     {
         if (ConversionStarting is not null)
         {
@@ -729,7 +737,7 @@ public sealed class MediaViewModel : OperationViewModel, INavigationPage, IIniti
             return;
         }
 
-        var rows = Files.Where(r => r.IsSelected).ToArray();
+        rows ??= Files.Where(r => r.IsSelected).ToArray();
         if (rows.Length == 0)
         {
             return;
@@ -756,6 +764,7 @@ public sealed class MediaViewModel : OperationViewModel, INavigationPage, IIniti
                 row.Notice = "";
                 row.Warning = null;
                 row.PlannedOutput = "";
+                using var cancellationRegistration = itemToken.Register(row.ClearPlan);
                 try
                 {
                     var req = new CandidateConversionRequest(
@@ -770,6 +779,7 @@ public sealed class MediaViewModel : OperationViewModel, INavigationPage, IIniti
                         outputs);
 
                     var prep = await Task.Run(() => conversion.PrepareCandidateAsync(req, jobProgress, itemToken), itemToken);
+                    itemToken.ThrowIfCancellationRequested();
                     if (prep is CandidatePreparationResult.Skipped skipped)
                     {
                         return new OperationItemResult(row.Path, OperationStatus.Skipped, null, skipped.Reason);
