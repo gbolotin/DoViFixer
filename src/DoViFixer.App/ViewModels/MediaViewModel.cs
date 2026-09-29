@@ -395,10 +395,7 @@ public sealed class MediaViewModel : OperationViewModel, INavigationPage, IIniti
             return;
         }
 
-        row.IsPending = false;
-        row.IsSelected = false;
-        row.SelectionEnabled = false;
-        row.Status = $"{row.OperationName} skipped";
+        row.SetSkipped("Deselected before starting.");
     }
 
     private void BeginBatch(MediaRow[] rows, string operationName)
@@ -422,7 +419,7 @@ public sealed class MediaViewModel : OperationViewModel, INavigationPage, IIniti
         }
     }
 
-    private void EndBatch(bool deselectPending = true)
+    private void EndBatch()
     {
         BatchProgress.End();
         control?.Dispose();
@@ -430,11 +427,9 @@ public sealed class MediaViewModel : OperationViewModel, INavigationPage, IIniti
         NotifyActiveProgress();
         foreach (var row in Files)
         {
-            bool wasPending = row.IsPending;
-            bool wasActive = row.IsActive;
-            if (wasPending)
+            if (row.IsPending)
             {
-                row.Status = $"{row.OperationName} cancelled";
+                row.SetCancelled();
                 row.CanRetryAnalysis = row.LastAnalysisMethod is not null;
             }
 
@@ -442,11 +437,6 @@ public sealed class MediaViewModel : OperationViewModel, INavigationPage, IIniti
             row.IsPending = false;
             row.IsActive = false;
             row.SelectionEnabled = true;
-
-            if (deselectPending && (wasPending || wasActive))
-            {
-                row.IsSelected = false;
-            }
         }
     }
 
@@ -511,7 +501,7 @@ public sealed class MediaViewModel : OperationViewModel, INavigationPage, IIniti
                 }
             }, control!, new InlineProgress<OperationItemResult>(result =>
             {
-                BatchProgress.Complete();
+                BatchProgress.Complete(result.Status);
                 var row = rows.First(r => r.Path == result.Item);
                 row.Status = result.Status == OperationStatus.Completed ? "" : $"{row.OperationName} {result.Status.ToString().ToLowerInvariant()}";
                 row.CanRetryAnalysis = result.Status is OperationStatus.Failed or OperationStatus.Cancelled;
@@ -532,7 +522,7 @@ public sealed class MediaViewModel : OperationViewModel, INavigationPage, IIniti
                         row.IsSelected = ConversionPolicy.ShouldAutoSelectAfterAnalysis(row.Analysis, userSettings.IncludeSimple, userSettings.ForceComplex);
                     }
                 }
-                else if (result.Status is OperationStatus.Failed or OperationStatus.Cancelled)
+                else if (result.Status == OperationStatus.Failed)
                 {
                     row.IsSelected = false;
                 }
@@ -541,7 +531,7 @@ public sealed class MediaViewModel : OperationViewModel, INavigationPage, IIniti
         }
         finally
         {
-            EndBatch(deselectPending: true);
+            EndBatch();
         }
     }
 
@@ -658,7 +648,7 @@ public sealed class MediaViewModel : OperationViewModel, INavigationPage, IIniti
                 }
             }, control!, new InlineProgress<OperationItemResult>(itemResult =>
             {
-                BatchProgress.Complete();
+                BatchProgress.Complete(itemResult.Status);
                 var row = rows.First(r => r.Path == itemResult.Item);
                 row.CanRetryAnalysis = false;
                 if (itemResult.Status is OperationStatus.Completed or OperationStatus.Partial)
@@ -670,8 +660,7 @@ public sealed class MediaViewModel : OperationViewModel, INavigationPage, IIniti
                     row.Result = itemResult;
                     if (itemResult.Status == OperationStatus.Skipped)
                     {
-                        row.SetSkipped();
-                        row.Notice = itemResult.Message;
+                        row.SetSkipped(itemResult.Message);
                     }
                     else if (itemResult.Status == OperationStatus.Failed)
                     {
@@ -679,7 +668,7 @@ public sealed class MediaViewModel : OperationViewModel, INavigationPage, IIniti
                     }
                     else
                     {
-                        row.Status = $"Conversion {itemResult.Status.ToString().ToLowerInvariant()}";
+                        row.SetCancelled();
                     }
                 }
             }), token);

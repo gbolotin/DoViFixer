@@ -320,6 +320,7 @@ public sealed class ViewModelTests
         await adding.WaitAsync(TimeSpan.FromSeconds(10));
         Assert.IsTrue(model.IsIdle);
         Assert.AreEqual("Scan cancelled", model.Files[0].Status);
+        Assert.IsTrue(model.Files[0].IsSelected, "Cancelling a scan must preserve its checkbox selection.");
         Assert.AreEqual(cancelAll ? "Scan cancelled" : "", model.Files[1].Status);
         Assert.IsTrue(model.Files[0].CanRetryAnalysis);
         Assert.AreEqual(cancelAll ? 1 : 2, runtime.Analyses);
@@ -672,28 +673,46 @@ public sealed class ViewModelTests
     }
 
     [TestMethod]
-    public async Task ScanCancellationDeselectsCancelledAndUnprocessedRows()
+    [DataRow("Scan", true)]
+    [DataRow("Scan", false)]
+    [DataRow("Inspect", true)]
+    [DataRow("DeepInspect", true)]
+    public async Task AnalysisBatchCancellationPreservesCancelledAndUnprocessedSelections(string operation, bool selected)
     {
         using var runtime = new TestRuntime();
+        await runtime.UpdateAsync(settings => settings with { AutomaticallyScanAddedFiles = false }, default);
+        var model = runtime.Container.GetRequiredService<MediaViewModel>();
+        await model.AddAsync([@"C:\Media\Mountain.mkv", @"C:\Media\Ocean.mkv"]);
+        foreach (var row in model.Files)
+        {
+            row.IsSelected = selected;
+        }
+
         var started = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
         runtime.DuringAnalysis = async token =>
         {
             started.TrySetResult();
             await Task.Delay(Timeout.Infinite, token);
         };
-        var model = runtime.Container.GetRequiredService<MediaViewModel>();
-        var adding = model.AddAsync([@"C:\Media\Mountain.mkv", @"C:\Media\Ocean.mkv"]);
+        var command = operation switch
+        {
+            "Inspect" => model.InspectCommand,
+            "DeepInspect" => model.DeepInspectCommand,
+            _ => model.ScanCommand
+        };
+        var analysis = command.ExecuteAsync();
         await started.Task.WaitAsync(TimeSpan.FromSeconds(10));
         Assert.IsTrue(model.IsBusy);
         runtime.DuringAnalysis = null;
         model.CancelCommand.Execute();
-        await adding.WaitAsync(TimeSpan.FromSeconds(10));
+        await analysis.WaitAsync(TimeSpan.FromSeconds(10));
 
         Assert.IsTrue(model.IsIdle);
-        Assert.IsFalse(model.Files[0].IsSelected, "Cancelled active row must be deselected.");
-        Assert.IsFalse(model.Files[1].IsSelected, "Unprocessed pending row must be deselected.");
-        Assert.AreEqual("2 items", model.SelectionSummary);
-        Assert.IsFalse(model.AllFilesSelected);
+        Assert.AreEqual(selected, model.Files[0].IsSelected, "Cancellation must preserve the active row's selection.");
+        Assert.AreEqual(selected, model.Files[1].IsSelected, "Cancellation must preserve the queued row's selection.");
+        Assert.IsTrue(model.Files.All(row => row.SelectionEnabled));
+        Assert.AreEqual(selected ? "2 items | 2 items selected" : "2 items", model.SelectionSummary);
+        Assert.AreEqual(selected, model.AllFilesSelected);
     }
 
     [TestMethod]
@@ -842,6 +861,8 @@ public sealed class ViewModelTests
 
         model.SkipCommand.Execute(model.Files[2]);
         Assert.AreEqual("Conversion skipped", model.Files[2].Status);
+        Assert.IsTrue(model.Files[2].HasWarning);
+        Assert.AreEqual("Deselected before starting.", model.Files[2].Warning);
 
         model.CancelFileCommand.Execute(model.Files[0]);
         release.SetResult();
@@ -865,6 +886,8 @@ public sealed class ViewModelTests
         Assert.AreEqual("Converted", model.Files[0].Status);
         Assert.AreEqual("Conversion skipped", model.Files[1].Status);
         StringAssert.Contains(model.Files[1].Notice, "Multiple inputs resolve to the same output path");
+        Assert.IsTrue(model.Files[1].HasWarning);
+        Assert.AreEqual(model.Files[1].Notice, model.Files[1].Warning);
     }
 
     [TestMethod]

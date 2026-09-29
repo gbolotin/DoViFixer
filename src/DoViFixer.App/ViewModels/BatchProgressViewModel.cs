@@ -9,6 +9,7 @@ public sealed class BatchProgressViewModel : ObservableObject
     private bool isRunning;
     private int total;
     private int processed;
+    private int cancelled;
     private string operation = "";
     private MediaRow? currentJob;
 
@@ -17,7 +18,7 @@ public sealed class BatchProgressViewModel : ObservableObject
     public int Processed => processed;
     public string Operation => operation;
     public double Percent => total == 0 ? 0 : (100.0 * processed + (CurrentJob?.Progress.Percent ?? 0)) / total;
-    public string Summary => $"{processed} of {total} files processed";
+    public string Summary => $"{processed} of {total} files processed" + (cancelled > 0 ? $" · {cancelled} cancelled" : "");
     public MediaRow? CurrentJob { get => currentJob; private set => SetProperty(ref currentJob, value); }
 
     public void Begin(int fileCount, string operationName)
@@ -28,6 +29,7 @@ public sealed class BatchProgressViewModel : ObservableObject
             CurrentJob?.Progress.End();
             total = fileCount;
             processed = 0;
+            cancelled = 0;
             operation = operationName;
             CurrentJob = null;
             IsRunning = true;
@@ -70,12 +72,16 @@ public sealed class BatchProgressViewModel : ObservableObject
         });
     }
 
-    public void Complete()
+    public void Complete(OperationStatus status)
     {
         lock (gate)
         {
             revision++;
             processed++;
+            if (status == OperationStatus.Cancelled)
+            {
+                cancelled++;
+            }
             CurrentJob?.Progress.End();
             CurrentJob = null;
         }

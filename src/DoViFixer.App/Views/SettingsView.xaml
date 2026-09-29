@@ -75,7 +75,7 @@
                                        TextWrapping="Wrap"
                                        AutomationProperties.LiveSetting="Polite" />
                             <TextBlock Text="File handling and policy" Style="{StaticResource Label}" />
-                            <CheckBox Content="Replace original after verification by default" IsChecked="{Binding ReplaceOriginal}" />
+                            <CheckBox Content="Replace original after verification" IsChecked="{Binding ReplaceOriginal}" />
                             <CheckBox Content="Create EL archive by default" IsChecked="{Binding CreateArchive}" />
                             <CheckBox Content="Include Simple FEL conversion" IsChecked="{Binding IncludeSimple}" />
                             <TextBlock TextWrapping="Wrap"

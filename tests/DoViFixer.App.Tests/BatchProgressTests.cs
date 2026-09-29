@@ -8,6 +8,23 @@ namespace DoViFixer.App.Tests;
 public sealed class BatchProgressTests
 {
     [TestMethod]
+    public void CancelledFilesCountAsProcessedAndCancellationCountResetsWithNextBatch()
+    {
+        var model = new BatchProgressViewModel();
+        model.Begin(4, "Conversion");
+        model.Complete(OperationStatus.Cancelled);
+        Assert.AreEqual(4, model.Total);
+        Assert.AreEqual(1, model.Processed);
+        Assert.AreEqual(25d, model.Percent);
+        Assert.AreEqual("1 of 4 files processed · 1 cancelled", model.Summary);
+        model.Complete(OperationStatus.Completed);
+        Assert.AreEqual("2 of 4 files processed · 1 cancelled", model.Summary);
+        model.End();
+        model.Begin(2, "Scan");
+        Assert.AreEqual("0 of 2 files processed", model.Summary);
+    }
+
+    [TestMethod]
     public void EachJobProgressIncrementUpdatesBatchPercentageAndNotifiesBindings()
     {
         var previous = SynchronizationContext.Current;
@@ -17,7 +34,7 @@ public sealed class BatchProgressTests
         {
             var model = new BatchProgressViewModel();
             model.Begin(4, "Scan");
-            model.Complete();
+            model.Complete(OperationStatus.Completed);
             var row = new MediaRow("first.mkv");
             var progress = model.Start(row, "Scanning");
             var reportedPercentages = new List<double>();
@@ -37,7 +54,7 @@ public sealed class BatchProgressTests
             Assert.AreEqual(1, model.Processed);
             Assert.AreEqual("1 of 4 files processed", model.Summary);
 
-            model.Complete();
+            model.Complete(OperationStatus.Completed);
             Assert.AreEqual(50, model.Percent);
             var nextProgress = model.Start(new MediaRow("second.mkv"), "Scanning");
             Assert.AreEqual(50, model.Percent);
@@ -65,7 +82,7 @@ public sealed class BatchProgressTests
         {
             var model = new BatchProgressViewModel();
             model.Begin(4, "Conversion");
-            model.Complete();
+            model.Complete(OperationStatus.Completed);
             var row = new MediaRow(@"C:\Media\Ocean.mkv");
             var progress = model.Start(row, "Extracting video");
             progress.Report(new(Guid.NewGuid(), "Extracting video", row.Path, 75));
@@ -82,10 +99,10 @@ public sealed class BatchProgressTests
             Assert.AreEqual("Working…", row.Progress.StageProgressText);
             Assert.AreEqual(25, model.Percent);
 
-            model.Complete();
+            model.Complete(OperationStatus.Completed);
             Assert.IsFalse(row.Progress.IsIndeterminate);
-            model.Complete();
-            model.Complete();
+            model.Complete(OperationStatus.Completed);
+            model.Complete(OperationStatus.Completed);
             Assert.AreEqual(100, model.Percent);
             model.End();
             Assert.IsFalse(model.IsRunning);
@@ -114,7 +131,7 @@ public sealed class BatchProgressTests
             model.Begin(2, "Scan");
             var oldProgress = model.Start(first, "Scanning");
             oldProgress.Report(new(Guid.Empty, "Old sample", first.Path, 90));
-            model.Complete();
+            model.Complete(OperationStatus.Completed);
             var second = new MediaRow("second.mkv");
             model.Start(second, "Inspecting");
             context.Drain();
@@ -164,7 +181,7 @@ public sealed class BatchProgressTests
             switch (transition)
             {
                 case "Complete":
-                    model.Complete();
+                    model.Complete(OperationStatus.Completed);
                     break;
                 case "End":
                     model.End();

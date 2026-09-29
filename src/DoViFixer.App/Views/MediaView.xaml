@@ -16,7 +16,7 @@
                 <Button Content="Clear all"
                         Command="{Binding ClearAllCommand}"
                         Margin="0,0,8,8" />
-                <Button Content="⌕  Scan all"
+                <Button Content="⌕  Rescan"
                         Command="{Binding ScanCommand}"
                         ToolTip="Scan every file in the list. If automatic selection is enabled, selections are updated using the conversion policy in Settings."
                         Margin="0,0,8,8" />
@@ -186,7 +186,7 @@
                                                        TextWrapping="Wrap"
                                                        VerticalAlignment="Center"
                                                        ToolTip="{Binding StatusToolTip}" />
-                                            <TextBlock Text="&#xE730;"
+                                            <TextBlock Text="&#xE7BA;"
                                                        FontFamily="{StaticResource SymbolThemeFontFamily}"
                                                        FontWeight="SemiBold"
                                                        Foreground="{DynamicResource SystemFillColorCautionBrush}"
@@ -281,11 +281,22 @@
         <Border Style="{StaticResource Card}">
             <ScrollViewer VerticalScrollBarVisibility="Auto">
                 <StackPanel>
-                    <TextBlock Text="{Binding Focused.Name, TargetNullValue='Select a file to view details', FallbackValue='Select a file to view details'}"
-                               FontSize="18"
-                               FontWeight="SemiBold"
-                               TextWrapping="Wrap"
-                               Margin="0,0,0,14" />
+                    <DockPanel Margin="0,0,0,14">
+                        <TextBlock DockPanel.Dock="Right"
+                                   Text="&#xE7BA;"
+                                   FontFamily="{StaticResource SymbolThemeFontFamily}"
+                                   FontWeight="SemiBold"
+                                   Foreground="{DynamicResource SystemFillColorCautionBrush}"
+                                   Margin="6,0,0,0"
+                                   VerticalAlignment="Center"
+                                   Visibility="{Binding Focused.HasWarning, Converter={StaticResource Visible}, FallbackValue=Collapsed}"
+                                   ToolTip="{Binding Focused.Warning}"
+                                   AutomationProperties.Name="Conversion warning" />
+                        <TextBlock Text="{Binding Focused.Name, TargetNullValue='Select a file to view details', FallbackValue='Select a file to view details'}"
+                                   FontSize="18"
+                                   FontWeight="SemiBold"
+                                   TextWrapping="Wrap" />
+                    </DockPanel>
                     <TextBlock Text="{Binding Focused.Details}"
                            TextWrapping="Wrap"
                            Foreground="{DynamicResource TextFillColorSecondaryBrush}" />

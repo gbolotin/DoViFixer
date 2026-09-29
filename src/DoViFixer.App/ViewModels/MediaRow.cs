@@ -50,6 +50,9 @@ public sealed class MediaRow(string path) : ObservableObject
             if (SetProperty(ref state, value))
             {
                 RaisePropertyChanged(nameof(CanOpenResult));
+                RaisePropertyChanged(nameof(Warning));
+                RaisePropertyChanged(nameof(HasWarning));
+                RaisePropertyChanged(nameof(StatusToolTip));
             }
         }
     }
@@ -62,7 +65,7 @@ public sealed class MediaRow(string path) : ObservableObject
    
     public string? Warning
     {
-        get => warning;
+        get => State == MediaRowState.Skipped ? Notice : warning;
         set
         {
             SetProperty(ref warning, value);
@@ -70,7 +73,7 @@ public sealed class MediaRow(string path) : ObservableObject
             RaisePropertyChanged(nameof(StatusToolTip));
         }
     }
-    public bool HasWarning => !string.IsNullOrWhiteSpace(warning);
+    public bool HasWarning => !string.IsNullOrWhiteSpace(Warning);
     public bool IsSelected
     {
         get => selected;
@@ -121,6 +124,8 @@ public sealed class MediaRow(string path) : ObservableObject
         set
         {
             SetProperty(ref notice, value);
+            RaisePropertyChanged(nameof(Warning));
+            RaisePropertyChanged(nameof(HasWarning));
             RaisePropertyChanged(nameof(Details));
             RaisePropertyChanged(nameof(StatusToolTip));
         }
@@ -250,11 +255,13 @@ public sealed class MediaRow(string path) : ObservableObject
         State = MediaRowState.Scanned;
     }
 
-    public void SetSkipped()
+    public void SetSkipped(string reason)
     {
+        ClearPlan();
         IsPending = false;
         IsSelected = false;
         SelectionEnabled = false;
+        Notice = reason;
         Status = $"{OperationName} skipped";
         State = MediaRowState.Skipped;
     }
@@ -270,6 +277,7 @@ public sealed class MediaRow(string path) : ObservableObject
 
     public void SetCancelled(string? message = null)
     {
+        ClearPlan();
         if (message is not null)
         {
             Notice = message;
@@ -281,6 +289,7 @@ public sealed class MediaRow(string path) : ObservableObject
 
     public void SetFailed(string? error, string? statusText = null)
     {
+        ClearPlan();
         AnalysisError = error;
         Status = statusText ?? $"{OperationName} failed";
         State = MediaRowState.Failed;
