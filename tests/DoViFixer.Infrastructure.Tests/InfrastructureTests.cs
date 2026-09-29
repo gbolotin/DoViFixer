@@ -129,6 +129,23 @@ public sealed class InfrastructureTests
     }
 
     [TestMethod]
+    public void SupportedDiscoveryInputsAcceptMkvAndFoldersWithoutThrowingForOtherFiles()
+    {
+        string movie = Path.Combine(directory, "Movie.MKV");
+        string unsupported = Path.Combine(directory, "Movie.mp4");
+        File.WriteAllText(movie, "media");
+        File.WriteAllText(unsupported, "media");
+        string folder = Directory.CreateDirectory(Path.Combine(directory, "Folder.mp4")).FullName;
+        Assert.IsTrue(files.IsSupportedInput(movie));
+        Assert.IsTrue(files.IsSupportedInput(folder));
+        Assert.IsFalse(files.IsSupportedInput(unsupported));
+        Assert.IsFalse(files.IsSupportedInput(Path.Combine(directory, "Missing")));
+        Assert.IsFalse(files.IsSupportedInput(""));
+        Assert.IsFalse(files.IsSupportedInput("invalid\0path"));
+        CollectionAssert.AreEqual(new[] { movie }, files.Discover(directory, 100).ToArray());
+    }
+
+    [TestMethod]
     public async Task TemporaryDirectorySettingCreatesMissingParentsAndPreservesExistingContents()
     {
         var service = CreateSettingsService();

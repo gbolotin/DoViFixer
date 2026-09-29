@@ -88,6 +88,8 @@ internal sealed class TestRuntime : IFileDiscovery, IFileOperations, IMediaProbe
 
     public void Dispose() => container?.Dispose();
     public Func<string, IReadOnlyList<string>>? DiscoverFiles { get; set; }
+    public HashSet<string> Folders { get; } = new(StringComparer.OrdinalIgnoreCase);
+    public bool IsSupportedInput(string input) => !string.IsNullOrWhiteSpace(input) && (input.EndsWith(".mkv", StringComparison.OrdinalIgnoreCase) || Folders.Contains(input));
     public IReadOnlyList<string> Discover(string input, int recursiveDepth, bool cleanup = false) => DiscoverFiles?.Invoke(input) ?? [Path.GetFullPath(input)];
     public FileIdentity Identify(string path) => new(Path.GetFullPath(path), 40000000000, new DateTime(2026, 9, 11));
     public string PrepareOutputPath(string input, string? outputDirectory, string suffix, bool allowInput = false) => Path.Combine(outputDirectory ?? Path.GetDirectoryName(input)!, Path.GetFileNameWithoutExtension(input) + suffix);

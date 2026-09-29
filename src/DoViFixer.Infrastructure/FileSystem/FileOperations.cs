@@ -4,6 +4,10 @@ using DoViFixer.Domain.Media;
 namespace DoViFixer.Infrastructure.FileSystem;
 internal sealed class FileOperations : IFileOperations, IFileDiscovery
 {
+    private static bool IsMediaFile(string path) => path.EndsWith(".mkv", StringComparison.OrdinalIgnoreCase);
+
+    public bool IsSupportedInput(string input) => !string.IsNullOrWhiteSpace(input) && (IsMediaFile(input) || Directory.Exists(input));
+
     public FileIdentity Identify(string path)
     {
         string full = Path.GetFullPath(path);
@@ -26,7 +30,7 @@ internal sealed class FileOperations : IFileOperations, IFileDiscovery
 
         string full = Path.GetFullPath(input);
         RejectReparsePoints(full);
-        bool Matches(string path) => cleanup ? path.EndsWith(".bak.dovi_convert", StringComparison.OrdinalIgnoreCase) || path.EndsWith(".dovi", StringComparison.OrdinalIgnoreCase) : path.EndsWith(".mkv", StringComparison.OrdinalIgnoreCase);
+        bool Matches(string path) => cleanup ? path.EndsWith(".bak.dovi_convert", StringComparison.OrdinalIgnoreCase) || path.EndsWith(".dovi", StringComparison.OrdinalIgnoreCase) : IsMediaFile(path);
         if (File.Exists(full))
         {
             if (!Matches(full))

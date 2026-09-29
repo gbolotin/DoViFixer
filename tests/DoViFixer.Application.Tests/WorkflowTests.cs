@@ -640,6 +640,7 @@ public sealed class WorkflowTests
             init;
         }
 
+        public bool IsSupportedInput(string input) => true;
         public IReadOnlyList<string> Discover(string input, int recursiveDepth, bool cleanup = false) => ScanFiles ?? (PlanningFixtures ? new[]
         {
             "simple.mkv",

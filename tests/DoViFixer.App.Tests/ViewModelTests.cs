@@ -8,6 +8,39 @@ namespace DoViFixer.App.Tests;
 public sealed class ViewModelTests
 {
     [TestMethod]
+    public async Task DroppedPathsIgnoreUnsupportedFilesBeforeDiscovery()
+    {
+        using var runtime = new TestRuntime();
+        var model = runtime.Container.GetRequiredService<MediaViewModel>();
+        runtime.Folders.Add(@"C:\Media\Folder.with.dots");
+        Assert.IsTrue(model.AddDroppedPathsCommand.CanExecute(new[] { @"C:\Media\Movie.MKV", @"C:\Media\Folder.with.dots" }));
+        int discoveries = 0;
+        runtime.DiscoverFiles = _ => { discoveries++; return []; };
+        foreach (string[] paths in new string[][] { [], [""], [@"C:\Media\Movie.mp4"], [@"C:\Media\Movie"] })
+        {
+            Assert.IsFalse(model.AddDroppedPathsCommand.CanExecute(paths));
+            await model.AddDroppedPathsCommand.ExecuteAsync(paths);
+        }
+        Assert.AreEqual(0, discoveries);
+        Assert.IsEmpty(model.Files);
+        Assert.AreEqual(ViewStatus.Ready, model.Status);
+
+        await runtime.UpdateAsync(settings => settings with { AutomaticallyScanAddedFiles = false }, default);
+        var discovered = new List<string>();
+        runtime.DiscoverFiles = input =>
+        {
+            discovered.Add(input);
+            return [input.EndsWith("Folder.with.dots") ? @"C:\Media\Folder.with.dots\Nested.mkv" : input];
+        };
+        string[] mixed = [@"C:\Media\Movie.srt", @"C:\Media\Movie.MKV", @"C:\Media\Folder.with.dots", @"C:\Media\Movie.mp4"];
+        Assert.IsTrue(model.AddDroppedPathsCommand.CanExecute(mixed));
+        await model.AddDroppedPathsCommand.ExecuteAsync(mixed);
+        CollectionAssert.AreEqual(new[] { mixed[1], mixed[2] }, discovered.ToArray());
+        CollectionAssert.AreEqual(new[] { mixed[1], @"C:\Media\Folder.with.dots\Nested.mkv" }, model.Files.Select(row => row.Path).ToArray());
+        Assert.AreEqual(ViewStatus.Ready, model.Status);
+    }
+
+    [TestMethod]
     public async Task RemoveFileUpdatesSelectionAndDetailsAndRejectsRemovalWhileBusy()
     {
         using var runtime = new TestRuntime();

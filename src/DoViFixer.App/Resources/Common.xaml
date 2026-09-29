@@ -17,6 +17,44 @@
             <TextBlock Text="{Binding}" VerticalAlignment="Center" />
         </StackPanel>
     </DataTemplate>
+    <DataTemplate x:Key="AddIconButtonContent">
+        <StackPanel Orientation="Horizontal">
+            <Grid Width="24"
+                  Height="20"
+                  Margin="0,0,8,0"
+                  VerticalAlignment="Center">
+                <TextBlock Text="{Binding Tag, RelativeSource={RelativeSource AncestorType=Button}}"
+                           FontFamily="{StaticResource SymbolThemeFontFamily}"
+                           FontSize="16"
+                           HorizontalAlignment="Left"
+                           VerticalAlignment="Top">
+                    <TextBlock.Clip>
+                        <GeometryGroup FillRule="EvenOdd">
+                            <RectangleGeometry Rect="0,0,16,16" />
+                            <EllipseGeometry Center="18,14"
+                                             RadiusX="7"
+                                             RadiusY="7" />
+                        </GeometryGroup>
+                    </TextBlock.Clip>
+                </TextBlock>
+                <Border Width="12"
+                        Height="12"
+                        CornerRadius="6"
+                        BorderThickness="1"
+                        BorderBrush="{Binding Foreground, RelativeSource={RelativeSource AncestorType=Button}}"
+                        HorizontalAlignment="Right"
+                        VerticalAlignment="Bottom">
+                    <TextBlock Text="&#xE710;"
+                               FontFamily="{StaticResource SymbolThemeFontFamily}"
+                               FontSize="8"
+                               FontWeight="SemiBold"
+                               HorizontalAlignment="Center"
+                               VerticalAlignment="Center" />
+                </Border>
+            </Grid>
+            <TextBlock Text="{Binding}" VerticalAlignment="Center" />
+        </StackPanel>
+    </DataTemplate>
     <Style x:Key="Heading"
            TargetType="TextBlock"
            BasedOn="{StaticResource TitleTextBlockStyle}">

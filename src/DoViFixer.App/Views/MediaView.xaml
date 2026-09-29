@@ -8,13 +8,13 @@
         <StackPanel>
             <WrapPanel>
                 <Button Content="Add files"
-                        Tag="&#xE710;"
-                        ContentTemplate="{StaticResource IconButtonContent}"
+                        Tag="&#xE8A5;"
+                        ContentTemplate="{StaticResource AddIconButtonContent}"
                         Command="{Binding AddFilesCommand}"
                         Margin="0,0,8,8" />
                 <Button Content="Add folder"
                         Tag="&#xE8B7;"
-                        ContentTemplate="{StaticResource IconButtonContent}"
+                        ContentTemplate="{StaticResource AddIconButtonContent}"
                         Command="{Binding AddFolderCommand}"
                         Margin="0,0,8,8" />
                 <Button Content="Clear all"
@@ -39,13 +39,13 @@
                         Command="{Binding DeepInspectCommand}"
                         Margin="0,0,8,8"/>
                 <Button Content="Convert to DV8.1"
-                        Tag="&#xE768;"
+                        Tag="&#xE8AB;"
                         ContentTemplate="{StaticResource IconButtonContent}"
                         Command="{Binding ConvertDv81Command}"
                         ToolTip="{Binding OutputSummaryToolTip}"
                         Margin="0,0,8,8" />
                 <Button Content="Convert to HDR10"
-                        Tag="&#xE768;"
+                        Tag="&#xE8AB;"
                         ContentTemplate="{StaticResource IconButtonContent}"
                         Command="{Binding ConvertHdrCommand}"
                         ToolTip="{Binding OutputSummaryToolTip}"
@@ -498,20 +498,20 @@
                        Style="{StaticResource Heading}"
                        TextAlignment="Center"
                        TextWrapping="Wrap" />
-            <TextBlock Text="Add files or choose a folder to get started."
+            <TextBlock Text="Drag and drop MKV files or folders here, or use the buttons below."
                        Foreground="{DynamicResource TextFillColorSecondaryBrush}"
                        TextAlignment="Center"
                        TextWrapping="Wrap" />
             <WrapPanel HorizontalAlignment="Center" Margin="0,20,0,0">
                 <Button Content="Add files"
-                        Tag="&#xE710;"
-                        ContentTemplate="{StaticResource IconButtonContent}"
+                        Tag="&#xE8A5;"
+                        ContentTemplate="{StaticResource AddIconButtonContent}"
                         Command="{Binding AddFilesCommand}"
                         Style="{StaticResource Primary}"
                         Margin="4" />
                 <Button Content="Add folder"
                         Tag="&#xE8B7;"
-                        ContentTemplate="{StaticResource IconButtonContent}"
+                        ContentTemplate="{StaticResource AddIconButtonContent}"
                         Command="{Binding AddFolderCommand}"
                         Margin="4" />
             </WrapPanel>
@@ -519,7 +519,9 @@
     </DataTemplate>
 
     <DataTemplate DataType="{x:Type viewModels:MediaViewModel}">
-        <Grid>
+        <Grid Background="Transparent"
+              AllowDrop="True"
+              p:FileDrop.Command="{Binding AddDroppedPathsCommand}">
             <Grid.RowDefinitions>
                 <RowDefinition Height="Auto" />
                 <RowDefinition Height="*" />

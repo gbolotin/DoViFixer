@@ -45,6 +45,8 @@ public sealed class MediaViewModel : OperationViewModel, INavigationPage, IIniti
 
         AddFilesCommand = new(() => AddAsync(dialogs.PickFiles()), () => IsIdle);
         AddFolderCommand = new(() => AddAsync(dialogs.PickFolder() is { } folder ? [folder] : []), () => IsIdle);
+        AddDroppedPathsCommand = new(paths => AddAsync(paths.Where(discovery.IsSupportedInput)),
+            paths => IsIdle && paths.Any(discovery.IsSupportedInput));
         ScanCommand = new(ScanAllAsync, CanScan);
         Files.CollectionChanged += (_, _) =>
         {
@@ -165,6 +167,7 @@ public sealed class MediaViewModel : OperationViewModel, INavigationPage, IIniti
     public bool CanInspect => CanOperate();
     public AsyncCommand AddFilesCommand { get; }
     public AsyncCommand AddFolderCommand { get; }
+    public AsyncCommand<string[]> AddDroppedPathsCommand { get; }
     public AsyncCommand ScanCommand { get; }
     public AsyncCommand InspectCommand { get; }
     public AsyncCommand DeepInspectCommand { get; }
@@ -295,6 +298,7 @@ public sealed class MediaViewModel : OperationViewModel, INavigationPage, IIniti
         OpenSettingsCommand?.RaiseCanExecuteChanged();
         AddFilesCommand?.RaiseCanExecuteChanged();
         AddFolderCommand?.RaiseCanExecuteChanged();
+        AddDroppedPathsCommand?.RaiseCanExecuteChanged();
         ScanCommand?.RaiseCanExecuteChanged();
         InspectCommand?.RaiseCanExecuteChanged();
         DeepInspectCommand?.RaiseCanExecuteChanged();

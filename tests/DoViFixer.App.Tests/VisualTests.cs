@@ -10,6 +10,7 @@ using System.Windows.Media.Imaging;
 using System.Windows.Threading;
 using DoViFixer.App.ViewModels;
 using DoViFixer.App.Presentation.Application;
+using DoViFixer.App.Presentation.Common;
 using DoViFixer.App.Views;
 using DoViFixer.Domain.Analysis;
 using DoViFixer.Domain.Media;
@@ -90,6 +91,7 @@ public sealed class VisualTests
             SaveRender((FrameworkElement)window.Content, "command-icons-empty");
 
             await VerifyEmptyMediaAsync(runtime, media, window, navigation, mediaView);
+            await VerifyFileDropAsync(runtime, media, window, mediaView);
             shell.Pages.OfType<ArchiveViewModel>().Single().SetStatus(ViewStatus.Result, "Archive status retained.");
             await LayoutAsync(window);
             Assert.AreEqual(media.StatusText, StatusItem(window, 1).Text, "Inactive pages must not overwrite the visible status.");
@@ -314,6 +316,78 @@ public sealed class VisualTests
         await LayoutAsync(window);
     }
 
+    private static DragDropEffects RaiseFileDrag(UIElement target, IDataObject data, RoutedEvent routedEvent, DragDropEffects allowed = DragDropEffects.Copy)
+    {
+        // WPF constructs these internally for native drops; raise the same routed events in-process.
+        var args = (DragEventArgs)Activator.CreateInstance(typeof(DragEventArgs),
+            System.Reflection.BindingFlags.Instance | System.Reflection.BindingFlags.NonPublic,
+            null, [data, DragDropKeyStates.None, allowed, target, new Point()], null)!;
+        args.RoutedEvent = routedEvent;
+        target.RaiseEvent(args);
+        Assert.IsTrue(args.Handled);
+        return args.Effects;
+    }
+
+    private static async Task VerifyFileDropAsync(TestRuntime runtime, MediaViewModel media, Window window, DependencyObject mediaView)
+    {
+        var root = Descendants<Grid>(mediaView).Single(grid => FileDrop.GetCommand(grid) is not null);
+        var panel = Descendants<StackPanel>(mediaView).Single(element => element.Name == "EmptyMediaPanel");
+        Assert.IsTrue(root.AllowDrop);
+        Assert.IsNotNull(root.Background, "Blank page space must participate in hit testing.");
+        Assert.AreSame(media.AddDroppedPathsCommand, FileDrop.GetCommand(root));
+        Assert.IsTrue(Descendants<TextBlock>(panel).Any(text => text.Text.Contains("Drag and drop")));
+        string[] paths = [@"C:\Dropped\Mountain.mkv", @"C:\Dropped\Folder"];
+        runtime.Folders.Add(paths[1]);
+        var data = new DataObject(DataFormats.FileDrop, paths.Append(@"C:\Dropped\Movie.mp4").ToArray());
+        var unsupported = new DataObject(DataFormats.FileDrop, new[] { @"C:\Dropped\Movie.mp4" });
+        Assert.AreEqual(DragDropEffects.None, RaiseFileDrag(root, unsupported, UIElement.PreviewDragEnterEvent));
+        Assert.AreEqual(DragDropEffects.None, RaiseFileDrag(root, unsupported, UIElement.PreviewDragOverEvent));
+        Assert.AreEqual(DragDropEffects.None, RaiseFileDrag(root, unsupported, UIElement.PreviewDropEvent));
+        Assert.AreEqual(DragDropEffects.None, RaiseFileDrag(root, new DataObject(DataFormats.Text, "text"), UIElement.PreviewDropEvent));
+        Assert.AreEqual(DragDropEffects.None, RaiseFileDrag(root, new DataObject(DataFormats.FileDrop, Array.Empty<string>()), UIElement.PreviewDropEvent));
+        Assert.AreEqual(DragDropEffects.None, RaiseFileDrag(root, data, UIElement.PreviewDropEvent, DragDropEffects.Move));
+        Assert.IsEmpty(media.Files);
+        Assert.AreEqual(DragDropEffects.Copy, RaiseFileDrag(panel, data, UIElement.PreviewDragEnterEvent));
+        Assert.AreEqual(DragDropEffects.Copy, RaiseFileDrag(panel, data, UIElement.PreviewDragOverEvent));
+        Assert.IsEmpty(media.Files, "Hovering must not add files.");
+
+        var discovered = new List<string>();
+        runtime.DiscoverFiles = input =>
+        {
+            discovered.Add(input);
+            return input == paths[1] ? [paths[0], @"C:\Dropped\Ocean.mkv"] : [input];
+        };
+        int analyses = runtime.Analyses;
+        try
+        {
+            Assert.AreEqual(DragDropEffects.Copy, RaiseFileDrag(root, data, UIElement.PreviewDropEvent));
+            await media.Completion;
+            await LayoutAsync(window);
+            CollectionAssert.AreEqual(paths, discovered.ToArray());
+            Assert.HasCount(2, media.Files, "Overlapping files and folders must be deduplicated.");
+            Assert.AreEqual(analyses + 2, runtime.Analyses, "Dropped files use automatic scanning.");
+            Assert.IsFalse(panel.IsVisible);
+
+            var list = Descendants<ListView>(mediaView).Single();
+            Assert.AreEqual(DragDropEffects.Copy, RaiseFileDrag(list, new DataObject(DataFormats.FileDrop, new[] { @"C:\Dropped\City.mkv" }), UIElement.PreviewDropEvent));
+            await media.Completion;
+            Assert.HasCount(3, media.Files, "Dropping on a populated list must still work.");
+            await LayoutAsync(window);
+
+            runtime.DiscoverFiles = _ => throw new IOException("Unavailable");
+            Assert.AreEqual(DragDropEffects.Copy, RaiseFileDrag(list, data, UIElement.PreviewDropEvent));
+            await media.Completion;
+            Assert.AreEqual(ViewStatus.Error, media.Status);
+            Assert.HasCount(3, media.Files);
+        }
+        finally
+        {
+            runtime.DiscoverFiles = null;
+            media.ClearAllCommand.Execute();
+            await LayoutAsync(window);
+        }
+    }
+
     private static async Task VerifyEmptyMediaAsync(TestRuntime runtime, MediaViewModel media, Window window, ListBox navigation, DependencyObject mediaView)
     {
         var panel = Descendants<StackPanel>(mediaView).Single(element => element.Name == "EmptyMediaPanel");
@@ -419,6 +493,8 @@ public sealed class VisualTests
             await LayoutAsync(window);
             Assert.IsTrue(panel.IsVisible);
             Assert.IsFalse(addFiles.IsEnabled || addFolder.IsEnabled);
+            Assert.IsFalse(media.AddDroppedPathsCommand.CanExecute(new[] { @"C:\Media\Dropped.mkv" }));
+            Assert.AreEqual(DragDropEffects.None, RaiseFileDrag(panel, new DataObject(DataFormats.FileDrop, new[] { @"C:\Media\Dropped.mkv" }), UIElement.PreviewDropEvent));
             Assert.IsTrue(Descendants<ProgressBar>(mediaView).Any(progress => progress.IsVisible));
             var cancel = Button(mediaView, "Cancel batch");
             Assert.IsTrue(cancel.IsVisible);
@@ -697,6 +773,13 @@ public sealed class VisualTests
             Assert.IsTrue(font.CharacterToGlyphMap.ContainsKey(glyph[0]), $"Missing icon for {button.Content}.");
             Assert.AreEqual(button.Content, new ButtonAutomationPeer(button).GetName());
             AssertInside(icon, button);
+            if (button.Content is "Add files" or "Add folder")
+            {
+                Assert.AreEqual(button.Content is "Add files" ? "\uE8A5" : "\uE8B7", glyph);
+                var badge = Descendants<TextBlock>(button).Single(text => text.Text == "\uE710");
+                Assert.AreEqual(icon.FontFamily, badge.FontFamily);
+                AssertInside(badge, button);
+            }
         }
     }
 

@@ -3,6 +3,7 @@ using DoViFixer.Domain.Media;
 namespace DoViFixer.Application.Abstractions;
 public interface IFileDiscovery
 {
+    bool IsSupportedInput(string input);
     IReadOnlyList<string> Discover(string input, int recursiveDepth, bool cleanup = false);
 }
 
