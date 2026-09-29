@@ -126,7 +126,7 @@ public sealed class MediaRow(string path) : ObservableObject
             SetProperty(ref notice, value);
             RaisePropertyChanged(nameof(Warning));
             RaisePropertyChanged(nameof(HasWarning));
-            RaisePropertyChanged(nameof(Details));
+            RaisePropertyChanged(nameof(DetailNotes));
             RaisePropertyChanged(nameof(StatusToolTip));
         }
     }
@@ -167,7 +167,8 @@ public sealed class MediaRow(string path) : ObservableObject
             SetProperty(ref analysisError, value);
             RaisePropertyChanged(nameof(Classification));
             RaisePropertyChanged(nameof(HasAnalysisError));
-            RaisePropertyChanged(nameof(Details));
+            RaisePropertyChanged(nameof(DetailRows));
+            RaisePropertyChanged(nameof(DetailNotes));
             RaisePropertyChanged(nameof(StatusToolTip));
         }
     }
@@ -193,7 +194,8 @@ public sealed class MediaRow(string path) : ObservableObject
             RaisePropertyChanged(nameof(HasIncompleteScan));
             RaisePropertyChanged(nameof(CanInspectIncomplete));
             RaisePropertyChanged(nameof(Classification));
-            RaisePropertyChanged(nameof(Details));
+            RaisePropertyChanged(nameof(DetailRows));
+            RaisePropertyChanged(nameof(DetailNotes));
         }
     }
 
@@ -214,8 +216,47 @@ public sealed class MediaRow(string path) : ObservableObject
         }
     };
     public bool HasAnalysisError => AnalysisError is not null;
-    public string Details => AnalysisError is not null ? $"{Path}\n\nAnalysis failed\n{AnalysisError}" : Analysis is not{ }
-    a ? Path + "\n" + Notice : $"{Path}\n\n{Classification}\n{a.Media.Width} × {a.Media.Height} · {a.Media.FramesPerSecond:0.###} fps\n" + $"{TimeSpan.FromSeconds(a.Media.DurationSeconds ?? 0):g} · {a.Media.Source.Length / 1073741824d:0.00} GiB\n\n" + $"Evidence: {EvidenceName(a.Evidence.Method)}\nFrames: {a.Evidence.Frames:N0}\nSamples: {a.Evidence.SuccessfulSamples}/{a.Evidence.RequestedSamples}\n\n{a.Reason}\n{a.Evidence.SampleDiagnostics}\n" + (HasIncompleteScan ? "\nSuggested action: Inspect. Standard inspection examines the full RPU metadata stream instead of short samples. It may take longer; missing metadata may still prevent classification.\n" : "") + $"\n{Notice}";
+    public IReadOnlyList<KeyValuePair<string, string>> DetailRows
+    {
+        get
+        {
+            if (Analysis is not { } a)
+            {
+                return [new("File location", Path)];
+            }
+
+            string length = "Unknown";
+            if (a.Media.DurationSeconds is { } seconds && double.IsFinite(seconds) && seconds >= 0 && seconds < TimeSpan.MaxValue.TotalSeconds)
+            {
+                var duration = TimeSpan.FromSeconds(seconds);
+                length = $"{(long)duration.TotalHours:00}:{duration.Minutes:00}:{duration.Seconds:00}";
+            }
+
+            return
+            [
+                new("Type", "Matroska"),
+                new("Size", a.Media.Source.Length >= 1073741824
+                    ? $"{a.Media.Source.Length / 1073741824d:0.##} GiB" : $"{a.Media.Source.Length / 1048576d:0.##} MiB"),
+                new("File location", Path),
+                new("Date modified", a.Media.Source.LastWriteUtc.ToLocalTime().ToString("g")),
+                new("Length", length),
+                new("Profile / Type", Classification),
+                new("Resolution", $"{a.Media.Width} × {a.Media.Height}"),
+                new("Frame rate", a.Media.FramesPerSecond is { } fps ? $"{fps:0.###} fps" : "Unknown"),
+                new("Evidence", EvidenceName(a.Evidence.Method)),
+                new("Frames", a.Evidence.Frames.ToString("N0")),
+                new("Samples", $"{a.Evidence.SuccessfulSamples}/{a.Evidence.RequestedSamples}")
+            ];
+        }
+    }
+
+    public string DetailNotes => string.Join("\n\n", new[]
+    {
+        AnalysisError is not null ? $"Analysis failed\n{AnalysisError}" : Analysis?.Reason,
+        Analysis?.Evidence.SampleDiagnostics,
+        HasIncompleteScan ? "Suggested action: Inspect. Standard inspection examines the full RPU metadata stream instead of short samples. It may take longer; missing metadata may still prevent classification." : null,
+        Notice
+    }.Where(text => !string.IsNullOrWhiteSpace(text)));
     public string ResultDetails => Result is null ? "" : $"Last conversion result\n{Result.Status}\n{Result.Output}\n{Result.Message}";
 
     #endregion

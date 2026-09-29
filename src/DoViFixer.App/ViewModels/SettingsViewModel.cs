@@ -15,6 +15,9 @@ public sealed class SettingsViewModel : OperationViewModel, INavigationPage
 
     private readonly SettingsService settings;
     private readonly IThemeService themeService;
+    private readonly IAnalysisCache cache;
+    private readonly IMediaPreview mediaPreview;
+    private string cacheSizeText = "Cache: …";
     private string temporary = "";
     private string destination = "";
     private bool otherFolder;
@@ -59,15 +62,26 @@ public sealed class SettingsViewModel : OperationViewModel, INavigationPage
     public string? DestinationError => OtherFolder && string.IsNullOrWhiteSpace(Destination) ? "Choose an output folder." : null;
 
     public event Action<UserSettings>? Saved;
-    public SettingsViewModel(SettingsService settings, DependencyService dependencies, DependencySetup setup, IUserDialogs dialogs, IAnalysisCache cache, IThemeService themeService)
+    public event Func<Task>? CacheClearing;
+    public string CacheDirectory => cache.RootDirectory;
+    public string CacheSizeText
+    {
+        get => cacheSizeText;
+        private set => SetProperty(ref cacheSizeText, value);
+    }
+
+    public SettingsViewModel(SettingsService settings, DependencyService dependencies, DependencySetup setup, IUserDialogs dialogs, IAnalysisCache cache, IThemeService themeService, IMediaPreview mediaPreview)
     {
         this.settings = settings;
         this.themeService = themeService;
+        this.cache = cache;
+        this.mediaPreview = mediaPreview;
         LoadCommand = new(() => RunAsync(async (token, _) =>
         {
             await FlushAsync(token);
             lastSavedSettings = await settings.ReadAsync(token);
             ApplyPreferences(lastSavedSettings);
+            await RefreshCacheSizeAsync(token);
             SetStatus(ViewStatus.SettingsLoaded);
         }), () => IsIdle);
         BrowseTemporaryCommand = new(() => Temporary = dialogs.PickFolder() ?? Temporary);
@@ -77,8 +91,14 @@ public sealed class SettingsViewModel : OperationViewModel, INavigationPage
         DiscardChangesCommand = new(DiscardChanges, () => IsIdle && !IsSaving && HasSaveError && lastSavedSettings is not null);
         ClearCacheCommand = new(() => RunAsync(async (token, _) =>
         {
+            if (CacheClearing is not null)
+            {
+                await CacheClearing();
+            }
             int removed = await Task.Run(() => cache.ClearAsync(token), token);
-            SetStatus(ViewStatus.Result, $"Cleared {removed} cached analysis results. Future scans will analyze those files again.");
+            int frames = await Task.Run(() => mediaPreview.ClearCacheAsync(token), token);
+            await RefreshCacheSizeAsync(token);
+            SetStatus(ViewStatus.Result, $"Cleared {removed} cached analysis results and {frames} frame previews. They will be recreated when needed.");
         }), () => IsIdle);
         CheckCommand = new(() => RunAsync(async (token, _) =>
         {
@@ -111,6 +131,26 @@ public sealed class SettingsViewModel : OperationViewModel, INavigationPage
             await settings.ResetToolAsync(SelectedTool, token);
             SetStatus(ViewStatus.ToolOverrideReset);
         }), () => IsIdle);
+    }
+
+    private async Task RefreshCacheSizeAsync(CancellationToken token)
+    {
+        CacheSizeText = "Cache: …";
+        try
+        {
+            long bytes = await Task.Run(async () => await cache.GetSizeAsync(token) + await mediaPreview.GetCacheSizeAsync(token), token);
+            CacheSizeText = bytes switch
+            {
+                >= 1073741824 => $"Cache: {bytes / 1073741824d:0.##} GiB",
+                >= 1048576 => $"Cache: {bytes / 1048576d:0.##} MiB",
+                >= 1024 => $"Cache: {bytes / 1024d:0.##} KiB",
+                _ => $"Cache: {bytes} B"
+            };
+        }
+        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
+        {
+            CacheSizeText = "Cache size unavailable";
+        }
     }
 
     private void ApplyPreferences(UserSettings value)

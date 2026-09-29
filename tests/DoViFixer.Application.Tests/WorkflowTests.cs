@@ -92,6 +92,8 @@ public sealed class WorkflowTests
 
     private sealed class MemoryCache : IAnalysisCache
     {
+        public string RootDirectory => @"C:\FixtureData\cache";
+        public Task<long> GetSizeAsync(CancellationToken cancellationToken) => Task.FromResult(0L);
         private readonly Dictionary<(FileIdentity, AnalysisMethod), MediaAnalysis> entries = new();
         public Task<int> ClearAsync(CancellationToken cancellationToken)
         {

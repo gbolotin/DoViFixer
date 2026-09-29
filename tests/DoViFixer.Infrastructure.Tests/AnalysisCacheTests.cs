@@ -47,13 +47,18 @@ public sealed class AnalysisCacheTests
     {
         var cache = Cache();
         Assert.AreEqual(0, await cache.ClearAsync(default));
+        Assert.AreEqual(Path.Combine(directory, "cache"), cache.RootDirectory);
+        Assert.AreEqual(0L, await cache.GetSizeAsync(default));
         var analysis = Analysis();
         await cache.WriteAsync(analysis, default);
         string settings = Path.Combine(directory, "settings.json");
         await File.WriteAllTextAsync(settings, "{}");
         string temporary = Path.Combine(directory, "cache", "analysis", "active.tmp");
         await File.WriteAllTextAsync(temporary, "in progress");
+        long expectedBytes = new FileInfo(Directory.GetFiles(Path.GetDirectoryName(temporary)!, "*.json").Single()).Length;
+        Assert.AreEqual(expectedBytes, await cache.GetSizeAsync(default));
         Assert.AreEqual(1, await cache.ClearAsync(default));
+        Assert.AreEqual(0L, await cache.GetSizeAsync(default));
         Assert.IsTrue(File.Exists(settings));
         Assert.IsTrue(File.Exists(temporary));
         Assert.IsNull(await cache.ReadAsync(analysis.Media.Source, AnalysisMethod.FullRpu, default));

@@ -8,6 +8,55 @@ namespace DoViFixer.App.Tests;
 public sealed class ViewModelTests
 {
     [TestMethod]
+    [DataRow(61.2710416, "00:01:01")]
+    [DataRow(90061d, "25:01:01")]
+    [DataRow(double.NaN, "Unknown")]
+    public async Task MediaDetailsUseLabeledRowsAndKeepDiagnostics(double seconds, string expectedLength)
+    {
+        using var runtime = new TestRuntime();
+        const string path = @"C:\Media\Mountain.mkv";
+        var row = new MediaRow(path);
+        Assert.AreEqual(path, row.DetailRows.Single().Value);
+        var media = (await runtime.ProbeAsync(path, default)) with { DurationSeconds = seconds };
+        var changes = new List<string?>();
+        row.PropertyChanged += (_, e) => changes.Add(e.PropertyName);
+        row.Analysis = DoViFixer.Domain.Analysis.MediaClassifier.Classify(media,
+            new(DoViFixer.Domain.Analysis.AnalysisMethod.SampledRpu, DoViFixer.Domain.Media.EnhancementLayer.Mel, 390, 900, 10, 10));
+        var details = row.DetailRows.ToDictionary();
+        Assert.AreEqual(expectedLength, details["Length"]);
+        Assert.AreEqual("Matroska", details["Type"]);
+        Assert.AreEqual(path, details["File location"]);
+        Assert.AreEqual("3840 × 2160", details["Resolution"]);
+        Assert.AreEqual("10/10", details["Samples"]);
+        CollectionAssert.Contains(changes, nameof(MediaRow.DetailRows));
+        row.Notice = "Keep this warning visible.";
+        row.AnalysisError = "Fixture analysis error.";
+        StringAssert.Contains(row.DetailNotes, row.Notice);
+        StringAssert.Contains(row.DetailNotes, row.AnalysisError);
+        CollectionAssert.Contains(changes, nameof(MediaRow.DetailNotes));
+    }
+
+    [TestMethod]
+    [DataRow(0L, 0L, "Cache: 0 B")]
+    [DataRow(25L, 50L, "Cache: 75 B")]
+    [DataRow(512L, 512L, "Cache: 1 KiB")]
+    [DataRow(1048576L, 1048576L, "Cache: 2 MiB")]
+    [DataRow(536870912L, 536870912L, "Cache: 1 GiB")]
+    public async Task SettingsShowsCombinedCacheSizeAndRefreshesAfterClearing(long analysisBytes, long frameBytes, string expected)
+    {
+        using var runtime = new TestRuntime { AnalysisCacheBytes = analysisBytes, FrameCacheBytes = frameBytes };
+        var settings = runtime.Container.GetRequiredService<SettingsViewModel>();
+        await settings.LoadCommand.ExecuteAsync();
+        Assert.AreEqual(expected, settings.CacheSizeText);
+        Assert.AreEqual(runtime.RootDirectory, settings.CacheDirectory);
+        await settings.ClearCacheCommand.ExecuteAsync();
+        Assert.AreEqual("Cache: 0 B", settings.CacheSizeText);
+        runtime.FrameCacheBytes = 1024;
+        await settings.LoadCommand.ExecuteAsync();
+        Assert.AreEqual("Cache: 1 KiB", settings.CacheSizeText);
+    }
+
+    [TestMethod]
     public async Task DroppedPathsIgnoreUnsupportedFilesBeforeDiscovery()
     {
         using var runtime = new TestRuntime();
@@ -247,9 +296,9 @@ public sealed class ViewModelTests
         };
         row.Analysis = DoViFixer.Domain.Analysis.MediaClassifier.Classify(row.Analysis.Media, evidence);
         Assert.AreEqual("Profile 7 · Incomplete scan", row.Classification);
-        Assert.IsTrue(row.Details.Contains("Samples: 9/10"));
-        Assert.IsTrue(row.Details.Contains("No RPU was found in input file"));
-        Assert.IsTrue(row.Details.Contains("Suggested action: Inspect"));
+        Assert.AreEqual("9/10", row.DetailRows.Single(detail => detail.Key == "Samples").Value);
+        Assert.IsTrue(row.DetailNotes.Contains("No RPU was found in input file"));
+        Assert.IsTrue(row.DetailNotes.Contains("Suggested action: Inspect"));
         Assert.IsFalse(row.CanRetryAnalysis);
         Assert.IsTrue(model.InspectIncompleteCommand.CanExecute(row));
         row.IsActive = true;
@@ -289,7 +338,7 @@ public sealed class ViewModelTests
         await command.ExecuteAsync();
         Assert.AreEqual(method == DoViFixer.Domain.Analysis.AnalysisMethod.SampledRpu ? "Scan failed" : "Inspection failed", row.Status);
         Assert.IsTrue(row.CanRetryAnalysis);
-        Assert.IsTrue(row.Details.Contains("Fixture analysis failure"));
+        Assert.IsTrue(row.DetailNotes.Contains("Fixture analysis failure"));
         int analyses = runtime.Analyses;
         runtime.DuringAnalysis = null;
         row.IsSelected = false;
@@ -406,7 +455,10 @@ public sealed class ViewModelTests
         await settings.SaveCommand.ExecuteAsync();
         await model.ScanCommand.ExecuteAsync();
         Assert.AreEqual(2, runtime.Analyses);
+        runtime.CachedFrames = 2;
         await settings.ClearCacheCommand.ExecuteAsync();
+        Assert.AreEqual(0, runtime.CachedFrames);
+        StringAssert.Contains(settings.StatusMessage, "2 frame previews");
         await model.ScanCommand.ExecuteAsync();
         Assert.AreEqual(3, runtime.Analyses);
     }

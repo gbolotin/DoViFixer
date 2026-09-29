@@ -1,6 +1,7 @@
 using DoViFixer.App.Navigation;
 using System.Collections.ObjectModel;
 using System.ComponentModel;
+using System.Windows.Media.Imaging;
 using DoViFixer.App.Dialogs;
 using DoViFixer.App.Presentation.Common;
 using DoViFixer.App.Presentation.Application;
@@ -14,7 +15,7 @@ using DoViFixer.Domain.Conversion;
 using Microsoft.Extensions.Logging;
 
 namespace DoViFixer.App.ViewModels;
-public sealed class MediaViewModel : OperationViewModel, INavigationPage, IInitializeAsync
+public sealed class MediaViewModel : OperationViewModel, INavigationPage, IInitializeAsync, IDisposable
 {
     public string NavigationName => "Media";
     public string? NavigationIcon => "\uE714";
@@ -30,9 +31,15 @@ public sealed class MediaViewModel : OperationViewModel, INavigationPage, IIniti
     private readonly ILogger<MediaViewModel> logger;
     private BatchControl? control;
     private MediaRow? focused;
+    private readonly IMediaPreview mediaPreview;
+    private CancellationTokenSource? previewCancellation;
+    private CancellationTokenSource? backgroundPreviewCancellation;
+    private Task previewCompletion = Task.CompletedTask;
+    private BitmapSource? framePreview;
+    private string previewStatus = "";
 
     private static string Summary(BatchResult result) => string.Join(" · ", result.Items.GroupBy(r => r.Status).Select(g => $"{g.Count()} {g.Key}"));
-    public MediaViewModel(IFileDiscovery discovery, InspectionService inspection, ConversionService conversion, ControlledBatchService batch, SettingsService settings, DependencySetup dependencies, IUserDialogs dialogs, ILogger<MediaViewModel> logger)
+    public MediaViewModel(IFileDiscovery discovery, InspectionService inspection, ConversionService conversion, ControlledBatchService batch, SettingsService settings, DependencySetup dependencies, IUserDialogs dialogs, ILogger<MediaViewModel> logger, IMediaPreview mediaPreview)
     {
         this.discovery = discovery;
         this.inspection = inspection;
@@ -42,6 +49,7 @@ public sealed class MediaViewModel : OperationViewModel, INavigationPage, IIniti
         this.dependencies = dependencies;
         this.dialogs = dialogs;
         this.logger = logger;
+        this.mediaPreview = mediaPreview;
 
         AddFilesCommand = new(() => AddAsync(dialogs.PickFiles()), () => IsIdle);
         AddFolderCommand = new(() => AddAsync(dialogs.PickFolder() is { } folder ? [folder] : []), () => IsIdle);
@@ -138,10 +146,140 @@ public sealed class MediaViewModel : OperationViewModel, INavigationPage, IIniti
         get => focused;
         set
         {
-            SetProperty(ref focused, value);
-            OpenOutputCommand.RaiseCanExecuteChanged();
+            if (SetProperty(ref focused, value))
+            {
+                OpenOutputCommand.RaiseCanExecuteChanged();
+                previewCompletion = Task.WhenAll(previewCompletion, LoadPreviewAsync(value));
+            }
         }
     }
+
+    public BitmapSource? FramePreview
+    {
+        get => framePreview;
+        private set => SetProperty(ref framePreview, value);
+    }
+
+    public string PreviewStatus
+    {
+        get => previewStatus;
+        private set => SetProperty(ref previewStatus, value);
+    }
+
+    private async Task LoadPreviewAsync(MediaRow? row)
+    {
+        previewCancellation?.Cancel();
+        previewCancellation = null;
+        FramePreview = null;
+        PreviewStatus = "";
+        if (row is null)
+        {
+            return;
+        }
+
+        using var cancellation = new CancellationTokenSource();
+        previewCancellation = cancellation;
+        PreviewStatus = "Loading frame preview…";
+        try
+        {
+            var image = await Task.Run(async () =>
+            {
+                byte[] bytes = await mediaPreview.LoadAsync(row.Path, cancellation.Token);
+                using var stream = new MemoryStream(bytes);
+                var bitmap = new BitmapImage();
+                bitmap.BeginInit();
+                bitmap.CacheOption = BitmapCacheOption.OnLoad;
+                bitmap.StreamSource = stream;
+                bitmap.EndInit();
+                bitmap.Freeze();
+                return bitmap;
+            }, cancellation.Token);
+            if (!cancellation.IsCancellationRequested)
+            {
+                FramePreview = image;
+                PreviewStatus = "";
+            }
+        }
+        catch (OperationCanceledException) when (cancellation.IsCancellationRequested)
+        {
+        }
+        catch (Exception ex)
+        {
+            logger.LogDebug(ex, "Frame preview unavailable for {Input}", row.Path);
+            if (!cancellation.IsCancellationRequested)
+            {
+                PreviewStatus = "Frame preview unavailable. Check media tools in Settings or try selecting the file again.";
+            }
+        }
+        finally
+        {
+            if (ReferenceEquals(previewCancellation, cancellation))
+            {
+                previewCancellation = null;
+            }
+        }
+    }
+
+    private void StartBackgroundPreviews(bool refreshFocused = false)
+    {
+        if (refreshFocused)
+        {
+            previewCompletion = Task.WhenAll(previewCompletion, LoadPreviewAsync(Focused));
+        }
+        previewCompletion = Task.WhenAll(previewCompletion, GeneratePreviewsAsync([.. Files]));
+    }
+
+    private async Task GeneratePreviewsAsync(MediaRow[] rows)
+    {
+        backgroundPreviewCancellation?.Cancel();
+        using var cancellation = new CancellationTokenSource();
+        backgroundPreviewCancellation = cancellation;
+        try
+        {
+            foreach (var row in rows)
+            {
+                cancellation.Token.ThrowIfCancellationRequested();
+                if (!Files.Contains(row))
+                {
+                    continue;
+                }
+                try
+                {
+                    // Fill the disk cache one file at a time without entering the busy operation flow.
+                    await Task.Run(() => mediaPreview.LoadAsync(row.Path, cancellation.Token), cancellation.Token);
+                }
+                catch (Exception ex) when (ex is not OperationCanceledException || !cancellation.IsCancellationRequested)
+                {
+                    logger.LogDebug(ex, "Background frame preview unavailable for {Input}", row.Path);
+                }
+            }
+        }
+        catch (OperationCanceledException) when (cancellation.IsCancellationRequested)
+        {
+        }
+        finally
+        {
+            if (ReferenceEquals(backgroundPreviewCancellation, cancellation))
+            {
+                backgroundPreviewCancellation = null;
+            }
+        }
+    }
+
+    public Task CancelPreviewsAsync()
+    {
+        CancelPreviews();
+        PreviewStatus = "";
+        return previewCompletion;
+    }
+
+    private void CancelPreviews()
+    {
+        previewCancellation?.Cancel();
+        backgroundPreviewCancellation?.Cancel();
+    }
+
+    public void Dispose() => CancelPreviews();
 
     public string SelectionSummary
     {
@@ -334,6 +472,10 @@ public sealed class MediaViewModel : OperationViewModel, INavigationPage, IIniti
         }
 
         Focused ??= Files.FirstOrDefault();
+        if (added.Count > 0)
+        {
+            StartBackgroundPreviews();
+        }
         InvalidatePlan();
         RaisePropertyChanged(nameof(SelectionSummary));
         RaisePropertyChanged(nameof(AllFilesSelected));
@@ -456,6 +598,7 @@ public sealed class MediaViewModel : OperationViewModel, INavigationPage, IIniti
 
     public Task ScanAllAsync() => RunAsync(async (token, _) =>
     {
+        StartBackgroundPreviews(refreshFocused: true);
         await AnalyzeRowsAsync([.. Files], AnalysisMethod.SampledRpu, token);
     });
 
@@ -696,6 +839,7 @@ public sealed class MediaViewModel : OperationViewModel, INavigationPage, IIniti
         row.PropertyChanged -= OnRowPropertyChanged;
         bool wasFocused = ReferenceEquals(Focused, row);
         Files.Remove(row);
+        StartBackgroundPreviews();
         if (wasFocused)
         {
             Focused = Files.FirstOrDefault();
@@ -717,6 +861,7 @@ public sealed class MediaViewModel : OperationViewModel, INavigationPage, IIniti
             return;
         }
 
+        CancelPreviews();
         foreach (var row in Files)
         {
             row.PropertyChanged -= OnRowPropertyChanged;

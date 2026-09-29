@@ -12,7 +12,7 @@ using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
 
 namespace DoViFixer.App.Tests;
-internal sealed class TestRuntime : IFileDiscovery, IFileOperations, IMediaProbe, ISettingsStore, IDependencyDetector, IDependencyInstaller, ITemporaryWorkspaceFactory, IAnalysisCache, IVideoProcessor, IMediaVerifier, IOutputPublisher, IUserDialogs, IThemeService, IDisposable
+internal sealed class TestRuntime : IFileDiscovery, IFileOperations, IMediaProbe, IMediaPreview, ISettingsStore, IDependencyDetector, IDependencyInstaller, ITemporaryWorkspaceFactory, IAnalysisCache, IVideoProcessor, IMediaVerifier, IOutputPublisher, IUserDialogs, IThemeService, IDisposable
 {
     private ServiceProvider? container;
     public IServiceCollection Services { get; } = new ServiceCollection();
@@ -79,7 +79,7 @@ internal sealed class TestRuntime : IFileDiscovery, IFileOperations, IMediaProbe
     public TestRuntime()
     {
         AppComposition.Register(Services, new ConfigurationBuilder().Build(), false);
-        Type[] contracts = [typeof(IFileDiscovery), typeof(IFileOperations), typeof(IMediaProbe), typeof(ISettingsStore), typeof(IDependencyDetector), typeof(IDependencyInstaller), typeof(ITemporaryWorkspaceFactory), typeof(IAnalysisCache), typeof(IVideoProcessor), typeof(IMediaVerifier), typeof(IOutputPublisher), typeof(IUserDialogs), typeof(IThemeService)];
+        Type[] contracts = [typeof(IFileDiscovery), typeof(IFileOperations), typeof(IMediaProbe), typeof(IMediaPreview), typeof(ISettingsStore), typeof(IDependencyDetector), typeof(IDependencyInstaller), typeof(ITemporaryWorkspaceFactory), typeof(IAnalysisCache), typeof(IVideoProcessor), typeof(IMediaVerifier), typeof(IOutputPublisher), typeof(IUserDialogs), typeof(IThemeService)];
         foreach (var contract in contracts)
         {
             Services.AddSingleton(contract, this);
@@ -87,6 +87,22 @@ internal sealed class TestRuntime : IFileDiscovery, IFileOperations, IMediaProbe
     }
 
     public void Dispose() => container?.Dispose();
+    public Func<string, CancellationToken, Task<byte[]>> Preview { get; set; } = (_, _) => Task.FromException<byte[]>(new IOException("Fixture preview unavailable."));
+    public Task<byte[]> LoadAsync(string path, CancellationToken cancellationToken) => Preview(path, cancellationToken);
+    public int CachedFrames { get; set; }
+    public string RootDirectory => @"C:\FixtureData\cache";
+    public long AnalysisCacheBytes { get; set; }
+    public long FrameCacheBytes { get; set; }
+    public Task<long> GetSizeAsync(CancellationToken cancellationToken) => Task.FromResult(AnalysisCacheBytes);
+    public Task<long> GetCacheSizeAsync(CancellationToken cancellationToken) => Task.FromResult(FrameCacheBytes);
+    public Task<int> ClearCacheAsync(CancellationToken cancellationToken)
+    {
+        cancellationToken.ThrowIfCancellationRequested();
+        int removed = CachedFrames;
+        CachedFrames = 0;
+        FrameCacheBytes = 0;
+        return Task.FromResult(removed);
+    }
     public Func<string, IReadOnlyList<string>>? DiscoverFiles { get; set; }
     public HashSet<string> Folders { get; } = new(StringComparer.OrdinalIgnoreCase);
     public bool IsSupportedInput(string input) => !string.IsNullOrWhiteSpace(input) && (input.EndsWith(".mkv", StringComparison.OrdinalIgnoreCase) || Folders.Contains(input));
@@ -198,6 +214,7 @@ internal sealed class TestRuntime : IFileDiscovery, IFileOperations, IMediaProbe
     {
         int count = cache.Count;
         cache.Clear();
+        AnalysisCacheBytes = 0;
         return Task.FromResult(count);
     }
     public async Task ConvertAsync(MediaInfo media, ConversionTarget target, ITemporaryWorkspace workspace, string stagedOutput, IProgress<OperationProgress>? progress, Guid operationId, CancellationToken cancellationToken, bool safe = false)

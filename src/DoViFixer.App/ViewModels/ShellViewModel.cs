@@ -14,6 +14,7 @@ public sealed class ShellViewModel : ObservableObject, IInitializeAsync
         operations = [.. Pages.OfType<OperationViewModel>()];
         media.RequestNavigateToSettings += () => CurrentPage = settings;
         settings.Saved += media.UpdateSettingsSummary;
+        settings.CacheClearing += media.CancelPreviewsAsync;
         media.ConversionStarting += settings.FlushAsync;
 
         currentPage = media;
@@ -115,6 +116,7 @@ public sealed class ShellViewModel : ObservableObject, IInitializeAsync
 
         await NavigationTask;
         await Task.WhenAll(operations.Select(o => o.Completion));
+        await media.CancelPreviewsAsync();
         await Settings.FlushAsync();
     }
 }

@@ -37,6 +37,7 @@ public sealed class CompositionTests
 
         Assert.AreSame(container.GetRequiredService<ISettingsStore>(), container.GetRequiredService<ISettingsStore>());
         Assert.AreSame(container.GetRequiredService<IToolCatalog>(), container.GetRequiredService<IToolCatalog>());
+        Assert.AreSame(container.GetRequiredService<IMediaPreview>(), container.GetRequiredService<IMediaPreview>());
         Assert.AreSame(container.GetRequiredService<IThemeService>(), container.GetRequiredService<IThemeService>());
         Assert.AreNotSame(container.GetRequiredService<MediaViewModel>(), container.GetRequiredService<MediaViewModel>());
         Assert.AreNotSame(container.GetRequiredService<ConversionService>(), container.GetRequiredService<ConversionService>());

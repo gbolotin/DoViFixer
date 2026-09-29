@@ -4,6 +4,13 @@ using DoViFixer.Domain.Conversion;
 using DoViFixer.Domain.Media;
 
 namespace DoViFixer.Application.Abstractions;
+public interface IMediaPreview
+{
+    Task<byte[]> LoadAsync(string path, CancellationToken cancellationToken);
+    Task<int> ClearCacheAsync(CancellationToken cancellationToken);
+    Task<long> GetCacheSizeAsync(CancellationToken cancellationToken);
+}
+
 public interface IMediaProbe
 {
     Task<MediaInfo> ProbeAsync(string path, CancellationToken cancellationToken);

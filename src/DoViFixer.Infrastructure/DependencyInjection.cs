@@ -42,6 +42,7 @@ public static class DependencyInjection
         services.AddTransient<IOutputPublisher, OutputPublisher>();
         services.AddTransient<MediaProbe>();
         services.AddTransient<IMediaProbe, MediaProbe>();
+        services.AddSingleton<IMediaPreview, MediaPreview>();
         services.AddTransient<VideoProcessor>();
         services.AddTransient<IVideoProcessor, VideoProcessor>();
         services.AddTransient<IMediaVerifier, MediaVerifier>();

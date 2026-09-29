@@ -68,6 +68,9 @@ public sealed class VisualTests
         source.Listeners.Add(errors);
         source.Switch.Level = SourceLevels.Error;
         using var runtime = new TestRuntime();
+        byte[] preview = Environment.GetEnvironmentVariable("DOVIFIXER_TEST_PREVIEW_OUTPUT") is { } previewPath
+            ? File.ReadAllBytes(previewPath) : MediaPreviewTests.CreateImage();
+        runtime.Preview = (_, _) => Task.FromResult(preview);
         var window = runtime.Container.GetRequiredService<Shell>();
         var shell = (ShellViewModel)window.DataContext;
         var media = shell.Pages.OfType<MediaViewModel>().Single();
@@ -124,6 +127,8 @@ public sealed class VisualTests
                 [media] = VisualTreeHelper.GetChild(mediaView, 0)
             };
             double? settingsOffset = null;
+            runtime.AnalysisCacheBytes = 262144;
+            runtime.FrameCacheBytes = 10485760;
             foreach (var page in shell.Pages.Skip(1).Append(media).Concat(shell.Pages.Skip(1).Append(media)))
             {
                 navigation.SelectedItem = page;
@@ -163,6 +168,15 @@ public sealed class VisualTests
                     }
                     else
                     {
+                        var cacheSize = Descendants<TextBlock>(workspace).Single(text => text.Text == shell.Settings.CacheSizeText);
+                        var cacheLocation = Descendants<TextBlock>(workspace).Single(text => text.Text == "Location: " + shell.Settings.CacheDirectory);
+                        var cacheCard = (FrameworkElement)((FrameworkElement)cacheSize.Parent).Parent;
+                        cacheCard.BringIntoView();
+                        await LayoutAsync(window);
+                        Assert.IsTrue(cacheSize.IsVisible);
+                        AssertInside(cacheSize, (FrameworkElement)window.Content);
+                        AssertInside(cacheLocation, (FrameworkElement)window.Content);
+                        SaveRender((FrameworkElement)window.Content, "settings-cache-size");
                         scroll.ScrollToEnd();
                         await LayoutAsync(window);
                         settingsOffset = scroll.VerticalOffset;
@@ -198,6 +212,24 @@ public sealed class VisualTests
 
             await LayoutAsync(window);
             VerifyCommandIcons(mediaView);
+            for (int attempt = 0; media.FramePreview is null && attempt < 100; attempt++)
+            {
+                await Task.Delay(20);
+            }
+            await LayoutAsync(window);
+            var frame = Descendants<Image>(mediaView).Single(image => System.Windows.Automation.AutomationProperties.GetName(image) == "Movie frame preview");
+            Assert.IsNotNull(media.FramePreview);
+            Assert.AreSame(media.FramePreview, frame.Source);
+            Assert.IsTrue(frame.IsVisible);
+            Assert.IsTrue(frame.ActualHeight <= 240);
+            var detailValues = Descendants<TextBlock>(mediaView)
+                .Where(text => text.DataContext is KeyValuePair<string, string> && Grid.GetColumn(text) == 1).ToArray();
+            Assert.AreEqual(media.Focused!.DetailRows.Count, detailValues.Length);
+            foreach (var value in detailValues)
+            {
+                Assert.AreEqual(TextAlignment.Right, value.TextAlignment);
+                Assert.AreEqual(value.Text, value.ToolTip);
+            }
             SaveRender((FrameworkElement)window.Content, "command-icons-toolbar");
             await VerifyRowActionsAsync(runtime, media, list, window, navigation, mediaView);
             window.Width = 800;

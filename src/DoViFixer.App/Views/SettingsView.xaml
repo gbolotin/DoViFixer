@@ -101,17 +101,28 @@
                     </Border>
                     <Border Style="{StaticResource Card}" Margin="0,18,0,0">
                         <StackPanel>
-                            <TextBlock Text="Scanning and analysis cache"
+                            <TextBlock Text="Scanning and cache"
                                        FontSize="20"
                                        FontWeight="SemiBold" />
                             <CheckBox Content="Automatically scan added files" IsChecked="{Binding AutomaticallyScanAddedFiles}" />
-                            <StackPanel Orientation="Horizontal">
+                            <WrapPanel>
                                 <CheckBox Content="Use cached analysis results" IsChecked="{Binding UseCachedResults}" />
-                                <Button Content="Clear analysis cache"
+                                <Button Content="Clear cache"
                                         Command="{Binding ClearCacheCommand}"
+                                        ToolTip="Delete cached analysis results and movie frame previews."
                                         HorizontalAlignment="Left"
                                         Margin="10,0,0,0" />
-                            </StackPanel>
+                                <TextBlock Text="{Binding CacheSizeText}"
+                                           VerticalAlignment="Center"
+                                           Foreground="{DynamicResource TextFillColorSecondaryBrush}"
+                                           ToolTip="Total disk space used by cached analysis results and movie frame previews."
+                                           Margin="12,0,0,0" />
+                            </WrapPanel>
+                            <TextBlock Text="{Binding CacheDirectory, StringFormat=Location: {0}}"
+                                       TextWrapping="Wrap"
+                                       Foreground="{DynamicResource TextFillColorSecondaryBrush}"
+                                       ToolTip="{Binding CacheDirectory}"
+                                       Margin="0,6,0,0" />
                             <CheckBox Content="Automatically select convertible files after scan" IsChecked="{Binding AutoSelectAfterScan}" />
                             <TextBlock Text="When disabled, scans and inspections analyze files again. Successful results are still saved."
                                        TextWrapping="Wrap"

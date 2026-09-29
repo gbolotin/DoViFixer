@@ -26,7 +26,7 @@
                         Tag="&#xE72C;"
                         ContentTemplate="{StaticResource IconButtonContent}"
                         Command="{Binding ScanCommand}"
-                        ToolTip="Scan every file in the list. If automatic selection is enabled, selections are updated using the conversion policy in Settings."
+                        ToolTip="Scan every file in the list and generate missing frame previews in the background. If automatic selection is enabled, selections are updated using the conversion policy in Settings."
                         Margin="0,0,8,8" />
                 <Button Content="Inspect"
                         Tag="&#xE721;"
@@ -307,8 +307,34 @@
 
     <DataTemplate x:Key="MediaDetailsTemplate" DataType="{x:Type viewModels:MediaViewModel}">
         <Border Style="{StaticResource Card}">
-            <ScrollViewer VerticalScrollBarVisibility="Auto">
+            <ScrollViewer VerticalScrollBarVisibility="Auto" Padding="0,0,12,0">
                 <StackPanel>
+                    <Border Margin="0,0,0,14"
+                            Background="Black"
+                            CornerRadius="6">
+                        <Border.Style>
+                            <Style TargetType="Border">
+                                <Style.Triggers>
+                                    <DataTrigger Binding="{Binding Focused}" Value="{x:Null}">
+                                        <Setter Property="Visibility" Value="Collapsed" />
+                                    </DataTrigger>
+                                </Style.Triggers>
+                            </Style>
+                        </Border.Style>
+                        <Grid MinHeight="120">
+                            <Image Source="{Binding FramePreview}"
+                                   Stretch="Uniform"
+                                   MaxHeight="240"
+                                   AutomationProperties.Name="Movie frame preview" />
+                            <TextBlock Text="{Binding PreviewStatus}"
+                                       Foreground="White"
+                                       HorizontalAlignment="Center"
+                                       VerticalAlignment="Center"
+                                       TextAlignment="Center"
+                                       TextWrapping="Wrap"
+                                       Margin="16" />
+                        </Grid>
+                    </Border>
                     <DockPanel Margin="0,0,0,14">
                         <TextBlock DockPanel.Dock="Right"
                                    Text="&#xE7BA;"
@@ -325,9 +351,33 @@
                                    FontWeight="SemiBold"
                                    TextWrapping="Wrap" />
                     </DockPanel>
-                    <TextBlock Text="{Binding Focused.Details}"
-                           TextWrapping="Wrap"
-                           Foreground="{DynamicResource TextFillColorSecondaryBrush}" />
+                    <TextBlock Text="Details"
+                               FontWeight="SemiBold"
+                               Margin="0,0,0,12" />
+                    <ItemsControl ItemsSource="{Binding Focused.DetailRows}"
+                                  Grid.IsSharedSizeScope="True"
+                                  Foreground="{DynamicResource TextFillColorSecondaryBrush}">
+                        <ItemsControl.ItemTemplate>
+                            <DataTemplate>
+                                <Grid Margin="0,0,0,6">
+                                    <Grid.ColumnDefinitions>
+                                        <ColumnDefinition Width="Auto" SharedSizeGroup="MediaDetailLabels" />
+                                        <ColumnDefinition Width="*" />
+                                    </Grid.ColumnDefinitions>
+                                    <TextBlock Text="{Binding Key}" Margin="0,0,12,0" />
+                                    <TextBlock Grid.Column="1"
+                                               Text="{Binding Value}"
+                                               TextAlignment="Right"
+                                               TextTrimming="CharacterEllipsis"
+                                               ToolTip="{Binding Value}" />
+                                </Grid>
+                            </DataTemplate>
+                        </ItemsControl.ItemTemplate>
+                    </ItemsControl>
+                    <TextBlock Text="{Binding Focused.DetailNotes}"
+                               TextWrapping="Wrap"
+                               Foreground="{DynamicResource TextFillColorSecondaryBrush}"
+                               Margin="0,12,0,0" />
                     <Border BorderBrush="{DynamicResource DividerStrokeColorDefaultBrush}"
                             BorderThickness="0,1,0,0"
                             Margin="0,20,0,0"

@@ -9,6 +9,7 @@ public sealed record StorageOptions(string RootDirectory)
 {
     public string SettingsPath => Path.Combine(RootDirectory, "settings.json");
     public string ToolsDirectory => Path.Combine(RootDirectory, "tools");
+    public string CacheDirectory => Path.Combine(RootDirectory, "cache");
 }
 
 internal sealed class SettingsStore(StorageOptions options, ILogger<SettingsStore> logger) : ISettingsStore

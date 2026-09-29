@@ -9,13 +9,26 @@ using Microsoft.Extensions.Logging;
 namespace DoViFixer.Infrastructure.Configuration;
 internal sealed class AnalysisCache(StorageOptions options, ILogger<AnalysisCache> logger) : IAnalysisCache
 {
+    public string RootDirectory => options.CacheDirectory;
     // Bump when probing, evidence interpretation, or analysis algorithms change.
     private const int version = 1;
     private sealed record Entry(int Version, MediaAnalysis Analysis);
+    public Task<long> GetSizeAsync(CancellationToken cancellationToken)
+    {
+        cancellationToken.ThrowIfCancellationRequested();
+        var directory = new DirectoryInfo(Path.Combine(RootDirectory, "analysis"));
+        long bytes = directory.Exists ? directory.EnumerateFiles("*.json").Sum(file =>
+        {
+            cancellationToken.ThrowIfCancellationRequested();
+            return file.Length;
+        }) : 0;
+        return Task.FromResult(bytes);
+    }
+
     public Task<int> ClearAsync(CancellationToken cancellationToken)
     {
         cancellationToken.ThrowIfCancellationRequested();
-        string directory = Path.Combine(options.RootDirectory, "cache", "analysis");
+        string directory = Path.Combine(RootDirectory, "analysis");
         int removed = 0;
         if (Directory.Exists(directory))
         {
@@ -106,6 +119,6 @@ internal sealed class AnalysisCache(StorageOptions options, ILogger<AnalysisCach
     private string CachePath(FileIdentity source, AnalysisMethod method)
     {
         string key = Convert.ToHexString(SHA256.HashData(Encoding.UTF8.GetBytes(Path.GetFullPath(source.Path).ToUpperInvariant())));
-        return Path.Combine(options.RootDirectory, "cache", "analysis", $"{key}.{method}.json");
+        return Path.Combine(RootDirectory, "analysis", $"{key}.{method}.json");
     }
 }
