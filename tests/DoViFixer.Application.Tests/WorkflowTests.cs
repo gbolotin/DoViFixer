@@ -96,7 +96,18 @@ public sealed class WorkflowTests
         public Task<long> GetSizeAsync(CancellationToken cancellationToken) => Task.FromResult(0L);
         private readonly Dictionary<(FileIdentity, AnalysisMethod), MediaAnalysis> entries = new();
         public Task<string?> ReadBaseLayerHashAsync(FileIdentity source, CancellationToken cancellationToken) => Task.FromResult<string?>(null);
-        public Task WriteBaseLayerHashAsync(FileIdentity source, string sha256, CancellationToken cancellationToken) => Task.CompletedTask;
+        public CancellationTokenSource? CancelOnBaseLayerHashWrite { get; init; }
+        public FileIdentity? BaseLayerHashSource { get; private set; }
+        public string? BaseLayerHash { get; private set; }
+        public Task WriteBaseLayerHashAsync(FileIdentity source, string sha256, CancellationToken cancellationToken)
+        {
+            // Simulates cancellation arriving just after the conversion output was published.
+            CancelOnBaseLayerHashWrite?.Cancel();
+            cancellationToken.ThrowIfCancellationRequested();
+            BaseLayerHashSource = source;
+            BaseLayerHash = sha256;
+            return Task.CompletedTask;
+        }
         public Task<int> ClearAsync(CancellationToken cancellationToken)
         {
             int count = entries.Count;
@@ -284,6 +295,29 @@ public sealed class WorkflowTests
         Assert.IsTrue(runtime.ConversionLog.Entries.Any(e => e.Exception is IOException));
         Assert.IsTrue(runtime.ConversionLog.Entries.Any(e => Equals(e.Properties.GetValueOrDefault("Outcome"), "Failed")));
         Assert.IsFalse(runtime.ConversionLog.Entries.Any(e => Equals(e.Properties.GetValueOrDefault("LogKind"), "Audit")));
+    }
+
+    [TestMethod]
+    public async Task CancellationAfterPublicationKeepsConversionCompletedAndCachesBaseLayerHash()
+    {
+        using var cancellation = new CancellationTokenSource();
+        var cache = new MemoryCache
+        {
+            CancelOnBaseLayerHashWrite = cancellation
+        };
+        var runtime = new Runtime();
+        var plan = Plan("good.mkv") with
+        {
+            Archive = Path.GetFullPath("good.dovi")
+        };
+
+        var result = await runtime.Conversion(cache: cache).ExecuteAsync(plan, null, cancellation.Token);
+
+        Assert.AreEqual(OperationStatus.Completed, result.Status, result.Message);
+        Assert.AreEqual(plan.Output, result.Output);
+        Assert.AreEqual(2, runtime.Published);
+        Assert.AreEqual(Path.GetFullPath(plan.Output), cache.BaseLayerHashSource?.Path);
+        Assert.AreEqual(new string('A', 64), cache.BaseLayerHash);
     }
 
     [TestMethod]
@@ -699,7 +733,7 @@ public sealed class WorkflowTests
 
         private readonly Dictionary<NativeTool, string> catalog = new();
         public DependencyService Dependencies() => new(this, this, this, this, NullLogger<DependencyService>.Instance);
-        public ConversionService Conversion(InspectionService? inspection = null) => new(Dependencies(), this, this, this, this, this, this, ConversionLog, new MemoryCache(), inspection);
+        public ConversionService Conversion(InspectionService? inspection = null, IAnalysisCache? cache = null) => new(Dependencies(), this, this, this, this, this, this, ConversionLog, cache ?? new MemoryCache(), inspection);
         public RecordingLogger<ConversionService> ConversionLog
         {
             get;
@@ -840,11 +874,11 @@ public sealed class WorkflowTests
             "invalid frame count"
         }
         : []);
-        public Task<ArchiveManifest> ExtractBackupAsync(MediaInfo media, ITemporaryWorkspace workspace, CancellationToken cancellationToken) => throw new NotSupportedException();
+        public Task<ArchiveManifest> ExtractBackupAsync(MediaInfo media, ITemporaryWorkspace workspace, CancellationToken cancellationToken) => Task.FromResult(new ArchiveManifest(1, "source.mkv", new string('A', 64), new string('B', 64), 1000, 1000, DateTimeOffset.UnixEpoch));
         public Task<string> GetBaseLayerSha256Async(MediaInfo media, ITemporaryWorkspace workspace, CancellationToken cancellationToken) => throw new NotSupportedException();
         public Task<ArchiveManifest?> ReadManifestAsync(string archive, CancellationToken cancellationToken) => throw new NotSupportedException();
         public Task RestoreAsync(MediaInfo media, ArchiveManifest? manifest, ITemporaryWorkspace workspace, string stagedOutput, CancellationToken cancellationToken) => throw new NotSupportedException();
-        public Task WriteAsync(string stagedArchive, ArchiveManifest manifest, ITemporaryWorkspace workspace, CancellationToken cancellationToken) => throw new NotSupportedException();
+        public Task WriteAsync(string stagedArchive, ArchiveManifest manifest, ITemporaryWorkspace workspace, CancellationToken cancellationToken) => Task.CompletedTask;
         public Task<ArchiveManifest?> ReadAsync(string archive, ITemporaryWorkspace workspace, bool allowLegacy, CancellationToken cancellationToken) => throw new NotSupportedException();
         private sealed class Owned(Runtime owner) : ITemporaryWorkspace, IStagedOutput
         {

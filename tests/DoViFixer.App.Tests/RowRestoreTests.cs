@@ -228,6 +228,45 @@ public sealed class RowRestoreTests
     }
 
     [TestMethod]
+    public async Task DeclinedToolSetupDuringPairingIsNotOfferedAgainForEachFile()
+    {
+        using var runtime = new TestRuntime();
+        var model = runtime.Container.GetRequiredService<MediaViewModel>();
+        await model.AddAsync([@"C:\Media\P81.mkv", @"C:\Media\P81-copy.mkv"]);
+        runtime.Archives.UnionWith([@"C:\Media\P81.dovi", @"C:\Media\P81-copy.dovi"]);
+        runtime.Ready = false;
+
+        await model.ScanCommand.ExecuteAsync();
+
+        Assert.HasCount(1, runtime.Reviews);
+        Assert.IsEmpty(runtime.HashedInputs);
+        foreach (var row in model.Files)
+        {
+            Assert.IsNotNull(row.Analysis);
+            Assert.IsFalse(row.CanRestore);
+            StringAssert.Contains(row.Notice, "Configure tools");
+        }
+    }
+
+    [TestMethod]
+    public async Task PairingFailureKeepsCompletedAnalysisAndExplainsWhy()
+    {
+        using var runtime = new TestRuntime();
+        runtime.Archives.Add(@"C:\Media\P81.dovi");
+        runtime.DuringHash = _ => Task.FromException(new TimeoutException("dovi_tool exceeded its time limit."));
+        var model = runtime.Container.GetRequiredService<MediaViewModel>();
+
+        await model.AddAsync([@"C:\Media\P81.mkv"]);
+
+        var row = model.Files.Single();
+        Assert.AreEqual(MediaRowState.Scanned, row.State);
+        Assert.IsNotNull(row.Analysis);
+        Assert.IsNull(row.AnalysisError);
+        Assert.IsFalse(row.CanRestore);
+        StringAssert.Contains(row.Notice, "dovi_tool exceeded its time limit.");
+    }
+
+    [TestMethod]
     public async Task PairingCanBeCancelledWithoutAssigningAnArchive()
     {
         using var runtime = new TestRuntime();

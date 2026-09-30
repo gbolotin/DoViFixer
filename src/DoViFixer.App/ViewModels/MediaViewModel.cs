@@ -633,6 +633,13 @@ public sealed class MediaViewModel : OperationViewModel, INavigationPage, IIniti
         var userSettings = await settings.ReadAsync(token);
         bool autoSelect = userSettings.AutoSelectAfterScan;
         bool? toolsReady = null;
+        async Task<bool> EnsureToolsAsync(IProgress<OperationProgress> progress, CancellationToken itemToken)
+        {
+            // Ask once per batch; a declined setup must not prompt again for each file.
+            toolsReady ??= await dependencies.EnsureAsync(progress, itemToken);
+            return toolsReady == true;
+        }
+
         var pairedArchives = new HashSet<string>(Files.Except(rows).Where(row => row.CanRestore).Select(row => row.RestoreArchive!), StringComparer.OrdinalIgnoreCase);
         foreach (var row in rows)
         {
@@ -654,8 +661,7 @@ public sealed class MediaViewModel : OperationViewModel, INavigationPage, IIniti
                     row.Analysis = await Task.Run(() => inspection.ReadCachedAsync(row.Path, method, itemToken), itemToken);
                     if (row.Analysis is null)
                     {
-                        toolsReady ??= await dependencies.EnsureAsync(jobProgress, itemToken);
-                        if (toolsReady != true)
+                        if (!await EnsureToolsAsync(jobProgress, itemToken))
                         {
                             return new OperationItemResult(row.Path, OperationStatus.Failed, null, "Required tools are unavailable. Open Settings to configure tools, then retry Scan.");
                         }
@@ -663,7 +669,7 @@ public sealed class MediaViewModel : OperationViewModel, INavigationPage, IIniti
                         row.Analysis = await Task.Run(() => inspection.InspectAsync(row.Path, method, null, itemToken, jobProgress), itemToken);
                     }
 
-                    await RefreshRestoreArchiveAsync(row, pairedArchives, jobProgress, itemToken);
+                    await RefreshRestoreArchiveAsync(row, pairedArchives, () => EnsureToolsAsync(jobProgress, itemToken), jobProgress, itemToken);
                     return new OperationItemResult(row.Path, row.Analysis.Verdict == AnalysisVerdict.AnalysisFailed ? OperationStatus.Failed : OperationStatus.Completed, null, row.Analysis.Reason);
                 }
                 finally
@@ -706,7 +712,7 @@ public sealed class MediaViewModel : OperationViewModel, INavigationPage, IIniti
         }
     }
 
-    private async Task RefreshRestoreArchiveAsync(MediaRow row, HashSet<string> pairedArchives, IProgress<OperationProgress> progress, CancellationToken token)
+    private async Task RefreshRestoreArchiveAsync(MediaRow row, HashSet<string> pairedArchives, Func<Task<bool>> ensureTools, IProgress<OperationProgress> progress, CancellationToken token)
     {
         row.RestoreArchive = null;
         if (row.Analysis?.Media.Profile != Domain.Media.DolbyVisionProfile.Profile81)
@@ -722,7 +728,7 @@ public sealed class MediaViewModel : OperationViewModel, INavigationPage, IIniti
             }
             catch (DependencyNotReadyException)
             {
-                if (!await dependencies.EnsureAsync(progress, token))
+                if (!await ensureTools())
                 {
                     row.Notice = "Archive matching needs media tools. Configure tools in Settings, then rescan.";
                     return;
@@ -734,9 +740,11 @@ public sealed class MediaViewModel : OperationViewModel, INavigationPage, IIniti
                 pairedArchives.Add(archive);
             }
         }
-        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
+        catch (Exception ex) when (ex is not OperationCanceledException)
         {
-            logger.LogDebug(ex, "Restore archive unavailable for {Input}", row.Path);
+            // Archive matching is optional; its failure must not fail the completed analysis.
+            logger.LogWarning(ex, "Restore archive matching failed for {Input}", row.Path);
+            row.Notice = $"Could not check for a matching .dovi archive: {ex.Message} Rescan to retry.";
         }
     }
 
