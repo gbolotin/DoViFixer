@@ -267,6 +267,19 @@ public sealed class InfrastructureTests
     }
 
     [TestMethod]
+    public async Task ArchiveReportsMalformedManifestAsInvalidData()
+    {
+        string archive = Path.Combine(directory, "malformed.dovi");
+        await WriteTarAsync(archive, ("el.hevc", "payload"), ("manifest.json", "{"));
+        var store = new BackupArchiveStore();
+        var error = await Assert.ThrowsExactlyAsync<InvalidDataException>(() => store.ReadManifestAsync(archive, default));
+        Assert.IsInstanceOfType<JsonException>(error.InnerException);
+        var factory = new TemporaryWorkspaceFactory(files, NullLogger<TemporaryWorkspaceFactory>.Instance);
+        await using var workspace = await factory.CreateAsync(0, directory, default);
+        await Assert.ThrowsExactlyAsync<InvalidDataException>(() => store.ReadAsync(archive, workspace, true, default));
+    }
+
+    [TestMethod]
     public async Task PublisherRejectsCollisionThatAppearsAfterStaging()
     {
         string output = Path.Combine(directory, "movie.mkv");

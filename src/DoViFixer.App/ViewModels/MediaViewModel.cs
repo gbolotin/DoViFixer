@@ -11,7 +11,6 @@ using DoViFixer.Application.Inspection;
 using DoViFixer.Application.Operations;
 using DoViFixer.Application.Settings;
 using DoViFixer.Application.Restore;
-using DoViFixer.Application.Dependencies;
 using DoViFixer.Domain.Analysis;
 using DoViFixer.Domain.Conversion;
 using Microsoft.Extensions.Logging;
@@ -633,11 +632,10 @@ public sealed class MediaViewModel : OperationViewModel, INavigationPage, IIniti
         var userSettings = await settings.ReadAsync(token);
         bool autoSelect = userSettings.AutoSelectAfterScan;
         bool? toolsReady = null;
-        var pairedArchives = new HashSet<string>(Files.Except(rows).Where(row => row.CanRestore).Select(row => row.RestoreArchive!), StringComparer.OrdinalIgnoreCase);
+        var pairing = restore.BeginPairing(Files.Where(row => row.RestoreArchive is not null).Select(row => (Input: row.Path, Archive: row.RestoreArchive!)));
         foreach (var row in rows)
         {
             row.LastAnalysisMethod = method;
-            row.RestoreArchive = null;
         }
 
         BeginBatch(rows, method == AnalysisMethod.SampledRpu ? "Scan" : method == AnalysisMethod.DeepInspection ? "Deep inspection" : "Inspection");
@@ -649,6 +647,7 @@ public sealed class MediaViewModel : OperationViewModel, INavigationPage, IIniti
                 row.AnalysisError = null;
                 row.Notice = "";
                 row.Analysis = null;
+                row.RestoreArchive = null;
                 try
                 {
                     row.Analysis = await Task.Run(() => inspection.ReadCachedAsync(row.Path, method, itemToken), itemToken);
@@ -663,7 +662,7 @@ public sealed class MediaViewModel : OperationViewModel, INavigationPage, IIniti
                         row.Analysis = await Task.Run(() => inspection.InspectAsync(row.Path, method, null, itemToken, jobProgress), itemToken);
                     }
 
-                    await RefreshRestoreArchiveAsync(row, pairedArchives, jobProgress, itemToken);
+                    await RefreshRestoreArchiveAsync(row, pairing, itemToken);
                     return new OperationItemResult(row.Path, row.Analysis.Verdict == AnalysisVerdict.AnalysisFailed ? OperationStatus.Failed : OperationStatus.Completed, null, row.Analysis.Reason);
                 }
                 finally
@@ -706,37 +705,22 @@ public sealed class MediaViewModel : OperationViewModel, INavigationPage, IIniti
         }
     }
 
-    private async Task RefreshRestoreArchiveAsync(MediaRow row, HashSet<string> pairedArchives, IProgress<OperationProgress> progress, CancellationToken token)
+    private async Task RefreshRestoreArchiveAsync(MediaRow row, RestoreArchivePairing pairing, CancellationToken token)
     {
-        row.RestoreArchive = null;
-        if (row.Analysis?.Media.Profile != Domain.Media.DolbyVisionProfile.Profile81)
+        if (row.Analysis is not { } analysis)
         {
             return;
         }
 
         try
         {
-            try
-            {
-                row.RestoreArchive = await Task.Run(() => restore.FindArchiveAsync(row.Analysis.Media, pairedArchives, progress, token), token);
-            }
-            catch (DependencyNotReadyException)
-            {
-                if (!await dependencies.EnsureAsync(progress, token))
-                {
-                    row.Notice = "Archive matching needs media tools. Configure tools in Settings, then rescan.";
-                    return;
-                }
-                row.RestoreArchive = await Task.Run(() => restore.FindArchiveAsync(row.Analysis.Media, pairedArchives, progress, token), token);
-            }
-            if (row.RestoreArchive is { } archive)
-            {
-                pairedArchives.Add(archive);
-            }
+            row.RestoreArchive = await Task.Run(() => pairing.PairAsync(analysis.Media, token), token);
         }
-        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
+        catch (Exception ex) when (ex is not OperationCanceledException)
         {
-            logger.LogDebug(ex, "Restore archive unavailable for {Input}", row.Path);
+            // Archive matching is optional; its failure must not fail the completed analysis.
+            logger.LogWarning(ex, "Restore archive matching failed for {Input}", row.Path);
+            row.Notice = $"Could not check for a matching .dovi archive: {ex.Message} Rescan to retry.";
         }
     }
 

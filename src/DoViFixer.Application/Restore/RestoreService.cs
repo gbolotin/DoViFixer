@@ -4,13 +4,17 @@ using DoViFixer.Application.Operations;
 using DoViFixer.Domain.Conversion;
 using DoViFixer.Domain.Media;
 using Microsoft.Extensions.Logging;
-using System.Text.Json;
 
 namespace DoViFixer.Application.Restore;
 public sealed record RestorePlan(Guid Id, MediaInfo Media, FileIdentity Archive, string Output, string? TemporaryDirectory, long ScratchBytes, bool AllowLegacy);
 public sealed class RestoreService(DependencyService dependencies, IMediaProbe probe, IFileOperations files, ITemporaryWorkspaceFactory workspaces, IVideoProcessor processor, IBackupArchiveStore archives, IMediaVerifier verifier, IOutputPublisher publisher, ISettingsStore settings, ILogger<RestoreService> logger, IFileDiscovery discovery, IAnalysisCache cache)
 {
-    public async Task<string?> FindArchiveAsync(MediaInfo media, IReadOnlySet<string> excludedArchives, IProgress<OperationProgress>? progress, CancellationToken cancellationToken)
+    // Starts archive pairing for one sequential batch from the current input-to-archive pairings.
+    public RestoreArchivePairing BeginPairing(IEnumerable<(string Input, string Archive)> existingPairings) => new(this, existingPairings);
+
+    // Pairing only reads cached hashes and archive manifests; it never extracts video. Without a cached
+    // base-layer hash only a same-name archive is offered, and restoration verifies its SHA-256 pairing.
+    internal async Task<string?> FindArchiveAsync(MediaInfo media, IReadOnlySet<string> excludedArchives, CancellationToken cancellationToken)
     {
         cancellationToken.ThrowIfCancellationRequested();
         string input = media.Source.Path;
@@ -19,15 +23,15 @@ public sealed class RestoreService(DependencyService dependencies, IMediaProbe p
         string[] preferred = stem.EndsWith(convertedSuffix, StringComparison.OrdinalIgnoreCase)
             ? [stem + ".dovi", stem[..^convertedSuffix.Length] + ".dovi"]
             : [stem + ".dovi"];
+        var snapshot = await settings.ReadAsync(cancellationToken);
+        string? baseHash = snapshot.UseCachedResults ? await cache.ReadBaseLayerHashAsync(media.Source, cancellationToken) : null;
         var candidates = discovery.Discover(Path.GetDirectoryName(input)!, 0, cleanup: true)
             .Where(path => path.EndsWith(".dovi", StringComparison.OrdinalIgnoreCase) && !excludedArchives.Contains(path))
-            .OrderBy(path =>
-            {
-                int index = Array.FindIndex(preferred, candidate => string.Equals(candidate, path, StringComparison.OrdinalIgnoreCase));
-                return index >= 0 ? index : preferred.Length;
-            })
-            .ThenBy(path => path, StringComparer.OrdinalIgnoreCase);
-        string? baseHash = null;
+            .Select(path => (Path: path, Rank: Array.FindIndex(preferred, candidate => string.Equals(candidate, path, StringComparison.OrdinalIgnoreCase))))
+            .Where(candidate => baseHash is not null || candidate.Rank >= 0)
+            .OrderBy(candidate => candidate.Rank >= 0 ? candidate.Rank : preferred.Length)
+            .ThenBy(candidate => candidate.Path, StringComparer.OrdinalIgnoreCase)
+            .Select(candidate => candidate.Path);
         foreach (string candidate in candidates)
         {
             cancellationToken.ThrowIfCancellationRequested();
@@ -36,33 +40,13 @@ public sealed class RestoreService(DependencyService dependencies, IMediaProbe p
             {
                 manifest = await archives.ReadManifestAsync(candidate, cancellationToken);
             }
-            catch (Exception ex) when (ex is IOException or InvalidDataException or UnauthorizedAccessException or JsonException)
+            catch (Exception ex) when (ex is IOException or InvalidDataException or UnauthorizedAccessException)
             {
                 logger.LogDebug(ex, "Skipping unreadable restore archive {Archive}", candidate);
                 continue;
             }
 
-            if (manifest is null)
-            {
-                continue;
-            }
-
-            if (baseHash is null)
-            {
-                var snapshot = await settings.ReadAsync(cancellationToken);
-                await using var lease = await files.AcquireReadLeaseAsync(media.Source, cancellationToken);
-                baseHash = snapshot.UseCachedResults ? await cache.ReadBaseLayerHashAsync(media.Source, cancellationToken) : null;
-                if (baseHash is null)
-                {
-                    await dependencies.RequireAsync(DependencyRequirements.All, cancellationToken);
-                    await using var workspace = await workspaces.CreateAsync(ConversionPolicy.RequiredScratchBytes(media.Source.Length), snapshot.TemporaryDirectory, cancellationToken);
-                    progress?.Report(new(Guid.Empty, "Matching .dovi archives by SHA-256", input));
-                    baseHash = await processor.GetBaseLayerSha256Async(media, workspace, cancellationToken);
-                    await cache.WriteBaseLayerHashAsync(media.Source, baseHash, cancellationToken);
-                }
-            }
-
-            if (string.Equals(baseHash, manifest.BaseLayerSha256, StringComparison.OrdinalIgnoreCase))
+            if (manifest is not null && (baseHash is null || string.Equals(baseHash, manifest.BaseLayerSha256, StringComparison.OrdinalIgnoreCase)))
             {
                 return candidate;
             }
@@ -118,5 +102,46 @@ public sealed class RestoreService(DependencyService dependencies, IMediaProbe p
         await staged.PublishAsync(cancellationToken);
         OperationLog.Audit(logger, "PublishRestore", approvedPlan.Output, "Completed", approvedPlan.Id);
         return new(approvedPlan.Media.Source.Path, OperationStatus.Completed, approvedPlan.Output, manifest is null ? "Restored media verified. Legacy archive source identity remains unverified." : "Pairing, payload and restored media verified. Original retained.");
+    }
+}
+
+// Pairs Profile 8.1 files with restore archives so that each archive belongs to at most one file.
+// Existing pairings stay claimed until their input is paired again, so inputs a batch never reaches keep theirs.
+// Not thread-safe: use one instance per sequential batch.
+public sealed class RestoreArchivePairing
+{
+    private readonly RestoreService restore;
+    private readonly Dictionary<string, string> owners = new(StringComparer.OrdinalIgnoreCase);
+
+    internal RestoreArchivePairing(RestoreService restore, IEnumerable<(string Input, string Archive)> existingPairings)
+    {
+        this.restore = restore;
+        foreach (var (input, archive) in existingPairings)
+        {
+            owners[archive] = Path.GetFullPath(input);
+        }
+    }
+
+    // Releases the input's previous archive, then pairs it with an archive no other input owns.
+    public async Task<string?> PairAsync(MediaInfo media, CancellationToken cancellationToken)
+    {
+        string input = Path.GetFullPath(media.Source.Path);
+        foreach (string released in owners.Where(owner => string.Equals(owner.Value, input, StringComparison.OrdinalIgnoreCase)).Select(owner => owner.Key).ToArray())
+        {
+            owners.Remove(released);
+        }
+
+        if (media.Profile != DolbyVisionProfile.Profile81)
+        {
+            return null;
+        }
+
+        string? archive = await restore.FindArchiveAsync(media, new HashSet<string>(owners.Keys, StringComparer.OrdinalIgnoreCase), cancellationToken);
+        if (archive is not null)
+        {
+            owners[archive] = input;
+        }
+
+        return archive;
     }
 }

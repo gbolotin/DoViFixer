@@ -95,29 +95,17 @@ internal sealed class VideoProcessor(IToolCatalog tools, IProcessRunner processe
         return manifest;
     }
 
-    public async Task<string> GetBaseLayerSha256Async(MediaInfo media, ITemporaryWorkspace workspace, CancellationToken cancellationToken)
-    {
-        string clean = await ExtractBaseLayerAsync(media, workspace, cancellationToken);
-        return await HashAsync(clean, cancellationToken);
-    }
-
-    private async Task<string> ExtractBaseLayerAsync(MediaInfo media, ITemporaryWorkspace workspace, CancellationToken cancellationToken)
+    public async Task RestoreAsync(MediaInfo media, ArchiveManifest? manifest, ITemporaryWorkspace workspace, string stagedOutput, CancellationToken cancellationToken)
     {
         string raw = workspace.File("restore-input.hevc");
         string clean = workspace.File("restore-clean.hevc");
+        string restored = workspace.File("restored.hevc");
         await ExtractVideoAsync(media, raw, cancellationToken);
         await RunDoviAsync(new[]
         {
             "remove", raw, "-o", clean
         }, cancellationToken);
         File.Delete(raw);
-        return clean;
-    }
-
-    public async Task RestoreAsync(MediaInfo media, ArchiveManifest? manifest, ITemporaryWorkspace workspace, string stagedOutput, CancellationToken cancellationToken)
-    {
-        string clean = await ExtractBaseLayerAsync(media, workspace, cancellationToken);
-        string restored = workspace.File("restored.hevc");
         if (manifest is not null && !string.Equals(await HashAsync(clean, cancellationToken), manifest.BaseLayerSha256, StringComparison.OrdinalIgnoreCase))
         {
             throw new InvalidDataException("Archive does not belong to this base-layer video (SHA-256 mismatch).");

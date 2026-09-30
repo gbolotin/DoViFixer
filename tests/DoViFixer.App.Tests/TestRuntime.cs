@@ -106,9 +106,21 @@ internal sealed class TestRuntime : IFileDiscovery, IFileOperations, IMediaProbe
     public Func<string, IReadOnlyList<string>>? DiscoverFiles { get; set; }
     public HashSet<string> Folders { get; } = new(StringComparer.OrdinalIgnoreCase);
     public bool IsSupportedInput(string input) => !string.IsNullOrWhiteSpace(input) && (input.EndsWith(".mkv", StringComparison.OrdinalIgnoreCase) || Folders.Contains(input));
-    public IReadOnlyList<string> Discover(string input, int recursiveDepth, bool cleanup = false) => cleanup
-        ? Archives.Where(path => string.Equals(Path.GetDirectoryName(path), input, StringComparison.OrdinalIgnoreCase)).ToArray()
-        : DiscoverFiles?.Invoke(input) ?? [Path.GetFullPath(input)];
+    public Exception? ArchiveDiscoveryFailure { get; set; }
+    public IReadOnlyList<string> Discover(string input, int recursiveDepth, bool cleanup = false)
+    {
+        if (!cleanup)
+        {
+            return DiscoverFiles?.Invoke(input) ?? [Path.GetFullPath(input)];
+        }
+
+        if (ArchiveDiscoveryFailure is not null)
+        {
+            throw ArchiveDiscoveryFailure;
+        }
+
+        return Archives.Where(path => string.Equals(Path.GetDirectoryName(path), input, StringComparison.OrdinalIgnoreCase)).ToArray();
+    }
     public HashSet<string> Archives { get; } = new(StringComparer.OrdinalIgnoreCase);
     public FileIdentity Identify(string path)
     {
@@ -252,20 +264,8 @@ internal sealed class TestRuntime : IFileDiscovery, IFileOperations, IMediaProbe
     }
 
     public Task<ArchiveManifest> ExtractBackupAsync(MediaInfo media, ITemporaryWorkspace workspace, CancellationToken cancellationToken) => throw new NotSupportedException();
-    public Dictionary<string, string> BaseLayerHashes { get; } = new(StringComparer.OrdinalIgnoreCase);
     public Dictionary<string, string?> ArchiveBaseLayerHashes { get; } = new(StringComparer.OrdinalIgnoreCase);
-    public List<string> HashedInputs { get; } = [];
     public List<string> ManifestReads { get; } = [];
-    public Func<CancellationToken, Task>? DuringHash { get; set; }
-    public async Task<string> GetBaseLayerSha256Async(MediaInfo media, ITemporaryWorkspace workspace, CancellationToken cancellationToken)
-    {
-        HashedInputs.Add(media.Source.Path);
-        if (DuringHash is not null)
-        {
-            await DuringHash(cancellationToken);
-        }
-        return BaseLayerHashes.GetValueOrDefault(media.Source.Path, new string('A', 64));
-    }
     public Task<ArchiveManifest?> ReadManifestAsync(string archive, CancellationToken cancellationToken)
     {
         ManifestReads.Add(archive);

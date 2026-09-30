@@ -63,7 +63,14 @@ internal sealed class BackupArchiveStore : IBackupArchiveStore
                     throw new InvalidDataException("Archive manifest exceeds 64 KiB.");
                 }
 
-                manifest = await JsonSerializer.DeserializeAsync<ArchiveManifest>(entry.DataStream, cancellationToken: cancellationToken) ?? throw new InvalidDataException("Archive manifest is empty.");
+                try
+                {
+                    manifest = await JsonSerializer.DeserializeAsync<ArchiveManifest>(entry.DataStream, cancellationToken: cancellationToken) ?? throw new InvalidDataException("Archive manifest is empty.");
+                }
+                catch (JsonException ex)
+                {
+                    throw new InvalidDataException("Archive manifest is not valid JSON.", ex);
+                }
             }
             else
             {

@@ -337,7 +337,8 @@ public sealed class ConversionService(DependencyService dependencies, IFileOpera
                     OperationLog.Audit(logger, "PublishConversion", approvedPlan.Output, "Completed", approvedPlan.Id);
                     if (outputIdentity is not null)
                     {
-                        await cache.WriteBaseLayerHashAsync(outputIdentity, baseLayerHash!, cancellationToken);
+                        // Best-effort cache after publication; cancellation must not turn a published conversion into a partial one.
+                        await cache.WriteBaseLayerHashAsync(outputIdentity, baseLayerHash!, CancellationToken.None);
                     }
                     break;
                 }

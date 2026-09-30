@@ -30,7 +30,7 @@ public sealed class MediaRow(string path) : ObservableObject
     public string Name => System.IO.Path.GetFileName(Path);
     public ProgressViewModel Progress { get; } = new();
     public bool IsProfile7 => Analysis?.Media.Profile == Domain.Media.DolbyVisionProfile.Profile7;
-    public bool CanRestore => Analysis?.Media.Profile == Domain.Media.DolbyVisionProfile.Profile81 && RestoreArchive is not null;
+    public bool CanRestore => Analysis?.Media.Profile == Domain.Media.DolbyVisionProfile.Profile81 && RestoreArchive is not null && State != MediaRowState.Restored;
     public string? RestoreArchive
     {
         get => restoreArchive;
@@ -62,6 +62,7 @@ public sealed class MediaRow(string path) : ObservableObject
             if (SetProperty(ref state, value))
             {
                 RaisePropertyChanged(nameof(CanOpenResult));
+                RaisePropertyChanged(nameof(CanRestore));
                 RaisePropertyChanged(nameof(Warning));
                 RaisePropertyChanged(nameof(HasWarning));
                 RaisePropertyChanged(nameof(StatusToolTip));
