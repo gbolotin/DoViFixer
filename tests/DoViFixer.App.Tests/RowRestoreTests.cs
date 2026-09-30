@@ -50,6 +50,7 @@ public sealed class RowRestoreTests
         Assert.IsFalse(row.IsSelected);
         Assert.IsTrue(model.Files[1].IsSelected);
         Assert.AreEqual(1, model.BatchProgress.Total);
+        Assert.AreEqual(new string('A', 64), await runtime.ReadBaseLayerHashAsync(runtime.Identify(input), default), "A verified restore records the file's base-layer hash.");
         Assert.IsFalse(row.CanRestore, "A restored row must not offer restoration again.");
         Assert.IsFalse(model.RestoreRowCommand.CanExecute(row));
         Assert.AreEqual(archive, row.RestoreArchive, "The restored row keeps its archive so no other row can claim it.");
@@ -260,6 +261,37 @@ public sealed class RowRestoreTests
         Assert.AreEqual(@"C:\Media\P81-copy.dovi", model.Files[1].RestoreArchive);
         Assert.IsTrue(model.Files[1].CanRestore);
         Assert.IsTrue(model.RestoreRowCommand.CanExecute(model.Files[1]));
+    }
+
+    [TestMethod]
+    [DataRow(false)]
+    [DataRow(true)]
+    public async Task FailedRestoreOfMismatchedSameNameArchiveStopsOfferingIt(bool renamedMatchExists)
+    {
+        string actual = new string('C', 64);
+        using var runtime = new TestRuntime { Approval = true, RestoreBaseLayerSha256 = actual };
+        runtime.Archives.Add(@"C:\Media\P81.dovi");
+        if (renamedMatchExists)
+        {
+            runtime.Archives.Add(@"C:\Media\Renamed.dovi");
+            runtime.ArchiveBaseLayerHashes[@"C:\Media\Renamed.dovi"] = actual;
+        }
+
+        var model = runtime.Container.GetRequiredService<MediaViewModel>();
+        await model.AddAsync([@"C:\Media\P81.mkv"]);
+        var row = model.Files.Single();
+        Assert.AreEqual(@"C:\Media\P81.dovi", row.RestoreArchive, "Without a cached hash the same-name archive is offered.");
+
+        await model.RestoreRowCommand.ExecuteAsync(row);
+
+        Assert.AreEqual(MediaRowState.Failed, row.State);
+        StringAssert.Contains(row.Result!.Message, "SHA-256 mismatch");
+        Assert.AreEqual(actual, await runtime.ReadBaseLayerHashAsync(runtime.Identify(@"C:\Media\P81.mkv"), default));
+        Assert.AreEqual(renamedMatchExists ? @"C:\Media\Renamed.dovi" : null, row.RestoreArchive, "The learned hash must replace the mismatched pairing.");
+        Assert.AreEqual(renamedMatchExists, model.RestoreRowCommand.CanExecute(row));
+
+        await model.ScanCommand.ExecuteAsync();
+        Assert.AreEqual(renamedMatchExists ? @"C:\Media\Renamed.dovi" : null, row.RestoreArchive, "Rescanning must not offer the mismatched archive again.");
     }
 
     [TestMethod]

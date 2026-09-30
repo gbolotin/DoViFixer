@@ -281,8 +281,14 @@ internal sealed class TestRuntime : IFileDiscovery, IFileOperations, IMediaProbe
     public bool? AllowLegacyArchive { get; private set; }
     public bool FailArchiveValidation { get; set; }
     public Func<CancellationToken, Task>? DuringRestore { get; set; }
+    public string? RestoreBaseLayerSha256 { get; set; }
     public async Task RestoreAsync(MediaInfo media, ArchiveManifest? manifest, ITemporaryWorkspace workspace, string stagedOutput, CancellationToken cancellationToken)
     {
+        if (manifest is not null && RestoreBaseLayerSha256 is { } actual && !string.Equals(actual, manifest.BaseLayerSha256, StringComparison.OrdinalIgnoreCase))
+        {
+            throw new BaseLayerMismatchException(actual);
+        }
+
         RestoredInputs.Add(media.Source.Path);
         if (DuringRestore is not null)
         {

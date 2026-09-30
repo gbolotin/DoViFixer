@@ -106,9 +106,13 @@ internal sealed class VideoProcessor(IToolCatalog tools, IProcessRunner processe
             "remove", raw, "-o", clean
         }, cancellationToken);
         File.Delete(raw);
-        if (manifest is not null && !string.Equals(await HashAsync(clean, cancellationToken), manifest.BaseLayerSha256, StringComparison.OrdinalIgnoreCase))
+        if (manifest is not null)
         {
-            throw new InvalidDataException("Archive does not belong to this base-layer video (SHA-256 mismatch).");
+            string baseLayerSha256 = await HashAsync(clean, cancellationToken);
+            if (!string.Equals(baseLayerSha256, manifest.BaseLayerSha256, StringComparison.OrdinalIgnoreCase))
+            {
+                throw new BaseLayerMismatchException(baseLayerSha256);
+            }
         }
 
         await RunDoviAsync(new[]

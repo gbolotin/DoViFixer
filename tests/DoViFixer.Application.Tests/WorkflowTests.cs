@@ -366,6 +366,33 @@ public sealed class WorkflowTests
     }
 
     [TestMethod]
+    [DataRow(24L, true)]
+    [DataRow(26L, true)]
+    [DataRow(null, true)]
+    [DataRow(1000L, false)]
+    public async Task UncachedPairingRejectsSameNameArchiveWithDifferentFrameCount(long? archiveFrames, bool offered)
+    {
+        string directory = Path.GetFullPath("frames");
+        string archive = Path.Combine(directory, "movie.dovi");
+        var runtime = new Runtime
+        {
+            ScanFiles = [archive]
+        };
+        runtime.Manifests[archive] = new(1, "movie.mkv", new string('A', 64), new string('B', 64), 1000, archiveFrames, DateTimeOffset.UnixEpoch);
+        var media = Plan(Path.Combine(directory, "movie.mkv")).Analysis.Media with
+        {
+            Profile = DolbyVisionProfile.Profile81
+        };
+        Assert.AreEqual(24L, media.FrameCount);
+        var cache = new MemoryCache();
+
+        Assert.AreEqual(offered ? archive : null, await runtime.Restore(cache).BeginPairing([]).PairAsync(media, default));
+
+        await cache.WriteBaseLayerHashAsync(media.Source, new string('A', 64), default);
+        Assert.AreEqual(archive, await runtime.Restore(cache).BeginPairing([]).PairAsync(media, default), "A matching cached hash is authoritative over frame counts.");
+    }
+
+    [TestMethod]
     public async Task CancellationStopsBatchAndDisposesOwnedResources()
     {
         using var cancellation = new CancellationTokenSource();

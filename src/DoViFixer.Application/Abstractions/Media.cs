@@ -29,6 +29,12 @@ public interface IMediaVerifier
     Task<IReadOnlyList<string>> VerifyAsync(MediaInfo source, string output, DolbyVisionProfile expectedProfile, ITemporaryWorkspace workspace, CancellationToken cancellationToken, IProgress<OperationProgress>? progress = null, Guid operationId = default);
 }
 
+// Thrown when an archive's base-layer SHA-256 does not match the input; carries the input's actual hash.
+public sealed class BaseLayerMismatchException(string actualSha256) : InvalidDataException("Archive does not belong to this base-layer video (SHA-256 mismatch).")
+{
+    public string ActualSha256 { get; } = actualSha256;
+}
+
 public sealed record ArchiveManifest(int FormatVersion, string SourceName, string BaseLayerSha256, string EnhancementLayerSha256, long EnhancementLayerLength, long? FrameCount, DateTimeOffset CreatedAt);
 public interface IBackupArchiveStore
 {
