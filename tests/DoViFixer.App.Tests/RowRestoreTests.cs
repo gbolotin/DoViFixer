@@ -268,13 +268,13 @@ public sealed class RowRestoreTests
     [DataRow(true)]
     public async Task FailedRestoreOfMismatchedSameNameArchiveStopsOfferingIt(bool renamedMatchExists)
     {
-        string actual = new string('C', 64);
-        using var runtime = new TestRuntime { Approval = true, RestoreBaseLayerSha256 = actual };
+        string inputHash = new string('C', 64);
+        using var runtime = new TestRuntime { Approval = true, RestoreBaseLayerSha256 = inputHash };
         runtime.Archives.Add(@"C:\Media\P81.dovi");
         if (renamedMatchExists)
         {
             runtime.Archives.Add(@"C:\Media\Renamed.dovi");
-            runtime.ArchiveBaseLayerHashes[@"C:\Media\Renamed.dovi"] = actual;
+            runtime.ArchiveBaseLayerHashes[@"C:\Media\Renamed.dovi"] = inputHash;
         }
 
         var model = runtime.Container.GetRequiredService<MediaViewModel>();
@@ -286,7 +286,7 @@ public sealed class RowRestoreTests
 
         Assert.AreEqual(MediaRowState.Failed, row.State);
         StringAssert.Contains(row.Result!.Message, "SHA-256 mismatch");
-        Assert.AreEqual(actual, await runtime.ReadBaseLayerHashAsync(runtime.Identify(@"C:\Media\P81.mkv"), default));
+        Assert.AreEqual(inputHash, await runtime.ReadBaseLayerHashAsync(runtime.Identify(@"C:\Media\P81.mkv"), default));
         Assert.AreEqual(renamedMatchExists ? @"C:\Media\Renamed.dovi" : null, row.RestoreArchive, "The learned hash must replace the mismatched pairing.");
         Assert.AreEqual(renamedMatchExists, model.RestoreRowCommand.CanExecute(row));
 

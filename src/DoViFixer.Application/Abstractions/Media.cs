@@ -30,7 +30,8 @@ public interface IMediaVerifier
 }
 
 // Thrown when an archive's base-layer SHA-256 does not match the input; carries the input's actual hash.
-public sealed class BaseLayerMismatchException(string actualSha256) : InvalidDataException("Archive does not belong to this base-layer video (SHA-256 mismatch).")
+// InvalidDataException is sealed, so this derives from Exception; RestoreService catches it by name.
+public sealed class BaseLayerMismatchException(string actualSha256) : Exception("Archive does not belong to this base-layer video (SHA-256 mismatch).")
 {
     public string ActualSha256 { get; } = actualSha256;
 }
