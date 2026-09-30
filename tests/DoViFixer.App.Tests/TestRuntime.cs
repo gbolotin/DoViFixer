@@ -168,11 +168,21 @@ internal sealed class TestRuntime : IFileDiscovery, IFileOperations, IMediaProbe
         DeletedFiles.Add(identity.Path);
         return Task.CompletedTask;
     }
-    public Task<MediaInfo> ProbeAsync(string path, CancellationToken cancellationToken)
+    public Func<CancellationToken, Task>? DuringProbe
+    {
+        get;
+        set;
+    }
+    public async Task<MediaInfo> ProbeAsync(string path, CancellationToken cancellationToken)
     {
         Probes++;
+        if (DuringProbe is not null)
+        {
+            await DuringProbe(cancellationToken);
+        }
+
         var profile = path.Contains("P81") ? DolbyVisionProfile.Profile81 : path.Contains("Sdr") ? DolbyVisionProfile.None : DolbyVisionProfile.Profile7;
-        return Task.FromResult(new MediaInfo(Identify(path), profile, "HEVC", 0, 3840, 2160, 1000, 23.976, 5772, 0, 1000, [], 0, 1, null, "{}"));
+        return new MediaInfo(Identify(path), profile, "HEVC", 0, 3840, 2160, 1000, 23.976, 5772, 0, 1000, [], 0, 1, null, "{}");
     }
 
     public Func<CancellationToken, Task>? DuringAnalysis

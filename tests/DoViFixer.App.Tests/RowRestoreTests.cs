@@ -245,7 +245,8 @@ public sealed class RowRestoreTests
         Assert.IsTrue(model.Files.All(row => row.CanRestore));
         await runtime.UpdateAsync(settings => settings with { UseCachedResults = false }, default);
         var started = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
-        runtime.DuringAnalysis = async token =>
+        // Profile 8.1 inspection never reaches RPU analysis, so interrupt the scan while it probes the first row.
+        runtime.DuringProbe = async token =>
         {
             started.TrySetResult();
             await Task.Delay(Timeout.Infinite, token);
