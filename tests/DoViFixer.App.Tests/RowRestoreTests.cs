@@ -141,22 +141,22 @@ public sealed class RowRestoreTests
     }
 
     [TestMethod]
-    public async Task PairingChecksSameNameFirstThenRenamedArchivesAndExcludesMatches()
+    public async Task CachedHashChecksSameNameFirstThenRenamedArchivesAndExcludesMatches()
     {
         using var runtime = new TestRuntime();
         runtime.Archives.UnionWith([@"C:\Media\P81.dovi", @"C:\Media\A-invalid.dovi", @"C:\Media\B-legacy.dovi", @"C:\Media\Z-renamed.dovi"]);
         runtime.ArchiveBaseLayerHashes[@"C:\Media\P81.dovi"] = new string('B', 64);
         runtime.ArchiveBaseLayerHashes[@"C:\Media\A-invalid.dovi"] = "invalid";
         runtime.ArchiveBaseLayerHashes[@"C:\Media\B-legacy.dovi"] = null;
+        await CacheBaseLayerHashAsync(runtime, @"C:\Media\P81.mkv", @"C:\Media\P81-copy.mkv");
         var model = runtime.Container.GetRequiredService<MediaViewModel>();
 
         await model.AddAsync([@"C:\Media\P81.mkv", @"C:\Media\P81-copy.mkv"]);
 
         Assert.AreEqual(@"C:\Media\P81.dovi", runtime.ManifestReads[0]);
-        Assert.AreEqual(@"C:\Media\Z-renamed.dovi", model.Files[0].RestoreArchive);
+        Assert.AreEqual(@"C:\Media\Z-renamed.dovi", model.Files[0].RestoreArchive, "A same-name archive with a different base-layer hash must be passed over.");
         Assert.IsFalse(model.Files[1].CanRestore, "An archive already paired in this scan must not be assigned again.");
         Assert.AreEqual(1, runtime.ManifestReads.Count(path => path == @"C:\Media\Z-renamed.dovi"));
-        CollectionAssert.AreEqual(new[] { @"C:\Media\P81.mkv", @"C:\Media\P81-copy.mkv" }, runtime.HashedInputs);
 
         runtime.ManifestReads.Clear();
         await model.ScanCommand.ExecuteAsync();
@@ -165,70 +165,54 @@ public sealed class RowRestoreTests
     }
 
     [TestMethod]
-    public async Task PairingPrefersMatchingNameAndSkipsHashingWithoutUsableManifests()
+    public async Task UncachedPairingOffersOnlyAUsableSameNameArchive()
     {
         using var runtime = new TestRuntime();
         runtime.Archives.UnionWith([@"C:\Media\P81.dovi", @"C:\Media\A-other.dovi"]);
         var model = runtime.Container.GetRequiredService<MediaViewModel>();
+
         await model.AddAsync([@"C:\Media\P81.mkv"]);
-        CollectionAssert.AreEqual(new[] { @"C:\Media\P81.dovi" }, runtime.ManifestReads);
-        Assert.HasCount(1, runtime.HashedInputs);
+
+        var row = model.Files.Single();
+        Assert.AreEqual(@"C:\Media\P81.dovi", row.RestoreArchive);
+        CollectionAssert.AreEqual(new[] { @"C:\Media\P81.dovi" }, runtime.ManifestReads, "Without a cached hash, differently named archives are not read.");
+        foreach (string? unusable in new[] { null, "invalid" })
+        {
+            runtime.ArchiveBaseLayerHashes[@"C:\Media\P81.dovi"] = unusable;
+            await model.ScanCommand.ExecuteAsync();
+            Assert.IsFalse(row.CanRestore, "A same-name archive without a readable manifest must not be offered.");
+        }
 
         runtime.Archives.Clear();
-        runtime.HashedInputs.Clear();
+        runtime.ArchiveBaseLayerHashes.Clear();
+        runtime.Archives.Add(@"C:\Media\Renamed.dovi");
         await model.ScanCommand.ExecuteAsync();
-        Assert.IsEmpty(runtime.HashedInputs);
-        Assert.IsFalse(model.Files[0].CanRestore);
-        runtime.Archives.Add(@"C:\Media\legacy.dovi");
-        runtime.ArchiveBaseLayerHashes[@"C:\Media\legacy.dovi"] = null;
-        await model.ScanCommand.ExecuteAsync();
-        Assert.IsEmpty(runtime.HashedInputs);
-        Assert.IsFalse(model.Files[0].CanRestore);
+        Assert.IsFalse(row.CanRestore);
     }
 
     [TestMethod]
-    public async Task CachedHashMatchesRenamedArchiveWithoutToolsAndHonorsCacheSetting()
+    public async Task CachedHashMatchesRenamedArchiveAndHonorsCacheSetting()
     {
         using var runtime = new TestRuntime();
-        runtime.Archives.Add(@"C:\Media\P81.dovi");
-        var model = runtime.Container.GetRequiredService<MediaViewModel>();
-        await model.AddAsync([@"C:\Media\P81.mkv"]);
-        Assert.HasCount(1, runtime.HashedInputs);
-        runtime.Archives.Clear();
         runtime.Archives.Add(@"C:\Media\Renamed.dovi");
-        runtime.Ready = false;
+        await CacheBaseLayerHashAsync(runtime, @"C:\Media\P81.mkv");
+        var model = runtime.Container.GetRequiredService<MediaViewModel>();
 
-        await model.ScanCommand.ExecuteAsync();
-
+        await model.AddAsync([@"C:\Media\P81.mkv"]);
         Assert.AreEqual(@"C:\Media\Renamed.dovi", model.Files.Single().RestoreArchive);
-        Assert.HasCount(1, runtime.HashedInputs);
-        Assert.IsEmpty(runtime.Reviews);
-        runtime.Ready = true;
+
+        runtime.ArchiveBaseLayerHashes[@"C:\Media\Renamed.dovi"] = new string('B', 64);
+        await model.ScanCommand.ExecuteAsync();
+        Assert.IsFalse(model.Files.Single().CanRestore, "A renamed archive must match the cached base-layer hash.");
+
+        runtime.ArchiveBaseLayerHashes.Clear();
         await runtime.UpdateAsync(settings => settings with { UseCachedResults = false }, default);
         await model.ScanCommand.ExecuteAsync();
-        Assert.HasCount(2, runtime.HashedInputs);
+        Assert.IsFalse(model.Files.Single().CanRestore, "Without cached results only same-name archives are offered.");
     }
 
     [TestMethod]
-    public async Task UncachedPairingOffersMissingToolSetupWithoutLosingCachedAnalysis()
-    {
-        using var runtime = new TestRuntime();
-        var model = runtime.Container.GetRequiredService<MediaViewModel>();
-        await model.AddAsync([@"C:\Media\P81.mkv"]);
-        runtime.Archives.Add(@"C:\Media\P81.dovi");
-        runtime.Ready = false;
-
-        await model.ScanCommand.ExecuteAsync();
-
-        Assert.HasCount(1, runtime.Reviews);
-        Assert.IsEmpty(runtime.HashedInputs);
-        Assert.IsNotNull(model.Files.Single().Analysis);
-        Assert.IsFalse(model.Files.Single().CanRestore);
-        StringAssert.Contains(model.Files.Single().Notice, "Configure tools");
-    }
-
-    [TestMethod]
-    public async Task DeclinedToolSetupDuringPairingIsNotOfferedAgainForEachFile()
+    public async Task PairingNeedsNoMediaToolsOrSetupPrompt()
     {
         using var runtime = new TestRuntime();
         var model = runtime.Container.GetRequiredService<MediaViewModel>();
@@ -238,22 +222,18 @@ public sealed class RowRestoreTests
 
         await model.ScanCommand.ExecuteAsync();
 
-        Assert.HasCount(1, runtime.Reviews);
-        Assert.IsEmpty(runtime.HashedInputs);
-        foreach (var row in model.Files)
-        {
-            Assert.IsNotNull(row.Analysis);
-            Assert.IsFalse(row.CanRestore);
-            StringAssert.Contains(row.Notice, "Configure tools");
-        }
+        Assert.IsEmpty(runtime.Reviews);
+        Assert.AreEqual(@"C:\Media\P81.dovi", model.Files[0].RestoreArchive);
+        Assert.AreEqual(@"C:\Media\P81-copy.dovi", model.Files[1].RestoreArchive);
     }
 
     [TestMethod]
     public async Task PairingFailureKeepsCompletedAnalysisAndExplainsWhy()
     {
-        using var runtime = new TestRuntime();
-        runtime.Archives.Add(@"C:\Media\P81.dovi");
-        runtime.DuringHash = _ => Task.FromException(new TimeoutException("dovi_tool exceeded its time limit."));
+        using var runtime = new TestRuntime
+        {
+            ArchiveDiscoveryFailure = new UnauthorizedAccessException(@"Access to C:\Media is denied.")
+        };
         var model = runtime.Container.GetRequiredService<MediaViewModel>();
 
         await model.AddAsync([@"C:\Media\P81.mkv"]);
@@ -263,34 +243,15 @@ public sealed class RowRestoreTests
         Assert.IsNotNull(row.Analysis);
         Assert.IsNull(row.AnalysisError);
         Assert.IsFalse(row.CanRestore);
-        StringAssert.Contains(row.Notice, "dovi_tool exceeded its time limit.");
+        StringAssert.Contains(row.Notice, @"Access to C:\Media is denied.");
     }
 
-    [TestMethod]
-    public async Task PairingCanBeCancelledWithoutAssigningAnArchive()
+    private static async Task CacheBaseLayerHashAsync(TestRuntime runtime, params string[] inputs)
     {
-        using var runtime = new TestRuntime();
-        runtime.Archives.Add(@"C:\Media\P81.dovi");
-        var model = runtime.Container.GetRequiredService<MediaViewModel>();
-        var started = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
-        runtime.DuringHash = async token =>
+        // Conversion caches the published output's base-layer hash; seed it the same way.
+        foreach (string input in inputs)
         {
-            started.TrySetResult();
-            await Task.Delay(Timeout.Infinite, token);
-        };
-        var adding = model.AddAsync([@"C:\Media\P81.mkv"]);
-        try
-        {
-            await started.Task.WaitAsync(TimeSpan.FromSeconds(10));
-            model.CancelFileCommand.Execute(model.Files.Single());
-            await adding.WaitAsync(TimeSpan.FromSeconds(10));
-            Assert.IsFalse(model.Files.Single().CanRestore);
-            Assert.IsTrue(model.IsIdle);
-        }
-        finally
-        {
-            model.CancelCommand.Execute();
-            await adding.WaitAsync(TimeSpan.FromSeconds(10));
+            await runtime.WriteBaseLayerHashAsync(runtime.Identify(input), new string('A', 64), default);
         }
     }
 }

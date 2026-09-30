@@ -297,10 +297,6 @@ public sealed class NativeIntegrationTests
             Profile = DolbyVisionProfile.Profile81
         };
         string beforeTimestamps = restorationWorkspace.File("before.txt");
-        await using (var pairingWorkspace = await factory.CreateAsync(16 * 1024 * 1024, null, default))
-        {
-            Assert.AreEqual(manifest.BaseLayerSha256, await processor.GetBaseLayerSha256Async(convertedMedia, pairingWorkspace, default));
-        }
         string afterTimestamps = restorationWorkspace.File("after.txt");
         await runner.RunAsync(new(tools.GetPath(NativeTool.MkvExtract), new[]
         {

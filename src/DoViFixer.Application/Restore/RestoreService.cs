@@ -10,7 +10,9 @@ namespace DoViFixer.Application.Restore;
 public sealed record RestorePlan(Guid Id, MediaInfo Media, FileIdentity Archive, string Output, string? TemporaryDirectory, long ScratchBytes, bool AllowLegacy);
 public sealed class RestoreService(DependencyService dependencies, IMediaProbe probe, IFileOperations files, ITemporaryWorkspaceFactory workspaces, IVideoProcessor processor, IBackupArchiveStore archives, IMediaVerifier verifier, IOutputPublisher publisher, ISettingsStore settings, ILogger<RestoreService> logger, IFileDiscovery discovery, IAnalysisCache cache)
 {
-    public async Task<string?> FindArchiveAsync(MediaInfo media, IReadOnlySet<string> excludedArchives, IProgress<OperationProgress>? progress, CancellationToken cancellationToken)
+    // Pairing only reads cached hashes and archive manifests; it never extracts video. Without a cached
+    // base-layer hash only a same-name archive is offered, and restoration verifies its SHA-256 pairing.
+    public async Task<string?> FindArchiveAsync(MediaInfo media, IReadOnlySet<string> excludedArchives, CancellationToken cancellationToken)
     {
         cancellationToken.ThrowIfCancellationRequested();
         string input = media.Source.Path;
@@ -19,15 +21,15 @@ public sealed class RestoreService(DependencyService dependencies, IMediaProbe p
         string[] preferred = stem.EndsWith(convertedSuffix, StringComparison.OrdinalIgnoreCase)
             ? [stem + ".dovi", stem[..^convertedSuffix.Length] + ".dovi"]
             : [stem + ".dovi"];
+        var snapshot = await settings.ReadAsync(cancellationToken);
+        string? baseHash = snapshot.UseCachedResults ? await cache.ReadBaseLayerHashAsync(media.Source, cancellationToken) : null;
         var candidates = discovery.Discover(Path.GetDirectoryName(input)!, 0, cleanup: true)
             .Where(path => path.EndsWith(".dovi", StringComparison.OrdinalIgnoreCase) && !excludedArchives.Contains(path))
-            .OrderBy(path =>
-            {
-                int index = Array.FindIndex(preferred, candidate => string.Equals(candidate, path, StringComparison.OrdinalIgnoreCase));
-                return index >= 0 ? index : preferred.Length;
-            })
-            .ThenBy(path => path, StringComparer.OrdinalIgnoreCase);
-        string? baseHash = null;
+            .Select(path => (Path: path, Rank: Array.FindIndex(preferred, candidate => string.Equals(candidate, path, StringComparison.OrdinalIgnoreCase))))
+            .Where(candidate => baseHash is not null || candidate.Rank >= 0)
+            .OrderBy(candidate => candidate.Rank >= 0 ? candidate.Rank : preferred.Length)
+            .ThenBy(candidate => candidate.Path, StringComparer.OrdinalIgnoreCase)
+            .Select(candidate => candidate.Path);
         foreach (string candidate in candidates)
         {
             cancellationToken.ThrowIfCancellationRequested();
@@ -42,27 +44,7 @@ public sealed class RestoreService(DependencyService dependencies, IMediaProbe p
                 continue;
             }
 
-            if (manifest is null)
-            {
-                continue;
-            }
-
-            if (baseHash is null)
-            {
-                var snapshot = await settings.ReadAsync(cancellationToken);
-                await using var lease = await files.AcquireReadLeaseAsync(media.Source, cancellationToken);
-                baseHash = snapshot.UseCachedResults ? await cache.ReadBaseLayerHashAsync(media.Source, cancellationToken) : null;
-                if (baseHash is null)
-                {
-                    await dependencies.RequireAsync(DependencyRequirements.All, cancellationToken);
-                    await using var workspace = await workspaces.CreateAsync(ConversionPolicy.RequiredScratchBytes(media.Source.Length), snapshot.TemporaryDirectory, cancellationToken);
-                    progress?.Report(new(Guid.Empty, "Matching .dovi archives by SHA-256", input));
-                    baseHash = await processor.GetBaseLayerSha256Async(media, workspace, cancellationToken);
-                    await cache.WriteBaseLayerHashAsync(media.Source, baseHash, cancellationToken);
-                }
-            }
-
-            if (string.Equals(baseHash, manifest.BaseLayerSha256, StringComparison.OrdinalIgnoreCase))
+            if (manifest is not null && (baseHash is null || string.Equals(baseHash, manifest.BaseLayerSha256, StringComparison.OrdinalIgnoreCase)))
             {
                 return candidate;
             }

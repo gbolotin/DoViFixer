@@ -875,7 +875,6 @@ public sealed class WorkflowTests
         }
         : []);
         public Task<ArchiveManifest> ExtractBackupAsync(MediaInfo media, ITemporaryWorkspace workspace, CancellationToken cancellationToken) => Task.FromResult(new ArchiveManifest(1, "source.mkv", new string('A', 64), new string('B', 64), 1000, 1000, DateTimeOffset.UnixEpoch));
-        public Task<string> GetBaseLayerSha256Async(MediaInfo media, ITemporaryWorkspace workspace, CancellationToken cancellationToken) => throw new NotSupportedException();
         public Task<ArchiveManifest?> ReadManifestAsync(string archive, CancellationToken cancellationToken) => throw new NotSupportedException();
         public Task RestoreAsync(MediaInfo media, ArchiveManifest? manifest, ITemporaryWorkspace workspace, string stagedOutput, CancellationToken cancellationToken) => throw new NotSupportedException();
         public Task WriteAsync(string stagedArchive, ArchiveManifest manifest, ITemporaryWorkspace workspace, CancellationToken cancellationToken) => Task.CompletedTask;
