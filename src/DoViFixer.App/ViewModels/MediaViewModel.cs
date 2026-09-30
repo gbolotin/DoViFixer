@@ -632,11 +632,10 @@ public sealed class MediaViewModel : OperationViewModel, INavigationPage, IIniti
         var userSettings = await settings.ReadAsync(token);
         bool autoSelect = userSettings.AutoSelectAfterScan;
         bool? toolsReady = null;
-        var pairing = restore.BeginPairing(Files.Except(rows).Where(row => row.CanRestore).Select(row => row.RestoreArchive!));
+        var pairing = restore.BeginPairing(Files.Where(row => row.RestoreArchive is not null).Select(row => (Input: row.Path, Archive: row.RestoreArchive!)));
         foreach (var row in rows)
         {
             row.LastAnalysisMethod = method;
-            row.RestoreArchive = null;
         }
 
         BeginBatch(rows, method == AnalysisMethod.SampledRpu ? "Scan" : method == AnalysisMethod.DeepInspection ? "Deep inspection" : "Inspection");
@@ -648,6 +647,7 @@ public sealed class MediaViewModel : OperationViewModel, INavigationPage, IIniti
                 row.AnalysisError = null;
                 row.Notice = "";
                 row.Analysis = null;
+                row.RestoreArchive = null;
                 try
                 {
                     row.Analysis = await Task.Run(() => inspection.ReadCachedAsync(row.Path, method, itemToken), itemToken);
@@ -707,7 +707,6 @@ public sealed class MediaViewModel : OperationViewModel, INavigationPage, IIniti
 
     private async Task RefreshRestoreArchiveAsync(MediaRow row, RestoreArchivePairing pairing, CancellationToken token)
     {
-        row.RestoreArchive = null;
         if (row.Analysis is not { } analysis)
         {
             return;

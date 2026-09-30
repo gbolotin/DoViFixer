@@ -349,13 +349,20 @@ public sealed class WorkflowTests
         };
         await cache.WriteBaseLayerHashAsync(first.Source, new string('A', 64), default);
         await cache.WriteBaseLayerHashAsync(second.Source, new string('A', 64), default);
-        var pairing = runtime.Restore(cache).BeginPairing([claimed]);
+        var outside = (Input: Path.Combine(directory, "other.mkv"), Archive: claimed);
+        var pairing = runtime.Restore(cache).BeginPairing([outside]);
 
         Assert.IsNull(await pairing.PairAsync(first with { Profile = DolbyVisionProfile.Profile7 }, default));
         Assert.IsEmpty(runtime.ManifestReads, "Only Profile 8.1 files are paired.");
-        Assert.AreEqual(renamed, await pairing.PairAsync(first, default), "An archive claimed outside the batch must be skipped.");
+        Assert.AreEqual(renamed, await pairing.PairAsync(first, default), "An archive owned by another file must be skipped.");
         Assert.IsNull(await pairing.PairAsync(second, default), "An archive paired earlier in the batch must not be paired again.");
         CollectionAssert.DoesNotContain(runtime.ManifestReads, claimed);
+        Assert.AreEqual(renamed, await pairing.PairAsync(first, default), "Pairing a file again releases its own previous archive first.");
+
+        var resumed = runtime.Restore(cache).BeginPairing([outside, (first.Source.Path, renamed)]);
+        Assert.IsNull(await resumed.PairAsync(second, default), "A file the batch has not re-paired yet keeps its archive.");
+        Assert.IsNull(await resumed.PairAsync(first with { Profile = DolbyVisionProfile.Profile7 }, default));
+        Assert.AreEqual(renamed, await resumed.PairAsync(second, default), "An archive is released when its file stops qualifying.");
     }
 
     [TestMethod]

@@ -50,6 +50,13 @@ public sealed class RowRestoreTests
         Assert.IsFalse(row.IsSelected);
         Assert.IsTrue(model.Files[1].IsSelected);
         Assert.AreEqual(1, model.BatchProgress.Total);
+        Assert.IsFalse(row.CanRestore, "A restored row must not offer restoration again.");
+        Assert.IsFalse(model.RestoreRowCommand.CanExecute(row));
+        Assert.AreEqual(archive, row.RestoreArchive, "The restored row keeps its archive so no other row can claim it.");
+
+        await model.ScanCommand.ExecuteAsync();
+        Assert.AreEqual(MediaRowState.Scanned, row.State);
+        Assert.IsTrue(row.CanRestore, "Rescanning returns the row to a restorable state.");
     }
 
     [TestMethod]
@@ -225,6 +232,34 @@ public sealed class RowRestoreTests
         Assert.IsEmpty(runtime.Reviews);
         Assert.AreEqual(@"C:\Media\P81.dovi", model.Files[0].RestoreArchive);
         Assert.AreEqual(@"C:\Media\P81-copy.dovi", model.Files[1].RestoreArchive);
+    }
+
+    [TestMethod]
+    public async Task RowsACancelledScanNeverReachedKeepTheirRestoreArchive()
+    {
+        using var runtime = new TestRuntime();
+        runtime.Archives.UnionWith([@"C:\Media\P81.dovi", @"C:\Media\P81-copy.dovi"]);
+        var model = runtime.Container.GetRequiredService<MediaViewModel>();
+        await model.AddAsync([@"C:\Media\P81.mkv", @"C:\Media\P81-copy.mkv"]);
+        Assert.IsTrue(model.Files.All(row => row.CanRestore));
+        await runtime.UpdateAsync(settings => settings with { UseCachedResults = false }, default);
+        var started = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+        runtime.DuringAnalysis = async token =>
+        {
+            started.TrySetResult();
+            await Task.Delay(Timeout.Infinite, token);
+        };
+
+        var scanning = model.ScanCommand.ExecuteAsync();
+        await started.Task.WaitAsync(TimeSpan.FromSeconds(10));
+        model.CancelCommand.Execute();
+        await scanning.WaitAsync(TimeSpan.FromSeconds(10));
+
+        Assert.IsFalse(model.Files[0].CanRestore, "The interrupted row lost its analysis and must be rescanned.");
+        Assert.AreEqual(MediaRowState.Cancelled, model.Files[1].State);
+        Assert.AreEqual(@"C:\Media\P81-copy.dovi", model.Files[1].RestoreArchive);
+        Assert.IsTrue(model.Files[1].CanRestore);
+        Assert.IsTrue(model.RestoreRowCommand.CanExecute(model.Files[1]));
     }
 
     [TestMethod]

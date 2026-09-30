@@ -9,8 +9,8 @@ namespace DoViFixer.Application.Restore;
 public sealed record RestorePlan(Guid Id, MediaInfo Media, FileIdentity Archive, string Output, string? TemporaryDirectory, long ScratchBytes, bool AllowLegacy);
 public sealed class RestoreService(DependencyService dependencies, IMediaProbe probe, IFileOperations files, ITemporaryWorkspaceFactory workspaces, IVideoProcessor processor, IBackupArchiveStore archives, IMediaVerifier verifier, IOutputPublisher publisher, ISettingsStore settings, ILogger<RestoreService> logger, IFileDiscovery discovery, IAnalysisCache cache)
 {
-    // Starts archive pairing for one sequential batch. Archives claimed by files outside the batch stay excluded.
-    public RestoreArchivePairing BeginPairing(IEnumerable<string> claimedArchives) => new(this, claimedArchives);
+    // Starts archive pairing for one sequential batch from the current input-to-archive pairings.
+    public RestoreArchivePairing BeginPairing(IEnumerable<(string Input, string Archive)> existingPairings) => new(this, existingPairings);
 
     // Pairing only reads cached hashes and archive manifests; it never extracts video. Without a cached
     // base-layer hash only a same-name archive is offered, and restoration verifies its SHA-256 pairing.
@@ -106,29 +106,40 @@ public sealed class RestoreService(DependencyService dependencies, IMediaProbe p
 }
 
 // Pairs Profile 8.1 files with restore archives so that each archive belongs to at most one file.
+// Existing pairings stay claimed until their input is paired again, so inputs a batch never reaches keep theirs.
 // Not thread-safe: use one instance per sequential batch.
 public sealed class RestoreArchivePairing
 {
     private readonly RestoreService restore;
-    private readonly HashSet<string> claimed;
+    private readonly Dictionary<string, string> owners = new(StringComparer.OrdinalIgnoreCase);
 
-    internal RestoreArchivePairing(RestoreService restore, IEnumerable<string> claimedArchives)
+    internal RestoreArchivePairing(RestoreService restore, IEnumerable<(string Input, string Archive)> existingPairings)
     {
         this.restore = restore;
-        claimed = new(claimedArchives, StringComparer.OrdinalIgnoreCase);
+        foreach (var (input, archive) in existingPairings)
+        {
+            owners[archive] = Path.GetFullPath(input);
+        }
     }
 
+    // Releases the input's previous archive, then pairs it with an archive no other input owns.
     public async Task<string?> PairAsync(MediaInfo media, CancellationToken cancellationToken)
     {
+        string input = Path.GetFullPath(media.Source.Path);
+        foreach (string released in owners.Where(owner => string.Equals(owner.Value, input, StringComparison.OrdinalIgnoreCase)).Select(owner => owner.Key).ToArray())
+        {
+            owners.Remove(released);
+        }
+
         if (media.Profile != DolbyVisionProfile.Profile81)
         {
             return null;
         }
 
-        string? archive = await restore.FindArchiveAsync(media, claimed, cancellationToken);
+        string? archive = await restore.FindArchiveAsync(media, new HashSet<string>(owners.Keys, StringComparer.OrdinalIgnoreCase), cancellationToken);
         if (archive is not null)
         {
-            claimed.Add(archive);
+            owners[archive] = input;
         }
 
         return archive;
