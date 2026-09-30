@@ -149,6 +149,7 @@ public sealed class VisualTests
             Assert.AreEqual("2 items | 1 item selected", StatusItem(window, 0).Text);
             await VerifyClassificationColorsAsync(runtime, list);
             await VerifyLastColumnSizingAsync(list, window);
+            await VerifyHeaderSortingAsync(media, list, window);
             var fileColumn = ((GridView)list.View).Columns[0];
             double originalWidth = fileColumn.Width;
             fileColumn.Width = 400;
@@ -352,6 +353,63 @@ public sealed class VisualTests
         await AssertColorAsync("#A6B6C3");
         row.AnalysisError = "Analysis failed";
         await AssertColorAsync("#FF625A");
+    }
+
+    private static async Task VerifyHeaderSortingAsync(MediaViewModel media, ListView list, Window window)
+    {
+        var grid = (GridView)list.View;
+        GridViewColumnHeader Header(int column) => Descendants<GridViewColumnHeader>(list).Single(header => ReferenceEquals(header.Column, grid.Columns[column]));
+        TextBlock Indicator(GridViewColumnHeader header) => Descendants<TextBlock>(header).Single(text => text.Style == list.FindResource("ColumnSortIndicator"));
+        string ascending = char.ConvertFromUtf32(0xE70E);
+        string descending = char.ConvertFromUtf32(0xE70D);
+        void AssertIndicatorAboveCenter(GridViewColumnHeader header, string title)
+        {
+            // Like Windows Explorer: the indicator is centered over the column, above the title, inside the header.
+            var indicator = Indicator(header);
+            var label = Descendants<TextBlock>(header).Single(text => text.Text == title);
+            var glyph = indicator.TransformToAncestor(header).TransformBounds(new Rect(indicator.RenderSize));
+            var text = label.TransformToAncestor(header).TransformBounds(new Rect(label.RenderSize));
+            string layout = $"indicator {glyph}, title {text}, header {header.RenderSize}";
+            Assert.IsTrue(glyph.Top >= 0 && glyph.Bottom <= text.Top + 2, $"The indicator must sit above the title inside the header: {layout}.");
+            Assert.AreEqual(header.ActualWidth / 2, (glyph.Left + glyph.Right) / 2, 4, $"The indicator must be centered over the column: {layout}.");
+        }
+        var fileHeader = Header(0);
+        var profileHeader = Header(1);
+        var selectAll = Descendants<CheckBox>(fileHeader).Single();
+        var original = media.Files.ToArray();
+        var focused = media.Focused;
+        Assert.AreSame(list.FindResource("SortableColumnHeader"), profileHeader.ContentTemplate, "Columns without a header template use the shared sortable header.");
+        Assert.IsTrue(Descendants<TextBlock>(profileHeader).Any(text => text.Text == "Profile / Type"));
+        Assert.IsFalse(Indicator(fileHeader).IsVisible);
+
+        fileHeader.RaiseEvent(new RoutedEventArgs(ButtonBase.ClickEvent, fileHeader));
+        fileHeader.RaiseEvent(new RoutedEventArgs(ButtonBase.ClickEvent, fileHeader));
+        await LayoutAsync(window);
+        CollectionAssert.AreEqual(Enumerable.Reverse(original).ToArray(), list.Items.Cast<MediaRow>().ToArray(), "Clicking a header twice sorts descending.");
+        CollectionAssert.AreEqual(original, media.Files.ToArray(), "Sorting uses the collection view, not the source order.");
+        Assert.AreSame(focused, list.SelectedItem, "Sorting keeps the list selection.");
+        Assert.AreEqual(System.ComponentModel.ListSortDirection.Descending, GridViewSort.GetDirection(grid.Columns[0]));
+        Assert.AreEqual(descending, Indicator(fileHeader).Text);
+        Assert.IsTrue(Indicator(fileHeader).IsVisible, "Custom header templates show the shared indicator.");
+        AssertIndicatorAboveCenter(fileHeader, "File");
+        Assert.IsFalse(Indicator(profileHeader).IsVisible, "Only the sorted column shows an indicator.");
+
+        selectAll.RaiseEvent(new RoutedEventArgs(ButtonBase.ClickEvent, selectAll));
+        Assert.AreEqual(System.ComponentModel.ListSortDirection.Descending, media.FileSort.Direction, "The select-all check box must not sort.");
+
+        profileHeader.RaiseEvent(new RoutedEventArgs(ButtonBase.ClickEvent, profileHeader));
+        await LayoutAsync(window);
+        Assert.AreEqual(MediaSortColumn.Classification, media.FileSort.Column);
+        Assert.IsNull(GridViewSort.GetDirection(grid.Columns[0]));
+        Assert.IsFalse(Indicator(fileHeader).IsVisible);
+        Assert.AreEqual(ascending, Indicator(profileHeader).Text);
+        Assert.IsTrue(Indicator(profileHeader).IsVisible, "The shared header template shows the indicator.");
+        AssertIndicatorAboveCenter(profileHeader, "Profile / Type");
+
+        // Leave the list sorted by name ascending, which matches the order the files were added.
+        fileHeader.RaiseEvent(new RoutedEventArgs(ButtonBase.ClickEvent, fileHeader));
+        await LayoutAsync(window);
+        CollectionAssert.AreEqual(original, list.Items.Cast<MediaRow>().ToArray());
     }
 
     private static async Task VerifyLastColumnSizingAsync(ListView list, Window window)

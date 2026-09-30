@@ -55,21 +55,27 @@
     <DataTemplate x:Key="MediaListTemplate" DataType="{x:Type viewModels:MediaViewModel}">
         <ListView ItemsSource="{Binding Files}"
                   SelectedItem="{Binding Focused}"
-                  p:GridViewSizing.LastColumnMinimumWidth="255">
+                  p:GridViewSizing.LastColumnMinimumWidth="255"
+                  p:GridViewSort.Sort="{Binding FileSort}">
             <ListView.View>
-                <GridView>
-                    <GridViewColumn Header="File" Width="238">
+                <GridView ColumnHeaderContainerStyle="{StaticResource SortableColumnHeaderContainer}" ColumnHeaderTemplate="{StaticResource SortableColumnHeader}">
+                    <GridViewColumn Header="File"
+                                    Width="238"
+                                    p:GridViewSort.Key="{x:Static viewModels:MediaSortColumn.Name}">
                         <GridViewColumn.HeaderTemplate>
                             <DataTemplate>
-                                <StackPanel Orientation="Horizontal" Margin="1,0,0,0">
-                                    <CheckBox IsChecked="{Binding DataContext.AllFilesSelected, RelativeSource={RelativeSource AncestorType=ListView}, Mode=OneWay}"
-                                              Command="{Binding DataContext.ToggleSelectAllCommand, RelativeSource={RelativeSource AncestorType=ListView}}"
-                                              Margin="0,0,12,0"
-                                              VerticalAlignment="Center"
-                                              ToolTip="Select all / none"
-                                              AutomationProperties.Name="Select all or clear all files" />
-                                    <TextBlock Text="File" VerticalAlignment="Center" />
-                                </StackPanel>
+                                <Grid Margin="1,0,0,0">
+                                    <StackPanel Orientation="Horizontal">
+                                        <CheckBox IsChecked="{Binding DataContext.AllFilesSelected, RelativeSource={RelativeSource AncestorType=ListView}, Mode=OneWay}"
+                                                  Command="{Binding DataContext.ToggleSelectAllCommand, RelativeSource={RelativeSource AncestorType=ListView}}"
+                                                  Margin="0,0,12,0"
+                                                  VerticalAlignment="Center"
+                                                  ToolTip="Select all / none"
+                                                  AutomationProperties.Name="Select all or clear all files" />
+                                        <TextBlock Text="File" VerticalAlignment="Center" />
+                                    </StackPanel>
+                                    <TextBlock Style="{StaticResource ColumnSortIndicator}" />
+                                </Grid>
                             </DataTemplate>
                         </GridViewColumn.HeaderTemplate>
                         <GridViewColumn.CellTemplate>
@@ -108,12 +114,9 @@
                             </DataTemplate>
                         </GridViewColumn.CellTemplate>
                     </GridViewColumn>
-                    <GridViewColumn Header="Profile / Type" Width="180">
-                        <GridViewColumn.HeaderTemplate>
-                            <DataTemplate>
-                                <TextBlock Text="Profile / Type" Margin="1,0,0,0" />
-                            </DataTemplate>
-                        </GridViewColumn.HeaderTemplate>
+                    <GridViewColumn Header="Profile / Type"
+                                    Width="180"
+                                    p:GridViewSort.Key="{x:Static viewModels:MediaSortColumn.Classification}">
                         <GridViewColumn.CellTemplate>
                             <DataTemplate>
                                 <TextBlock Text="{Binding Classification}"
@@ -151,12 +154,9 @@
                             </DataTemplate>
                         </GridViewColumn.CellTemplate>
                     </GridViewColumn>
-                    <GridViewColumn Header="Status / Action" Width="255">
-                        <GridViewColumn.HeaderTemplate>
-                            <DataTemplate>
-                                <TextBlock Text="Status / Action" Margin="1,0,0,0" />
-                            </DataTemplate>
-                        </GridViewColumn.HeaderTemplate>
+                    <GridViewColumn Header="Status / Action"
+                                    Width="255"
+                                    p:GridViewSort.Key="{x:Static viewModels:MediaSortColumn.Status}">
                         <GridViewColumn.CellTemplate>
                             <DataTemplate>
                                 <Grid VerticalAlignment="Center">
