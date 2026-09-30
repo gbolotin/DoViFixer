@@ -632,7 +632,7 @@ public sealed class MediaViewModel : OperationViewModel, INavigationPage, IIniti
         var userSettings = await settings.ReadAsync(token);
         bool autoSelect = userSettings.AutoSelectAfterScan;
         bool? toolsReady = null;
-        var pairing = restore.BeginPairing(Files.Where(row => row.RestoreArchive is not null).Select(row => (Input: row.Path, Archive: row.RestoreArchive!)));
+        var pairing = BeginArchivePairing();
         foreach (var row in rows)
         {
             row.LastAnalysisMethod = method;
@@ -704,6 +704,8 @@ public sealed class MediaViewModel : OperationViewModel, INavigationPage, IIniti
             EndBatch();
         }
     }
+
+    private RestoreArchivePairing BeginArchivePairing() => restore.BeginPairing(Files.Where(row => row.RestoreArchive is not null).Select(row => (Input: row.Path, Archive: row.RestoreArchive!)));
 
     private async Task RefreshRestoreArchiveAsync(MediaRow row, RestoreArchivePairing pairing, CancellationToken token)
     {
@@ -790,6 +792,12 @@ public sealed class MediaViewModel : OperationViewModel, INavigationPage, IIniti
         finally
         {
             EndBatch();
+        }
+
+        if (row.State == MediaRowState.Failed)
+        {
+            // A failed restore may have learned the file's base-layer hash; pair again so a mismatched archive is not offered twice.
+            await RefreshRestoreArchiveAsync(row, BeginArchivePairing(), token);
         }
     });
 

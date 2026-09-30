@@ -13,7 +13,8 @@ public sealed class RestoreService(DependencyService dependencies, IMediaProbe p
     public RestoreArchivePairing BeginPairing(IEnumerable<(string Input, string Archive)> existingPairings) => new(this, existingPairings);
 
     // Pairing only reads cached hashes and archive manifests; it never extracts video. Without a cached
-    // base-layer hash only a same-name archive is offered, and restoration verifies its SHA-256 pairing.
+    // base-layer hash only a same-name archive with an agreeing frame count is offered. Restoration verifies
+    // the SHA-256 pairing and caches the hash it learns, so a mismatched archive is not offered again.
     internal async Task<string?> FindArchiveAsync(MediaInfo media, IReadOnlySet<string> excludedArchives, CancellationToken cancellationToken)
     {
         cancellationToken.ThrowIfCancellationRequested();
@@ -46,7 +47,7 @@ public sealed class RestoreService(DependencyService dependencies, IMediaProbe p
                 continue;
             }
 
-            if (manifest is not null && (baseHash is null || string.Equals(baseHash, manifest.BaseLayerSha256, StringComparison.OrdinalIgnoreCase)))
+            if (manifest is not null && (baseHash is null ? FrameCountsAgree(media.FrameCount, manifest.FrameCount) : string.Equals(baseHash, manifest.BaseLayerSha256, StringComparison.OrdinalIgnoreCase)))
             {
                 return candidate;
             }
@@ -54,6 +55,11 @@ public sealed class RestoreService(DependencyService dependencies, IMediaProbe p
 
         return null;
     }
+
+    // Without a verified hash, reject an archive whose recorded frame count clearly differs. MediaInfo may estimate
+    // counts from duration, so a small tolerance keeps the right archive from being hidden.
+    private static bool FrameCountsAgree(long? mediaFrames, long? archiveFrames) =>
+        mediaFrames is not { } media || archiveFrames is not { } archive || Math.Abs(media - archive) <= Math.Max(2, Math.Max(media, archive) / 1000);
 
     public async Task<RestorePlan> PlanAsync(string input, string archive, string? outputDirectory, string? temporaryDirectory, bool allowLegacy, CancellationToken cancellationToken)
     {
@@ -92,7 +98,23 @@ public sealed class RestoreService(DependencyService dependencies, IMediaProbe p
             OperationLog.Audit(logger, "UseLegacyArchive", approvedPlan.Archive.Path, "SourcePairingUnverified", approvedPlan.Id);
         }
 
-        await processor.RestoreAsync(approvedPlan.Media, manifest, workspace, staged.Path, cancellationToken);
+        try
+        {
+            await processor.RestoreAsync(approvedPlan.Media, manifest, workspace, staged.Path, cancellationToken);
+        }
+        catch (BaseLayerMismatchException mismatch)
+        {
+            // Remember the input's real hash so archive pairing stops offering the mismatched archive.
+            await cache.WriteBaseLayerHashAsync(approvedPlan.Media.Source, mismatch.ActualSha256, CancellationToken.None);
+            throw;
+        }
+
+        if (manifest is not null)
+        {
+            // The processor verified the base layer against the manifest, so its hash is now known for pairing.
+            await cache.WriteBaseLayerHashAsync(approvedPlan.Media.Source, manifest.BaseLayerSha256, CancellationToken.None);
+        }
+
         var findings = await verifier.VerifyAsync(approvedPlan.Media, staged.Path, DolbyVisionProfile.Profile7, workspace, cancellationToken);
         if (findings.Count > 0)
         {
