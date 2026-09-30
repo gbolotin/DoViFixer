@@ -21,6 +21,9 @@
                     ContentTemplate="{StaticResource IconButtonContent}"
                     Command="{Binding ClearAllCommand}"
                     Margin="0,0,8,8" />
+            <Border Width="1"
+                    Margin="4,6,12,14"
+                    Background="{DynamicResource DividerStrokeColorDefaultBrush}" />
             <Button Content="Rescan"
                     Tag="&#xE72C;"
                     ContentTemplate="{StaticResource IconButtonContent}"
