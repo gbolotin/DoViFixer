@@ -4,11 +4,73 @@ using DoViFixer.Application.Operations;
 using DoViFixer.Domain.Conversion;
 using DoViFixer.Domain.Media;
 using Microsoft.Extensions.Logging;
+using System.Text.Json;
 
 namespace DoViFixer.Application.Restore;
 public sealed record RestorePlan(Guid Id, MediaInfo Media, FileIdentity Archive, string Output, string? TemporaryDirectory, long ScratchBytes, bool AllowLegacy);
-public sealed class RestoreService(DependencyService dependencies, IMediaProbe probe, IFileOperations files, ITemporaryWorkspaceFactory workspaces, IVideoProcessor processor, IBackupArchiveStore archives, IMediaVerifier verifier, IOutputPublisher publisher, ISettingsStore settings, ILogger<RestoreService> logger)
+public sealed class RestoreService(DependencyService dependencies, IMediaProbe probe, IFileOperations files, ITemporaryWorkspaceFactory workspaces, IVideoProcessor processor, IBackupArchiveStore archives, IMediaVerifier verifier, IOutputPublisher publisher, ISettingsStore settings, ILogger<RestoreService> logger, IFileDiscovery discovery, IAnalysisCache cache)
 {
+    public async Task<string?> FindArchiveAsync(MediaInfo media, IReadOnlySet<string> excludedArchives, IProgress<OperationProgress>? progress, CancellationToken cancellationToken)
+    {
+        cancellationToken.ThrowIfCancellationRequested();
+        string input = media.Source.Path;
+        string stem = Path.Combine(Path.GetDirectoryName(input)!, Path.GetFileNameWithoutExtension(input));
+        const string convertedSuffix = " - DV P8.1";
+        string[] preferred = stem.EndsWith(convertedSuffix, StringComparison.OrdinalIgnoreCase)
+            ? [stem + ".dovi", stem[..^convertedSuffix.Length] + ".dovi"]
+            : [stem + ".dovi"];
+        var candidates = discovery.Discover(Path.GetDirectoryName(input)!, 0, cleanup: true)
+            .Where(path => path.EndsWith(".dovi", StringComparison.OrdinalIgnoreCase) && !excludedArchives.Contains(path))
+            .OrderBy(path =>
+            {
+                int index = Array.FindIndex(preferred, candidate => string.Equals(candidate, path, StringComparison.OrdinalIgnoreCase));
+                return index >= 0 ? index : preferred.Length;
+            })
+            .ThenBy(path => path, StringComparer.OrdinalIgnoreCase);
+        string? baseHash = null;
+        foreach (string candidate in candidates)
+        {
+            cancellationToken.ThrowIfCancellationRequested();
+            ArchiveManifest? manifest;
+            try
+            {
+                manifest = await archives.ReadManifestAsync(candidate, cancellationToken);
+            }
+            catch (Exception ex) when (ex is IOException or InvalidDataException or UnauthorizedAccessException or JsonException)
+            {
+                logger.LogDebug(ex, "Skipping unreadable restore archive {Archive}", candidate);
+                continue;
+            }
+
+            if (manifest is null)
+            {
+                continue;
+            }
+
+            if (baseHash is null)
+            {
+                var snapshot = await settings.ReadAsync(cancellationToken);
+                await using var lease = await files.AcquireReadLeaseAsync(media.Source, cancellationToken);
+                baseHash = snapshot.UseCachedResults ? await cache.ReadBaseLayerHashAsync(media.Source, cancellationToken) : null;
+                if (baseHash is null)
+                {
+                    await dependencies.RequireAsync(DependencyRequirements.All, cancellationToken);
+                    await using var workspace = await workspaces.CreateAsync(ConversionPolicy.RequiredScratchBytes(media.Source.Length), snapshot.TemporaryDirectory, cancellationToken);
+                    progress?.Report(new(Guid.Empty, "Matching .dovi archives by SHA-256", input));
+                    baseHash = await processor.GetBaseLayerSha256Async(media, workspace, cancellationToken);
+                    await cache.WriteBaseLayerHashAsync(media.Source, baseHash, cancellationToken);
+                }
+            }
+
+            if (string.Equals(baseHash, manifest.BaseLayerSha256, StringComparison.OrdinalIgnoreCase))
+            {
+                return candidate;
+            }
+        }
+
+        return null;
+    }
+
     public async Task<RestorePlan> PlanAsync(string input, string archive, string? outputDirectory, string? temporaryDirectory, bool allowLegacy, CancellationToken cancellationToken)
     {
         await dependencies.RequireAsync(DependencyRequirements.All, cancellationToken);

@@ -31,7 +31,8 @@ internal sealed class BackupArchiveStore : IBackupArchiveStore
     }
 
     public Task<ArchiveManifest?> ReadAsync(string archive, ITemporaryWorkspace workspace, bool allowLegacy, CancellationToken cancellationToken) => ReadCoreAsync(archive, workspace, allowLegacy, cancellationToken);
-    private static async Task<ArchiveManifest?> ReadCoreAsync(string archive, ITemporaryWorkspace? workspace, bool allowLegacy, CancellationToken cancellationToken)
+    public Task<ArchiveManifest?> ReadManifestAsync(string archive, CancellationToken cancellationToken) => ReadCoreAsync(archive, null, true, cancellationToken, verifyPayload: false);
+    private static async Task<ArchiveManifest?> ReadCoreAsync(string archive, ITemporaryWorkspace? workspace, bool allowLegacy, CancellationToken cancellationToken, bool verifyPayload = true)
     {
         await using var source = File.OpenRead(archive);
         await using var reader = new TarReader(source);
@@ -67,6 +68,11 @@ internal sealed class BackupArchiveStore : IBackupArchiveStore
             else
             {
                 length = entry.Length;
+                if (!verifyPayload)
+                {
+                    // TarReader seeks past payload data on this seekable file stream.
+                    continue;
+                }
                 using var hash = IncrementalHash.CreateHash(HashAlgorithmName.SHA256);
                 await using FileStream? output = workspace is null ? null : new FileStream(workspace.File("el.hevc"), FileMode.CreateNew, FileAccess.Write, FileShare.None, 81920, true);
                 var buffer = new byte[1024 * 1024];
@@ -91,7 +97,7 @@ internal sealed class BackupArchiveStore : IBackupArchiveStore
             }
         }
 
-        if (payloadHash is null)
+        if (!names.Contains("el.hevc") || length <= 0)
         {
             throw new InvalidDataException("Archive lacks el.hevc.");
         }
@@ -106,7 +112,10 @@ internal sealed class BackupArchiveStore : IBackupArchiveStore
             return null;
         }
 
-        if (manifest.FormatVersion != 1 || manifest.BaseLayerSha256 is null || manifest.BaseLayerSha256.Length != 64 || !manifest.BaseLayerSha256.All(Uri.IsHexDigit) || length != manifest.EnhancementLayerLength || !string.Equals(payloadHash, manifest.EnhancementLayerSha256, StringComparison.OrdinalIgnoreCase))
+        if (manifest.FormatVersion != 1 || manifest.BaseLayerSha256 is not { Length: 64 } || !manifest.BaseLayerSha256.All(Uri.IsHexDigit)
+            || manifest.EnhancementLayerSha256 is not { Length: 64 } || !manifest.EnhancementLayerSha256.All(Uri.IsHexDigit)
+            || length != manifest.EnhancementLayerLength
+            || (verifyPayload && !string.Equals(payloadHash, manifest.EnhancementLayerSha256, StringComparison.OrdinalIgnoreCase)))
         {
             throw new InvalidDataException("Archive version, manifest or payload SHA-256 is invalid.");
         }

@@ -616,6 +616,32 @@ public sealed class ViewModelTests
     }
 
     [TestMethod]
+    [DataRow(false)]
+    [DataRow(true)]
+    public async Task CleanupRequiresDeletionConfirmationAndDeletesOnlyReviewedFiles(bool approve)
+    {
+        using var runtime = new TestRuntime { Approval = approve, PickedFolder = @"C:\Media" };
+        runtime.Archives.UnionWith([@"C:\Media\Movie.dovi", @"C:\Other\Keep.dovi"]);
+        var model = runtime.Container.GetRequiredService<ArchiveViewModel>();
+
+        await model.CleanupCommand.ExecuteAsync();
+
+        Assert.IsTrue(runtime.DeletionConfirmationRequested);
+        Assert.AreEqual("Delete", runtime.LastApproveLabel);
+        Assert.HasCount(1, runtime.Reviews);
+        StringAssert.Contains(runtime.Reviews[0], @"C:\Media\Movie.dovi");
+        if (approve)
+        {
+            CollectionAssert.AreEqual(new[] { @"C:\Media\Movie.dovi" }, runtime.DeletedFiles);
+        }
+        else
+        {
+            Assert.IsEmpty(runtime.DeletedFiles);
+            Assert.AreEqual(ViewStatus.CleanupNotApproved, model.Status);
+        }
+    }
+
+    [TestMethod]
     public async Task ArchivePreparationCannotExecuteWithoutDisplayedPlanApproval()
     {
         using var runtime = new TestRuntime();

@@ -222,11 +222,13 @@ public sealed class InfrastructureTests
         var archive = new BackupArchiveStore();
         string path = Path.Combine(directory, "movie.dovi");
         await archive.WriteAsync(path, manifest, writeWorkspace, default);
+        Assert.AreEqual(manifest, await archive.ReadManifestAsync(path, default));
         await using var readWorkspace = await factory.CreateAsync(0, directory, default);
         Assert.AreEqual(manifest, await archive.ReadAsync(path, readWorkspace, false, default));
         Assert.AreEqual(hash, await VideoProcessor.HashAsync(readWorkspace.File("el.hevc"), default));
         string legacy = Path.Combine(directory, "legacy.dovi");
         await WriteTarAsync(legacy, ("el.hevc", "payload"));
+        Assert.IsNull(await archive.ReadManifestAsync(legacy, default));
         await using var legacyWorkspace = await factory.CreateAsync(0, directory, default);
         await Assert.ThrowsExactlyAsync<InvalidDataException>(() => archive.ReadAsync(legacy, legacyWorkspace, false, default));
         await using var allowedWorkspace = await factory.CreateAsync(0, directory, default);
@@ -244,6 +246,7 @@ public sealed class InfrastructureTests
         var factory = new TemporaryWorkspaceFactory(files, NullLogger<TemporaryWorkspaceFactory>.Instance);
         await using var workspace = await factory.CreateAsync(0, directory, default);
         await Assert.ThrowsExactlyAsync<InvalidDataException>(() => new BackupArchiveStore().ReadAsync(archive, workspace, true, default));
+        await Assert.ThrowsExactlyAsync<InvalidDataException>(() => new BackupArchiveStore().ReadManifestAsync(archive, default));
     }
 
     [TestMethod]
@@ -252,6 +255,7 @@ public sealed class InfrastructureTests
         string archive = Path.Combine(directory, "bad.dovi");
         var manifest = new ArchiveManifest(1, "source", new string ('A', 64), new string ('B', 64), 7, 1, DateTimeOffset.UnixEpoch);
         await WriteTarAsync(archive, ("el.hevc", "payload"), ("manifest.json", JsonSerializer.Serialize(manifest)));
+        Assert.AreEqual(manifest, await new BackupArchiveStore().ReadManifestAsync(archive, default), "Discovery reads pairing metadata; restore must still verify payload integrity.");
         var factory = new TemporaryWorkspaceFactory(files, NullLogger<TemporaryWorkspaceFactory>.Instance);
         await using var workspace = await factory.CreateAsync(0, directory, default);
         await Assert.ThrowsExactlyAsync<InvalidDataException>(() => new BackupArchiveStore().ReadAsync(archive, workspace, false, default));
@@ -259,6 +263,7 @@ public sealed class InfrastructureTests
         await WriteTarAsync(duplicate, ("el.hevc", "first"), ("el.hevc", "second"));
         await using var another = await factory.CreateAsync(0, directory, default);
         await Assert.ThrowsExactlyAsync<InvalidDataException>(() => new BackupArchiveStore().ReadAsync(duplicate, another, true, default));
+        await Assert.ThrowsExactlyAsync<InvalidDataException>(() => new BackupArchiveStore().ReadManifestAsync(duplicate, default));
     }
 
     [TestMethod]

@@ -278,6 +278,29 @@
                                         <Button Padding="7,6"
                                                 Margin="4"
                                                 VerticalAlignment="Center"
+                                                ToolTip="Restore to DV7 from .dovi archive"
+                                                AutomationProperties.Name="Restore to DV7"
+                                                Command="{Binding DataContext.RestoreRowCommand, RelativeSource={RelativeSource AncestorType=ListView}}"
+                                                CommandParameter="{Binding}"
+                                                Content="&#xE7A7;"
+                                                FontFamily="{StaticResource SymbolThemeFontFamily}">
+                                            <Button.Style>
+                                                <Style TargetType="Button" BasedOn="{StaticResource TransparentButton}">
+                                                    <Setter Property="Visibility" Value="Hidden" />
+                                                    <Style.Triggers>
+                                                        <DataTrigger Binding="{Binding IsMouseOver, RelativeSource={RelativeSource AncestorType=ListViewItem}}" Value="True">
+                                                            <Setter Property="Visibility" Value="Visible" />
+                                                        </DataTrigger>
+                                                        <DataTrigger Binding="{Binding CanRestore}" Value="False">
+                                                            <Setter Property="Visibility" Value="Collapsed" />
+                                                        </DataTrigger>
+                                                    </Style.Triggers>
+                                                </Style>
+                                            </Button.Style>
+                                        </Button>
+                                        <Button Padding="7,6"
+                                                Margin="4"
+                                                VerticalAlignment="Center"
                                                 ToolTip="Convert to DV8.1"
                                                 AutomationProperties.Name="Convert to DV8.1"
                                                 Command="{Binding DataContext.ConvertRowDv81Command, RelativeSource={RelativeSource AncestorType=ListView}}"

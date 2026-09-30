@@ -20,6 +20,7 @@ public sealed class MediaRow(string path) : ObservableObject
     private string? analysisError;
     private string? warning;
     private string notice = "";
+    private string? restoreArchive;
 
     #endregion
 
@@ -29,6 +30,16 @@ public sealed class MediaRow(string path) : ObservableObject
     public string Name => System.IO.Path.GetFileName(Path);
     public ProgressViewModel Progress { get; } = new();
     public bool IsProfile7 => Analysis?.Media.Profile == Domain.Media.DolbyVisionProfile.Profile7;
+    public bool CanRestore => Analysis?.Media.Profile == Domain.Media.DolbyVisionProfile.Profile81 && RestoreArchive is not null;
+    public string? RestoreArchive
+    {
+        get => restoreArchive;
+        set
+        {
+            SetProperty(ref restoreArchive, value);
+            RaisePropertyChanged(nameof(CanRestore));
+        }
+    }
     public bool IsCancellationRequested
     {
         get => cancellationRequested;
@@ -62,7 +73,7 @@ public sealed class MediaRow(string path) : ObservableObject
         get => canRetryAnalysis;
         set => SetProperty(ref canRetryAnalysis, value);
     }
-    public bool CanOpenResult => Result?.Output is not null && State == MediaRowState.Converted;
+    public bool CanOpenResult => Result?.Output is not null && State is MediaRowState.Converted or MediaRowState.Restored;
    
     public string? Warning
     {
@@ -193,6 +204,7 @@ public sealed class MediaRow(string path) : ObservableObject
         {
             SetProperty(ref analysis, value);
             RaisePropertyChanged(nameof(IsProfile7));
+            RaisePropertyChanged(nameof(CanRestore));
             RaisePropertyChanged(nameof(HasIncompleteScan));
             RaisePropertyChanged(nameof(CanInspectIncomplete));
             RaisePropertyChanged(nameof(Classification));
@@ -259,7 +271,7 @@ public sealed class MediaRow(string path) : ObservableObject
         HasIncompleteScan ? "Suggested action: Inspect. Standard inspection examines the full RPU metadata stream instead of short samples. It may take longer; missing metadata may still prevent classification." : null,
         Notice
     }.Where(text => !string.IsNullOrWhiteSpace(text)));
-    public string ResultDetails => Result is null ? "" : $"Last conversion result\n{Result.Status}\n{Result.Output}\n{Result.Message}";
+    public string ResultDetails => Result is null ? "" : $"Last operation result\n{Result.Status}\n{Result.Output}\n{Result.Message}";
 
     #endregion
 
@@ -296,6 +308,14 @@ public sealed class MediaRow(string path) : ObservableObject
     {
         Status = "";
         State = MediaRowState.Scanned;
+    }
+
+    public void SetRestored(OperationItemResult itemResult)
+    {
+        ClearPlan();
+        Result = itemResult;
+        Status = "Restored";
+        State = MediaRowState.Restored;
     }
 
     public void SetSkipped(string reason)

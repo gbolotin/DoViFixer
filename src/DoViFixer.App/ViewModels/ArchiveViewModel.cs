@@ -88,14 +88,13 @@ public sealed class ArchiveViewModel : OperationViewModel, INavigationPage
             }
 
             string review = "Permanently delete exactly these retained backup files:\n\n" + string.Join("\n", plan.Files.Select(f => $"{f.Path} ({f.Length:N0} bytes)"));
-            string code = "APPROVE " + plan.Id.ToString("N")[..8].ToUpperInvariant();
-            if (!dialogs.Review("Review cleanup", review, "Delete displayed backups", code))
+            if (!dialogs.Review("Review cleanup", review, "Delete", confirmDeletion: true))
             {
                 SetStatus(ViewStatus.CleanupNotApproved);
                 return;
             }
 
-            OperationLog.Audit(logger, "ApproveCleanup", review, "ApprovedByExactCode", plan.Id);
+            OperationLog.Audit(logger, "ApproveCleanup", review, "ApprovedByConfirmation", plan.Id);
             var result = await Task.Run(() => cleanup.ExecuteAsync(plan, token), token);
             SetStatus(ViewStatus.Result, string.Join("\n", result.Items.Select(f => $"{f.Item}: {f.Status} — {f.Message}")));
         }), () => IsIdle);

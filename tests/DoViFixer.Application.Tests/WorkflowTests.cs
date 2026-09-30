@@ -95,6 +95,8 @@ public sealed class WorkflowTests
         public string RootDirectory => @"C:\FixtureData\cache";
         public Task<long> GetSizeAsync(CancellationToken cancellationToken) => Task.FromResult(0L);
         private readonly Dictionary<(FileIdentity, AnalysisMethod), MediaAnalysis> entries = new();
+        public Task<string?> ReadBaseLayerHashAsync(FileIdentity source, CancellationToken cancellationToken) => Task.FromResult<string?>(null);
+        public Task WriteBaseLayerHashAsync(FileIdentity source, string sha256, CancellationToken cancellationToken) => Task.CompletedTask;
         public Task<int> ClearAsync(CancellationToken cancellationToken)
         {
             int count = entries.Count;
@@ -697,7 +699,7 @@ public sealed class WorkflowTests
 
         private readonly Dictionary<NativeTool, string> catalog = new();
         public DependencyService Dependencies() => new(this, this, this, this, NullLogger<DependencyService>.Instance);
-        public ConversionService Conversion(InspectionService? inspection = null) => new(Dependencies(), this, this, this, this, this, this, ConversionLog, inspection);
+        public ConversionService Conversion(InspectionService? inspection = null) => new(Dependencies(), this, this, this, this, this, this, ConversionLog, new MemoryCache(), inspection);
         public RecordingLogger<ConversionService> ConversionLog
         {
             get;
@@ -839,6 +841,8 @@ public sealed class WorkflowTests
         }
         : []);
         public Task<ArchiveManifest> ExtractBackupAsync(MediaInfo media, ITemporaryWorkspace workspace, CancellationToken cancellationToken) => throw new NotSupportedException();
+        public Task<string> GetBaseLayerSha256Async(MediaInfo media, ITemporaryWorkspace workspace, CancellationToken cancellationToken) => throw new NotSupportedException();
+        public Task<ArchiveManifest?> ReadManifestAsync(string archive, CancellationToken cancellationToken) => throw new NotSupportedException();
         public Task RestoreAsync(MediaInfo media, ArchiveManifest? manifest, ITemporaryWorkspace workspace, string stagedOutput, CancellationToken cancellationToken) => throw new NotSupportedException();
         public Task WriteAsync(string stagedArchive, ArchiveManifest manifest, ITemporaryWorkspace workspace, CancellationToken cancellationToken) => throw new NotSupportedException();
         public Task<ArchiveManifest?> ReadAsync(string archive, ITemporaryWorkspace workspace, bool allowLegacy, CancellationToken cancellationToken) => throw new NotSupportedException();

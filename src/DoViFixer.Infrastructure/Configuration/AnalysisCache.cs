@@ -13,6 +13,7 @@ internal sealed class AnalysisCache(StorageOptions options, ILogger<AnalysisCach
     // Bump when probing, evidence interpretation, or analysis algorithms change.
     private const int version = 1;
     private sealed record Entry(int Version, MediaAnalysis Analysis);
+    private sealed record HashEntry(int Version, FileIdentity Source, string Sha256);
     public Task<long> GetSizeAsync(CancellationToken cancellationToken)
     {
         cancellationToken.ThrowIfCancellationRequested();
@@ -49,7 +50,7 @@ internal sealed class AnalysisCache(StorageOptions options, ILogger<AnalysisCach
         cancellationToken.ThrowIfCancellationRequested();
         try
         {
-            await using var stream = new FileStream(CachePath(source, method), FileMode.Open, FileAccess.Read, FileShare.Read | FileShare.Delete, 4096, true);
+            await using var stream = new FileStream(CachePath(source, method.ToString()), FileMode.Open, FileAccess.Read, FileShare.Read | FileShare.Delete, 4096, true);
             var entry = await JsonSerializer.DeserializeAsync<Entry>(stream, cancellationToken: cancellationToken);
             if (entry?.Version != version || entry.Analysis is not
             {
@@ -76,22 +77,49 @@ internal sealed class AnalysisCache(StorageOptions options, ILogger<AnalysisCach
         }
     }
 
-    public async Task WriteAsync(MediaAnalysis analysis, CancellationToken cancellationToken)
+    public async Task<string?> ReadBaseLayerHashAsync(FileIdentity source, CancellationToken cancellationToken)
+    {
+        cancellationToken.ThrowIfCancellationRequested();
+        try
+        {
+            await using var stream = new FileStream(CachePath(source, "base-layer"), FileMode.Open, FileAccess.Read, FileShare.Read | FileShare.Delete, 4096, true);
+            var entry = await JsonSerializer.DeserializeAsync<HashEntry>(stream, cancellationToken: cancellationToken);
+            return entry?.Version == version && entry.Source is { } identity
+                && string.Equals(identity.Path, source.Path, StringComparison.OrdinalIgnoreCase)
+                && identity.Length == source.Length && identity.LastWriteUtc == source.LastWriteUtc
+                && entry.Sha256 is { Length: 64 } && entry.Sha256.All(Uri.IsHexDigit) ? entry.Sha256 : null;
+        }
+        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException or JsonException)
+        {
+            logger.LogDebug(ex, "Base-layer hash cache miss for {Input}", source.Path);
+            return null;
+        }
+    }
+
+    public Task WriteBaseLayerHashAsync(FileIdentity source, string sha256, CancellationToken cancellationToken) =>
+        WriteEntryAsync(CachePath(source, "base-layer"), new HashEntry(version, source, sha256), source.Path, cancellationToken);
+
+    public Task WriteAsync(MediaAnalysis analysis, CancellationToken cancellationToken)
     {
         cancellationToken.ThrowIfCancellationRequested();
         if (!Cacheable(analysis))
         {
-            return;
+            return Task.CompletedTask;
         }
 
-        string destination = CachePath(analysis.Media.Source, analysis.Evidence.Method);
+        return WriteEntryAsync(CachePath(analysis.Media.Source, analysis.Evidence.Method.ToString()), new Entry(version, analysis), analysis.Media.Source.Path, cancellationToken);
+    }
+
+    private async Task WriteEntryAsync<T>(string destination, T entry, string input, CancellationToken cancellationToken)
+    {
+        cancellationToken.ThrowIfCancellationRequested();
         string temporary = destination + "." + Guid.NewGuid().ToString("N") + ".tmp";
         try
         {
             Directory.CreateDirectory(Path.GetDirectoryName(destination)!);
             await using (var stream = new FileStream(temporary, FileMode.CreateNew, FileAccess.Write, FileShare.None, 4096, true))
             {
-                await JsonSerializer.SerializeAsync(stream, new Entry(version, analysis), cancellationToken: cancellationToken);
+                await JsonSerializer.SerializeAsync(stream, entry, cancellationToken: cancellationToken);
                 await stream.FlushAsync(cancellationToken);
             }
 
@@ -100,7 +128,7 @@ internal sealed class AnalysisCache(StorageOptions options, ILogger<AnalysisCach
         }
         catch (Exception ex)when (ex is IOException or UnauthorizedAccessException)
         {
-            logger.LogWarning(ex, "Could not save analysis cache for {Input}", analysis.Media.Source.Path);
+            logger.LogWarning(ex, "Could not save analysis cache for {Input}", input);
         }
         finally
         {
@@ -116,7 +144,7 @@ internal sealed class AnalysisCache(StorageOptions options, ILogger<AnalysisCach
     }
 
     private static bool Cacheable(MediaAnalysis analysis) => analysis.Evidence.Error is null && MediaClassifier.Classify(analysis.Media, analysis.Evidence).Verdict is AnalysisVerdict.NotApplicable or AnalysisVerdict.Mel or AnalysisVerdict.SimpleFel or AnalysisVerdict.ComplexFel or AnalysisVerdict.FelUnclassified && (analysis.Evidence.Method != AnalysisMethod.MetadataOnly || analysis.Media.Profile != DolbyVisionProfile.Profile7);
-    private string CachePath(FileIdentity source, AnalysisMethod method)
+    private string CachePath(FileIdentity source, string method)
     {
         string key = Convert.ToHexString(SHA256.HashData(Encoding.UTF8.GetBytes(Path.GetFullPath(source.Path).ToUpperInvariant())));
         return Path.Combine(RootDirectory, "analysis", $"{key}.{method}.json");

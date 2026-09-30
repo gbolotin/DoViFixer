@@ -9,5 +9,6 @@ public enum MediaRowState
     Converted,
     Failed,
     Cancelled,
-    Skipped
+    Skipped,
+    Restored
 }

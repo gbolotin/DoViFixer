@@ -7,6 +7,7 @@ using DoViFixer.Application.Dependencies;
 using DoViFixer.Domain.Conversion;
 using DoViFixer.Domain.Media;
 using DoViFixer.Infrastructure.Archives;
+using DoViFixer.Infrastructure.Configuration;
 using DoViFixer.Infrastructure.Dependencies;
 using DoViFixer.Infrastructure.FileSystem;
 using DoViFixer.Infrastructure.MediaTools;
@@ -87,7 +88,8 @@ public sealed class NativeIntegrationTests
         };
         var verifier = new MediaVerifier(probe, processor, tools, runner);
         var dependencies = new DependencyService(new ReadyDetector(tools), null!, null!, tools, NullLogger<DependencyService>.Instance);
-        var service = new ConversionService(dependencies, files, factory, processor, verifier, new OutputPublisher(NullLogger<OutputPublisher>.Instance), new BackupArchiveStore(), NullLogger<ConversionService>.Instance);
+        var cache = new AnalysisCache(new StorageOptions(workspace.DirectoryPath), NullLogger<AnalysisCache>.Instance);
+        var service = new ConversionService(dependencies, files, factory, processor, verifier, new OutputPublisher(NullLogger<OutputPublisher>.Instance), new BackupArchiveStore(), NullLogger<ConversionService>.Instance, cache);
         var analysis = MediaClassifier.Classify(copy, await probe.AnalyzeAsync(copy, AnalysisMethod.FullRpu, workspace, default));
         string converted = files.PrepareOutputPath(input, null, " - DV P8.1.mkv");
         var result = await service.ExecuteAsync(new(Guid.NewGuid(), analysis, ConversionTarget.Profile81, converted, null, workspace.DirectoryPath, ConversionPolicy.RequiredScratchBytes(copy.Source.Length), "explicit native test", Safe: safe), null, default);
@@ -295,6 +297,10 @@ public sealed class NativeIntegrationTests
             Profile = DolbyVisionProfile.Profile81
         };
         string beforeTimestamps = restorationWorkspace.File("before.txt");
+        await using (var pairingWorkspace = await factory.CreateAsync(16 * 1024 * 1024, null, default))
+        {
+            Assert.AreEqual(manifest.BaseLayerSha256, await processor.GetBaseLayerSha256Async(convertedMedia, pairingWorkspace, default));
+        }
         string afterTimestamps = restorationWorkspace.File("after.txt");
         await runner.RunAsync(new(tools.GetPath(NativeTool.MkvExtract), new[]
         {
@@ -399,7 +405,8 @@ public sealed class NativeIntegrationTests
             var serviceProcessor = new VideoProcessor(tools, failStreaming ? new FailingPipelineRunner(runner) : runner, TimeProvider.System, NullLogger<VideoProcessor>.Instance);
             var serviceVerifier = new MediaVerifier(serviceProbe, serviceProcessor, tools, serviceRunner);
             var dependencies = new DependencyService(new ReadyDetector(tools), null!, null!, tools, NullLogger<DependencyService>.Instance);
-            var service = new ConversionService(dependencies, files, factory, serviceProcessor, serviceVerifier, new OutputPublisher(NullLogger<OutputPublisher>.Instance), archiveStore, NullLogger<ConversionService>.Instance);
+            var cache = new AnalysisCache(new StorageOptions(workspace.DirectoryPath), NullLogger<AnalysisCache>.Instance);
+            var service = new ConversionService(dependencies, files, factory, serviceProcessor, serviceVerifier, new OutputPublisher(NullLogger<OutputPublisher>.Instance), archiveStore, NullLogger<ConversionService>.Instance, cache);
             var sourceMedia = media with
             {
                 Source = files.Identify(serviceInput)
@@ -412,6 +419,7 @@ public sealed class NativeIntegrationTests
             Assert.IsTrue(File.Exists(serviceInput));
             Assert.IsTrue(File.Exists(serviceArchive));
             Assert.IsTrue(File.Exists(serviceOutput));
+            Assert.AreEqual(manifest.BaseLayerSha256, await cache.ReadBaseLayerHashAsync(files.Identify(serviceOutput), default));
             Assert.IsFalse(File.Exists(serviceInput + ".bak.dovi_convert"));
             if (safe)
             {

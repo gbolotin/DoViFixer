@@ -46,7 +46,7 @@ public sealed class UserDialogs(string logDirectory) : IUserDialogs
         return dialog.ShowDialog() == true ? dialog.FolderName : null;
     }
 
-    public bool Review(string title, string content, string approveLabel, string? requiredText = null)
+    public bool Review(string title, string content, string approveLabel, bool confirmDeletion = false)
     {
         var window = new Window
         {
@@ -67,16 +67,6 @@ public sealed class UserDialogs(string logDirectory) : IUserDialogs
             Margin = new Thickness(0, 16, 0, 0)
         };
         DockPanel.SetDock(footer, Dock.Bottom);
-        var input = new TextBox();
-        if (requiredText is not null)
-        {
-            footer.Children.Add(new TextBlock
-            {
-                Text = "Type " + requiredText + " to confirm deletion.", Margin = new Thickness(0, 0, 0, 8)
-            });
-            footer.Children.Add(input);
-        }
-
         var buttons = new StackPanel
         {
             Orientation = Orientation.Horizontal,
@@ -89,11 +79,16 @@ public sealed class UserDialogs(string logDirectory) : IUserDialogs
         };
         var approve = new Button
         {
-            Content = approveLabel,
-            IsEnabled = requiredText is null
+            Content = approveLabel
         };
-        input.TextChanged += (_, _) => approve.IsEnabled = input.Text == requiredText;
-        approve.Click += (_, _) => window.DialogResult = true;
+        approve.Click += (_, _) =>
+        {
+            if (confirmDeletion && MessageBox.Show(window, "Are you sure you want to permanently delete the displayed backup files?", "Confirm deletion", MessageBoxButton.YesNo, MessageBoxImage.Warning, MessageBoxResult.No) != MessageBoxResult.Yes)
+            {
+                return;
+            }
+            window.DialogResult = true;
+        };
         buttons.Children.Add(cancel);
         buttons.Children.Add(approve);
         footer.Children.Add(buttons);

@@ -7,6 +7,7 @@ using DoViFixer.Application.Abstractions;
 using DoViFixer.Application.Conversion;
 using DoViFixer.Application.Operations;
 using DoViFixer.Infrastructure.Archives;
+using DoViFixer.Infrastructure.Configuration;
 using DoViFixer.Infrastructure.Dependencies;
 using DoViFixer.Infrastructure.FileSystem;
 using DoViFixer.Infrastructure.TemporaryStorage;
@@ -59,7 +60,8 @@ public sealed class RpuCoverageTests
         string output = workspace.File("output.mkv");
         var verifier = new MediaVerifier(probe, processor, tools, runner);
         var dependencies = new DependencyService(new ReadyDetector(tools), null!, null!, tools, NullLogger<DependencyService>.Instance);
-        var service = new ConversionService(dependencies, files, factory, processor, verifier, new OutputPublisher(NullLogger<OutputPublisher>.Instance), new BackupArchiveStore(), NullLogger<ConversionService>.Instance);
+        var cache = new AnalysisCache(new StorageOptions(workspace.DirectoryPath), NullLogger<AnalysisCache>.Instance);
+        var service = new ConversionService(dependencies, files, factory, processor, verifier, new OutputPublisher(NullLogger<OutputPublisher>.Instance), new BackupArchiveStore(), NullLogger<ConversionService>.Instance, cache);
         var result = await service.ExecuteAsync(new(Guid.NewGuid(), MediaClassifier.Classify(media, evidence), ConversionTarget.Profile81, output, null, workspace.DirectoryPath, ConversionPolicy.RequiredScratchBytes(media.Source.Length), "explicit tail fixture test", Safe: safe), null, default);
         Assert.AreEqual(OperationStatus.Completed, result.Status, result.Message);
         Assert.AreEqual(media.Source, files.Identify(input));

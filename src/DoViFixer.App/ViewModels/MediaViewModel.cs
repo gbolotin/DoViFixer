@@ -10,6 +10,8 @@ using DoViFixer.Application.Conversion;
 using DoViFixer.Application.Inspection;
 using DoViFixer.Application.Operations;
 using DoViFixer.Application.Settings;
+using DoViFixer.Application.Restore;
+using DoViFixer.Application.Dependencies;
 using DoViFixer.Domain.Analysis;
 using DoViFixer.Domain.Conversion;
 using Microsoft.Extensions.Logging;
@@ -24,6 +26,7 @@ public sealed class MediaViewModel : OperationViewModel, INavigationPage, IIniti
     private readonly IFileDiscovery discovery;
     private readonly InspectionService inspection;
     private readonly ConversionService conversion;
+    private readonly RestoreService restore;
     private readonly ControlledBatchService batch;
     private readonly SettingsService settings;
     private readonly DependencySetup dependencies;
@@ -39,11 +42,12 @@ public sealed class MediaViewModel : OperationViewModel, INavigationPage, IIniti
     private string previewStatus = "";
 
     private static string Summary(BatchResult result) => string.Join(" · ", result.Items.GroupBy(r => r.Status).Select(g => $"{g.Count()} {g.Key}"));
-    public MediaViewModel(IFileDiscovery discovery, InspectionService inspection, ConversionService conversion, ControlledBatchService batch, SettingsService settings, DependencySetup dependencies, IUserDialogs dialogs, ILogger<MediaViewModel> logger, IMediaPreview mediaPreview)
+    public MediaViewModel(IFileDiscovery discovery, InspectionService inspection, ConversionService conversion, ControlledBatchService batch, SettingsService settings, DependencySetup dependencies, IUserDialogs dialogs, ILogger<MediaViewModel> logger, IMediaPreview mediaPreview, RestoreService restore)
     {
         this.discovery = discovery;
         this.inspection = inspection;
         this.conversion = conversion;
+        this.restore = restore;
         this.batch = batch;
         this.settings = settings;
         this.dependencies = dependencies;
@@ -65,6 +69,7 @@ public sealed class MediaViewModel : OperationViewModel, INavigationPage, IIniti
         DeepInspectCommand = new(() => AnalyzeAsync(AnalysisMethod.DeepInspection), CanOperate);
         ConvertDv81Command = new(() => ConvertBatchAsync(ConversionTarget.Profile81), CanOperate);
         ConvertRowDv81Command = new(row => ConvertBatchAsync(ConversionTarget.Profile81, [row]), row => IsIdle && Files.Contains(row) && row.IsProfile7);
+        RestoreRowCommand = new(RestoreRowAsync, row => IsIdle && Files.Contains(row) && row.CanRestore);
         ConvertHdrCommand = new(() => ConvertBatchAsync(ConversionTarget.Hdr10), CanOperate);
 
         SkipCommand = new RelayCommand<MediaRow>(Skip);
@@ -312,6 +317,7 @@ public sealed class MediaViewModel : OperationViewModel, INavigationPage, IIniti
     public AsyncCommand DeepInspectCommand { get; }
     public AsyncCommand ConvertDv81Command { get; }
     public AsyncCommand<MediaRow> ConvertRowDv81Command { get; }
+    public AsyncCommand<MediaRow> RestoreRowCommand { get; }
     public AsyncCommand ConvertHdrCommand { get; }
     public RelayCommand<MediaRow> SkipCommand { get; }
     public RelayCommand<MediaRow> CancelFileCommand { get; }
@@ -444,6 +450,7 @@ public sealed class MediaViewModel : OperationViewModel, INavigationPage, IIniti
         DeepInspectCommand?.RaiseCanExecuteChanged();
         ConvertDv81Command?.RaiseCanExecuteChanged();
         ConvertRowDv81Command?.RaiseCanExecuteChanged();
+        RestoreRowCommand?.RaiseCanExecuteChanged();
         ConvertHdrCommand?.RaiseCanExecuteChanged();
     }
 
@@ -502,6 +509,11 @@ public sealed class MediaViewModel : OperationViewModel, INavigationPage, IIniti
         if (e.PropertyName == nameof(MediaRow.IsProfile7))
         {
             ConvertRowDv81Command.RaiseCanExecuteChanged();
+        }
+
+        if (e.PropertyName == nameof(MediaRow.CanRestore))
+        {
+            RestoreRowCommand.RaiseCanExecuteChanged();
         }
 
         if (e.PropertyName is nameof(MediaRow.IsActive) or nameof(MediaRow.IsCancellationRequested))
@@ -621,9 +633,11 @@ public sealed class MediaViewModel : OperationViewModel, INavigationPage, IIniti
         var userSettings = await settings.ReadAsync(token);
         bool autoSelect = userSettings.AutoSelectAfterScan;
         bool? toolsReady = null;
+        var pairedArchives = new HashSet<string>(Files.Except(rows).Where(row => row.CanRestore).Select(row => row.RestoreArchive!), StringComparer.OrdinalIgnoreCase);
         foreach (var row in rows)
         {
             row.LastAnalysisMethod = method;
+            row.RestoreArchive = null;
         }
 
         BeginBatch(rows, method == AnalysisMethod.SampledRpu ? "Scan" : method == AnalysisMethod.DeepInspection ? "Deep inspection" : "Inspection");
@@ -649,6 +663,7 @@ public sealed class MediaViewModel : OperationViewModel, INavigationPage, IIniti
                         row.Analysis = await Task.Run(() => inspection.InspectAsync(row.Path, method, null, itemToken, jobProgress), itemToken);
                     }
 
+                    await RefreshRestoreArchiveAsync(row, pairedArchives, jobProgress, itemToken);
                     return new OperationItemResult(row.Path, row.Analysis.Verdict == AnalysisVerdict.AnalysisFailed ? OperationStatus.Failed : OperationStatus.Completed, null, row.Analysis.Reason);
                 }
                 finally
@@ -690,6 +705,109 @@ public sealed class MediaViewModel : OperationViewModel, INavigationPage, IIniti
             EndBatch();
         }
     }
+
+    private async Task RefreshRestoreArchiveAsync(MediaRow row, HashSet<string> pairedArchives, IProgress<OperationProgress> progress, CancellationToken token)
+    {
+        row.RestoreArchive = null;
+        if (row.Analysis?.Media.Profile != Domain.Media.DolbyVisionProfile.Profile81)
+        {
+            return;
+        }
+
+        try
+        {
+            try
+            {
+                row.RestoreArchive = await Task.Run(() => restore.FindArchiveAsync(row.Analysis.Media, pairedArchives, progress, token), token);
+            }
+            catch (DependencyNotReadyException)
+            {
+                if (!await dependencies.EnsureAsync(progress, token))
+                {
+                    row.Notice = "Archive matching needs media tools. Configure tools in Settings, then rescan.";
+                    return;
+                }
+                row.RestoreArchive = await Task.Run(() => restore.FindArchiveAsync(row.Analysis.Media, pairedArchives, progress, token), token);
+            }
+            if (row.RestoreArchive is { } archive)
+            {
+                pairedArchives.Add(archive);
+            }
+        }
+        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
+        {
+            logger.LogDebug(ex, "Restore archive unavailable for {Input}", row.Path);
+        }
+    }
+
+    private Task RestoreRowAsync(MediaRow row) => RunAsync(async (token, progress) =>
+    {
+        if (row.RestoreArchive is not { } archive)
+        {
+            SetStatus(ViewStatus.Error, "The matching .dovi archive is no longer available. Rescan after restoring it.");
+            return;
+        }
+
+        if (!await dependencies.EnsureAsync(progress, token))
+        {
+            SetStatus(ViewStatus.ToolsUnavailable);
+            return;
+        }
+
+        RestorePlan plan;
+        try
+        {
+            plan = await Task.Run(() => restore.PlanAsync(row.Path, archive, null, null, false, token), token);
+        }
+        catch (FileNotFoundException)
+        {
+            row.RestoreArchive = null;
+            throw;
+        }
+        string review = $"Base file: {plan.Media.Source.Path}\nArchive: {plan.Archive.Path}\nOutput: {plan.Output}\nScratch: {plan.ScratchBytes / 1073741824d:0.0} GiB\nVerified source pairing required.\nOriginal retained.";
+        if (!dialogs.Review("Review restoration", review, "Approve and start"))
+        {
+            SetStatus(ViewStatus.RestoreNotApproved);
+            return;
+        }
+
+        OperationLog.Audit(logger, "ApproveRestore", review, "ApprovedByDialog", plan.Id);
+        row.ClearPlan();
+        row.AnalysisError = null;
+        row.Notice = "";
+        row.LastAnalysisMethod = null;
+        BeginBatch([row], "Restoration");
+        row.CurrentOperation = "Restoration";
+        try
+        {
+            var result = await batch.ExecuteAsync(new[] { row }, item => item.Path, async (item, itemToken) =>
+            {
+                var jobProgress = Activate(item, "Restoring Profile 7");
+                return await Task.Run(() => restore.ExecuteAsync(plan, jobProgress, itemToken), itemToken);
+            }, control!, new InlineProgress<OperationItemResult>(itemResult =>
+            {
+                BatchProgress.Complete(itemResult.Status);
+                row.Result = itemResult;
+                if (itemResult.Status == OperationStatus.Completed)
+                {
+                    row.SetRestored(itemResult);
+                }
+                else if (itemResult.Status == OperationStatus.Cancelled)
+                {
+                    row.SetCancelled();
+                }
+                else
+                {
+                    row.SetFailed(itemResult.Message);
+                }
+            }), token);
+            SetStatus(ViewStatus.Result, $"Restoration: {Summary(result)}");
+        }
+        finally
+        {
+            EndBatch();
+        }
+    });
 
     private Task ConvertBatchAsync(ConversionTarget target, MediaRow[]? rows = null) => RunAsync(async (token, progress) =>
     {

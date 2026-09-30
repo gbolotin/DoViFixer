@@ -21,6 +21,48 @@ public sealed class AnalysisCacheTests
     }
 
     [TestMethod]
+    public async Task BaseLayerHashPersistsInvalidatesAndIsIncludedInCacheCleanup()
+    {
+        var source = Analysis().Media.Source;
+        string hash = new string('A', 64);
+        await Cache().WriteBaseLayerHashAsync(source, hash, default);
+        var cache = Cache();
+        Assert.AreEqual(hash, await cache.ReadBaseLayerHashAsync(source, default));
+        Assert.IsNull(await cache.ReadBaseLayerHashAsync(source with { Length = source.Length + 1 }, default));
+        Assert.IsNull(await cache.ReadBaseLayerHashAsync(source with { LastWriteUtc = source.LastWriteUtc.AddSeconds(1) }, default));
+        Assert.IsNull(await cache.ReadBaseLayerHashAsync(source with { Path = source.Path + ".renamed" }, default));
+        Assert.IsTrue(await cache.GetSizeAsync(default) > 0);
+        Assert.AreEqual(1, await cache.ClearAsync(default));
+        Assert.IsNull(await cache.ReadBaseLayerHashAsync(source, default));
+        Assert.AreEqual(0L, await cache.GetSizeAsync(default));
+    }
+
+    [TestMethod]
+    public async Task InvalidHashCacheEntriesAreIgnoredAndUnwritableCacheIsHarmless()
+    {
+        var source = Analysis().Media.Source;
+        string hash = new string('A', 64);
+        var cache = Cache();
+        await cache.WriteBaseLayerHashAsync(source, hash, default);
+        string path = Directory.GetFiles(directory, "*.json", SearchOption.AllDirectories).Single();
+        string json = await File.ReadAllTextAsync(path);
+        foreach (string invalid in new[] { "{", "null", "{}", json.Replace(hash, "bad"), json.Replace("\"Version\":1", "\"Version\":0"), json.Replace("\"Source\":{", "\"Source\":null,\"Unused\":{") })
+        {
+            await File.WriteAllTextAsync(path, invalid);
+            Assert.IsNull(await cache.ReadBaseLayerHashAsync(source, default));
+        }
+        using var cancelled = new CancellationTokenSource();
+        cancelled.Cancel();
+        await Assert.ThrowsExactlyAsync<OperationCanceledException>(() => cache.WriteBaseLayerHashAsync(source, hash, cancelled.Token));
+        await Assert.ThrowsExactlyAsync<OperationCanceledException>(() => cache.ReadBaseLayerHashAsync(source, cancelled.Token));
+        string blocked = Path.Combine(directory, "blocked");
+        await File.WriteAllTextAsync(blocked, "not a directory");
+        var unavailable = new AnalysisCache(new StorageOptions(blocked), NullLogger<AnalysisCache>.Instance);
+        await unavailable.WriteBaseLayerHashAsync(source, hash, default);
+        Assert.IsNull(await unavailable.ReadBaseLayerHashAsync(source, default));
+    }
+
+    [TestMethod]
     public async Task VerifiedTailAndUnclassifiedFelPersistWithTheirEvidence()
     {
         var original = Analysis();

@@ -121,7 +121,7 @@ public sealed class ConversionPlanner(IFileDiscovery discovery, IFileOperations 
     }
 }
 
-public sealed class ConversionService(DependencyService dependencies, IFileOperations files, ITemporaryWorkspaceFactory workspaces, IVideoProcessor processor, IMediaVerifier verifier, IOutputPublisher publisher, IBackupArchiveStore archives, ILogger<ConversionService> logger, InspectionService? inspection = null)
+public sealed class ConversionService(DependencyService dependencies, IFileOperations files, ITemporaryWorkspaceFactory workspaces, IVideoProcessor processor, IMediaVerifier verifier, IOutputPublisher publisher, IBackupArchiveStore archives, ILogger<ConversionService> logger, IAnalysisCache cache, InspectionService? inspection = null)
 {
     public async Task<CandidatePreparationResult> PrepareCandidateAsync(CandidateConversionRequest request, IProgress<OperationProgress>? progress, CancellationToken cancellationToken)
     {
@@ -286,6 +286,7 @@ public sealed class ConversionService(DependencyService dependencies, IFileOpera
         }
 
         string archiveNote = "";
+        string? baseLayerHash = null;
         bool published = false;
         try
         {
@@ -296,6 +297,7 @@ public sealed class ConversionService(DependencyService dependencies, IFileOpera
                     await using var stagedArchive = publisher.Stage(approvedPlan.Archive);
                     progress?.Report(new(approvedPlan.Id, "Backing up enhancement layer", media.Source.Path));
                     var manifest = await processor.ExtractBackupAsync(media, workspace, cancellationToken);
+                    baseLayerHash = manifest.BaseLayerSha256;
                     manifest = manifest with
                     {
                         SourceName = Path.GetFileName(approvedPlan.Analysis.Media.Source.Path)
@@ -329,9 +331,14 @@ public sealed class ConversionService(DependencyService dependencies, IFileOpera
                     }
 
                     progress?.Report(new(approvedPlan.Id, "Verifying", media.Source.Path, 100));
+                    var outputIdentity = baseLayerHash is null ? null : files.Identify(staged.Path) with { Path = Path.GetFullPath(approvedPlan.Output) };
                     await staged.PublishAsync(cancellationToken);
                     published = true;
                     OperationLog.Audit(logger, "PublishConversion", approvedPlan.Output, "Completed", approvedPlan.Id);
+                    if (outputIdentity is not null)
+                    {
+                        await cache.WriteBaseLayerHashAsync(outputIdentity, baseLayerHash!, cancellationToken);
+                    }
                     break;
                 }
             }

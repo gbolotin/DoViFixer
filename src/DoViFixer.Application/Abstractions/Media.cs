@@ -21,6 +21,7 @@ public interface IVideoProcessor
 {
     Task ConvertAsync(MediaInfo media, ConversionTarget target, ITemporaryWorkspace workspace, string stagedOutput, IProgress<OperationProgress>? progress, Guid operationId, CancellationToken cancellationToken, bool safe = false);
     Task<ArchiveManifest> ExtractBackupAsync(MediaInfo media, ITemporaryWorkspace workspace, CancellationToken cancellationToken);
+    Task<string> GetBaseLayerSha256Async(MediaInfo media, ITemporaryWorkspace workspace, CancellationToken cancellationToken);
     Task RestoreAsync(MediaInfo media, ArchiveManifest? manifest, ITemporaryWorkspace workspace, string stagedOutput, CancellationToken cancellationToken);
 }
 
@@ -32,6 +33,7 @@ public interface IMediaVerifier
 public sealed record ArchiveManifest(int FormatVersion, string SourceName, string BaseLayerSha256, string EnhancementLayerSha256, long EnhancementLayerLength, long? FrameCount, DateTimeOffset CreatedAt);
 public interface IBackupArchiveStore
 {
+    Task<ArchiveManifest?> ReadManifestAsync(string archive, CancellationToken cancellationToken);
     Task WriteAsync(string stagedArchive, ArchiveManifest manifest, ITemporaryWorkspace workspace, CancellationToken cancellationToken);
     Task<ArchiveManifest?> ReadAsync(string archive, ITemporaryWorkspace workspace, bool allowLegacy, CancellationToken cancellationToken);
 }
