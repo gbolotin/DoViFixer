@@ -4,15 +4,17 @@ using DoViFixer.Application.Operations;
 using DoViFixer.Domain.Conversion;
 using DoViFixer.Domain.Media;
 using Microsoft.Extensions.Logging;
-using System.Text.Json;
 
 namespace DoViFixer.Application.Restore;
 public sealed record RestorePlan(Guid Id, MediaInfo Media, FileIdentity Archive, string Output, string? TemporaryDirectory, long ScratchBytes, bool AllowLegacy);
 public sealed class RestoreService(DependencyService dependencies, IMediaProbe probe, IFileOperations files, ITemporaryWorkspaceFactory workspaces, IVideoProcessor processor, IBackupArchiveStore archives, IMediaVerifier verifier, IOutputPublisher publisher, ISettingsStore settings, ILogger<RestoreService> logger, IFileDiscovery discovery, IAnalysisCache cache)
 {
+    // Starts archive pairing for one sequential batch. Archives claimed by files outside the batch stay excluded.
+    public RestoreArchivePairing BeginPairing(IEnumerable<string> claimedArchives) => new(this, claimedArchives);
+
     // Pairing only reads cached hashes and archive manifests; it never extracts video. Without a cached
     // base-layer hash only a same-name archive is offered, and restoration verifies its SHA-256 pairing.
-    public async Task<string?> FindArchiveAsync(MediaInfo media, IReadOnlySet<string> excludedArchives, CancellationToken cancellationToken)
+    internal async Task<string?> FindArchiveAsync(MediaInfo media, IReadOnlySet<string> excludedArchives, CancellationToken cancellationToken)
     {
         cancellationToken.ThrowIfCancellationRequested();
         string input = media.Source.Path;
@@ -38,7 +40,7 @@ public sealed class RestoreService(DependencyService dependencies, IMediaProbe p
             {
                 manifest = await archives.ReadManifestAsync(candidate, cancellationToken);
             }
-            catch (Exception ex) when (ex is IOException or InvalidDataException or UnauthorizedAccessException or JsonException)
+            catch (Exception ex) when (ex is IOException or InvalidDataException or UnauthorizedAccessException)
             {
                 logger.LogDebug(ex, "Skipping unreadable restore archive {Archive}", candidate);
                 continue;
@@ -100,5 +102,35 @@ public sealed class RestoreService(DependencyService dependencies, IMediaProbe p
         await staged.PublishAsync(cancellationToken);
         OperationLog.Audit(logger, "PublishRestore", approvedPlan.Output, "Completed", approvedPlan.Id);
         return new(approvedPlan.Media.Source.Path, OperationStatus.Completed, approvedPlan.Output, manifest is null ? "Restored media verified. Legacy archive source identity remains unverified." : "Pairing, payload and restored media verified. Original retained.");
+    }
+}
+
+// Pairs Profile 8.1 files with restore archives so that each archive belongs to at most one file.
+// Not thread-safe: use one instance per sequential batch.
+public sealed class RestoreArchivePairing
+{
+    private readonly RestoreService restore;
+    private readonly HashSet<string> claimed;
+
+    internal RestoreArchivePairing(RestoreService restore, IEnumerable<string> claimedArchives)
+    {
+        this.restore = restore;
+        claimed = new(claimedArchives, StringComparer.OrdinalIgnoreCase);
+    }
+
+    public async Task<string?> PairAsync(MediaInfo media, CancellationToken cancellationToken)
+    {
+        if (media.Profile != DolbyVisionProfile.Profile81)
+        {
+            return null;
+        }
+
+        string? archive = await restore.FindArchiveAsync(media, claimed, cancellationToken);
+        if (archive is not null)
+        {
+            claimed.Add(archive);
+        }
+
+        return archive;
     }
 }

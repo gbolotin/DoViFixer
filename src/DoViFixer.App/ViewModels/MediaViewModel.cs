@@ -632,7 +632,7 @@ public sealed class MediaViewModel : OperationViewModel, INavigationPage, IIniti
         var userSettings = await settings.ReadAsync(token);
         bool autoSelect = userSettings.AutoSelectAfterScan;
         bool? toolsReady = null;
-        var pairedArchives = new HashSet<string>(Files.Except(rows).Where(row => row.CanRestore).Select(row => row.RestoreArchive!), StringComparer.OrdinalIgnoreCase);
+        var pairing = restore.BeginPairing(Files.Except(rows).Where(row => row.CanRestore).Select(row => row.RestoreArchive!));
         foreach (var row in rows)
         {
             row.LastAnalysisMethod = method;
@@ -662,7 +662,7 @@ public sealed class MediaViewModel : OperationViewModel, INavigationPage, IIniti
                         row.Analysis = await Task.Run(() => inspection.InspectAsync(row.Path, method, null, itemToken, jobProgress), itemToken);
                     }
 
-                    await RefreshRestoreArchiveAsync(row, pairedArchives, itemToken);
+                    await RefreshRestoreArchiveAsync(row, pairing, itemToken);
                     return new OperationItemResult(row.Path, row.Analysis.Verdict == AnalysisVerdict.AnalysisFailed ? OperationStatus.Failed : OperationStatus.Completed, null, row.Analysis.Reason);
                 }
                 finally
@@ -705,21 +705,17 @@ public sealed class MediaViewModel : OperationViewModel, INavigationPage, IIniti
         }
     }
 
-    private async Task RefreshRestoreArchiveAsync(MediaRow row, HashSet<string> pairedArchives, CancellationToken token)
+    private async Task RefreshRestoreArchiveAsync(MediaRow row, RestoreArchivePairing pairing, CancellationToken token)
     {
         row.RestoreArchive = null;
-        if (row.Analysis?.Media.Profile != Domain.Media.DolbyVisionProfile.Profile81)
+        if (row.Analysis is not { } analysis)
         {
             return;
         }
 
         try
         {
-            row.RestoreArchive = await Task.Run(() => restore.FindArchiveAsync(row.Analysis.Media, pairedArchives, token), token);
-            if (row.RestoreArchive is { } archive)
-            {
-                pairedArchives.Add(archive);
-            }
+            row.RestoreArchive = await Task.Run(() => pairing.PairAsync(analysis.Media, token), token);
         }
         catch (Exception ex) when (ex is not OperationCanceledException)
         {
