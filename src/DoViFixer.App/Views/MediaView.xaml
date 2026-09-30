@@ -58,6 +58,7 @@
     <DataTemplate x:Key="MediaListTemplate" DataType="{x:Type viewModels:MediaViewModel}">
         <ListView ItemsSource="{Binding Files}"
                   SelectedItem="{Binding Focused}"
+                  Grid.IsSharedSizeScope="True"
                   p:GridViewSizing.LastColumnMinimumWidth="255"
                   p:GridViewSort.Sort="{Binding FileSort}">
             <ListView.View>
@@ -165,7 +166,8 @@
                                 <Grid VerticalAlignment="Center">
                                     <Grid.ColumnDefinitions>
                                         <ColumnDefinition Width="*" />
-                                        <ColumnDefinition Width="Auto" />
+                                        <ColumnDefinition Width="Auto" SharedSizeGroup="MediaRowPrimaryActions" />
+                                        <ColumnDefinition Width="Auto" SharedSizeGroup="MediaRowHoverActions" />
                                     </Grid.ColumnDefinitions>
                                     <StackPanel VerticalAlignment="Center">
                                         <StackPanel Orientation="Horizontal" VerticalAlignment="Center">
@@ -215,15 +217,44 @@
                                             </StackPanel>
                                         </StackPanel>
                                     </StackPanel>
-                                    <StackPanel Grid.Column="1" Orientation="Horizontal">
-                                        <Button Content="Cancel"
-                                                Tag="&#xE711;"
-                                                ContentTemplate="{StaticResource IconButtonContent}"
-                                                Padding="7,6"
-                                                Margin="4"
-                                                Visibility="{Binding IsActive, Converter={StaticResource Visible}}"
-                                                Command="{Binding DataContext.CancelFileCommand, RelativeSource={RelativeSource AncestorType=ListView}}"
-                                                CommandParameter="{Binding}" />
+                                    <StackPanel Grid.Column="1" Orientation="Horizontal" HorizontalAlignment="Left">
+                                        <!-- Cancel (active) and Skip (queued) share one cell so they line up at the same width across rows. -->
+                                        <Grid>
+                                            <Grid.ColumnDefinitions>
+                                                <ColumnDefinition Width="Auto" SharedSizeGroup="MediaRowQueueAction" />
+                                            </Grid.ColumnDefinitions>
+                                            <Grid.Style>
+                                                <Style TargetType="Grid">
+                                                    <Setter Property="Visibility" Value="Collapsed" />
+                                                    <Style.Triggers>
+                                                        <DataTrigger Binding="{Binding IsActive}" Value="True">
+                                                            <Setter Property="Visibility" Value="Visible" />
+                                                        </DataTrigger>
+                                                        <DataTrigger Binding="{Binding IsPending}" Value="True">
+                                                            <Setter Property="Visibility" Value="Visible" />
+                                                        </DataTrigger>
+                                                    </Style.Triggers>
+                                                </Style>
+                                            </Grid.Style>
+                                            <Button Content="Cancel"
+                                                    Tag="&#xE711;"
+                                                    ContentTemplate="{StaticResource IconButtonContent}"
+                                                    Padding="7,6"
+                                                    Margin="4"
+                                                    HorizontalAlignment="Stretch"
+                                                    Visibility="{Binding IsActive, Converter={StaticResource Visible}}"
+                                                    Command="{Binding DataContext.CancelFileCommand, RelativeSource={RelativeSource AncestorType=ListView}}"
+                                                    CommandParameter="{Binding}" />
+                                            <Button Content="Skip"
+                                                    Tag="&#xE893;"
+                                                    ContentTemplate="{StaticResource IconButtonContent}"
+                                                    Padding="7,6"
+                                                    Margin="4"
+                                                    HorizontalAlignment="Stretch"
+                                                    Visibility="{Binding IsPending, Converter={StaticResource Visible}}"
+                                                    Command="{Binding DataContext.SkipCommand, RelativeSource={RelativeSource AncestorType=ListView}}"
+                                                    CommandParameter="{Binding}" />
+                                        </Grid>
                                         <Button Content="Retry"
                                                 Tag="&#xE72C;"
                                                 ContentTemplate="{StaticResource IconButtonContent}"
@@ -248,14 +279,8 @@
                                                 Visibility="{Binding CanOpenResult, Converter={StaticResource Visible}}"
                                                 Command="{Binding DataContext.OpenRowOutputCommand, RelativeSource={RelativeSource AncestorType=ListView}}"
                                                 CommandParameter="{Binding}" />
-                                        <Button Content="Skip"
-                                                Tag="&#xE893;"
-                                                ContentTemplate="{StaticResource IconButtonContent}"
-                                                Padding="7,6"
-                                                Margin="4"
-                                                Visibility="{Binding IsPending, Converter={StaticResource Visible}}"
-                                                Command="{Binding DataContext.SkipCommand, RelativeSource={RelativeSource AncestorType=ListView}}"
-                                                CommandParameter="{Binding}" />
+                                    </StackPanel>
+                                    <StackPanel Grid.Column="2" Orientation="Horizontal">
                                         <Button Padding="7,6"
                                                 Margin="4"
                                                 VerticalAlignment="Center"
@@ -275,6 +300,9 @@
                                                         <DataTrigger Binding="{Binding CanRestore}" Value="False">
                                                             <Setter Property="Visibility" Value="Collapsed" />
                                                         </DataTrigger>
+                                                        <Trigger Property="IsEnabled" Value="False">
+                                                            <Setter Property="Visibility" Value="Collapsed" />
+                                                        </Trigger>
                                                     </Style.Triggers>
                                                 </Style>
                                             </Button.Style>
@@ -298,6 +326,9 @@
                                                         <DataTrigger Binding="{Binding IsProfile7}" Value="False">
                                                             <Setter Property="Visibility" Value="Collapsed" />
                                                         </DataTrigger>
+                                                        <Trigger Property="IsEnabled" Value="False">
+                                                            <Setter Property="Visibility" Value="Collapsed" />
+                                                        </Trigger>
                                                     </Style.Triggers>
                                                 </Style>
                                             </Button.Style>
@@ -309,7 +340,7 @@
                                                 AutomationProperties.Name="Remove from list"
                                                 Command="{Binding DataContext.RemoveFileCommand, RelativeSource={RelativeSource AncestorType=ListView}}"
                                                 CommandParameter="{Binding}"
-                                                Content="&#xE74D;" 
+                                                Content="&#xE74D;"
                                                 FontFamily="{StaticResource SymbolThemeFontFamily}">
                                             <Button.Style>
                                                 <Style TargetType="Button" BasedOn="{StaticResource TransparentButton}">
@@ -318,6 +349,9 @@
                                                         <DataTrigger Binding="{Binding IsMouseOver, RelativeSource={RelativeSource AncestorType=ListViewItem}}" Value="True">
                                                             <Setter Property="Visibility" Value="Visible" />
                                                         </DataTrigger>
+                                                        <Trigger Property="IsEnabled" Value="False">
+                                                            <Setter Property="Visibility" Value="Collapsed" />
+                                                        </Trigger>
                                                     </Style.Triggers>
                                                 </Style>
                                             </Button.Style>
@@ -454,9 +488,15 @@
     </DataTemplate>
 
     <DataTemplate x:Key="MediaCurrentJobProgressTemplate" DataType="{x:Type viewModels:MediaViewModel}">
-        <DockPanel>
-            <Button DockPanel.Dock="Right"
+        <Grid>
+            <Grid.ColumnDefinitions>
+                <ColumnDefinition Width="*" />
+                <ColumnDefinition Width="Auto" SharedSizeGroup="ProgressCancelAction" />
+                <ColumnDefinition Width="Auto" SharedSizeGroup="ProgressPauseAction" />
+            </Grid.ColumnDefinitions>
+            <Button Grid.Column="1"
                     VerticalAlignment="Center"
+                    HorizontalAlignment="Stretch"
                     Content="Cancel job"
                     Tag="&#xE711;"
                     ContentTemplate="{StaticResource IconButtonContent}"
@@ -464,7 +504,7 @@
                     CommandParameter="{Binding BatchProgress.CurrentJob}"
                     Margin="8,0,0,0" />
             <StackPanel>
-                <DockPanel Margin="0,8,0,8" TextBlock.FontSize="22">
+                <DockPanel Margin="0,8,0,8" TextBlock.FontSize="16">
                     <TextBlock Text="{Binding BatchProgress.CurrentJob.Progress.ProgressText}"
                                DockPanel.Dock="Right"
                                Foreground="{DynamicResource {x:Static SystemColors.AccentColorBrushKey}}"
@@ -483,27 +523,33 @@
                            Foreground="{DynamicResource TextFillColorSecondaryBrush}"
                            TextTrimming="CharacterEllipsis" />
             </StackPanel>
-        </DockPanel>
+        </Grid>
     </DataTemplate>
 
     <DataTemplate x:Key="MediaActiveProgressTemplate" DataType="{x:Type viewModels:MediaViewModel}">
-        <DockPanel>
-            <StackPanel DockPanel.Dock="Right"
-                        Orientation="Horizontal"
-                        VerticalAlignment="Center">
-                <Button Content="Cancel batch"
-                        Tag="&#xE711;"
-                        ContentTemplate="{StaticResource IconButtonContent}"
-                        Command="{Binding CancelCommand}"
-                        Margin="8,0,0,0" />
-                <Button Content="{Binding PauseBatchText}"
-                        Tag="{Binding PauseBatchIcon}"
-                        ContentTemplate="{StaticResource IconButtonContent}"
-                        Command="{Binding PauseBatchCommand}"
-                        Visibility="{Binding BatchProgress.IsRunning, Converter={StaticResource Visible}}"
-                        ToolTip="Pause before the next job starts, or resume the batch."
-                        Margin="8,0,0,0" />
-            </StackPanel>
+        <Grid>
+            <Grid.ColumnDefinitions>
+                <ColumnDefinition Width="*" />
+                <ColumnDefinition Width="Auto" SharedSizeGroup="ProgressCancelAction" />
+                <ColumnDefinition Width="Auto" SharedSizeGroup="ProgressPauseAction" />
+            </Grid.ColumnDefinitions>
+            <Button Grid.Column="1"
+                    VerticalAlignment="Center"
+                    HorizontalAlignment="Stretch"
+                    Content="Cancel batch"
+                    Tag="&#xE711;"
+                    ContentTemplate="{StaticResource IconButtonContent}"
+                    Command="{Binding CancelCommand}"
+                    Margin="8,0,0,0" />
+            <Button Grid.Column="2"
+                    VerticalAlignment="Center"
+                    Content="{Binding PauseBatchText}"
+                    Tag="{Binding PauseBatchIcon}"
+                    ContentTemplate="{StaticResource IconButtonContent}"
+                    Command="{Binding PauseBatchCommand}"
+                    Visibility="{Binding BatchProgress.IsRunning, Converter={StaticResource Visible}}"
+                    ToolTip="Pause before the next job starts, or resume the batch."
+                    Margin="8,0,0,0" />
             <StackPanel>
                 <DockPanel Margin="0,8,0,8" TextBlock.FontSize="16">
                     <TextBlock Text="{Binding ActiveProgressText}"
@@ -523,12 +569,12 @@
                            Foreground="{DynamicResource TextFillColorSecondaryBrush}"
                            ToolTip="{Binding ActiveProgressToolTip}" />
             </StackPanel>
-        </DockPanel>
+        </Grid>
     </DataTemplate>
 
     <DataTemplate x:Key="MediaProgressTemplate" DataType="{x:Type viewModels:MediaViewModel}">
         <Border Style="{StaticResource Card}">
-            <StackPanel>
+            <StackPanel Grid.IsSharedSizeScope="True">
                 <ContentControl Content="{Binding}" ContentTemplate="{StaticResource MediaActiveProgressTemplate}">
                     <ContentControl.Style>
                         <Style TargetType="ContentControl">
