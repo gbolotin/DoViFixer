@@ -239,7 +239,7 @@ public sealed class MediaViewModel : OperationViewModel, INavigationPage, IIniti
         {
             previewCompletion = Task.WhenAll(previewCompletion, LoadPreviewAsync(Focused));
         }
-        previewCompletion = Task.WhenAll(previewCompletion, GeneratePreviewsAsync([.. Files]));
+        previewCompletion = Task.WhenAll(previewCompletion, GeneratePreviewsAsync(InDisplayOrder(Files)));
     }
 
     private async Task GeneratePreviewsAsync(MediaRow[] rows)
@@ -315,6 +315,8 @@ public sealed class MediaViewModel : OperationViewModel, INavigationPage, IIniti
     public RelayCommand ToggleSelectAllCommand { get; }
     public RelayCommand ClearAllCommand { get; }
     public RelayCommand<MediaRow> RemoveFileCommand { get; }
+    /// <summary>Display order applied by the list's collection view; <see cref="Files"/> keeps the order files were added.</summary>
+    public ColumnSort<MediaRow> FileSort { get; } = new((column, direction) => new MediaRowComparer((MediaSortColumn)column, direction));
     public bool CanInspect => CanOperate();
     public AsyncCommand AddFilesCommand { get; }
     public AsyncCommand AddFolderCommand { get; }
@@ -499,7 +501,7 @@ public sealed class MediaViewModel : OperationViewModel, INavigationPage, IIniti
         RaisePropertyChanged(nameof(AllFilesSelected));
         if (added.Count > 0 && (await settings.ReadAsync(token)).AutomaticallyScanAddedFiles)
         {
-            await AnalyzeRowsAsync([.. added], AnalysisMethod.SampledRpu, token);
+            await AnalyzeRowsAsync(InDisplayOrder(added), AnalysisMethod.SampledRpu, token);
         }
     });
     private void OnRowPropertyChanged(object? sender, PropertyChangedEventArgs e)
@@ -627,12 +629,12 @@ public sealed class MediaViewModel : OperationViewModel, INavigationPage, IIniti
     public Task ScanAllAsync() => RunAsync(async (token, _) =>
     {
         StartBackgroundPreviews(refreshFocused: true);
-        await AnalyzeRowsAsync([.. Files], AnalysisMethod.SampledRpu, token);
+        await AnalyzeRowsAsync(InDisplayOrder(Files), AnalysisMethod.SampledRpu, token);
     });
 
     private Task AnalyzeAsync(AnalysisMethod method) => RunAsync(async (token, _) =>
     {
-        await AnalyzeRowsAsync([.. Files.Where(r => r.IsSelected)], method, token);
+        await AnalyzeRowsAsync(InDisplayOrder(Files.Where(r => r.IsSelected)), method, token);
     });
 
     private async Task AnalyzeRowsAsync(MediaRow[] rows, AnalysisMethod method, CancellationToken token)
@@ -856,7 +858,7 @@ public sealed class MediaViewModel : OperationViewModel, INavigationPage, IIniti
             return;
         }
 
-        rows ??= Files.Where(r => r.IsSelected).ToArray();
+        rows ??= InDisplayOrder(Files.Where(r => r.IsSelected));
         if (rows.Length == 0)
         {
             return;
@@ -1003,6 +1005,15 @@ public sealed class MediaViewModel : OperationViewModel, INavigationPage, IIniti
         RaisePropertyChanged(nameof(SelectionSummary));
         RaisePropertyChanged(nameof(AllFilesSelected));
         CommandsChanged();
+    }
+
+    /// <summary>Returns rows in the order the list shows them, so batches process files top to bottom.</summary>
+    private MediaRow[] InDisplayOrder(IEnumerable<MediaRow> rows)
+    {
+        // The view is not live-sorted; re-apply the sort so values changed since the
+        // last click (for example by a scan) put the screen and processing order in sync.
+        FileSort.Refresh();
+        return FileSort.Order(rows);
     }
 
     private void ToggleSelectAll()

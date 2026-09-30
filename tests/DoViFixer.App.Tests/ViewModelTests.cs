@@ -1,5 +1,7 @@
+using System.ComponentModel;
 using DoViFixer.App.ViewModels;
 using DoViFixer.App.Presentation.Application;
+using DoViFixer.App.Presentation.Common;
 using Microsoft.VisualStudio.TestTools.UnitTesting;
 using Microsoft.Extensions.DependencyInjection;
 
@@ -87,6 +89,96 @@ public sealed class ViewModelTests
         CollectionAssert.AreEqual(new[] { mixed[1], mixed[2] }, discovered.ToArray());
         CollectionAssert.AreEqual(new[] { mixed[1], @"C:\Media\Folder.with.dots\Nested.mkv" }, model.Files.Select(row => row.Path).ToArray());
         Assert.AreEqual(ViewStatus.Ready, model.Status);
+    }
+
+    [TestMethod]
+    public async Task SortingByColumnOrdersTheDisplayAndTogglesDirectionWithoutReorderingFiles()
+    {
+        using var runtime = new TestRuntime();
+        await runtime.UpdateAsync(settings => settings with { AutomaticallyScanAddedFiles = false }, default);
+        var model = runtime.Container.GetRequiredService<MediaViewModel>();
+        await model.AddAsync([@"C:\Media\Movie10.mkv", @"C:\Media\movie2.mkv", @"C:\Media\Movie1.mkv"]);
+        var added = model.Files.ToArray();
+        string[] Names() => [.. model.FileSort.Order(model.Files).Select(row => row.Name)];
+        Assert.IsNull(model.FileSort.Column);
+        Assert.IsNull(model.FileSort.Comparer);
+        CollectionAssert.AreEqual(new[] { "Movie10.mkv", "movie2.mkv", "Movie1.mkv" }, Names(), "Unsorted lists keep the order files were added.");
+
+        var changes = new List<string?>();
+        model.FileSort.PropertyChanged += (_, e) => changes.Add(e.PropertyName);
+        model.FileSort.SortBy(MediaSortColumn.Name);
+        CollectionAssert.Contains(changes, nameof(ColumnSort<MediaRow>.Comparer));
+        CollectionAssert.AreEqual(new[] { "Movie1.mkv", "movie2.mkv", "Movie10.mkv" }, Names(), "Names use case-insensitive natural order.");
+        CollectionAssert.AreEqual(added, model.Files.ToArray(), "Sorting changes only the displayed order.");
+        Assert.AreEqual(ListSortDirection.Ascending, model.FileSort.Direction);
+
+        model.FileSort.SortBy(MediaSortColumn.Name);
+        CollectionAssert.AreEqual(new[] { "Movie10.mkv", "movie2.mkv", "Movie1.mkv" }, Names());
+        Assert.AreEqual(ListSortDirection.Descending, model.FileSort.Direction);
+
+        await model.AddAsync([@"C:\Media\Movie3.mkv"]);
+        Assert.AreEqual("Movie3.mkv", model.Files[^1].Name, "New files are appended to the source collection.");
+        CollectionAssert.AreEqual(new[] { "Movie10.mkv", "Movie3.mkv", "movie2.mkv", "Movie1.mkv" }, Names());
+
+        model.Files.Single(row => row.Name == "Movie3.mkv").Status = "Converted";
+        model.Files.Single(row => row.Name == "Movie1.mkv").Status = "";
+        model.Files.Single(row => row.Name == "Movie10.mkv").Status = "Analysis failed";
+        model.FileSort.SortBy(MediaSortColumn.Status);
+        Assert.AreEqual(MediaSortColumn.Status, model.FileSort.Column);
+        Assert.AreEqual(ListSortDirection.Ascending, model.FileSort.Direction, "A new column starts ascending.");
+        CollectionAssert.AreEqual(new[] { "Movie10.mkv", "Movie3.mkv", "movie2.mkv", "Movie1.mkv" }, Names());
+        model.FileSort.SortBy(MediaSortColumn.Status);
+        CollectionAssert.AreEqual(new[] { "movie2.mkv", "Movie3.mkv", "Movie10.mkv", "Movie1.mkv" }, Names(), "Blank values stay last.");
+
+        model.Files.Single(row => row.Name == "movie2.mkv").AnalysisError = "Fixture failure.";
+        model.FileSort.SortBy(MediaSortColumn.Classification);
+        Assert.AreEqual("movie2.mkv", Names()[0]);
+        CollectionAssert.AreEqual(new[] { "Movie1.mkv", "Movie3.mkv", "Movie10.mkv" }, Names()[1..], "Ties fall back to the file name.");
+    }
+
+    [TestMethod]
+    public async Task BatchesProcessFilesInDisplayedOrder()
+    {
+        using var runtime = new TestRuntime();
+        await runtime.UpdateAsync(settings => settings with { AutomaticallyScanAddedFiles = false }, default);
+        var model = runtime.Container.GetRequiredService<MediaViewModel>();
+        await model.AddAsync([@"C:\Media\Movie10.mkv", @"C:\Media\movie2.mkv", @"C:\Media\Movie1.mkv"]);
+        var processed = new List<string>();
+        foreach (var row in model.Files)
+        {
+            row.PropertyChanged += (_, e) =>
+            {
+                if (e.PropertyName == nameof(MediaRow.IsActive) && row.IsActive)
+                {
+                    processed.Add(row.Name);
+                }
+            };
+        }
+
+        await model.ScanCommand.ExecuteAsync();
+        CollectionAssert.AreEqual(new[] { "Movie10.mkv", "movie2.mkv", "Movie1.mkv" }, processed, "Unsorted lists keep the order files were added.");
+
+        model.FileSort.SortBy(MediaSortColumn.Name);
+        processed.Clear();
+        await model.ScanCommand.ExecuteAsync();
+        CollectionAssert.AreEqual(new[] { "Movie1.mkv", "movie2.mkv", "Movie10.mkv" }, processed);
+
+        model.FileSort.SortBy(MediaSortColumn.Name);
+        foreach (var row in model.Files)
+        {
+            row.IsSelected = row.Name != "Movie10.mkv";
+        }
+        processed.Clear();
+        await model.InspectCommand.ExecuteAsync();
+        CollectionAssert.AreEqual(new[] { "movie2.mkv", "Movie1.mkv" }, processed, "Selected-file batches follow the sort too.");
+
+        model.FileSort.SortBy(MediaSortColumn.Status);
+        var sortedOrder = model.FileSort.Comparer;
+        model.Files.Single(row => row.Name == "Movie1.mkv").Status = "Needs attention";
+        processed.Clear();
+        await model.ScanCommand.ExecuteAsync();
+        Assert.AreNotSame(sortedOrder, model.FileSort.Comparer,"Starting a batch re-applies the sort so the screen matches the processing order.");
+        CollectionAssert.AreEqual(new[] { "Movie1.mkv", "movie2.mkv", "Movie10.mkv" }, processed, "Blank statuses stay last and fall back to name order.");
     }
 
     [TestMethod]

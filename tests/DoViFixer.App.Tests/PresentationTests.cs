@@ -21,6 +21,39 @@ public sealed class PresentationTests
     }
 
     [TestMethod]
+    public void ColumnSortTogglesDirectionAndPublishesComparers()
+    {
+        var sort = new ColumnSort<string>((column, direction) => Comparer<string>.Create((x, y) =>
+        {
+            int result = (string)column == "Length" ? x.Length.CompareTo(y.Length) : string.CompareOrdinal(x, y);
+            return direction == System.ComponentModel.ListSortDirection.Descending ? -result : result;
+        }));
+        string[] items = ["ccc", "a", "bb"];
+        var changes = new List<string?>();
+        sort.PropertyChanged += (_, e) => changes.Add(e.PropertyName);
+
+        sort.Refresh();
+        Assert.IsEmpty(changes, "Refreshing an unsorted list publishes nothing.");
+        Assert.IsNull(((IColumnSort)sort).Comparer);
+        CollectionAssert.AreEqual(items, sort.Order(items));
+
+        sort.SortBy("Length");
+        CollectionAssert.AreEqual(new[] { "a", "bb", "ccc" }, sort.Order(items));
+        sort.SortBy("Length");
+        CollectionAssert.AreEqual(new[] { "ccc", "bb", "a" }, sort.Order(items));
+        sort.SortBy("Text");
+        Assert.AreEqual(System.ComponentModel.ListSortDirection.Ascending, sort.Direction, "Another column starts ascending.");
+        CollectionAssert.AreEqual(new[] { "a", "bb", "ccc" }, sort.Order(items));
+
+        var comparer = sort.Comparer;
+        changes.Clear();
+        sort.Refresh();
+        Assert.AreNotSame(comparer, sort.Comparer, "Refresh publishes a new comparer so views re-sort.");
+        CollectionAssert.AreEqual(new[] { nameof(ColumnSort<string>.Comparer) }, changes);
+        Assert.AreSame<object>(sort.Comparer, ((IColumnSort)sort).Comparer,"Views receive the same comparer as a non-generic IComparer.");
+    }
+
+    [TestMethod]
     public void PageVisibilityRequiresTheSameAvailableObject()
     {
         var converter = new ReferenceEqualsToVisibilityConverter();
