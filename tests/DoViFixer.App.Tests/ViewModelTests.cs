@@ -182,6 +182,52 @@ public sealed class ViewModelTests
     }
 
     [TestMethod]
+    public async Task SortingIsIgnoredWhileABatchIsRunning()
+    {
+        using var runtime = new TestRuntime();
+        await runtime.UpdateAsync(settings => settings with { AutomaticallyScanAddedFiles = false }, default);
+        var model = runtime.Container.GetRequiredService<MediaViewModel>();
+        await model.AddAsync([@"C:\Media\Movie2.mkv", @"C:\Media\Movie3.mkv", @"C:\Media\Movie1.mkv"]);
+        var processed = new List<string>();
+        foreach (var row in model.Files)
+        {
+            row.PropertyChanged += (_, e) =>
+            {
+                if (e.PropertyName == nameof(MediaRow.IsActive) && row.IsActive)
+                {
+                    processed.Add(row.Name);
+                }
+            };
+        }
+
+        model.FileSort.SortBy(MediaSortColumn.Name);
+        var started = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+        var release = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+        runtime.DuringAnalysis = async token =>
+        {
+            started.TrySetResult();
+            await release.Task.WaitAsync(token);
+        };
+        var scanning = model.ScanCommand.ExecuteAsync();
+        await started.Task.WaitAsync(TimeSpan.FromSeconds(10));
+        var comparer = model.FileSort.Comparer;
+
+        // A header click calls SortBy; reversing the display mid-batch would no longer match processing.
+        model.FileSort.SortBy(MediaSortColumn.Name);
+        model.FileSort.SortBy(MediaSortColumn.Status);
+        Assert.AreEqual(MediaSortColumn.Name, model.FileSort.Column);
+        Assert.AreEqual(ListSortDirection.Ascending, model.FileSort.Direction);
+        Assert.AreSame(comparer, model.FileSort.Comparer, "The displayed order must not change while a batch runs.");
+
+        release.TrySetResult();
+        await scanning.WaitAsync(TimeSpan.FromSeconds(10));
+        CollectionAssert.AreEqual(new[] { "Movie1.mkv", "Movie2.mkv", "Movie3.mkv" }, processed);
+
+        model.FileSort.SortBy(MediaSortColumn.Name);
+        Assert.AreEqual(ListSortDirection.Descending, model.FileSort.Direction, "Sorting works again once the batch ends.");
+    }
+
+    [TestMethod]
     public async Task RemoveFileUpdatesSelectionAndDetailsAndRejectsRemovalWhileBusy()
     {
         using var runtime = new TestRuntime();

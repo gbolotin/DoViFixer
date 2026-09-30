@@ -16,7 +16,12 @@ public interface IColumnSort : INotifyPropertyChanged
 /// Column sort state for a list: clicking the sorted column toggles the direction and
 /// clicking another column sorts it ascending. The comparer orders the view, not the source.
 /// </summary>
-public sealed class ColumnSort<TItem>(Func<object, ListSortDirection, IComparer<TItem>> createComparer) : ObservableObject, IColumnSort
+/// <param name="canSort">
+/// When it returns false, <see cref="SortBy"/> is ignored; for example while a batch is processing
+/// rows in the current display order.
+/// </param>
+public sealed class ColumnSort<TItem>(Func<object, ListSortDirection, IComparer<TItem>> createComparer, Func<bool>? canSort = null)
+    : ObservableObject, IColumnSort
 {
     private object? column;
     private ListSortDirection direction;
@@ -29,6 +34,11 @@ public sealed class ColumnSort<TItem>(Func<object, ListSortDirection, IComparer<
 
     public void SortBy(object column)
     {
+        if (canSort?.Invoke() == false)
+        {
+            return;
+        }
+
         direction = Equals(this.column, column) && direction == ListSortDirection.Ascending
             ? ListSortDirection.Descending
             : ListSortDirection.Ascending;

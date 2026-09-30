@@ -115,6 +115,7 @@ public sealed class MediaViewModel : OperationViewModel, INavigationPage, IIniti
         ClearAllCommand = new(ClearAll, () => IsIdle && Files.Count > 0);
         RemoveFileCommand = new(RemoveFile, row => IsIdle && Files.Contains(row));
         OpenSettingsCommand = new(() => RequestNavigateToSettings?.Invoke(), () => IsIdle);
+        FileSort = new((column, direction) => new MediaRowComparer((MediaSortColumn)column, direction), () => IsIdle);
         BatchProgress.PropertyChanged += (_, _) => NotifyActiveProgress();
         Progress.PropertyChanged += (_, _) => NotifyActiveProgress();
         PropertyChanged += (_, e) =>
@@ -315,8 +316,11 @@ public sealed class MediaViewModel : OperationViewModel, INavigationPage, IIniti
     public RelayCommand ToggleSelectAllCommand { get; }
     public RelayCommand ClearAllCommand { get; }
     public RelayCommand<MediaRow> RemoveFileCommand { get; }
-    /// <summary>Display order applied by the list's collection view; <see cref="Files"/> keeps the order files were added.</summary>
-    public ColumnSort<MediaRow> FileSort { get; } = new((column, direction) => new MediaRowComparer((MediaSortColumn)column, direction));
+    /// <summary>
+    /// Display order applied by the list's collection view; <see cref="Files"/> keeps the order files were added.
+    /// Sorting is blocked while busy because a running batch keeps the order it started with.
+    /// </summary>
+    public ColumnSort<MediaRow> FileSort { get; }
     public bool CanInspect => CanOperate();
     public AsyncCommand AddFilesCommand { get; }
     public AsyncCommand AddFolderCommand { get; }

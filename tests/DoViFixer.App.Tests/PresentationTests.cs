@@ -50,7 +50,15 @@ public sealed class PresentationTests
         sort.Refresh();
         Assert.AreNotSame(comparer, sort.Comparer, "Refresh publishes a new comparer so views re-sort.");
         CollectionAssert.AreEqual(new[] { nameof(ColumnSort<string>.Comparer) }, changes);
-        Assert.AreSame<object>(sort.Comparer, ((IColumnSort)sort).Comparer,"Views receive the same comparer as a non-generic IComparer.");
+        Assert.AreSame<object>(sort.Comparer, ((IColumnSort)sort).Comparer, "Views receive the same comparer as a non-generic IComparer.");
+
+        bool allowed = false;
+        var blocked = new ColumnSort<string>((_, _) => Comparer<string>.Default, () => allowed);
+        blocked.SortBy("Text");
+        Assert.IsNull(blocked.Column, "SortBy is ignored while sorting is not allowed.");
+        allowed = true;
+        blocked.SortBy("Text");
+        Assert.AreEqual("Text", blocked.Column);
     }
 
     [TestMethod]
