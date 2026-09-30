@@ -27,7 +27,9 @@ public static class AppComposition
         string root = configuration["DoViFixer:DataDirectory"] ?? Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData), "DoViFixer");
         services.AddSingleton<IThemeService, ThemeService>();
         services.AddTransient<IUserDialogs>(_ => new UserDialogs(Path.Combine(root, "Logs")));
-        services.AddTransient<DependencySetup>();
+        services.AddSingleton<DependencyReportViewModel>();
+        services.AddSingleton<DependencySetup>();
+        services.AddTransient<StartupDependencyCheckViewModel>();
         services.AddTransient<MediaViewModel>();
         services.AddTransient<ArchiveViewModel>();
         services.AddTransient<SettingsViewModel>();

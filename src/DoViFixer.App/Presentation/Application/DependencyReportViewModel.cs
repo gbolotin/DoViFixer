@@ -1,0 +1,35 @@
+using DoViFixer.App.Presentation.Common;
+using DoViFixer.Application.Dependencies;
+
+namespace DoViFixer.App.Presentation.Application;
+public sealed class DependencyReportViewModel : ObservableObject
+{
+    private DependencyReport? report;
+    private string? checkError;
+
+    public IReadOnlyList<DependencyStatus> Tools => report?.Tools ?? [];
+    public bool HasWarning => checkError is not null || report is { Ready: false };
+    public string WarningText => checkError is not null ? "Dependency check failed" : "Dependencies missing or unavailable";
+    public string WarningDetails => (checkError ?? string.Join("\n", Tools.Where(t => t.State != DependencyState.Ready).Select(t => $"{t.Tool}: {t.State} — {t.Diagnostic}"))) + "\nOpen Settings → Dependency setup to install or configure tools.";
+
+    public void Update(DependencyReport value)
+    {
+        report = value;
+        checkError = null;
+        RaisePropertyChanged(nameof(Tools));
+        NotifyWarning();
+    }
+
+    public void Fail(string error)
+    {
+        checkError = error;
+        NotifyWarning();
+    }
+
+    private void NotifyWarning()
+    {
+        RaisePropertyChanged(nameof(WarningText));
+        RaisePropertyChanged(nameof(WarningDetails));
+        RaisePropertyChanged(nameof(HasWarning));
+    }
+}

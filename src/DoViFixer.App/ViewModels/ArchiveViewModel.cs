@@ -88,7 +88,7 @@ public sealed class ArchiveViewModel : OperationViewModel, INavigationPage
             }
 
             string review = "Permanently delete exactly these retained backup files:\n\n" + string.Join("\n", plan.Files.Select(f => $"{f.Path} ({f.Length:N0} bytes)"));
-            if (!dialogs.Review("Review cleanup", review, "Delete", confirmDeletion: true))
+            if (!dialogs.Review("Review cleanup", review, "Delete"))
             {
                 SetStatus(ViewStatus.CleanupNotApproved);
                 return;

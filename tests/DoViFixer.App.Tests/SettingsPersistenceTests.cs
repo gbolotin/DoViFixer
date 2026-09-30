@@ -97,6 +97,22 @@ public sealed class SettingsPersistenceTests
     }
 
     [TestMethod]
+    public async Task ShutdownDuringInitialSettingsReadDoesNotStartDependencySetup()
+    {
+        using var runtime = new TestRuntime { Ready = false };
+        var store = new DelayedReadStore(runtime);
+        runtime.Services.AddSingleton<ISettingsStore>(store);
+        var shell = runtime.Container.GetRequiredService<ShellViewModel>();
+        var initializing = shell.InitializeAsync();
+        await store.Started.Task.WaitAsync(TimeSpan.FromSeconds(10));
+        await shell.CancelAndWaitAsync().WaitAsync(TimeSpan.FromSeconds(10));
+        await initializing.WaitAsync(TimeSpan.FromSeconds(10));
+        Assert.IsEmpty(runtime.Reviews);
+        Assert.AreEqual(0, runtime.Installations);
+        Assert.IsEmpty(shell.Settings.Dependencies.Tools);
+    }
+
+    [TestMethod]
     public async Task ConversionWaitsForAutosaveAndKeepsOriginalAfterReplacementIsDisabled()
     {
         using var runtime = new TestRuntime();

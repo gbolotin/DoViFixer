@@ -68,6 +68,7 @@ public sealed class VisualTests
         source.Listeners.Add(errors);
         source.Switch.Level = SourceLevels.Error;
         using var runtime = new TestRuntime();
+        runtime.MissingTools.Add(DoViFixer.Application.Dependencies.NativeTool.FFmpeg);
         byte[] preview = Environment.GetEnvironmentVariable("DOVIFIXER_TEST_PREVIEW_OUTPUT") is { } previewPath
             ? File.ReadAllBytes(previewPath) : MediaPreviewTests.CreateImage();
         runtime.Preview = (_, _) => Task.FromResult(preview);
@@ -83,7 +84,49 @@ public sealed class VisualTests
         try
         {
             window.Show();
-            await shell.InitializeAsync();
+            int uiThread = Environment.CurrentManagedThreadId;
+            var checkStarted = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+            var releaseCheck = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+            runtime.DuringDependencyCheck = async token =>
+            {
+                Assert.AreNotEqual(uiThread, Environment.CurrentManagedThreadId, "Dependency detection must run off the UI thread.");
+                checkStarted.TrySetResult();
+                await releaseCheck.Task.WaitAsync(token);
+            };
+            var initializing = shell.InitializeAsync();
+            try
+            {
+                await checkStarted.Task.WaitAsync(TimeSpan.FromSeconds(10));
+                await LayoutAsync(window);
+                var cancelCheck = Descendants<Button>(window).Single(button => System.Windows.Automation.AutomationProperties.GetName(button) == "Cancel dependency operation");
+                AssertInside(cancelCheck, (FrameworkElement)window.Content);
+                Assert.IsTrue(cancelCheck.IsEnabled);
+                SaveRender((FrameworkElement)window.Content, "startup-dependency-check");
+            }
+            finally
+            {
+                runtime.DuringDependencyCheck = null;
+                releaseCheck.TrySetResult();
+                await initializing;
+            }
+            await LayoutAsync(window);
+            window.Width = 800;
+            window.Height = 600;
+            await LayoutAsync(window);
+            var warning = Descendants<StackPanel>(window).Single(panel => System.Windows.Automation.AutomationProperties.GetName(panel) == "Dependency warning");
+            var warningIcon = Descendants<TextBlock>(warning).Single(text => text.Text == "\uE7BA");
+            Assert.AreEqual(window.FindResource("SystemFillColorCautionBrush"), warningIcon.Foreground);
+            Assert.AreEqual(window.FindResource("SymbolThemeFontFamily"), warningIcon.FontFamily);
+            AssertInside(warning, (FrameworkElement)window.Content);
+            StringAssert.Contains((string)warning.ToolTip, "FFmpeg: Missing");
+            Assert.AreEqual(0, runtime.Installations);
+            SaveRender((FrameworkElement)window.Content, "startup-dependency-warning");
+            runtime.MissingTools.Clear();
+            await shell.Settings.CheckCommand.ExecuteAsync();
+            await LayoutAsync(window);
+            Assert.IsFalse(Descendants<StackPanel>(window).Any(panel => System.Windows.Automation.AutomationProperties.GetName(panel) == "Dependency warning"));
+            window.Width = 1400;
+            window.Height = 900;
             await LayoutAsync(window);
             var navigation = Descendants<ListBox>(window).Single(list => ReferenceEquals(list.ItemsSource, shell.Pages));
             var pageHost = Descendants<ItemsControl>(window).Single(control => control.Name == "PageHost");
@@ -137,7 +180,7 @@ public sealed class VisualTests
                 var workspace = (ContentPresenter)pageHost.ItemContainerGenerator.ContainerFromItem(page);
                 Assert.AreSame(page, shell.CurrentPage);
                 var statusBar = Descendants<StatusBar>(window).Single();
-                CollectionAssert.AreEqual(page.StatusItems.ToArray(), Descendants<TextBlock>(statusBar).Select(text => text.Text).ToArray());
+                CollectionAssert.AreEqual(page.StatusItems.Select(item => item.Text).ToArray(), Descendants<TextBlock>(statusBar).Select(text => text.Text).ToArray());
                 AssertInside(statusBar, (FrameworkElement)window.Content);
                 Assert.AreSame(page, workspace.Content);
                 Assert.IsTrue(Descendants<FrameworkElement>(workspace).Any(element => ReferenceEquals(element.DataContext, page) && element.ActualHeight > 0));
@@ -177,6 +220,11 @@ public sealed class VisualTests
                         AssertInside(cacheSize, (FrameworkElement)window.Content);
                         AssertInside(cacheLocation, (FrameworkElement)window.Content);
                         SaveRender((FrameworkElement)window.Content, "settings-cache-size");
+                        var toolDescriptions = Descendants<TextBlock>(workspace).Single(text => text.Text == DependencySetup.ToolDescriptions);
+                        toolDescriptions.BringIntoView();
+                        await LayoutAsync(window);
+                        AssertInside(toolDescriptions, (FrameworkElement)window.Content);
+                        SaveRender((FrameworkElement)window.Content, "settings-tool-descriptions");
                         scroll.ScrollToEnd();
                         await LayoutAsync(window);
                         settingsOffset = scroll.VerticalOffset;
@@ -237,13 +285,21 @@ public sealed class VisualTests
             await LayoutAsync(window);
             var content = (FrameworkElement)window.Content;
             AssertInside(splitter, content);
-            foreach (string caption in new[] { "Rescan", "Inspect", "Deep Inspect", "Convert to DV8.1", "Convert to HDR10", "Settings" })
+            foreach (string caption in new[] { "Rescan", "Inspect", "Deep Inspect", "Convert to DV8.1", "Convert to HDR10" })
             {
                 AssertInside(Descendants<Button>(mediaView).Single(button => Equals(button.Content, caption) && button.IsVisible), content);
             }
             SaveRender(content, "media-minimum");
 
-            Invoke(Button(mediaView, "Settings"));
+            var mediaStatusBar = Descendants<StatusBar>(window).Single();
+            foreach (string summary in new[] { media.OutputSummary, media.RetentionSummary, media.FelSummary, media.ArchiveSummary })
+            {
+                AssertInside(Descendants<TextBlock>(mediaStatusBar).Single(text => text.Text == summary), content);
+                Assert.IsFalse(Descendants<TextBlock>(mediaView).Any(text => text.Text == summary));
+            }
+
+            Assert.IsFalse(Descendants<Button>(mediaView).Any(button => Equals(button.Content, "Settings")));
+            navigation.SelectedItem = shell.Settings;
             await LayoutAsync(window);
             await shell.NavigationTask;
             Assert.AreSame(shell.Settings, navigation.SelectedItem);

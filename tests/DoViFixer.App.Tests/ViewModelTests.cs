@@ -540,6 +540,204 @@ public sealed class ViewModelTests
     }
 
     [TestMethod]
+    [DataRow(true, false, true)]
+    [DataRow(false, false, true)]
+    [DataRow(false, true, true)]
+    [DataRow(false, true, false)]
+    public async Task StartupChecksDependenciesAndRequiresInstallationApproval(bool ready, bool approve, bool succeeds)
+    {
+        using var runtime = new TestRuntime { Ready = ready, Approval = approve, InstallationSucceeds = succeeds };
+        var shell = runtime.Container.GetRequiredService<ShellViewModel>();
+        await shell.InitializeAsync();
+        bool missing = !ready && !(approve && succeeds);
+        Assert.AreEqual(missing, shell.Settings.Dependencies.HasWarning);
+        Assert.AreEqual(missing, shell.StatusItems.Contains(shell.Settings.Dependencies));
+        Assert.AreEqual(!ready && approve ? 1 : 0, runtime.Installations);
+        Assert.AreEqual(6, shell.Settings.Dependencies.Tools.Count);
+        Assert.IsTrue(shell.CanNavigate);
+        if (!ready)
+        {
+            StringAssert.Contains(runtime.Reviews[0], "Installed and ready");
+            StringAssert.Contains(runtime.Reviews[0], "Missing or needs attention");
+            StringAssert.Contains(runtime.Reviews[0], DependencySetup.ToolDescriptions);
+            StringAssert.Contains(runtime.Reviews[0], "Source:");
+            StringAssert.Contains(runtime.Reviews[0], "Scope:");
+            StringAssert.Contains(runtime.Reviews[0], "elevation:");
+        }
+        else
+        {
+            Assert.IsEmpty(runtime.Reviews);
+        }
+        int reviews = runtime.Reviews.Count;
+        await shell.InitializeAsync();
+        Assert.AreEqual(reviews, runtime.Reviews.Count, "Startup must not prompt twice.");
+    }
+
+    [TestMethod]
+    public async Task MissingDependencyWarningPersistsAcrossPagesAndClearsAfterOperationInstallsTools()
+    {
+        using var runtime = new TestRuntime();
+        runtime.MissingTools.Add(DoViFixer.Application.Dependencies.NativeTool.FFmpeg);
+        var shell = runtime.Container.GetRequiredService<ShellViewModel>();
+        await shell.InitializeAsync();
+        StringAssert.Contains(runtime.Reviews.Single(), "FFprobe: Installed and ready");
+        StringAssert.Contains(runtime.Reviews.Single(), "FFmpeg: Missing");
+        shell.CurrentPage = shell.Settings;
+        await shell.NavigationTask;
+        Assert.IsTrue(shell.StatusItems.Contains(shell.Settings.Dependencies));
+        shell.CurrentPage = shell.Pages.OfType<MediaViewModel>().Single();
+        await shell.NavigationTask;
+        Assert.IsTrue(shell.StatusItems.Contains(shell.Settings.Dependencies));
+        runtime.Approval = true;
+        await ((MediaViewModel)shell.CurrentPage).AddAsync([@"C:\Media\Mountain.mkv"]);
+        Assert.AreEqual(1, runtime.Installations);
+        Assert.IsFalse(shell.Settings.Dependencies.HasWarning);
+        Assert.IsFalse(shell.StatusItems.Contains(shell.Settings.Dependencies));
+        Assert.IsTrue(shell.Settings.Dependencies.Tools.All(tool => tool.State == DoViFixer.Application.Dependencies.DependencyState.Ready));
+    }
+
+    [TestMethod]
+    public async Task ShutdownCancelsBackgroundDependencyCheckBeforePrompting()
+    {
+        using var runtime = new TestRuntime { Ready = false };
+        var started = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+        runtime.DuringDependencyCheck = async token =>
+        {
+            started.TrySetResult();
+            await Task.Delay(Timeout.Infinite, token);
+        };
+        var shell = runtime.Container.GetRequiredService<ShellViewModel>();
+        var initializing = shell.InitializeAsync();
+        await started.Task.WaitAsync(TimeSpan.FromSeconds(10));
+        Assert.IsFalse(initializing.IsCompleted, "The background check must not block the caller.");
+        await shell.CancelAndWaitAsync().WaitAsync(TimeSpan.FromSeconds(10));
+        await initializing.WaitAsync(TimeSpan.FromSeconds(10));
+        Assert.IsEmpty(runtime.Reviews);
+        Assert.AreEqual(0, runtime.Installations);
+    }
+
+    [TestMethod]
+    public async Task FailedStartupDependencyCheckWarnsAndCanBeRetried()
+    {
+        using var runtime = new TestRuntime();
+        runtime.DuringDependencyCheck = _ => throw new IOException("Tool discovery failed");
+        var shell = runtime.Container.GetRequiredService<ShellViewModel>();
+        await shell.InitializeAsync();
+        Assert.IsTrue(shell.Settings.Dependencies.HasWarning);
+        StringAssert.Contains(shell.Settings.Dependencies.WarningDetails, "Tool discovery failed");
+        Assert.AreEqual("Dependency check failed", shell.Settings.Dependencies.WarningText);
+        Assert.IsTrue(shell.CanNavigate);
+        runtime.DuringDependencyCheck = null;
+        await shell.Settings.CheckCommand.ExecuteAsync();
+        Assert.IsFalse(shell.Settings.Dependencies.HasWarning);
+    }
+
+    [TestMethod]
+    public async Task StartupDependencyCheckDoesNotBlockNavigation()
+    {
+        using var runtime = new TestRuntime { Ready = false };
+        var started = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+        var release = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+        runtime.DuringDependencyCheck = async token =>
+        {
+            started.TrySetResult();
+            await release.Task.WaitAsync(token);
+        };
+        var shell = runtime.Container.GetRequiredService<ShellViewModel>();
+        var initializing = shell.InitializeAsync();
+        await started.Task.WaitAsync(TimeSpan.FromSeconds(10));
+
+        Assert.IsTrue(shell.CanNavigate);
+        shell.CurrentPage = shell.Settings;
+        await shell.NavigationTask.WaitAsync(TimeSpan.FromSeconds(10));
+        Assert.AreSame(shell.Settings, shell.CurrentPage);
+        Assert.AreEqual(ViewStatus.SettingsLoaded, shell.Settings.Status);
+
+        runtime.DuringDependencyCheck = null;
+        release.TrySetResult();
+        await initializing.WaitAsync(TimeSpan.FromSeconds(10));
+        Assert.HasCount(1, runtime.Reviews);
+    }
+
+    [TestMethod]
+    public async Task StartupDoesNotShowUnavailableSetupDialog()
+    {
+        using var runtime = new TestRuntime { Ready = false, InstallationAvailable = false };
+        var shell = runtime.Container.GetRequiredService<ShellViewModel>();
+        await shell.InitializeAsync();
+        Assert.IsEmpty(runtime.Reviews);
+        Assert.IsTrue(shell.StatusItems.Contains(shell.Settings.Dependencies));
+
+        await shell.Settings.InstallCommand.ExecuteAsync();
+        Assert.HasCount(1, runtime.Reviews, "An explicit setup request still explains why nothing can be installed.");
+    }
+
+    [TestMethod]
+    public async Task ConcurrentDependencyRequestsShareOneInstallationPrompt()
+    {
+        using var runtime = new TestRuntime { Ready = false };
+        var started = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+        var release = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+        int checks = 0;
+        runtime.DuringDependencyCheck = async token =>
+        {
+            checks++;
+            started.TrySetResult();
+            await release.Task.WaitAsync(token);
+        };
+        var setup = runtime.Container.GetRequiredService<DependencySetup>();
+        var progress = new Progress<DoViFixer.Application.Operations.OperationProgress>();
+
+        var first = setup.EnsureAsync(progress, CancellationToken.None);
+        await started.Task.WaitAsync(TimeSpan.FromSeconds(10));
+        var second = setup.EnsureAsync(progress, CancellationToken.None);
+        release.TrySetResult();
+
+        Assert.IsFalse(await first.WaitAsync(TimeSpan.FromSeconds(10)));
+        Assert.IsFalse(await second.WaitAsync(TimeSpan.FromSeconds(10)));
+        Assert.HasCount(1, runtime.Reviews);
+        Assert.AreEqual(1, checks);
+
+        Assert.IsFalse(await setup.EnsureAsync(progress, CancellationToken.None));
+        Assert.HasCount(2, runtime.Reviews, "A later request must prompt again.");
+    }
+
+    [TestMethod]
+    public async Task SavingToolPathSucceedsWhenRecheckFails()
+    {
+        using var runtime = new TestRuntime();
+        var settings = runtime.Container.GetRequiredService<SettingsViewModel>();
+        await settings.LoadCommand.ExecuteAsync();
+        runtime.DuringDependencyCheck = _ => throw new IOException("Tool discovery failed");
+        settings.ToolPath = @"C:\Tools\ffmpeg.exe";
+
+        await settings.SetToolCommand.ExecuteAsync();
+
+        Assert.AreEqual(ViewStatus.ToolPathSaved, settings.Status);
+        Assert.IsTrue(settings.Dependencies.HasWarning);
+        Assert.AreEqual("Dependency check failed", settings.Dependencies.WarningText);
+    }
+
+    [TestMethod]
+    public async Task StatusItemsUpdateOnlyChangedEntries()
+    {
+        using var runtime = new TestRuntime { Ready = false };
+        var shell = runtime.Container.GetRequiredService<ShellViewModel>();
+        await shell.InitializeAsync();
+        var media = shell.Pages.OfType<MediaViewModel>().Single();
+        var dependencyItem = shell.StatusItems.Last();
+        var changes = new List<System.Collections.Specialized.NotifyCollectionChangedEventArgs>();
+        shell.StatusItems.CollectionChanged += (_, e) => changes.Add(e);
+
+        media.SetStatus(ViewStatus.Progress, "Scanning Mountain.mkv");
+
+        var change = changes.Single();
+        Assert.AreEqual(System.Collections.Specialized.NotifyCollectionChangedAction.Replace, change.Action);
+        Assert.AreEqual(1, change.NewStartingIndex);
+        Assert.AreSame(dependencyItem, shell.StatusItems.Last());
+    }
+
+    [TestMethod]
     public async Task PreferencesValidateBeforeSavingAndBlankPathsResetDefaults()
     {
         using var runtime = new TestRuntime();
@@ -618,7 +816,7 @@ public sealed class ViewModelTests
     [TestMethod]
     [DataRow(false)]
     [DataRow(true)]
-    public async Task CleanupRequiresDeletionConfirmationAndDeletesOnlyReviewedFiles(bool approve)
+    public async Task CleanupRequiresReviewAndDeletesOnlyReviewedFiles(bool approve)
     {
         using var runtime = new TestRuntime { Approval = approve, PickedFolder = @"C:\Media" };
         runtime.Archives.UnionWith([@"C:\Media\Movie.dovi", @"C:\Other\Keep.dovi"]);
@@ -626,7 +824,6 @@ public sealed class ViewModelTests
 
         await model.CleanupCommand.ExecuteAsync();
 
-        Assert.IsTrue(runtime.DeletionConfirmationRequested);
         Assert.AreEqual("Delete", runtime.LastApproveLabel);
         Assert.HasCount(1, runtime.Reviews);
         StringAssert.Contains(runtime.Reviews[0], @"C:\Media\Movie.dovi");
@@ -753,7 +950,7 @@ public sealed class ViewModelTests
         var media = runtime.Container.GetRequiredService<MediaViewModel>();
         var settings = runtime.Container.GetRequiredService<SettingsViewModel>();
         var archive = runtime.Container.GetRequiredService<ArchiveViewModel>();
-        var shell = new ShellViewModel(media, archive, settings);
+        var shell = new ShellViewModel(media, archive, settings, runtime.Container.GetRequiredService<StartupDependencyCheckViewModel>(), runtime.Container.GetRequiredService<DependencyReportViewModel>());
 
         await media.AddAsync([
             @"C:\Media\Mountain.mkv",
@@ -1202,12 +1399,20 @@ public sealed class ViewModelTests
         var media = runtime.Container.GetRequiredService<MediaViewModel>();
         var settings = runtime.Container.GetRequiredService<SettingsViewModel>();
         var archive = runtime.Container.GetRequiredService<ArchiveViewModel>();
-        var shell = new ShellViewModel(media, archive, settings);
+        var shell = new ShellViewModel(media, archive, settings, runtime.Container.GetRequiredService<StartupDependencyCheckViewModel>(), runtime.Container.GetRequiredService<DependencyReportViewModel>());
 
         await media.RefreshSettingsSummaryAsync();
         Assert.AreEqual("Output: Same folder", media.OutputSummary);
         Assert.IsFalse(media.IsReplaceOriginalActive);
 
+        string[]? updatedStatusItems = null;
+        media.PropertyChanged += (_, e) =>
+        {
+            if (e.PropertyName == nameof(media.StatusItems))
+            {
+                updatedStatusItems = media.StatusItems.Select(item => item.Text).ToArray();
+            }
+        };
         await settings.LoadCommand.ExecuteAsync();
         settings.Destination = @"C:\Media\CustomOutput";
         settings.OtherFolder = true;
@@ -1218,6 +1423,11 @@ public sealed class ViewModelTests
         Assert.IsTrue(media.IsReplaceOriginalActive);
         StringAssert.Contains(media.OutputSummaryToolTip, @"C:\Media\CustomOutput");
         StringAssert.Contains(media.OutputSummaryToolTip, "Replace original after verification");
+        CollectionAssert.AreEqual(new[] { media.SelectionSummary, media.StatusText, media.OutputSummary, media.RetentionSummary, media.FelSummary, media.ArchiveSummary }, updatedStatusItems);
+        var outputItem = media.StatusItems.Single(item => item.Text == media.OutputSummary);
+        Assert.AreSame(media.OpenSettingsCommand, outputItem.Command);
+        Assert.AreEqual(media.OutputSummaryToolTip, outputItem.ToolTipText);
+        Assert.IsTrue(media.StatusItems.Single(item => item.Text == media.RetentionSummary).IsEmphasized);
     }
 
     [TestMethod]

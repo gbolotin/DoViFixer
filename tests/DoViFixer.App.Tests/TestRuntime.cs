@@ -211,6 +211,7 @@ internal sealed class TestRuntime : IFileDiscovery, IFileOperations, IMediaProbe
     }
 
     public Func<CancellationToken, Task>? DuringDependencyCheck { get; set; }
+    public HashSet<NativeTool> MissingTools { get; } = [];
     public async Task<DependencyReport> DetectAsync(IReadOnlyList<NativeTool> tools, CancellationToken cancellationToken, bool skipConfiguredPaths = false)
     {
         if (DuringDependencyCheck is not null)
@@ -218,14 +219,21 @@ internal sealed class TestRuntime : IFileDiscovery, IFileOperations, IMediaProbe
             await DuringDependencyCheck(cancellationToken);
         }
 
-        return new DependencyReport(tools.Select(t => new DependencyStatus(t, Ready ? DependencyState.Ready : DependencyState.Missing, @"C:\Tools\" + t + ".exe", "test", "Fixture")).ToArray());
+        return new DependencyReport(tools.Select(t => new DependencyStatus(t, Ready && !MissingTools.Contains(t) ? DependencyState.Ready : DependencyState.Missing, @"C:\Tools\" + t + ".exe", "test", "Fixture")).ToArray());
     }
     public Task<DependencyStatus> ValidatePathAsync(NativeTool tool, string path, CancellationToken cancellationToken) => Task.FromResult(new DependencyStatus(tool, DependencyState.Ready, path, "test", "Fixture"));
-    public Task<InstallationPlan> PrepareAsync(DependencyReport report, CancellationToken cancellationToken) => Task.FromResult(new InstallationPlan(Guid.NewGuid(), [new InstallationItem("Fixture.Tools", "1.2.3", InstallationProvider.VerifiedZip, "https://example.invalid/tools.zip", @"C:\FixtureTools", "user", false, DependencyRequirements.All, new string ('a', 64))], []));
+    public bool InstallationAvailable { get; set; } = true;
+    public Task<InstallationPlan> PrepareAsync(DependencyReport report, CancellationToken cancellationToken) => Task.FromResult(InstallationAvailable
+        ? new InstallationPlan(Guid.NewGuid(), [new InstallationItem("Fixture.Tools", "1.2.3", InstallationProvider.VerifiedZip, "https://example.invalid/tools.zip", @"C:\FixtureTools", "user", false, DependencyRequirements.All, new string ('a', 64))], [])
+        : new InstallationPlan(Guid.NewGuid(), [], ["No automatic installer for the fixture tools."]));
     public Task<IReadOnlyList<InstallationOutcome>> InstallAsync(InstallationPlan approvedPlan, IProgress<OperationProgress>? progress, CancellationToken cancellationToken)
     {
         Installations++;
         Ready = InstallationSucceeds;
+        if (InstallationSucceeds)
+        {
+            MissingTools.Clear();
+        }
         return Task.FromResult<IReadOnlyList<InstallationOutcome>>([new("Fixture.Tools", InstallationSucceeds, "Fixture outcome")]);
     }
 
@@ -326,12 +334,10 @@ internal sealed class TestRuntime : IFileDiscovery, IFileOperations, IMediaProbe
     {
     }
 
-    public bool DeletionConfirmationRequested { get; private set; }
     public string? LastApproveLabel { get; private set; }
-    public bool Review(string title, string content, string approveLabel, bool confirmDeletion = false)
+    public bool Review(string title, string content, string approveLabel)
     {
         Reviews.Add(content);
-        DeletionConfirmationRequested = confirmDeletion;
         LastApproveLabel = approveLabel;
         return Approval;
     }

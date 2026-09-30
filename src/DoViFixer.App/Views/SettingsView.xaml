@@ -1,6 +1,7 @@
 <ResourceDictionary xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
                     xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
-                    xmlns:viewModels="clr-namespace:DoViFixer.App.ViewModels">
+                    xmlns:viewModels="clr-namespace:DoViFixer.App.ViewModels"
+                    xmlns:p="clr-namespace:DoViFixer.App.Presentation.Application">
     <DataTemplate DataType="{x:Type viewModels:SettingsViewModel}">
         <DockPanel>
             <StackPanel DockPanel.Dock="Bottom" Margin="0,8,0,0">
@@ -134,13 +135,17 @@
                             <TextBlock Text="Native tools"
                                        FontSize="20"
                                        FontWeight="SemiBold" />
+                            <TextBlock Text="{x:Static p:DependencySetup.ToolDescriptions}"
+                                       TextWrapping="Wrap"
+                                       Foreground="{DynamicResource TextFillColorSecondaryBrush}"
+                                       Margin="0,8,0,0" />
                             <StackPanel Orientation="Horizontal" Margin="0,14">
                                 <Button Content="Check tools"
                                         Command="{Binding CheckCommand}"
                                         Margin="0,0,8,0" />
                                         <Button Content="Dependency setup" Command="{Binding InstallCommand}" />
                             </StackPanel>
-                            <ItemsControl ItemsSource="{Binding Tools}">
+                            <ItemsControl ItemsSource="{Binding Dependencies.Tools}">
                                 <ItemsControl.ItemTemplate>
                                     <DataTemplate>
                                         <StackPanel Margin="0,5">

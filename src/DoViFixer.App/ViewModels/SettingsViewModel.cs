@@ -1,5 +1,4 @@
 using DoViFixer.App.Navigation;
-using System.Collections.ObjectModel;
 using DoViFixer.App.Dialogs;
 using DoViFixer.App.Presentation.Common;
 using DoViFixer.App.Presentation.Application;
@@ -17,6 +16,7 @@ public sealed class SettingsViewModel : OperationViewModel, INavigationPage
     private readonly IThemeService themeService;
     private readonly IAnalysisCache cache;
     private readonly IMediaPreview mediaPreview;
+    private readonly DependencySetup setup;
     private string cacheSizeText = "Cache: …";
     private string temporary = "";
     private string destination = "";
@@ -70,12 +70,16 @@ public sealed class SettingsViewModel : OperationViewModel, INavigationPage
         private set => SetProperty(ref cacheSizeText, value);
     }
 
-    public SettingsViewModel(SettingsService settings, DependencyService dependencies, DependencySetup setup, IUserDialogs dialogs, IAnalysisCache cache, IThemeService themeService, IMediaPreview mediaPreview)
+    public DependencyReportViewModel Dependencies { get; }
+
+    public SettingsViewModel(SettingsService settings, DependencySetup setup, DependencyReportViewModel dependencies, IUserDialogs dialogs, IAnalysisCache cache, IThemeService themeService, IMediaPreview mediaPreview)
     {
         this.settings = settings;
         this.themeService = themeService;
         this.cache = cache;
         this.mediaPreview = mediaPreview;
+        this.setup = setup;
+        Dependencies = dependencies;
         LoadCommand = new(() => RunAsync(async (token, _) =>
         {
             await FlushAsync(token);
@@ -102,35 +106,38 @@ public sealed class SettingsViewModel : OperationViewModel, INavigationPage
         }), () => IsIdle);
         CheckCommand = new(() => RunAsync(async (token, _) =>
         {
-            var report = await dependencies.CheckAsync(DependencyRequirements.All, token);
-            Tools.Clear();
-            foreach (var tool in report.Tools)
-            {
-                Tools.Add(tool);
-            }
-
+            var report = await setup.CheckAsync(token);
             SetStatus(report.Ready ? ViewStatus.ToolsReady : ViewStatus.ToolsNeedAttention);
         }), () => IsIdle);
         InstallCommand = new(() => RunAsync(async (token, progress) =>
         {
+            SetStatus(ViewStatus.Progress, "Checking dependencies…");
             SetStatus(await setup.EnsureAsync(progress, token) ? ViewStatus.ToolsReady : ViewStatus.DependencySetupIncomplete);
-            var report = await dependencies.CheckAsync(DependencyRequirements.All, token);
-            Tools.Clear();
-            foreach (var tool in report.Tools)
-            {
-                Tools.Add(tool);
-            }
         }), () => IsIdle);
         SetToolCommand = new(() => RunAsync(async (token, _) =>
         {
             await settings.SetToolAsync(SelectedTool, ToolPath, token);
+            await RecheckToolsAsync(token);
             SetStatus(ViewStatus.ToolPathSaved);
         }), () => IsIdle && !string.IsNullOrWhiteSpace(ToolPath));
         ResetToolCommand = new(() => RunAsync(async (token, _) =>
         {
             await settings.ResetToolAsync(SelectedTool, token);
+            await RecheckToolsAsync(token);
             SetStatus(ViewStatus.ToolOverrideReset);
         }), () => IsIdle);
+    }
+
+    private async Task RecheckToolsAsync(CancellationToken token)
+    {
+        try
+        {
+            await setup.CheckAsync(token);
+        }
+        catch (Exception ex) when (ex is not OperationCanceledException)
+        {
+            // The change is already saved; the dependency warning reports the failed check.
+        }
     }
 
     private async Task RefreshCacheSizeAsync(CancellationToken token)
@@ -539,11 +546,6 @@ public sealed class SettingsViewModel : OperationViewModel, INavigationPage
         get;
     }
     = Enum.GetValues<NativeTool>();
-    public ObservableCollection<DependencyStatus> Tools
-    {
-        get;
-    }
-    = [];
     public AsyncCommand LoadCommand
     {
         get;

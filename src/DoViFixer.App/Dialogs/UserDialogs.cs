@@ -46,7 +46,7 @@ public sealed class UserDialogs(string logDirectory) : IUserDialogs
         return dialog.ShowDialog() == true ? dialog.FolderName : null;
     }
 
-    public bool Review(string title, string content, string approveLabel, bool confirmDeletion = false)
+    public bool Review(string title, string content, string approveLabel)
     {
         var window = new Window
         {
@@ -60,7 +60,7 @@ public sealed class UserDialogs(string logDirectory) : IUserDialogs
         };
         var root = new DockPanel
         {
-            Margin = new Thickness(24)
+            Margin = new Thickness(16)
         };
         var footer = new StackPanel
         {
@@ -75,20 +75,15 @@ public sealed class UserDialogs(string logDirectory) : IUserDialogs
         var cancel = new Button
         {
             Content = "Cancel",
-            IsCancel = true
+            IsCancel = true,
+            Margin = new(0,0,8,0)
         };
         var approve = new Button
         {
             Content = approveLabel
         };
-        approve.Click += (_, _) =>
-        {
-            if (confirmDeletion && MessageBox.Show(window, "Are you sure you want to permanently delete the displayed backup files?", "Confirm deletion", MessageBoxButton.YesNo, MessageBoxImage.Warning, MessageBoxResult.No) != MessageBoxResult.Yes)
-            {
-                return;
-            }
-            window.DialogResult = true;
-        };
+        approve.SetResourceReference(FrameworkElement.StyleProperty, "Primary");
+        approve.Click += (_, _) => window.DialogResult = true;
         buttons.Children.Add(cancel);
         buttons.Children.Add(approve);
         footer.Children.Add(buttons);

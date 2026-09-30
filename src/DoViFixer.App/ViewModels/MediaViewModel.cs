@@ -20,7 +20,15 @@ public sealed class MediaViewModel : OperationViewModel, INavigationPage, IIniti
 {
     public string NavigationName => "Media";
     public string? NavigationIcon => "\uE714";
-    public override IReadOnlyList<string> StatusItems => [SelectionSummary, StatusText];
+    public override IReadOnlyList<StatusItem> StatusItems =>
+    [
+        new(SelectionSummary),
+        new(StatusText),
+        new(OutputSummary, OutputSummaryToolTip, Command: OpenSettingsCommand),
+        new(RetentionSummary, IsEmphasized: IsReplaceOriginalActive),
+        new(FelSummary),
+        new(ArchiveSummary)
+    ];
 
     private readonly IFileDiscovery discovery;
     private readonly InspectionService inspection;
@@ -412,6 +420,7 @@ public sealed class MediaViewModel : OperationViewModel, INavigationPage, IIniti
         sb.AppendLine();
         sb.Append("Click to view or change settings.");
         OutputSummaryToolTip = sb.ToString();
+        RaisePropertyChanged(nameof(StatusItems));
     }
 
     public Task InitializeAsync(CancellationToken token = default) => RefreshSettingsSummaryAsync(token);

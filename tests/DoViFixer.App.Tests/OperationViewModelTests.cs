@@ -121,7 +121,7 @@ public sealed class OperationViewModelTests
             Assert.AreEqual("File list cleared.", model.StatusText);
         };
         model.SetStatus(ViewStatus.FileListCleared);
-        CollectionAssert.AreEqual(new[] { "File list cleared." }, model.StatusItems.ToArray());
+        CollectionAssert.AreEqual(new[] { "File list cleared." }, model.StatusItems.Select(item => item.Text).ToArray());
         CollectionAssert.AreEquivalent(new[] { nameof(model.Status), nameof(model.StatusMessage), nameof(model.StatusText), nameof(model.StatusItems) }, notifications);
     }
 
@@ -135,7 +135,7 @@ public sealed class OperationViewModelTests
 
         model.SetStatus(ViewStatus.Progress, "Scanning second file");
         Assert.AreEqual("Scanning second file", model.StatusText);
-        CollectionAssert.AreEqual(new[] { "Scanning second file" }, model.StatusItems.ToArray());
+        CollectionAssert.AreEqual(new[] { "Scanning second file" }, model.StatusItems.Select(item => item.Text).ToArray());
         CollectionAssert.AreEquivalent(new[] { nameof(model.StatusMessage), nameof(model.StatusText), nameof(model.StatusItems) }, notifications);
 
         notifications.Clear();

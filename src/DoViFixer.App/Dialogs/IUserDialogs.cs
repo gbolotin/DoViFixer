@@ -5,6 +5,6 @@ public interface IUserDialogs
     string? PickFolder();
     void OpenFolder(string path);
     void OpenLogs();
-    bool Review(string title, string content, string approveLabel, bool confirmDeletion = false);
+    bool Review(string title, string content, string approveLabel);
     void ShowMessage(string message, string title = "DoViFixer");
 }

@@ -1,3 +1,4 @@
+using DoViFixer.App.Navigation;
 using DoViFixer.App.ViewModels;
 using DoViFixer.Application.Operations;
 
@@ -21,7 +22,7 @@ public abstract class OperationViewModel : ObservableObject
         [ViewStatus.ToolsNeedAttention] = "Tools need attention. Set a validated path or open dependency setup.",
         [ViewStatus.DependencySetupIncomplete] = "Dependency setup incomplete.",
         [ViewStatus.ToolPathSaved] = "Validated tool path saved and applied.",
-        [ViewStatus.ToolOverrideReset] = "Tool override reset. Check tools to rediscover."
+        [ViewStatus.ToolOverrideReset] = "Tool override reset; tools checked again."
     };
 
     private CancellationTokenSource? cancellation;
@@ -69,7 +70,7 @@ public abstract class OperationViewModel : ObservableObject
     public ViewStatus Status => status;
     public string StatusMessage => statusMessage;
     public string StatusText => statusTexts.TryGetValue(Status, out string? text) ? text : StatusMessage;
-    public virtual IReadOnlyList<string> StatusItems => [StatusText];
+    public virtual IReadOnlyList<StatusItem> StatusItems => [new(StatusText)];
 
     public void SetStatus(ViewStatus value, string message = "")
     {
