@@ -362,6 +362,17 @@ public sealed class VisualTests
         TextBlock Indicator(GridViewColumnHeader header) => Descendants<TextBlock>(header).Single(text => text.Style == list.FindResource("ColumnSortIndicator"));
         string ascending = char.ConvertFromUtf32(0xE70E);
         string descending = char.ConvertFromUtf32(0xE70D);
+        void AssertIndicatorAboveCenter(GridViewColumnHeader header, string title)
+        {
+            // Like Windows Explorer: the indicator is centered over the column, above the title, inside the header.
+            var indicator = Indicator(header);
+            var label = Descendants<TextBlock>(header).Single(text => text.Text == title);
+            var glyph = indicator.TransformToAncestor(header).TransformBounds(new Rect(indicator.RenderSize));
+            var text = label.TransformToAncestor(header).TransformBounds(new Rect(label.RenderSize));
+            string layout = $"indicator {glyph}, title {text}, header {header.RenderSize}";
+            Assert.IsTrue(glyph.Top >= 0 && glyph.Bottom <= text.Top + 2, $"The indicator must sit above the title inside the header: {layout}.");
+            Assert.AreEqual(header.ActualWidth / 2, (glyph.Left + glyph.Right) / 2, 4, $"The indicator must be centered over the column: {layout}.");
+        }
         var fileHeader = Header(0);
         var profileHeader = Header(1);
         var selectAll = Descendants<CheckBox>(fileHeader).Single();
@@ -380,6 +391,7 @@ public sealed class VisualTests
         Assert.AreEqual(System.ComponentModel.ListSortDirection.Descending, GridViewSort.GetDirection(grid.Columns[0]));
         Assert.AreEqual(descending, Indicator(fileHeader).Text);
         Assert.IsTrue(Indicator(fileHeader).IsVisible, "Custom header templates show the shared indicator.");
+        AssertIndicatorAboveCenter(fileHeader, "File");
         Assert.IsFalse(Indicator(profileHeader).IsVisible, "Only the sorted column shows an indicator.");
 
         selectAll.RaiseEvent(new RoutedEventArgs(ButtonBase.ClickEvent, selectAll));
@@ -392,6 +404,7 @@ public sealed class VisualTests
         Assert.IsFalse(Indicator(fileHeader).IsVisible);
         Assert.AreEqual(ascending, Indicator(profileHeader).Text);
         Assert.IsTrue(Indicator(profileHeader).IsVisible, "The shared header template shows the indicator.");
+        AssertIndicatorAboveCenter(profileHeader, "Profile / Type");
 
         // Leave the list sorted by name ascending, which matches the order the files were added.
         fileHeader.RaiseEvent(new RoutedEventArgs(ButtonBase.ClickEvent, fileHeader));

@@ -58,22 +58,24 @@
                   p:GridViewSizing.LastColumnMinimumWidth="255"
                   p:GridViewSort.Sort="{Binding FileSort}">
             <ListView.View>
-                <GridView ColumnHeaderTemplate="{StaticResource SortableColumnHeader}">
+                <GridView ColumnHeaderContainerStyle="{StaticResource SortableColumnHeaderContainer}" ColumnHeaderTemplate="{StaticResource SortableColumnHeader}">
                     <GridViewColumn Header="File"
                                     Width="238"
                                     p:GridViewSort.Key="{x:Static viewModels:MediaSortColumn.Name}">
                         <GridViewColumn.HeaderTemplate>
                             <DataTemplate>
-                                <StackPanel Orientation="Horizontal" Margin="1,0,0,0">
-                                    <CheckBox IsChecked="{Binding DataContext.AllFilesSelected, RelativeSource={RelativeSource AncestorType=ListView}, Mode=OneWay}"
-                                              Command="{Binding DataContext.ToggleSelectAllCommand, RelativeSource={RelativeSource AncestorType=ListView}}"
-                                              Margin="0,0,12,0"
-                                              VerticalAlignment="Center"
-                                              ToolTip="Select all / none"
-                                              AutomationProperties.Name="Select all or clear all files" />
-                                    <TextBlock Text="File" VerticalAlignment="Center" />
+                                <Grid Margin="1,0,0,0">
+                                    <StackPanel Orientation="Horizontal">
+                                        <CheckBox IsChecked="{Binding DataContext.AllFilesSelected, RelativeSource={RelativeSource AncestorType=ListView}, Mode=OneWay}"
+                                                  Command="{Binding DataContext.ToggleSelectAllCommand, RelativeSource={RelativeSource AncestorType=ListView}}"
+                                                  Margin="0,0,12,0"
+                                                  VerticalAlignment="Center"
+                                                  ToolTip="Select all / none"
+                                                  AutomationProperties.Name="Select all or clear all files" />
+                                        <TextBlock Text="File" VerticalAlignment="Center" />
+                                    </StackPanel>
                                     <TextBlock Style="{StaticResource ColumnSortIndicator}" />
-                                </StackPanel>
+                                </Grid>
                             </DataTemplate>
                         </GridViewColumn.HeaderTemplate>
                         <GridViewColumn.CellTemplate>
