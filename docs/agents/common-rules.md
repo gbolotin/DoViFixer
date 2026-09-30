@@ -4,6 +4,11 @@
 
 These rules apply throughout the repository. Application-specific project names, framework choices, and workflow requirements belong in [DoViFixer-specific rules](dovifixer-rules.md).
 
+## Git workflow
+
+- When the current branch is `main`, create and switch to a feature branch before making changes, following the repository's branch naming and pull request workflow.
+- Whenever the user asks to commit while on `main`, create and switch to a feature branch first, carrying any existing changes onto it, then commit there.
+
 ## Programming style
 
 - Prefer simple, readable, maintainable code.
