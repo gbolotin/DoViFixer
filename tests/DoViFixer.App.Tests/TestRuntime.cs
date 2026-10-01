@@ -340,6 +340,16 @@ internal sealed class TestRuntime : IFileDiscovery, IFileOperations, IMediaProbe
         OpenedFolder = path;
     }
 
+    public string? ShownFile
+    {
+        get;
+        private set;
+    }
+    public void ShowInFolder(string filePath)
+    {
+        ShownFile = filePath;
+    }
+
     public void OpenLogs()
     {
     }

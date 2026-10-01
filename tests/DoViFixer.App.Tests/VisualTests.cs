@@ -272,13 +272,19 @@ public sealed class VisualTests
             Assert.IsTrue(frame.IsVisible);
             Assert.IsTrue(frame.ActualHeight <= 240);
             var detailValues = Descendants<TextBlock>(mediaView)
-                .Where(text => text.DataContext is KeyValuePair<string, string> && Grid.GetColumn(text) == 1).ToArray();
+                .Where(text => text.DataContext is KeyValuePair<string, string> && Grid.GetColumn(text) == 1 && text.IsVisible).ToArray();
             Assert.AreEqual(media.Focused!.DetailRows.Count, detailValues.Length);
             foreach (var value in detailValues)
             {
                 Assert.AreEqual(TextAlignment.Right, value.TextAlignment);
-                Assert.AreEqual(value.Text, value.ToolTip);
+                Assert.AreEqual(DisplayedText(value), value.ToolTip);
             }
+            var fileLocation = detailValues.Single(text => text.Inlines.FirstInline is System.Windows.Documents.Hyperlink);
+            Assert.AreEqual(media.Focused.Path, DisplayedText(fileLocation));
+            var fileLocationLink = (System.Windows.Documents.Hyperlink)fileLocation.Inlines.FirstInline;
+            Assert.AreSame(media.OpenFileLocationCommand, fileLocationLink.Command, "The file location link must open the folder.");
+            fileLocationLink.Command.Execute(fileLocationLink.CommandParameter);
+            Assert.AreEqual(media.Focused.Path, runtime.ShownFile);
             SaveRender((FrameworkElement)window.Content, "command-icons-toolbar");
             await VerifyRowActionsAsync(runtime, media, list, window, navigation, mediaView);
             window.Width = 800;
@@ -913,6 +919,8 @@ public sealed class VisualTests
     }
 
     private static Button Button(DependencyObject parent, string caption) => Descendants<Button>(parent).Single(button => Equals(button.Content, caption));
+
+    private static string DisplayedText(TextBlock text) => new System.Windows.Documents.TextRange(text.ContentStart, text.ContentEnd).Text;
 
     private static TextBlock StatusItem(DependencyObject window, int index) =>
         Descendants<TextBlock>(Descendants<StatusBar>(window).Single()).ElementAt(index);

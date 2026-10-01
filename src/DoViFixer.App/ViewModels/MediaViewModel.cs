@@ -108,6 +108,7 @@ public sealed class MediaViewModel : OperationViewModel, INavigationPage, IIniti
 
         OpenOutputCommand = new(() => dialogs.OpenFolder(Path.GetDirectoryName(Focused!.Result!.Output!)!), () => Focused?.Result?.Output is not null);
         OpenRowOutputCommand = new(row => dialogs.OpenFolder(Path.GetDirectoryName(row.Result!.Output!)!), row => row is not null && row.CanOpenResult);
+        OpenFileLocationCommand = new(() => dialogs.ShowInFolder(Focused!.Path), () => Focused is not null);
         RetryAnalysisCommand = new(row => RunAsync((token, _) => AnalyzeRowsAsync([row], row.LastAnalysisMethod!.Value, token)), row => IsIdle && Files.Contains(row) && row.CanRetryAnalysis && row.LastAnalysisMethod is not null);
         InspectIncompleteCommand = new(row => RunAsync((token, _) => AnalyzeRowsAsync([row], AnalysisMethod.FullRpu, token)), row => IsIdle && Files.Contains(row) && row.CanInspectIncomplete);
         OpenLogsCommand = new(dialogs.OpenLogs);
@@ -163,6 +164,7 @@ public sealed class MediaViewModel : OperationViewModel, INavigationPage, IIniti
             if (SetProperty(ref focused, value))
             {
                 OpenOutputCommand.RaiseCanExecuteChanged();
+                OpenFileLocationCommand.RaiseCanExecuteChanged();
                 previewCompletion = Task.WhenAll(previewCompletion, LoadPreviewAsync(value));
             }
         }
@@ -335,6 +337,7 @@ public sealed class MediaViewModel : OperationViewModel, INavigationPage, IIniti
     public RelayCommand<MediaRow> SkipCommand { get; }
     public RelayCommand<MediaRow> CancelFileCommand { get; }
     public RelayCommand OpenOutputCommand { get; }
+    public RelayCommand OpenFileLocationCommand { get; }
     public RelayCommand OpenLogsCommand { get; }
     public AsyncCommand<MediaRow> RetryAnalysisCommand { get; }
     public AsyncCommand<MediaRow> InspectIncompleteCommand { get; }

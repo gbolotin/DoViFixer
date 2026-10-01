@@ -9,13 +9,30 @@ public sealed class UserDialogs(string logDirectory) : IUserDialogs
     public void OpenLogs() => OpenFolder(logDirectory);
     public void OpenFolder(string path)
     {
+        StartExplorer(start => start.ArgumentList.Add(Path.GetFullPath(path)));
+    }
+
+    public void ShowInFolder(string filePath)
+    {
+        if (!File.Exists(filePath))
+        {
+            OpenFolder(Path.GetDirectoryName(filePath)!);
+            return;
+        }
+
+        // Explorer parses "/select," itself, so the path is quoted here rather than through ArgumentList.
+        StartExplorer(start => start.Arguments = $"/select,\"{Path.GetFullPath(filePath)}\"");
+    }
+
+    private static void StartExplorer(Action<ProcessStartInfo> setArguments)
+    {
         try
         {
             var start = new ProcessStartInfo("explorer.exe")
             {
                 UseShellExecute = false
             };
-            start.ArgumentList.Add(Path.GetFullPath(path));
+            setArguments(start);
             using var process = Process.Start(start);
         }
         catch (Exception ex)when (ex is IOException or System.ComponentModel.Win32Exception or ArgumentException)

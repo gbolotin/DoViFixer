@@ -25,7 +25,8 @@ public sealed class MediaRow(string path) : ObservableObject
     #endregion
 
     #region Public fields
-    
+
+    public const string FileLocationLabel = "File location";
     public string Path { get; } = path;
     public string Name => System.IO.Path.GetFileName(Path);
     public ProgressViewModel Progress { get; } = new();
@@ -237,7 +238,7 @@ public sealed class MediaRow(string path) : ObservableObject
         {
             if (Analysis is not { } a)
             {
-                return [new("File location", Path)];
+                return [new(FileLocationLabel, Path)];
             }
 
             string length = "Unknown";
@@ -252,7 +253,7 @@ public sealed class MediaRow(string path) : ObservableObject
                 new("Type", "Matroska"),
                 new("Size", a.Media.Source.Length >= 1073741824
                     ? $"{a.Media.Source.Length / 1073741824d:0.##} GiB" : $"{a.Media.Source.Length / 1048576d:0.##} MiB"),
-                new("File location", Path),
+                new(FileLocationLabel, Path),
                 new("Date modified", a.Media.Source.LastWriteUtc.ToLocalTime().ToString("g")),
                 new("Length", length),
                 new("Profile / Type", Classification),
