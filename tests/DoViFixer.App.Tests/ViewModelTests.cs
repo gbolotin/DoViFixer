@@ -491,6 +491,20 @@ public sealed class ViewModelTests
     }
 
     [TestMethod]
+    public async Task OpenFileLocationShowsFocusedFileInFolder()
+    {
+        using var runtime = new TestRuntime();
+        var model = runtime.Container.GetRequiredService<MediaViewModel>();
+        await model.AddAsync([@"C:\Media\One\Mountain.mkv", @"C:\Media\Two\Ocean.mkv"]);
+        model.Focused = null;
+        Assert.IsFalse(model.OpenFileLocationCommand.CanExecute());
+        model.Focused = model.Files[1];
+        Assert.IsTrue(model.OpenFileLocationCommand.CanExecute());
+        model.OpenFileLocationCommand.Execute();
+        Assert.AreEqual(@"C:\Media\Two\Ocean.mkv", runtime.ShownFile);
+    }
+
+    [TestMethod]
     public async Task OpenFolderUsesClickedRowRatherThanFocusedRow()
     {
         using var runtime = new TestRuntime();

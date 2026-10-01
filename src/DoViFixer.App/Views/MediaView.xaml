@@ -396,7 +396,36 @@
                                                Text="{Binding Value}"
                                                TextAlignment="Right"
                                                TextTrimming="CharacterEllipsis"
-                                               ToolTip="{Binding Value}" />
+                                               ToolTip="{Binding Value}">
+                                        <TextBlock.Style>
+                                            <Style TargetType="TextBlock">
+                                                <Style.Triggers>
+                                                    <DataTrigger Binding="{Binding Key}" Value="{x:Static viewModels:MediaRow.FileLocationLabel}">
+                                                        <Setter Property="Visibility" Value="Collapsed" />
+                                                    </DataTrigger>
+                                                </Style.Triggers>
+                                            </Style>
+                                        </TextBlock.Style>
+                                    </TextBlock>
+                                    <TextBlock Grid.Column="1"
+                                               TextAlignment="Right"
+                                               TextTrimming="CharacterEllipsis"
+                                               ToolTip="{Binding Value}">
+                                        <TextBlock.Style>
+                                            <Style TargetType="TextBlock">
+                                                <Setter Property="Visibility" Value="Collapsed" />
+                                                <Style.Triggers>
+                                                    <DataTrigger Binding="{Binding Key}" Value="{x:Static viewModels:MediaRow.FileLocationLabel}">
+                                                        <Setter Property="Visibility" Value="Visible" />
+                                                    </DataTrigger>
+                                                </Style.Triggers>
+                                            </Style>
+                                        </TextBlock.Style>
+                                        <Hyperlink Command="{Binding DataContext.OpenFileLocationCommand, RelativeSource={RelativeSource AncestorType=ItemsControl}}"
+                                                   AutomationProperties.Name="Open file location">
+                                            <Run Text="{Binding Value, Mode=OneWay}" />
+                                        </Hyperlink>
+                                    </TextBlock>
                                 </Grid>
                             </DataTemplate>
                         </ItemsControl.ItemTemplate>
