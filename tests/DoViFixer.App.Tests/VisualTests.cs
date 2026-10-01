@@ -856,6 +856,27 @@ public sealed class VisualTests
         Invoke(Button(container, "Open folder"));
         await LayoutAsync(window);
         Assert.AreEqual(@"C:\Media", runtime.OpenedFolder);
+
+        var removeMissing = Button(window, "Remove missing");
+        Assert.AreEqual(Visibility.Collapsed, removeMissing.Visibility);
+        var missing = media.Files[1];
+        media.Focused = missing;
+        runtime.MissingFiles.Add(missing.Path);
+        runtime.RaiseSourceFilesChanged();
+        await LayoutAsync(window);
+        var missingContainer = (ListViewItem)list.ItemContainerGenerator.ContainerFromItem(missing);
+        var missingStatus = Descendants<TextBlock>(missingContainer).Single(text => text.Text == MediaRow.MissingStatus);
+        Assert.AreEqual(window.FindResource("SystemFillColorCautionBrush"), missingStatus.Foreground);
+        Assert.AreEqual(TextDecorationLocation.Strikethrough, Descendants<TextBlock>(missingContainer).Single(text => text.Text == missing.Name).TextDecorations.Single().Location);
+        Assert.IsFalse(Descendants<CheckBox>(missingContainer).Single().IsEnabled);
+        Assert.AreEqual(Visibility.Visible, removeMissing.Visibility);
+        Assert.IsTrue(removeMissing.IsEnabled);
+        AssertInside(removeMissing, (FrameworkElement)window.Content);
+        SaveRender((FrameworkElement)window.Content, "missing-source-file");
+        runtime.MissingFiles.Clear();
+        runtime.RaiseSourceFilesChanged();
+        await LayoutAsync(window);
+        Assert.AreEqual(Visibility.Collapsed, removeMissing.Visibility);
     }
 
     private static async Task VerifySettingsRecoveryAsync(TestRuntime runtime, ShellViewModel shell, Window window, ListBox navigation, DependencyObject settingsView)

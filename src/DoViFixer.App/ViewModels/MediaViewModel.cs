@@ -47,11 +47,17 @@ public sealed class MediaViewModel : OperationViewModel, INavigationPage, IIniti
     private Task previewCompletion = Task.CompletedTask;
     private BitmapSource? framePreview;
     private string previewStatus = "";
+    private readonly ISourceFileMonitor sourceFiles;
+    private readonly SynchronizationContext? uiContext;
+    private int availabilityCheckQueued;
 
     private static string Summary(BatchResult result) => string.Join(" · ", result.Items.GroupBy(r => r.Status).Select(g => $"{g.Count()} {g.Key}"));
-    public MediaViewModel(IFileDiscovery discovery, InspectionService inspection, ConversionService conversion, ControlledBatchService batch, SettingsService settings, DependencySetup dependencies, IUserDialogs dialogs, ILogger<MediaViewModel> logger, IMediaPreview mediaPreview, RestoreService restore)
+    public MediaViewModel(IFileDiscovery discovery, InspectionService inspection, ConversionService conversion, ControlledBatchService batch, SettingsService settings, DependencySetup dependencies, IUserDialogs dialogs, ILogger<MediaViewModel> logger, IMediaPreview mediaPreview, RestoreService restore, ISourceFileMonitor sourceFiles)
     {
         this.discovery = discovery;
+        this.sourceFiles = sourceFiles;
+        uiContext = SynchronizationContext.Current;
+        sourceFiles.Changed += OnSourceFilesChanged;
         this.inspection = inspection;
         this.conversion = conversion;
         this.restore = restore;
@@ -69,13 +75,15 @@ public sealed class MediaViewModel : OperationViewModel, INavigationPage, IIniti
         ScanCommand = new(ScanAllAsync, CanScan);
         Files.CollectionChanged += (_, _) =>
         {
+            sourceFiles.Watch(Files.Select(row => row.Path));
             RaisePropertyChanged(nameof(IsFileListEmpty));
+            RaisePropertyChanged(nameof(HasMissingFiles));
             CommandsChanged();
         };
         InspectCommand = new(() => AnalyzeAsync(AnalysisMethod.FullRpu), CanOperate);
         DeepInspectCommand = new(() => AnalyzeAsync(AnalysisMethod.DeepInspection), CanOperate);
         ConvertDv81Command = new(() => ConvertBatchAsync(ConversionTarget.Profile81), CanOperate);
-        ConvertRowDv81Command = new(row => ConvertBatchAsync(ConversionTarget.Profile81, [row]), row => IsIdle && Files.Contains(row) && row.IsProfile7);
+        ConvertRowDv81Command = new(row => ConvertBatchAsync(ConversionTarget.Profile81, [row]), row => IsIdle && Files.Contains(row) && row.IsProfile7 && !row.IsMissing);
         RestoreRowCommand = new(RestoreRowAsync, row => IsIdle && Files.Contains(row) && row.CanRestore);
         ConvertHdrCommand = new(() => ConvertBatchAsync(ConversionTarget.Hdr10), CanOperate);
 
@@ -115,6 +123,7 @@ public sealed class MediaViewModel : OperationViewModel, INavigationPage, IIniti
         ToggleSelectAllCommand = new(ToggleSelectAll, () => IsIdle && Files.Any(row => row.SelectionEnabled));
         ClearAllCommand = new(ClearAll, () => IsIdle && Files.Count > 0);
         RemoveFileCommand = new(RemoveFile, row => IsIdle && Files.Contains(row));
+        RemoveMissingCommand = new(RemoveMissing, () => IsIdle && HasMissingFiles);
         OpenSettingsCommand = new(() => RequestNavigateToSettings?.Invoke(), () => IsIdle);
         FileSort = new((column, direction) => new MediaRowComparer((MediaSortColumn)column, direction), () => IsIdle);
         BatchProgress.PropertyChanged += (_, _) => NotifyActiveProgress();
@@ -193,6 +202,12 @@ public sealed class MediaViewModel : OperationViewModel, INavigationPage, IIniti
             return;
         }
 
+        if (row.IsMissing)
+        {
+            PreviewStatus = MissingPreviewStatus;
+            return;
+        }
+
         using var cancellation = new CancellationTokenSource();
         previewCancellation = cancellation;
         PreviewStatus = "Loading frame preview…";
@@ -224,7 +239,9 @@ public sealed class MediaViewModel : OperationViewModel, INavigationPage, IIniti
             logger.LogDebug(ex, "Frame preview unavailable for {Input}", row.Path);
             if (!cancellation.IsCancellationRequested)
             {
-                PreviewStatus = "Frame preview unavailable. Check media tools in Settings or try selecting the file again.";
+                PreviewStatus = sourceFiles.Exists(row.Path)
+                    ? "Frame preview unavailable. Check media tools in Settings or try selecting the file again."
+                    : MissingPreviewStatus;
             }
         }
         finally
@@ -255,7 +272,7 @@ public sealed class MediaViewModel : OperationViewModel, INavigationPage, IIniti
             foreach (var row in rows)
             {
                 cancellation.Token.ThrowIfCancellationRequested();
-                if (!Files.Contains(row))
+                if (!Files.Contains(row) || row.IsMissing)
                 {
                     continue;
                 }
@@ -295,7 +312,99 @@ public sealed class MediaViewModel : OperationViewModel, INavigationPage, IIniti
         backgroundPreviewCancellation?.Cancel();
     }
 
-    public void Dispose() => CancelPreviews();
+    public void Dispose()
+    {
+        sourceFiles.Changed -= OnSourceFilesChanged;
+        CancelPreviews();
+    }
+
+    private const string MissingPreviewStatus = "File not found.";
+
+    public bool HasMissingFiles => Files.Any(row => row.IsMissing);
+
+    /// <summary>
+    /// Re-checks every listed file, for example when the window is activated, because folder watchers miss
+    /// changes on some network shares, removed drives and folders that were themselves moved.
+    /// </summary>
+    public void CheckSourceFiles()
+    {
+        sourceFiles.Watch(Files.Select(row => row.Path));
+        RefreshSourceAvailability();
+    }
+
+    private void OnSourceFilesChanged(object? sender, EventArgs e)
+    {
+        // Coalesce bursts, such as a whole folder being deleted, into one check on the UI thread.
+        if (Interlocked.Exchange(ref availabilityCheckQueued, 1) == 1)
+        {
+            return;
+        }
+
+        if (uiContext is null)
+        {
+            RunQueuedAvailabilityCheck();
+        }
+        else
+        {
+            uiContext.Post(_ => RunQueuedAvailabilityCheck(), null);
+        }
+    }
+
+    private void RunQueuedAvailabilityCheck()
+    {
+        Interlocked.Exchange(ref availabilityCheckQueued, 0);
+        RefreshSourceAvailability();
+    }
+
+    private void RefreshSourceAvailability()
+    {
+        bool changed = false;
+        foreach (var row in Files)
+        {
+            // A running job holds its source open, and Replace original moves it away on purpose.
+            if (row.IsActive)
+            {
+                continue;
+            }
+
+            bool missing = !sourceFiles.Exists(row.Path);
+            if (missing == row.IsMissing)
+            {
+                continue;
+            }
+
+            if (missing && row.IsPending && control?.Skip(row.Path) == true)
+            {
+                row.SetSkipped(MediaRow.MissingNote);
+            }
+
+            row.IsMissing = missing;
+            if (missing)
+            {
+                row.IsSelected = false;
+            }
+            else if (row.Notice == MediaRow.MissingNote)
+            {
+                row.Notice = "";
+            }
+
+            if (ReferenceEquals(row, Focused))
+            {
+                previewCompletion = Task.WhenAll(previewCompletion, LoadPreviewAsync(row));
+            }
+
+            changed = true;
+        }
+
+        if (changed)
+        {
+            RaisePropertyChanged(nameof(HasMissingFiles));
+            ConvertRowDv81Command.RaiseCanExecuteChanged();
+            CommandsChanged();
+        }
+    }
+
+    private static OperationItemResult MissingSource(MediaRow row) => new(row.Path, OperationStatus.Skipped, null, MediaRow.MissingNote);
 
     public string SelectionSummary
     {
@@ -318,6 +427,7 @@ public sealed class MediaViewModel : OperationViewModel, INavigationPage, IIniti
     public RelayCommand ToggleSelectAllCommand { get; }
     public RelayCommand ClearAllCommand { get; }
     public RelayCommand<MediaRow> RemoveFileCommand { get; }
+    public RelayCommand RemoveMissingCommand { get; }
     /// <summary>
     /// Display order applied by the list's collection view; <see cref="Files"/> keeps the order files were added.
     /// Sorting is blocked while busy because a running batch keeps the order it started with.
@@ -446,7 +556,7 @@ public sealed class MediaViewModel : OperationViewModel, INavigationPage, IIniti
         }
     }
 
-    private bool CanScan() => IsIdle && Files.Count > 0;
+    private bool CanScan() => IsIdle && Files.Any(row => !row.IsMissing);
     private bool CanOperate() => IsIdle && Files.Any(f => f.IsSelected);
 
     protected override void CommandsChanged()
@@ -458,6 +568,7 @@ public sealed class MediaViewModel : OperationViewModel, INavigationPage, IIniti
         ToggleSelectAllCommand?.RaiseCanExecuteChanged();
         ClearAllCommand?.RaiseCanExecuteChanged();
         RemoveFileCommand?.RaiseCanExecuteChanged();
+        RemoveMissingCommand?.RaiseCanExecuteChanged();
         OpenSettingsCommand?.RaiseCanExecuteChanged();
         AddFilesCommand?.RaiseCanExecuteChanged();
         AddFolderCommand?.RaiseCanExecuteChanged();
@@ -622,6 +733,9 @@ public sealed class MediaViewModel : OperationViewModel, INavigationPage, IIniti
             row.IsActive = false;
             row.SelectionEnabled = true;
         }
+
+        // Rows skipped as missing, and sources moved by Replace original, are marked now that no job holds them.
+        RefreshSourceAvailability();
     }
 
     private IProgress<OperationProgress> Activate(MediaRow row, string stage)
@@ -636,7 +750,7 @@ public sealed class MediaViewModel : OperationViewModel, INavigationPage, IIniti
     public Task ScanAllAsync() => RunAsync(async (token, _) =>
     {
         StartBackgroundPreviews(refreshFocused: true);
-        await AnalyzeRowsAsync(InDisplayOrder(Files), AnalysisMethod.SampledRpu, token);
+        await AnalyzeRowsAsync(InDisplayOrder(Files.Where(row => !row.IsMissing)), AnalysisMethod.SampledRpu, token);
     });
 
     private Task AnalyzeAsync(AnalysisMethod method) => RunAsync(async (token, _) =>
@@ -661,6 +775,11 @@ public sealed class MediaViewModel : OperationViewModel, INavigationPage, IIniti
         {
             var results = await batch.ExecuteAsync(rows, row => row.Path, async (row, itemToken) =>
             {
+                if (!sourceFiles.Exists(row.Path))
+                {
+                    return MissingSource(row);
+                }
+
                 var jobProgress = Activate(row, method == AnalysisMethod.SampledRpu ? "Scanning" : "Inspecting");
                 row.AnalysisError = null;
                 row.Notice = "";
@@ -887,6 +1006,11 @@ public sealed class MediaViewModel : OperationViewModel, INavigationPage, IIniti
         {
             var result = await batch.ExecuteAsync(rows, r => r.Path, async (row, itemToken) =>
             {
+                if (!sourceFiles.Exists(row.Path))
+                {
+                    return MissingSource(row);
+                }
+
                 var jobProgress = Activate(row, "Preparing conversion");
                 row.AnalysisError = null;
                 row.Notice = "";
@@ -990,6 +1114,14 @@ public sealed class MediaViewModel : OperationViewModel, INavigationPage, IIniti
         }
         RaisePropertyChanged(nameof(SelectionSummary));
         RaisePropertyChanged(nameof(AllFilesSelected));
+    }
+
+    private void RemoveMissing()
+    {
+        foreach (var row in Files.Where(row => row.IsMissing).ToArray())
+        {
+            RemoveFile(row);
+        }
     }
 
     private void ClearAll()

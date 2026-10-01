@@ -21,6 +21,13 @@
                     ContentTemplate="{StaticResource IconButtonContent}"
                     Command="{Binding ClearAllCommand}"
                     Margin="0,0,8,8" />
+            <Button Content="Remove missing"
+                    Tag="&#xE74D;"
+                    ContentTemplate="{StaticResource IconButtonContent}"
+                    Command="{Binding RemoveMissingCommand}"
+                    Visibility="{Binding HasMissingFiles, Converter={StaticResource Visible}}"
+                    ToolTip="Remove files that were deleted, moved or renamed outside DoViFixer from the list."
+                    Margin="0,0,8,8" />
             <Border Width="1"
                     Margin="4,6,12,14"
                     Background="{DynamicResource DividerStrokeColorDefaultBrush}" />
@@ -93,7 +100,18 @@
                                     <StackPanel VerticalAlignment="Center">
                                         <TextBlock Text="{Binding Name}"
                                                    TextTrimming="CharacterEllipsis"
-                                                   ToolTip="{Binding Path}" />
+                                                   ToolTip="{Binding Path}">
+                                            <TextBlock.Style>
+                                                <Style TargetType="TextBlock">
+                                                    <Style.Triggers>
+                                                        <DataTrigger Binding="{Binding IsMissing}" Value="True">
+                                                            <Setter Property="Foreground" Value="{DynamicResource TextFillColorSecondaryBrush}" />
+                                                            <Setter Property="TextDecorations" Value="Strikethrough" />
+                                                        </DataTrigger>
+                                                    </Style.Triggers>
+                                                </Style>
+                                            </TextBlock.Style>
+                                        </TextBlock>
                                         <TextBlock Text="{Binding PlannedOutput}"
                                                    FontSize="11"
                                                    Foreground="{DynamicResource TextFillColorSecondaryBrush}"
@@ -186,7 +204,17 @@
                                             <TextBlock Text="{Binding Status}"
                                                        TextWrapping="Wrap"
                                                        VerticalAlignment="Center"
-                                                       ToolTip="{Binding StatusToolTip}" />
+                                                       ToolTip="{Binding StatusToolTip}">
+                                                <TextBlock.Style>
+                                                    <Style TargetType="TextBlock">
+                                                        <Style.Triggers>
+                                                            <DataTrigger Binding="{Binding Status}" Value="{x:Static viewModels:MediaRow.MissingStatus}">
+                                                                <Setter Property="Foreground" Value="{DynamicResource SystemFillColorCautionBrush}" />
+                                                            </DataTrigger>
+                                                        </Style.Triggers>
+                                                    </Style>
+                                                </TextBlock.Style>
+                                            </TextBlock>
                                             <TextBlock Text="&#xE7BA;"
                                                        FontFamily="{StaticResource SymbolThemeFontFamily}"
                                                        FontWeight="SemiBold"
