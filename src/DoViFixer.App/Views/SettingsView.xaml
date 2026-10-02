@@ -88,24 +88,18 @@
                             <CheckBox Content="Include Simple FEL conversion"
                                       IsChecked="{Binding IncludeSimple}"
                                       Style="{StaticResource ToggleSwitchStyle}" />
-                            <TextBlock TextWrapping="Wrap"
-                                       Style="{StaticResource CaptionTextBlockStyle}"
-                                       Foreground="{DynamicResource TextFillColorSecondaryBrush}"
-                                       Margin="0,-6,88,10">
+                            <TextBlock Style="{StaticResource SettingWarning}">
                                 <Run Text="&#xE7BA;"
                                      FontFamily="{StaticResource SymbolThemeFontFamily}"
                                      FontWeight="SemiBold"
-                                     Foreground="{DynamicResource SystemFillColorCautionBrush}"/>
+                                     Foreground="{DynamicResource SystemFillColorCautionBrush}" />
                                 <Run Text="Enhancement-layer picture data will be discarded. Simple FEL contains minimal picture data and does not expand dynamic range beyond the base layer, but the original enhancement-layer video track is not retained in the converted file." />
                             </TextBlock>
                             <Separator />
                             <CheckBox Content="Force Complex FEL conversion"
                                       IsChecked="{Binding ForceComplex}"
                                       Style="{StaticResource ToggleSwitchStyle}" />
-                            <TextBlock TextWrapping="Wrap"
-                                       Style="{StaticResource CaptionTextBlockStyle}"
-                                       Foreground="{DynamicResource TextFillColorSecondaryBrush}"
-                                       Margin="0,-6,88,10">
+                            <TextBlock Style="{StaticResource SettingWarning}">
                                 <Run Text="&#xE7BA;"
                                      FontFamily="{StaticResource SymbolThemeFontFamily}"
                                      FontWeight="SemiBold"
