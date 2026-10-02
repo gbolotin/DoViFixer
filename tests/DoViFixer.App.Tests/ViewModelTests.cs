@@ -711,7 +711,7 @@ public sealed class ViewModelTests
         {
             StringAssert.Contains(runtime.Reviews[0], "Installed and ready");
             StringAssert.Contains(runtime.Reviews[0], "Missing or needs attention");
-            StringAssert.Contains(runtime.Reviews[0], DependencySetup.ToolDescriptions);
+            StringAssert.Contains(runtime.Reviews[0], NativeToolDescriptions.Summary);
             StringAssert.Contains(runtime.Reviews[0], "Source:");
             StringAssert.Contains(runtime.Reviews[0], "Scope:");
             StringAssert.Contains(runtime.Reviews[0], "elevation:");
