@@ -6,15 +6,6 @@ using Microsoft.Extensions.Logging;
 namespace DoViFixer.App.Presentation.Application;
 public sealed class DependencySetup(DependencyService dependencies, DependencyReportViewModel status, IUserDialogs dialogs, ILogger<DependencySetup> logger) : IDisposable
 {
-    public const string ToolDescriptions = """
-        FFmpeg — extracts video and generates frame previews.
-        FFprobe — reads stream and frame information.
-        mkvmerge (MKVToolNix) — builds the output MKV with video, audio, and subtitles.
-        mkvextract (MKVToolNix) — extracts tracks for conversion, backup, and restoration.
-        MediaInfo CLI — identifies media formats and Dolby Vision profiles.
-        dovi_tool — analyzes and converts Dolby Vision metadata and handles enhancement-layer data.
-        """;
-
     private readonly SemaphoreSlim gate = new(1, 1);
     private int completedEnsures;
     private bool lastEnsureResult;
@@ -86,7 +77,7 @@ public sealed class DependencySetup(DependencyService dependencies, DependencyRe
         string installed = string.Join("\n", report.Tools.Where(t => t.State == DependencyState.Ready).Select(t => $"{t.Tool}: Installed and ready — {t.Version}\n{t.Path}"));
         string missing = string.Join("\n", report.Tools.Where(t => t.State != DependencyState.Ready).Select(t => $"{t.Tool}: {t.State}\n{t.Path}\n{t.Diagnostic}"));
         string details = "DoViFixer uses these command-line tools to inspect and process media. Install the missing or unusable tools to enable those operations. You can cancel now and install them later from Settings.\n\n"
-            + ToolDescriptions + "\n\nInstalled and ready\n" + (installed.Length == 0 ? "None" : installed) + "\n\nMissing or needs attention\n" + missing;
+            + NativeToolDescriptions.Summary +"\n\nInstalled and ready\n" + (installed.Length == 0 ? "None" : installed) + "\n\nMissing or needs attention\n" + missing;
         details += "\n\nInstallation plan\n" + string.Join("\n\n", plan.Items.Select(i => $"{i.Id} {i.Version}\nTools: {string.Join(", ", i.Tools)}\nSource: {i.Source}\nDestination: {i.Destination}\nScope: {i.Scope}; elevation: {i.RequiresElevation}\nProvider: {i.Provider}\nSHA-256: {i.Sha256 ?? "Not supplied"}"));
         details += "\n" + string.Join("\n", plan.Unavailable);
         if (plan.Items.Count == 0)

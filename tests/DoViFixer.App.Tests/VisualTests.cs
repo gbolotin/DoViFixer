@@ -12,6 +12,7 @@ using DoViFixer.App.ViewModels;
 using DoViFixer.App.Presentation.Application;
 using DoViFixer.App.Presentation.Common;
 using DoViFixer.App.Views;
+using DoViFixer.Application.Dependencies;
 using DoViFixer.Domain.Analysis;
 using DoViFixer.Domain.Media;
 using Microsoft.Extensions.DependencyInjection;
@@ -221,7 +222,11 @@ public sealed class VisualTests
                         AssertInside(cacheSize, (FrameworkElement)window.Content);
                         AssertInside(cacheLocation, (FrameworkElement)window.Content);
                         SaveRender((FrameworkElement)window.Content, "settings-cache-size");
-                        var toolDescriptions = Descendants<TextBlock>(workspace).Single(text => text.Text == DependencySetup.ToolDescriptions);
+                        foreach (var tool in Enum.GetValues<NativeTool>())
+                        {
+                            Assert.HasCount(1, Descendants<TextBlock>(workspace).Where(text => text.Text == NativeToolDescriptions.Purpose(tool)));
+                        }
+                        var toolDescriptions = Descendants<TextBlock>(workspace).Single(text => text.Text == NativeToolDescriptions.Purpose(NativeTool.DoviTool));
                         toolDescriptions.BringIntoView();
                         await LayoutAsync(window);
                         AssertInside(toolDescriptions, (FrameworkElement)window.Content);
@@ -902,9 +907,15 @@ public sealed class VisualTests
 
     private static async Task VerifySettingsRecoveryAsync(TestRuntime runtime, ShellViewModel shell, Window window, ListBox navigation, DependencyObject settingsView)
     {
-        shell.Settings.OtherFolder = true;
+        var outputFolder = Descendants<ComboBox>(settingsView).Single(box => System.Windows.Automation.AutomationProperties.GetName(box) == "Output folder");
+        var outputPath = Descendants<TextBox>(settingsView).Single(box => System.Windows.Automation.AutomationProperties.GetName(box) == "Output folder path");
+        Assert.AreEqual(0, outputFolder.SelectedIndex);
+        Assert.IsFalse(outputPath.IsVisible);
+        outputFolder.SelectedIndex = 1;
+        Assert.IsTrue(shell.Settings.OtherFolder);
         await shell.Settings.SaveTask;
         await LayoutAsync(window);
+        Assert.IsTrue(outputPath.IsVisible);
         var discard = Button(settingsView, "Discard unsaved changes");
         Assert.IsTrue(discard.IsVisible);
         AssertInside(discard, (FrameworkElement)window.Content);
@@ -926,6 +937,8 @@ public sealed class VisualTests
         await LayoutAsync(window);
         Assert.IsNull(shell.Settings.SaveError);
         Assert.IsFalse(shell.Settings.OtherFolder);
+        Assert.AreEqual(0, outputFolder.SelectedIndex);
+        Assert.IsFalse(outputPath.IsVisible);
 
         runtime.DuringDependencyCheck = token => Task.Delay(Timeout.Infinite, token);
         var checking = shell.Settings.CheckCommand.ExecuteAsync();
