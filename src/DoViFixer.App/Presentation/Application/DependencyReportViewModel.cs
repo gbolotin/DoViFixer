@@ -1,4 +1,3 @@
-using DoViFixer.App.Presentation.Common;
 using DoViFixer.Application.Dependencies;
 
 namespace DoViFixer.App.Presentation.Application;
@@ -17,8 +16,8 @@ public sealed class DependencyReportViewModel : ObservableObject
     {
         report = value;
         checkError = null;
-        RaisePropertyChanged(nameof(Tools));
-        RaisePropertyChanged(nameof(ToolRows));
+        OnPropertyChanged(nameof(Tools));
+        OnPropertyChanged(nameof(ToolRows));
         NotifyWarning();
     }
 
@@ -30,9 +29,9 @@ public sealed class DependencyReportViewModel : ObservableObject
 
     private void NotifyWarning()
     {
-        RaisePropertyChanged(nameof(WarningText));
-        RaisePropertyChanged(nameof(WarningDetails));
-        RaisePropertyChanged(nameof(HasWarning));
+        OnPropertyChanged(nameof(WarningText));
+        OnPropertyChanged(nameof(WarningDetails));
+        OnPropertyChanged(nameof(HasWarning));
     }
 }
 

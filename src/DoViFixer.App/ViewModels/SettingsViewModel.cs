@@ -1,13 +1,11 @@
-using DoViFixer.App.Navigation;
 using DoViFixer.App.Dialogs;
-using DoViFixer.App.Presentation.Common;
 using DoViFixer.App.Presentation.Application;
 using DoViFixer.Application.Dependencies;
 using DoViFixer.Application.Settings;
 using DoViFixer.Application.Abstractions;
 
 namespace DoViFixer.App.ViewModels;
-public sealed class SettingsViewModel : OperationViewModel, INavigationPage
+public sealed class SettingsViewModel : OperationViewModel, INavigationPage, IPageActivation
 {
     public string NavigationName => "Settings";
     public string? NavigationIcon => "\uE713";
@@ -45,7 +43,7 @@ public sealed class SettingsViewModel : OperationViewModel, INavigationPage
         private set
         {
             SetProperty(ref isSaving, value);
-            DiscardChangesCommand?.RaiseCanExecuteChanged();
+            DiscardChangesCommand?.NotifyCanExecuteChanged();
         }
     }
     public string? SaveError
@@ -54,8 +52,8 @@ public sealed class SettingsViewModel : OperationViewModel, INavigationPage
         private set
         {
             SetProperty(ref saveError, value);
-            RaisePropertyChanged(nameof(HasSaveError));
-            DiscardChangesCommand?.RaiseCanExecuteChanged();
+            OnPropertyChanged(nameof(HasSaveError));
+            DiscardChangesCommand?.NotifyCanExecuteChanged();
         }
     }
     public bool HasSaveError => SaveError is not null;
@@ -72,7 +70,7 @@ public sealed class SettingsViewModel : OperationViewModel, INavigationPage
 
     public DependencyReportViewModel Dependencies { get; }
 
-    public SettingsViewModel(SettingsService settings, DependencySetup setup, DependencyReportViewModel dependencies, IUserDialogs dialogs, IAnalysisCache cache, IThemeService themeService, IMediaPreview mediaPreview)
+    public SettingsViewModel(SettingsService settings, DependencySetup setup, DependencyReportViewModel dependencies, IFileDialogService files, IFileExplorer explorer, IAnalysisCache cache, IThemeService themeService, IMediaPreview mediaPreview)
     {
         this.settings = settings;
         this.themeService = themeService;
@@ -88,10 +86,10 @@ public sealed class SettingsViewModel : OperationViewModel, INavigationPage
             await RefreshCacheSizeAsync(token);
             SetStatus(ViewStatus.SettingsLoaded);
         }), () => IsIdle);
-        BrowseTemporaryCommand = new(() => Temporary = dialogs.PickFolder() ?? Temporary);
-        BrowseDestinationCommand = new(() => Destination = dialogs.PickFolder() ?? Destination);
-        BrowseToolCommand = new(() => ToolPath = dialogs.PickFiles("Executables|*.exe").FirstOrDefault() ?? ToolPath);
-        OpenCacheFolderCommand = new(() => dialogs.OpenFolder(CacheDirectory));
+        BrowseTemporaryCommand = new(() => Temporary = files.PickFolder() ?? Temporary);
+        BrowseDestinationCommand = new(() => Destination = files.PickFolder() ?? Destination);
+        BrowseToolCommand = new(() => ToolPath = files.PickFiles("Executables|*.exe", allowMultiple: false).FirstOrDefault() ?? ToolPath);
+        OpenCacheFolderCommand = new(() => explorer.OpenFolder(CacheDirectory));
         SaveCommand = new(() => RunAsync(async (token, _) => await SaveAsync(token)), () => IsIdle);
         DiscardChangesCommand = new(DiscardChanges, () => IsIdle && !IsSaving && HasSaveError && lastSavedSettings is not null);
         ClearCacheCommand = new(() => RunAsync(async (token, _) =>
@@ -177,11 +175,11 @@ public sealed class SettingsViewModel : OperationViewModel, INavigationPage
             UseCachedResults = value.UseCachedResults;
             AutoSelectAfterScan = value.AutoSelectAfterScan;
             selectedTheme = value.Theme;
-            RaisePropertyChanged(nameof(SelectedTheme));
-            RaisePropertyChanged(nameof(IsSystemTheme));
-            RaisePropertyChanged(nameof(IsLightTheme));
-            RaisePropertyChanged(nameof(IsDarkTheme));
-            themeService.ApplyTheme(value.Theme);
+            OnPropertyChanged(nameof(SelectedTheme));
+            OnPropertyChanged(nameof(IsSystemTheme));
+            OnPropertyChanged(nameof(IsLightTheme));
+            OnPropertyChanged(nameof(IsDarkTheme));
+            themeService.ApplyTheme(value.Theme.ToThemePreference());
         }
         finally
         {
@@ -210,10 +208,10 @@ public sealed class SettingsViewModel : OperationViewModel, INavigationPage
         {
             if (SetProperty(ref selectedTheme, value))
             {
-                RaisePropertyChanged(nameof(IsSystemTheme));
-                RaisePropertyChanged(nameof(IsLightTheme));
-                RaisePropertyChanged(nameof(IsDarkTheme));
-                themeService.ApplyTheme(value);
+                OnPropertyChanged(nameof(IsSystemTheme));
+                OnPropertyChanged(nameof(IsLightTheme));
+                OnPropertyChanged(nameof(IsDarkTheme));
+                themeService.ApplyTheme(value.ToThemePreference());
                 TriggerAutoSave();
             }
         }
@@ -290,7 +288,7 @@ public sealed class SettingsViewModel : OperationViewModel, INavigationPage
             }
         }
     }
-    public AsyncCommand ClearCacheCommand
+    public AsyncRelayCommand ClearCacheCommand
     {
         get;
     }
@@ -312,7 +310,7 @@ public sealed class SettingsViewModel : OperationViewModel, INavigationPage
         {
             if (SetProperty(ref destination, value))
             {
-                RaisePropertyChanged(nameof(DestinationError));
+                OnPropertyChanged(nameof(DestinationError));
                 TriggerAutoSave();
             }
         }
@@ -324,7 +322,7 @@ public sealed class SettingsViewModel : OperationViewModel, INavigationPage
         {
             if (SetProperty(ref otherFolder, value))
             {
-                RaisePropertyChanged(nameof(DestinationError));
+                OnPropertyChanged(nameof(DestinationError));
                 TriggerAutoSave();
             }
         }
@@ -358,7 +356,7 @@ public sealed class SettingsViewModel : OperationViewModel, INavigationPage
         {
             if (SetProperty(ref includeSimple, value))
             {
-                RaisePropertyChanged(nameof(AllowFel));
+                OnPropertyChanged(nameof(AllowFel));
                 TriggerAutoSave();
             }
         }
@@ -370,7 +368,7 @@ public sealed class SettingsViewModel : OperationViewModel, INavigationPage
         {
             if (SetProperty(ref forceComplex, value))
             {
-                RaisePropertyChanged(nameof(AllowFel));
+                OnPropertyChanged(nameof(AllowFel));
                 TriggerAutoSave();
             }
         }
@@ -384,9 +382,9 @@ public sealed class SettingsViewModel : OperationViewModel, INavigationPage
             {
                 includeSimple = value;
                 forceComplex = value;
-                RaisePropertyChanged(nameof(IncludeSimple));
-                RaisePropertyChanged(nameof(ForceComplex));
-                RaisePropertyChanged(nameof(AllowFel));
+                OnPropertyChanged(nameof(IncludeSimple));
+                OnPropertyChanged(nameof(ForceComplex));
+                OnPropertyChanged(nameof(AllowFel));
                 TriggerAutoSave();
             }
         }
@@ -538,7 +536,7 @@ public sealed class SettingsViewModel : OperationViewModel, INavigationPage
         set
         {
             SetProperty(ref toolPath, value);
-            SetToolCommand.RaiseCanExecuteChanged();
+            SetToolCommand.NotifyCanExecuteChanged();
         }
     }
 
@@ -547,28 +545,31 @@ public sealed class SettingsViewModel : OperationViewModel, INavigationPage
         get;
     }
     = Enum.GetValues<NativeTool>();
-    public AsyncCommand LoadCommand
+    /// <summary>Settings reload every time the page is shown.</summary>
+    public Task OnActivatedAsync(CancellationToken cancellationToken) => LoadCommand.ExecuteAsync(null);
+
+    public AsyncRelayCommand LoadCommand
     {
         get;
     }
-    public AsyncCommand SaveCommand
+    public AsyncRelayCommand SaveCommand
     {
         get;
     }
     public RelayCommand DiscardChangesCommand { get; }
-    public AsyncCommand CheckCommand
+    public AsyncRelayCommand CheckCommand
     {
         get;
     }
-    public AsyncCommand InstallCommand
+    public AsyncRelayCommand InstallCommand
     {
         get;
     }
-    public AsyncCommand SetToolCommand
+    public AsyncRelayCommand SetToolCommand
     {
         get;
     }
-    public AsyncCommand ResetToolCommand
+    public AsyncRelayCommand ResetToolCommand
     {
         get;
     }
@@ -591,13 +592,13 @@ public sealed class SettingsViewModel : OperationViewModel, INavigationPage
 
     protected override void CommandsChanged()
     {
-        LoadCommand?.RaiseCanExecuteChanged();
-        SaveCommand?.RaiseCanExecuteChanged();
-        DiscardChangesCommand?.RaiseCanExecuteChanged();
-        ClearCacheCommand?.RaiseCanExecuteChanged();
-        CheckCommand?.RaiseCanExecuteChanged();
-        InstallCommand?.RaiseCanExecuteChanged();
-        SetToolCommand?.RaiseCanExecuteChanged();
-        ResetToolCommand?.RaiseCanExecuteChanged();
+        LoadCommand?.NotifyCanExecuteChanged();
+        SaveCommand?.NotifyCanExecuteChanged();
+        DiscardChangesCommand?.NotifyCanExecuteChanged();
+        ClearCacheCommand?.NotifyCanExecuteChanged();
+        CheckCommand?.NotifyCanExecuteChanged();
+        InstallCommand?.NotifyCanExecuteChanged();
+        SetToolCommand?.NotifyCanExecuteChanged();
+        ResetToolCommand?.NotifyCanExecuteChanged();
     }
 }

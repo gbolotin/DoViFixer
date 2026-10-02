@@ -1,6 +1,5 @@
 using System.Windows;
 using DoViFixer.App.Composition;
-using DoViFixer.App.Presentation.Common;
 using DoViFixer.App.Presentation.Application;
 using DoViFixer.App.ViewModels;
 using DoViFixer.App.Views;
@@ -28,7 +27,7 @@ public partial class App : System.Windows.Application
             var settings = await settingsService.ReadAsync(CancellationToken.None);
             if (services is not null)
             {
-                themeService.ApplyTheme(settings.Theme);
+                themeService.ApplyTheme(settings.Theme.ToThemePreference());
             }
         }
         catch
@@ -36,9 +35,9 @@ public partial class App : System.Windows.Application
             // If settings cannot be loaded, keep the default theme.
         }
 
-        if (MainWindow.DataContext is IInitializeAsync initializable)
+        if (MainWindow.DataContext is ShellViewModel shell)
         {
-            await initializable.InitializeAsync();
+            await shell.InitializeAsync();
         }
     }
 

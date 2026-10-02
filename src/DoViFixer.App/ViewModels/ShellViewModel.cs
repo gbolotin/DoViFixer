@@ -1,11 +1,9 @@
 using System.Collections.ObjectModel;
 using System.ComponentModel;
-using DoViFixer.App.Navigation;
-using DoViFixer.App.Presentation.Common;
 using DoViFixer.App.Presentation.Application;
 
 namespace DoViFixer.App.ViewModels;
-public sealed class ShellViewModel : ObservableObject, IInitializeAsync, IDisposable
+public sealed class ShellViewModel : ObservableObject, INavigationGuard, IDisposable
 {
     public ShellViewModel(MediaViewModel media, ArchiveViewModel archive, SettingsViewModel settings, StartupDependencyCheckViewModel dependencyCheck, DependencyReportViewModel dependencyReport)
     {
@@ -13,8 +11,11 @@ public sealed class ShellViewModel : ObservableObject, IInitializeAsync, IDispos
         this.dependencyCheck = dependencyCheck;
         this.dependencyReport = dependencyReport;
         Settings = settings;
-        Pages = [media, archive, settings];
-        operations = [.. Pages.OfType<OperationViewModel>()];
+        operations = [media, archive, settings];
+        // Media is shown from the start; InitializeAsync loads its summary as part of startup.
+        Navigation = new NavigationService([media, archive, settings], guard: this, initialPage: media);
+        Navigation.PropertyChanged += NavigationChanged;
+        Navigation.NavigationFailed += (_, failure) => Settings.SetStatus(ViewStatus.Error, failure.Exception.Message);
         media.RequestNavigateToSettings += () => CurrentPage = settings;
         settings.Saved += media.UpdateSettingsSummary;
         settings.CacheClearing += media.CancelPreviewsAsync;
@@ -22,7 +23,6 @@ public sealed class ShellViewModel : ObservableObject, IInitializeAsync, IDispos
         dependencyReport.PropertyChanged += DependencyReportChanged;
         dependencyCheck.PropertyChanged += DependencyCheckChanged;
 
-        currentPage = media;
         foreach (var operation in operations)
         {
             operation.PropertyChanged += OperationChanged;
@@ -36,21 +36,24 @@ public sealed class ShellViewModel : ObservableObject, IInitializeAsync, IDispos
     private readonly StartupDependencyCheckViewModel dependencyCheck;
     private readonly DependencyReportViewModel dependencyReport;
     private readonly OperationViewModel[] operations;
-    private INavigationPage currentPage;
-    private bool navigating;
     public SettingsViewModel Settings { get; }
+
+    /// <summary>Page navigation: the sidebar and the retained page host bind to it.</summary>
+    public NavigationService Navigation { get; }
+
     public Task NavigationTask { get; private set; } = Task.CompletedTask;
 
-    public INavigationPage[] Pages { get; }
+    public IReadOnlyList<INavigationPage> Pages => Navigation.Pages;
 
     /// <summary>
     /// Updated in place so unchanged items, such as the startup check's Cancel button, keep their containers.
+    /// Status belongs to the shell: the current page's items, then the startup check and dependency warning.
     /// </summary>
     public ObservableCollection<object> StatusItems { get; } = [];
 
     private void RefreshStatusItems()
     {
-        List<object> items = [.. CurrentPage.StatusItems];
+        List<object> items = [.. (CurrentPage as OperationViewModel)?.StatusItems ?? []];
         if (dependencyCheck.IsBusy)
         {
             items.Add(dependencyCheck);
@@ -89,13 +92,10 @@ public sealed class ShellViewModel : ObservableObject, IInitializeAsync, IDispos
     private async Task InitializeCoreAsync(CancellationToken cancellationToken)
     {
         using var linked = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken, startupCancellation.Token);
-        using var registration = linked.Token.Register(() => dependencyCheck.CancelCommand.Execute());
+        using var registration = linked.Token.Register(() => dependencyCheck.CancelCommand.Execute(null));
         try
         {
-            foreach (var page in Pages.OfType<IInitializeAsync>())
-            {
-                await page.InitializeAsync(linked.Token);
-            }
+            await media.RefreshSettingsSummaryAsync(linked.Token);
         }
         catch (OperationCanceledException) when (linked.IsCancellationRequested)
         {
@@ -108,55 +108,41 @@ public sealed class ShellViewModel : ObservableObject, IInitializeAsync, IDispos
         }
     }
 
-    public bool CanNavigate => !navigating && operations.All(o => !o.IsBusy) && !Settings.IsSaving && Settings.SaveError is null;
+    /// <summary>Navigation waits while an operation runs, settings save, or a save error is unresolved.</summary>
+    bool INavigationGuard.CanNavigate => operations.All(o => !o.IsBusy) && !Settings.IsSaving && Settings.SaveError is null;
 
-    public INavigationPage CurrentPage
+    public event EventHandler? CanNavigateChanged;
+
+    async Task<bool> INavigationGuard.ConfirmNavigationAsync(INavigationPage from, INavigationPage to, CancellationToken cancellationToken)
     {
-        get => currentPage;
+        await Settings.FlushAsync();
+        return !operations.Any(o => o.IsBusy);
+    }
+
+    public bool CanNavigate => Navigation.CanNavigate;
+
+    public INavigationPage? CurrentPage
+    {
+        get => Navigation.CurrentPage;
         set
         {
-            if (value is null || !CanNavigate || ReferenceEquals(currentPage, value))
+            if (value is null || !CanNavigate || ReferenceEquals(Navigation.CurrentPage, value))
             {
                 return;
             }
 
-            NavigationTask = NavigateAsync(value);
+            NavigationTask = Navigation.NavigateAsync(value);
         }
     }
 
-    private async Task NavigateAsync(INavigationPage page)
+    private void NavigationChanged(object? sender, PropertyChangedEventArgs e)
     {
-        navigating = true;
-        RaisePropertyChanged(nameof(CanNavigate));
-
-        try
+        if (e.PropertyName == nameof(INavigationService.CurrentPage))
         {
-            await Settings.FlushAsync();
-            if (operations.Any(o => o.IsBusy))
-            {
-                return;
-            }
-
-            SetProperty(ref currentPage, page, nameof(CurrentPage));
             RefreshStatusItems();
-            if (ReferenceEquals(page, Settings))
-            {
-                await Settings.LoadCommand.ExecuteAsync();
-            }
-            else if (ReferenceEquals(page, media))
-            {
-                await media.RefreshSettingsSummaryAsync();
-            }
         }
-        catch (Exception ex)
-        {
-            Settings.SetStatus(ViewStatus.Error, ex.Message);
-        }
-        finally
-        {
-            navigating = false;
-            RaisePropertyChanged(nameof(CanNavigate));
-        }
+
+        OnPropertyChanged(e.PropertyName);
     }
 
     private void DependencyReportChanged(object? sender, PropertyChangedEventArgs e)
@@ -184,7 +170,7 @@ public sealed class ShellViewModel : ObservableObject, IInitializeAsync, IDispos
 
         if (e.PropertyName is nameof(OperationViewModel.IsBusy) or nameof(SettingsViewModel.IsSaving) or nameof(SettingsViewModel.SaveError))
         {
-            RaisePropertyChanged(nameof(CanNavigate));
+            CanNavigateChanged?.Invoke(this, EventArgs.Empty);
         }
     }
 
@@ -194,10 +180,10 @@ public sealed class ShellViewModel : ObservableObject, IInitializeAsync, IDispos
     public async Task CancelAndWaitAsync()
     {
         startupCancellation.Cancel();
-        dependencyCheck.CancelCommand.Execute();
+        dependencyCheck.CancelCommand.Execute(null);
         foreach (var operation in operations)
         {
-            operation.CancelCommand.Execute();
+            operation.CancelCommand.Execute(null);
         }
 
         await NavigationTask;
@@ -221,6 +207,8 @@ public sealed class ShellViewModel : ObservableObject, IInitializeAsync, IDispos
     {
         dependencyReport.PropertyChanged -= DependencyReportChanged;
         dependencyCheck.PropertyChanged -= DependencyCheckChanged;
+        Navigation.PropertyChanged -= NavigationChanged;
+        Navigation.Dispose();
         startupCancellation.Dispose();
     }
 }

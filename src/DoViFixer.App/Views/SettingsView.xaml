@@ -5,8 +5,8 @@
         <DockPanel>
             <StackPanel DockPanel.Dock="Bottom" Margin="0,8,0,0">
                 <TextBlock Text="Changes save automatically." Foreground="{DynamicResource TextFillColorSecondaryBrush}" />
-                <TextBlock Text="Saving settings…" Visibility="{Binding IsSaving, Converter={StaticResource Visible}}" />
-                <StackPanel Visibility="{Binding HasSaveError, Converter={StaticResource Visible}}">
+                <TextBlock Text="Saving settings…" Visibility="{Binding IsSaving, Converter={StaticResource WfBooleanToVisibilityConverter}}" />
+                <StackPanel Visibility="{Binding HasSaveError, Converter={StaticResource WfBooleanToVisibilityConverter}}">
                     <TextBlock Text="Changes could not be saved. Correct the settings, retry, or discard unsaved changes to continue."
                                TextWrapping="Wrap"
                                FontWeight="SemiBold" />
@@ -23,15 +23,15 @@
             </StackPanel>
             <ScrollViewer VerticalScrollBarVisibility="Auto">
                 <StackPanel>
-                    <TextBlock Text="Settings" Style="{StaticResource Heading}" />
-                    <Border Style="{StaticResource Card}">
+                    <TextBlock Text="Settings" Style="{StaticResource WfHeadingTextStyle}" />
+                    <Border Style="{StaticResource WfCardStyle}">
                         <StackPanel>
                             <TextBlock Text="Appearance"
                                        FontSize="20"
                                        FontWeight="SemiBold" />
                             <HeaderedContentControl Header="App theme"
                                                     AutomationProperties.HelpText="Select whether DoViFixer follows your Windows system color theme, or uses Light or Dark theme."
-                                                    Style="{StaticResource SettingRow}">
+                                                    Style="{StaticResource WfSettingRowStyle}">
                                 <ComboBox ItemsSource="{Binding Themes}"
                                           SelectedItem="{Binding SelectedTheme}"
                                           AutomationProperties.Name="App theme"
@@ -39,14 +39,14 @@
                             </HeaderedContentControl>
                         </StackPanel>
                     </Border>
-                    <Border Style="{StaticResource Card}" Margin="0,18,0,0">
+                    <Border Style="{StaticResource WfCardStyle}" Margin="0,18,0,0">
                         <StackPanel IsEnabled="{Binding IsIdle}">
                             <TextBlock Text="Conversion options"
                                        FontSize="20"
                                        FontWeight="SemiBold" />
                             <HeaderedContentControl Header="Temporary storage folder"
                                                     AutomationProperties.HelpText="Working space for extracted video, Dolby Vision metadata and verification files during scans, inspections, conversions, backups and restores. Each operation uses its own subfolder and attempts to remove it when finished, including after failure or cancellation. Final output files use the output folder selected below. Leave blank to use the Windows temporary folder."
-                                                    Style="{StaticResource StackedSettingRow}">
+                                                    Style="{StaticResource WfStackedSettingRowStyle}">
                                 <DockPanel>
                                     <Button Content="Browse"
                                             DockPanel.Dock="Right"
@@ -58,13 +58,13 @@
                             <Separator />
                             <HeaderedContentControl Header="Output folder"
                                                     AutomationProperties.HelpText="Where converted files are written."
-                                                    Style="{StaticResource SettingRow}">
+                                                    Style="{StaticResource WfSettingRowStyle}">
                                 <ComboBox AutomationProperties.Name="Output folder" Width="220">
-                                    <ComboBoxItem Content="Same folder as source" IsSelected="{Binding OtherFolder, Converter={StaticResource Inverse}}" />
+                                    <ComboBoxItem Content="Same folder as source" IsSelected="{Binding OtherFolder, Converter={StaticResource WfInverseBooleanConverter}}" />
                                     <ComboBoxItem Content="Other output folder" IsSelected="{Binding OtherFolder}" />
                                 </ComboBox>
                             </HeaderedContentControl>
-                            <DockPanel Visibility="{Binding OtherFolder, Converter={StaticResource Visible}}" Margin="0,0,0,10">
+                            <DockPanel Visibility="{Binding OtherFolder, Converter={StaticResource WfBooleanToVisibilityConverter}}" Margin="0,0,0,10">
                                 <Button Content="Browse"
                                         DockPanel.Dock="Right"
                                         Command="{Binding BrowseDestinationCommand}"
@@ -74,21 +74,21 @@
                             <TextBlock Text="{Binding DestinationError}"
                                        TextWrapping="Wrap"
                                        AutomationProperties.LiveSetting="Polite" />
-                            <TextBlock Text="File handling and policy" Style="{StaticResource Label}" />
+                            <TextBlock Text="File handling and policy" Style="{StaticResource WfLabelTextStyle}" />
                             <CheckBox Content="Replace original after verification"
                                       AutomationProperties.HelpText="The converted file replaces the source file once verification succeeds. When off, the original is kept."
                                       IsChecked="{Binding ReplaceOriginal}"
-                                      Style="{StaticResource ToggleSwitchStyle}" />
+                                      Style="{StaticResource WfToggleSwitchStyle}" />
                             <Separator />
                             <CheckBox Content="Create EL archive by default"
                                       AutomationProperties.HelpText="Saves the enhancement layer in an archive so the original file can be restored from Backup &amp; Restore."
                                       IsChecked="{Binding CreateArchive}"
-                                      Style="{StaticResource ToggleSwitchStyle}" />
+                                      Style="{StaticResource WfToggleSwitchStyle}" />
                             <Separator />
                             <CheckBox Content="Include Simple FEL conversion"
                                       IsChecked="{Binding IncludeSimple}"
-                                      Style="{StaticResource ToggleSwitchStyle}" />
-                            <TextBlock Style="{StaticResource SettingWarning}">
+                                      Style="{StaticResource WfToggleSwitchStyle}" />
+                            <TextBlock Style="{StaticResource WfSettingNoteTextStyle}">
                                 <Run Text="&#xE7BA;"
                                      FontFamily="{StaticResource SymbolThemeFontFamily}"
                                      FontWeight="SemiBold"
@@ -98,8 +98,8 @@
                             <Separator />
                             <CheckBox Content="Force Complex FEL conversion"
                                       IsChecked="{Binding ForceComplex}"
-                                      Style="{StaticResource ToggleSwitchStyle}" />
-                            <TextBlock Style="{StaticResource SettingWarning}">
+                                      Style="{StaticResource WfToggleSwitchStyle}" />
+                            <TextBlock Style="{StaticResource WfSettingNoteTextStyle}">
                                 <Run Text="&#xE7BA;"
                                      FontFamily="{StaticResource SymbolThemeFontFamily}"
                                      FontWeight="SemiBold"
@@ -108,7 +108,7 @@
                             </TextBlock>
                         </StackPanel>
                     </Border>
-                    <Border Style="{StaticResource Card}" Margin="0,18,0,0">
+                    <Border Style="{StaticResource WfCardStyle}" Margin="0,18,0,0">
                         <StackPanel>
                             <TextBlock Text="Scanning and cache"
                                        FontSize="20"
@@ -116,12 +116,12 @@
                             <CheckBox Content="Automatically scan added files"
                                       AutomationProperties.HelpText="Starts a scan as soon as files are added to the Media list."
                                       IsChecked="{Binding AutomaticallyScanAddedFiles}"
-                                      Style="{StaticResource ToggleSwitchStyle}" />
+                                      Style="{StaticResource WfToggleSwitchStyle}" />
                             <Separator />
                             <CheckBox Content="Use cached analysis results"
                                       AutomationProperties.HelpText="When disabled, scans and inspections analyze files again. Successful results are still saved."
                                       IsChecked="{Binding UseCachedResults}"
-                                      Style="{StaticResource ToggleSwitchStyle}" />
+                                      Style="{StaticResource WfToggleSwitchStyle}" />
                             <Separator />
                             <DockPanel Margin="0,10">
                                 <Button Content="Clear cache"
@@ -152,17 +152,17 @@
                             <CheckBox Content="Automatically select convertible files after scan"
                                       AutomationProperties.HelpText="When a scan finishes, selects the files that can be converted with the current FEL settings."
                                       IsChecked="{Binding AutoSelectAfterScan}"
-                                      Style="{StaticResource ToggleSwitchStyle}" />
+                                      Style="{StaticResource WfToggleSwitchStyle}" />
                         </StackPanel>
                     </Border>
-                    <Border Style="{StaticResource Card}" Margin="0,18,0,0">
+                    <Border Style="{StaticResource WfCardStyle}" Margin="0,18,0,0">
                         <StackPanel>
                             <TextBlock Text="Native tools"
                                        FontSize="20"
                                        FontWeight="SemiBold" />
                             <HeaderedContentControl Header="Tool status"
                                                     AutomationProperties.HelpText="Command-line tools DoViFixer uses to read, extract and rebuild media files."
-                                                    Style="{StaticResource SettingRow}">
+                                                    Style="{StaticResource WfSettingRowStyle}">
                                 <StackPanel Orientation="Horizontal">
                                     <Button Content="Check tools"
                                             Command="{Binding CheckCommand}"
@@ -230,7 +230,7 @@
                             <HeaderedContentControl Header="Custom tool path"
                                                     AutomationProperties.HelpText="Use a specific executable instead of the one found by dependency setup."
                                                     IsEnabled="{Binding IsIdle}"
-                                                    Style="{StaticResource StackedSettingRow}">
+                                                    Style="{StaticResource WfStackedSettingRowStyle}">
                                 <StackPanel>
                                     <DockPanel>
                                         <ComboBox ItemsSource="{Binding ToolNames}"
@@ -261,10 +261,10 @@
                                Margin="0,20" />
                     <ProgressBar Value="{Binding Percent, Mode=OneWay}"
                                  IsIndeterminate="{Binding IsIndeterminate}"
-                                 Visibility="{Binding IsBusy, Converter={StaticResource Visible}}" />
+                                 Visibility="{Binding IsBusy, Converter={StaticResource WfBooleanToVisibilityConverter}}" />
                     <Button Content="Cancel operation"
                             Command="{Binding CancelCommand}"
-                            Visibility="{Binding IsBusy, Converter={StaticResource Visible}}"
+                            Visibility="{Binding IsBusy, Converter={StaticResource WfBooleanToVisibilityConverter}}"
                             HorizontalAlignment="Right" />
                 </StackPanel>
             </ScrollViewer>

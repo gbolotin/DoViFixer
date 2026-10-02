@@ -35,7 +35,7 @@ public sealed class RowRestoreTests
             return Task.CompletedTask;
         };
 
-        await model.RestoreRowCommand.ExecuteAsync(row);
+        await model.RestoreRowCommand.InvokeAsync(row);
 
         CollectionAssert.AreEqual(new[] { input }, runtime.RestoredInputs);
         Assert.AreEqual(archive, runtime.ReadArchive);
@@ -55,7 +55,7 @@ public sealed class RowRestoreTests
         Assert.IsFalse(model.RestoreRowCommand.CanExecute(row));
         Assert.AreEqual(archive, row.RestoreArchive, "The restored row keeps its archive so no other row can claim it.");
 
-        await model.ScanCommand.ExecuteAsync();
+        await model.ScanCommand.InvokeAsync();
         Assert.AreEqual(MediaRowState.Scanned, row.State);
         Assert.IsTrue(row.CanRestore, "Rescanning returns the row to a restorable state.");
     }
@@ -75,11 +75,11 @@ public sealed class RowRestoreTests
         var row = model.Files[2];
         runtime.Archives.Add(@"C:\Media\P81.dovi");
         runtime.ArchiveBaseLayerHashes[@"C:\Media\P81.dovi"] = new string('A', 64);
-        await model.ScanCommand.ExecuteAsync();
+        await model.ScanCommand.InvokeAsync();
         Assert.IsTrue(row.CanRestore);
         runtime.Archives.Clear();
 
-        await model.RestoreRowCommand.ExecuteAsync(row);
+        await model.RestoreRowCommand.InvokeAsync(row);
 
         Assert.IsFalse(row.CanRestore, "An archive removed after scanning must be detected before restoration.");
         Assert.IsEmpty(runtime.Reviews);
@@ -99,7 +99,7 @@ public sealed class RowRestoreTests
         await model.AddAsync([@"C:\Media\P81.mkv"]);
         var row = model.Files.Single();
 
-        await model.RestoreRowCommand.ExecuteAsync(row);
+        await model.RestoreRowCommand.InvokeAsync(row);
 
         Assert.IsEmpty(runtime.RestoredInputs);
         Assert.IsFalse(row.CanOpenResult);
@@ -129,11 +129,11 @@ public sealed class RowRestoreTests
             started.TrySetResult();
             await Task.Delay(Timeout.Infinite, token);
         };
-        var restoring = model.RestoreRowCommand.ExecuteAsync(row);
+        var restoring = model.RestoreRowCommand.InvokeAsync(row);
         try
         {
             await started.Task.WaitAsync(TimeSpan.FromSeconds(10));
-            model.CancelFileCommand.Execute(row);
+            model.CancelFileCommand.Invoke(row);
             await restoring.WaitAsync(TimeSpan.FromSeconds(10));
             Assert.AreEqual(MediaRowState.Cancelled, row.State);
             Assert.AreEqual("Restoration cancelled", row.Status);
@@ -143,7 +143,7 @@ public sealed class RowRestoreTests
         }
         finally
         {
-            model.CancelCommand.Execute();
+            model.CancelCommand.Invoke();
             await restoring.WaitAsync(TimeSpan.FromSeconds(10));
         }
     }
@@ -167,7 +167,7 @@ public sealed class RowRestoreTests
         Assert.AreEqual(1, runtime.ManifestReads.Count(path => path == @"C:\Media\Z-renamed.dovi"));
 
         runtime.ManifestReads.Clear();
-        await model.ScanCommand.ExecuteAsync();
+        await model.ScanCommand.InvokeAsync();
         Assert.AreEqual(@"C:\Media\Z-renamed.dovi", model.Files[0].RestoreArchive, "Rescan must release and rebuild existing pairings.");
         Assert.AreEqual(1, runtime.ManifestReads.Count(path => path == @"C:\Media\Z-renamed.dovi"));
     }
@@ -187,14 +187,14 @@ public sealed class RowRestoreTests
         foreach (string? unusable in new[] { null, "invalid" })
         {
             runtime.ArchiveBaseLayerHashes[@"C:\Media\P81.dovi"] = unusable;
-            await model.ScanCommand.ExecuteAsync();
+            await model.ScanCommand.InvokeAsync();
             Assert.IsFalse(row.CanRestore, "A same-name archive without a readable manifest must not be offered.");
         }
 
         runtime.Archives.Clear();
         runtime.ArchiveBaseLayerHashes.Clear();
         runtime.Archives.Add(@"C:\Media\Renamed.dovi");
-        await model.ScanCommand.ExecuteAsync();
+        await model.ScanCommand.InvokeAsync();
         Assert.IsFalse(row.CanRestore);
     }
 
@@ -210,12 +210,12 @@ public sealed class RowRestoreTests
         Assert.AreEqual(@"C:\Media\Renamed.dovi", model.Files.Single().RestoreArchive);
 
         runtime.ArchiveBaseLayerHashes[@"C:\Media\Renamed.dovi"] = new string('B', 64);
-        await model.ScanCommand.ExecuteAsync();
+        await model.ScanCommand.InvokeAsync();
         Assert.IsFalse(model.Files.Single().CanRestore, "A renamed archive must match the cached base-layer hash.");
 
         runtime.ArchiveBaseLayerHashes.Clear();
         await runtime.UpdateAsync(settings => settings with { UseCachedResults = false }, default);
-        await model.ScanCommand.ExecuteAsync();
+        await model.ScanCommand.InvokeAsync();
         Assert.IsFalse(model.Files.Single().CanRestore, "Without cached results only same-name archives are offered.");
     }
 
@@ -228,7 +228,7 @@ public sealed class RowRestoreTests
         runtime.Archives.UnionWith([@"C:\Media\P81.dovi", @"C:\Media\P81-copy.dovi"]);
         runtime.Ready = false;
 
-        await model.ScanCommand.ExecuteAsync();
+        await model.ScanCommand.InvokeAsync();
 
         Assert.IsEmpty(runtime.Reviews);
         Assert.AreEqual(@"C:\Media\P81.dovi", model.Files[0].RestoreArchive);
@@ -252,9 +252,9 @@ public sealed class RowRestoreTests
             await Task.Delay(Timeout.Infinite, token);
         };
 
-        var scanning = model.ScanCommand.ExecuteAsync();
+        var scanning = model.ScanCommand.InvokeAsync();
         await started.Task.WaitAsync(TimeSpan.FromSeconds(10));
-        model.CancelCommand.Execute();
+        model.CancelCommand.Invoke();
         await scanning.WaitAsync(TimeSpan.FromSeconds(10));
 
         Assert.IsFalse(model.Files[0].CanRestore, "The interrupted row lost its analysis and must be rescanned.");
@@ -283,7 +283,7 @@ public sealed class RowRestoreTests
         var row = model.Files.Single();
         Assert.AreEqual(@"C:\Media\P81.dovi", row.RestoreArchive, "Without a cached hash the same-name archive is offered.");
 
-        await model.RestoreRowCommand.ExecuteAsync(row);
+        await model.RestoreRowCommand.InvokeAsync(row);
 
         Assert.AreEqual(MediaRowState.Failed, row.State);
         StringAssert.Contains(row.Result!.Message, "SHA-256 mismatch");
@@ -291,7 +291,7 @@ public sealed class RowRestoreTests
         Assert.AreEqual(renamedMatchExists ? @"C:\Media\Renamed.dovi" : null, row.RestoreArchive, "The learned hash must replace the mismatched pairing.");
         Assert.AreEqual(renamedMatchExists, model.RestoreRowCommand.CanExecute(row));
 
-        await model.ScanCommand.ExecuteAsync();
+        await model.ScanCommand.InvokeAsync();
         Assert.AreEqual(renamedMatchExists ? @"C:\Media\Renamed.dovi" : null, row.RestoreArchive, "Rescanning must not offer the mismatched archive again.");
     }
 

@@ -3,7 +3,7 @@
         xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
         xmlns:viewModels="clr-namespace:DoViFixer.App.ViewModels"
         xmlns:p="clr-namespace:DoViFixer.App.Presentation.Application"
-        xmlns:navigation="clr-namespace:DoViFixer.App.Navigation"
+        xmlns:navigation="clr-namespace:WpfFoundation.Navigation;assembly=WpfFoundation"
         Title="DoViFixer"
         MinWidth="800"
         MinHeight="600"
@@ -21,65 +21,9 @@
                            TextElement.Foreground="{DynamicResource TextFillColorPrimaryBrush}">
                     <StatusBar ItemsSource="{Binding StatusItems}"
                                DockPanel.Dock="Bottom"
-                               Background="{DynamicResource ApplicationBackgroundBrush}"
-                               Foreground="{DynamicResource TextFillColorSecondaryBrush}"
-                               BorderBrush="{DynamicResource DividerStrokeColorDefaultBrush}"
-                               BorderThickness="0,1,0,0"
-                               Padding="8,4"
+                               Style="{StaticResource WfStatusBarStyle}"
                                AutomationProperties.Name="Page status">
-                        <StatusBar.ItemsPanel>
-                            <ItemsPanelTemplate>
-                                <WrapPanel />
-                            </ItemsPanelTemplate>
-                        </StatusBar.ItemsPanel>
-                        <StatusBar.ItemContainerStyle>
-                            <Style TargetType="StatusBarItem">
-                                <Setter Property="HorizontalContentAlignment" Value="Stretch" />
-                                <Setter Property="Padding" Value="4,0,12,0" />
-                                <Setter Property="BorderBrush" Value="{DynamicResource DividerStrokeColorDefaultBrush}" />
-                                <Setter Property="BorderThickness" Value="0,0,1,0" />
-                                <Setter Property="Margin" Value="8"/>
-                            </Style>
-                        </StatusBar.ItemContainerStyle>
                         <StatusBar.Resources>
-                            <Style x:Key="StatusText" TargetType="TextBlock">
-                                <Setter Property="Text" Value="{Binding Text}" />
-                                <Setter Property="MaxWidth" Value="320" />
-                                <Setter Property="TextTrimming" Value="CharacterEllipsis" />
-                                <Setter Property="VerticalAlignment" Value="Center" />
-                                <Style.Triggers>
-                                    <DataTrigger Binding="{Binding IsEmphasized}" Value="True">
-                                        <Setter Property="FontWeight" Value="SemiBold" />
-                                    </DataTrigger>
-                                </Style.Triggers>
-                            </Style>
-                            <DataTemplate x:Key="StatusTextTemplate" DataType="{x:Type navigation:StatusItem}">
-                                <TextBlock Style="{StaticResource StatusText}" ToolTip="{Binding ToolTipText}" />
-                            </DataTemplate>
-                            <DataTemplate x:Key="StatusCommandTemplate" DataType="{x:Type navigation:StatusItem}">
-                                <Button Style="{StaticResource TransparentButton}"
-                                        Command="{Binding Command}"
-                                        ToolTip="{Binding ToolTipText}"
-                                        AutomationProperties.Name="{Binding Text}"
-                                        Padding="0"
-                                        MinHeight="0">
-                                    <TextBlock Style="{StaticResource StatusText}" TextDecorations="Underline" />
-                                </Button>
-                            </DataTemplate>
-                            <DataTemplate DataType="{x:Type navigation:StatusItem}">
-                                <ContentControl Content="{Binding}" Focusable="False">
-                                    <ContentControl.Style>
-                                        <Style TargetType="ContentControl">
-                                            <Setter Property="ContentTemplate" Value="{StaticResource StatusCommandTemplate}" />
-                                            <Style.Triggers>
-                                                <DataTrigger Binding="{Binding Command}" Value="{x:Null}">
-                                                    <Setter Property="ContentTemplate" Value="{StaticResource StatusTextTemplate}" />
-                                                </DataTrigger>
-                                            </Style.Triggers>
-                                        </Style>
-                                    </ContentControl.Style>
-                                </ContentControl>
-                            </DataTemplate>
                             <DataTemplate DataType="{x:Type p:DependencyReportViewModel}">
                                 <StackPanel Orientation="Horizontal"
                                             ToolTip="{Binding WarningDetails}"
@@ -114,43 +58,8 @@
                              SelectedItem="{Binding CurrentPage}"
                              IsEnabled="{Binding CanNavigate}"
                              DockPanel.Dock="Left"
-                             BorderBrush="{DynamicResource DividerStrokeColorDefaultBrush}"
-                             BorderThickness="0,0,1,0"
-                             Padding="8"
-                             KeyboardNavigation.DirectionalNavigation="Cycle">
-                        <ListBox.ItemTemplate>
-                            <DataTemplate>
-                                <StackPanel Orientation="Horizontal">
-                                    <TextBlock Text="{Binding NavigationIcon}"
-                                               FontFamily="{StaticResource SymbolThemeFontFamily}"
-                                               VerticalAlignment="Center"
-                                               Margin="0,0,8,0" />
-                                    <TextBlock Text="{Binding NavigationName}" VerticalAlignment="Center" />
-                                </StackPanel>
-                            </DataTemplate>
-                        </ListBox.ItemTemplate>
-                    </ListBox>
-                    <ItemsControl x:Name="PageHost"
-                                  ItemsSource="{Binding Pages}"
-                                  Margin="8,0">
-                        <ItemsControl.ItemsPanel>
-                            <ItemsPanelTemplate>
-                                <Grid />
-                            </ItemsPanelTemplate>
-                        </ItemsControl.ItemsPanel>
-                        <ItemsControl.ItemContainerStyle>
-                            <Style TargetType="ContentPresenter">
-                                <Setter Property="Visibility">
-                                    <Setter.Value>
-                                        <MultiBinding Converter="{StaticResource ReferenceEqualsToVisibility}">
-                                            <Binding Path="Content" RelativeSource="{RelativeSource Self}" />
-                                            <Binding Path="DataContext.CurrentPage" RelativeSource="{RelativeSource AncestorType=Window}" />
-                                        </MultiBinding>
-                                    </Setter.Value>
-                                </Setter>
-                            </Style>
-                        </ItemsControl.ItemContainerStyle>
-                    </ItemsControl>
+                             Style="{StaticResource WfNavigationSidebarStyle}" />
+                    <navigation:RetainedPageHost Navigation="{Binding Navigation}" Margin="8,0" />
                 </DockPanel>
             </DataTemplate>
 

@@ -1,6 +1,4 @@
-using DoViFixer.App.Navigation;
 using DoViFixer.App.Dialogs;
-using DoViFixer.App.Presentation.Common;
 using DoViFixer.App.Presentation.Application;
 using DoViFixer.Application.Backup;
 using DoViFixer.Application.Cleanup;
@@ -18,19 +16,19 @@ public sealed class ArchiveViewModel : OperationViewModel, INavigationPage
     private string archive = "";
     private string output = "";
     private bool allowLegacy;
-    public ArchiveViewModel(BackupService backup, RestoreService restore, CleanupService cleanup, DependencySetup dependencies, IUserDialogs dialogs, ILogger<ArchiveViewModel> logger)
+    public ArchiveViewModel(BackupService backup, RestoreService restore, CleanupService cleanup, DependencySetup dependencies, IDialogService dialogs, IFileDialogService files, ILogger<ArchiveViewModel> logger)
     {
         BrowseInputCommand = new(() =>
         {
-            Input = dialogs.PickFiles().FirstOrDefault() ?? Input;
+            Input = files.PickFiles("Matroska media|*.mkv", allowMultiple: false).FirstOrDefault() ?? Input;
         });
         BrowseArchiveCommand = new(() =>
         {
-            Archive = dialogs.PickFiles("EL archives|*.dovi").FirstOrDefault() ?? Archive;
+            Archive = files.PickFiles("EL archives|*.dovi", allowMultiple: false).FirstOrDefault() ?? Archive;
         });
         BrowseOutputCommand = new(() =>
         {
-            Output = dialogs.PickFolder() ?? Output;
+            Output = files.PickFolder() ?? Output;
         });
         BackupCommand = new(() => RunAsync(async (token, progress) =>
         {
@@ -42,7 +40,7 @@ public sealed class ArchiveViewModel : OperationViewModel, INavigationPage
 
             var plan = await Task.Run(() => backup.PlanAsync(Input, Empty(Output), null, token), token);
             string review = $"Input: {plan.Media.Source.Path}\nArchive: {plan.Output}\nScratch: {plan.ScratchBytes / 1073741824d:0.0} GiB\nOriginal retained.";
-            if (!dialogs.Review("Review enhancement-layer backup", review, "Approve and start"))
+            if (!await dialogs.ReviewAsync("Review enhancement-layer backup", review, "Approve and start"))
             {
                 SetStatus(ViewStatus.BackupNotApproved);
                 return;
@@ -62,7 +60,7 @@ public sealed class ArchiveViewModel : OperationViewModel, INavigationPage
 
             var plan = await Task.Run(() => restore.PlanAsync(Input, Archive, Empty(Output), null, AllowLegacy, token), token);
             string review = $"Base file: {plan.Media.Source.Path}\nArchive: {plan.Archive.Path}\nOutput: {plan.Output}\nScratch: {plan.ScratchBytes / 1073741824d:0.0} GiB\n" + (plan.AllowLegacy ? "WARNING: Legacy archives lack verified source pairing.\n" : "Verified source pairing required.\n") + "Original retained.";
-            if (!dialogs.Review("Review restoration", review, "Approve and start"))
+            if (!await dialogs.ReviewAsync("Review restoration", review, "Approve and start"))
             {
                 SetStatus(ViewStatus.RestoreNotApproved);
                 return;
@@ -74,7 +72,7 @@ public sealed class ArchiveViewModel : OperationViewModel, INavigationPage
         }), () => IsIdle && !string.IsNullOrWhiteSpace(Input) && !string.IsNullOrWhiteSpace(Archive));
         CleanupCommand = new(() => RunAsync(async (token, _) =>
         {
-            string? folder = dialogs.PickFolder();
+            string? folder = files.PickFolder();
             if (folder is null)
             {
                 return;
@@ -88,7 +86,7 @@ public sealed class ArchiveViewModel : OperationViewModel, INavigationPage
             }
 
             string review = "Permanently delete exactly these retained backup files:\n\n" + string.Join("\n", plan.Files.Select(f => $"{f.Path} ({f.Length:N0} bytes)"));
-            if (!dialogs.Review("Review cleanup", review, "Delete"))
+            if (!await dialogs.ReviewAsync("Review cleanup", review, "Delete"))
             {
                 SetStatus(ViewStatus.CleanupNotApproved);
                 return;
@@ -143,23 +141,23 @@ public sealed class ArchiveViewModel : OperationViewModel, INavigationPage
     {
         get;
     }
-    public AsyncCommand BackupCommand
+    public AsyncRelayCommand BackupCommand
     {
         get;
     }
-    public AsyncCommand RestoreCommand
+    public AsyncRelayCommand RestoreCommand
     {
         get;
     }
-    public AsyncCommand CleanupCommand
+    public AsyncRelayCommand CleanupCommand
     {
         get;
     }
 
     protected override void CommandsChanged()
     {
-        BackupCommand?.RaiseCanExecuteChanged();
-        RestoreCommand?.RaiseCanExecuteChanged();
-        CleanupCommand?.RaiseCanExecuteChanged();
+        BackupCommand?.NotifyCanExecuteChanged();
+        RestoreCommand?.NotifyCanExecuteChanged();
+        CleanupCommand?.NotifyCanExecuteChanged();
     }
 }

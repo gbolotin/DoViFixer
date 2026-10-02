@@ -35,9 +35,9 @@ public sealed class MissingSourceFileTests
         Assert.AreEqual("File not found.", model.PreviewStatus);
         Assert.IsTrue(model.HasMissingFiles);
 
-        model.ToggleSelectAllCommand.Execute();
+        model.ToggleSelectAllCommand.Invoke();
         Assert.IsFalse(row.IsSelected);
-        await model.ScanCommand.ExecuteAsync();
+        await model.ScanCommand.InvokeAsync();
         Assert.AreEqual(1, model.BatchProgress.Processed);
         Assert.AreEqual(MediaRow.MissingStatus, row.Status);
     }
@@ -93,7 +93,7 @@ public sealed class MissingSourceFileTests
             await release.Task.WaitAsync(token);
         };
 
-        var scan = model.ScanCommand.ExecuteAsync();
+        var scan = model.ScanCommand.InvokeAsync();
         await started.Task;
         runtime.MissingFiles.Add(Ocean);
         runtime.RaiseSourceFilesChanged();
@@ -116,7 +116,7 @@ public sealed class MissingSourceFileTests
         await model.AddAsync([Mountain, Ocean]);
         runtime.MissingFiles.Add(Ocean);
 
-        await model.ScanCommand.ExecuteAsync();
+        await model.ScanCommand.InvokeAsync();
 
         Assert.IsTrue(model.Files[1].IsMissing);
         Assert.IsNull(model.Files[1].AnalysisError);
@@ -141,7 +141,7 @@ public sealed class MissingSourceFileTests
             return Task.CompletedTask;
         };
 
-        await model.ConvertDv81Command.ExecuteAsync();
+        await model.ConvertDv81Command.InvokeAsync();
 
         Assert.IsFalse(missingWhileRunning);
         Assert.IsTrue(row.IsMissing);
@@ -155,11 +155,11 @@ public sealed class MissingSourceFileTests
         using var runtime = new TestRuntime();
         var model = runtime.Container.GetRequiredService<MediaViewModel>();
         await model.AddAsync([Mountain, Ocean]);
-        Assert.IsFalse(model.RemoveMissingCommand.CanExecute());
+        Assert.IsFalse(model.RemoveMissingCommand.CanExecute(null));
         runtime.MissingFiles.Add(Mountain);
         runtime.RaiseSourceFilesChanged();
 
-        model.RemoveMissingCommand.Execute();
+        model.RemoveMissingCommand.Invoke();
 
         Assert.AreEqual(Ocean, model.Files.Single().Path);
         Assert.IsFalse(model.HasMissingFiles);

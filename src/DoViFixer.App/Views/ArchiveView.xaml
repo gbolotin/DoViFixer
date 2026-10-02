@@ -5,8 +5,8 @@
     <DataTemplate DataType="{x:Type viewModels:ArchiveViewModel}">
         <ScrollViewer VerticalScrollBarVisibility="Auto" TextElement.Foreground="{DynamicResource TextFillColorPrimaryBrush}">
             <StackPanel>
-                <TextBlock Text="Backup &amp; Restore" Style="{StaticResource Heading}" />
-                <Border Style="{StaticResource Card}">
+                <TextBlock Text="Backup &amp; Restore" Style="{StaticResource WfHeadingTextStyle}" />
+                <Border Style="{StaticResource WfCardStyle}">
                     <StackPanel IsEnabled="{Binding IsIdle}">
                         <TextBlock Text="Enhancement-layer archives"
                                    FontSize="20"
@@ -15,7 +15,7 @@
                                    Foreground="{DynamicResource TextFillColorSecondaryBrush}"
                                    Margin="0,10,0,10"
                                    TextWrapping="Wrap" />
-                                <TextBlock Text="Media file" Style="{StaticResource Label}" />
+                                <TextBlock Text="Media file" Style="{StaticResource WfLabelTextStyle}" />
                         <DockPanel>
                             <Button Content="Browse"
                                     DockPanel.Dock="Right"
@@ -23,7 +23,7 @@
                                     Margin="10,0,0,0" />
                                     <TextBox Text="{Binding Input, UpdateSourceTrigger=PropertyChanged}" />
                         </DockPanel>
-                        <TextBlock Text="EL archive for restoration" Style="{StaticResource Label}" />
+                        <TextBlock Text="EL archive for restoration" Style="{StaticResource WfLabelTextStyle}" />
                         <DockPanel>
                             <Button Content="Browse"
                                     DockPanel.Dock="Right"
@@ -31,7 +31,7 @@
                                     Margin="10,0,0,0" />
                                     <TextBox Text="{Binding Archive, UpdateSourceTrigger=PropertyChanged}" />
                         </DockPanel>
-                        <TextBlock Text="Output folder (leave blank for the source folder)" Style="{StaticResource Label}" />
+                        <TextBlock Text="Output folder (leave blank for the source folder)" Style="{StaticResource WfLabelTextStyle}" />
                         <DockPanel>
                             <Button Content="Browse"
                                     DockPanel.Dock="Right"
@@ -48,11 +48,11 @@
                                     Margin="0,0,8,0" />
                             <Button Content="Review restoration"
                                     Command="{Binding RestoreCommand}"
-                                    Style="{StaticResource Primary}" />
+                                    Style="{StaticResource WfPrimaryButtonStyle}" />
                         </StackPanel>
                     </StackPanel>
                 </Border>
-                <Border Style="{StaticResource Card}" Margin="0,20,0,0">
+                <Border Style="{StaticResource WfCardStyle}" Margin="0,20,0,0">
                     <StackPanel>
                         <TextBlock Text="Clean up retained backups"
                                    FontSize="20"
@@ -69,10 +69,10 @@
                 <ProgressBar Margin="0,20,0,10"
                              Value="{Binding Percent, Mode=OneWay}"
                              IsIndeterminate="{Binding IsIndeterminate}"
-                             Visibility="{Binding IsBusy, Converter={StaticResource Visible}}" />
+                             Visibility="{Binding IsBusy, Converter={StaticResource WfBooleanToVisibilityConverter}}" />
                 <Button Content="Cancel operation"
                         Command="{Binding CancelCommand}"
-                        Visibility="{Binding IsBusy, Converter={StaticResource Visible}}"
+                        Visibility="{Binding IsBusy, Converter={StaticResource WfBooleanToVisibilityConverter}}"
                         HorizontalAlignment="Right" />
             </StackPanel>
         </ScrollViewer>

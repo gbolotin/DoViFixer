@@ -6,4 +6,9 @@
     <TreatWarningsAsErrors>true</TreatWarningsAsErrors>
     <Deterministic>true</Deterministic>
   </PropertyGroup>
+  <!-- Use the WpfFoundation source next to this repository when it is checked out; -p:UseLocalWpfFoundation=false uses the pinned package. -->
+  <PropertyGroup>
+    <WpfFoundationProject>$(MSBuildThisFileDirectory)..\WpfFoundation\src\WpfFoundation\WpfFoundation.csproj</WpfFoundationProject>
+    <UseLocalWpfFoundation Condition="'$(UseLocalWpfFoundation)' == '' and Exists('$(WpfFoundationProject)')">true</UseLocalWpfFoundation>
+  </PropertyGroup>
 </Project>

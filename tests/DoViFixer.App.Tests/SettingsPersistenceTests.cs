@@ -121,12 +121,12 @@ public sealed class SettingsPersistenceTests
         runtime.Services.AddSingleton<ISettingsStore>(store);
         var shell = runtime.Container.GetRequiredService<ShellViewModel>();
         var media = shell.Pages.OfType<MediaViewModel>().Single();
-        await shell.Settings.LoadCommand.ExecuteAsync();
+        await shell.Settings.LoadCommand.InvokeAsync();
         await media.AddAsync([@"C:\Media\Mountain.mkv"]);
 
         shell.Settings.ReplaceOriginal = false;
         await store.Started.Task.WaitAsync(TimeSpan.FromSeconds(10));
-        var converting = media.ConvertDv81Command.ExecuteAsync();
+        var converting = media.ConvertDv81Command.InvokeAsync();
         try
         {
             Assert.IsFalse(shell.CanNavigate);
@@ -152,7 +152,7 @@ public sealed class SettingsPersistenceTests
         var store = new DelayedStore(runtime);
         runtime.Services.AddSingleton<ISettingsStore>(store);
         var shell = runtime.Container.GetRequiredService<ShellViewModel>();
-        await shell.Settings.LoadCommand.ExecuteAsync();
+        await shell.Settings.LoadCommand.InvokeAsync();
 
         shell.Settings.IncludeSimple = true;
         await store.Started.Task.WaitAsync(TimeSpan.FromSeconds(10));
@@ -181,7 +181,7 @@ public sealed class SettingsPersistenceTests
         await runtime.UpdateAsync(s => s with { ReplaceOriginal = true, TemporaryDirectory = Path.GetTempPath() }, default);
         var shell = runtime.Container.GetRequiredService<ShellViewModel>();
         var media = shell.Pages.OfType<MediaViewModel>().Single();
-        await shell.Settings.LoadCommand.ExecuteAsync();
+        await shell.Settings.LoadCommand.InvokeAsync();
         await media.AddAsync([@"C:\Media\Mountain.mkv"]);
 
         runtime.FailDirectoryValidation = true;
@@ -192,14 +192,14 @@ public sealed class SettingsPersistenceTests
         Assert.AreEqual(shell.Settings.SaveError, shell.Settings.StatusMessage);
         Assert.IsFalse(shell.CanNavigate);
 
-        await media.ConvertDv81Command.ExecuteAsync();
+        await media.ConvertDv81Command.InvokeAsync();
         Assert.AreEqual(0, runtime.Conversions);
         Assert.AreEqual(ViewStatus.Error, media.Status);
         Assert.AreEqual("Directory unavailable", media.StatusMessage);
         await Assert.ThrowsAsync<InvalidOperationException>(() => shell.CancelAndWaitAsync());
 
         runtime.FailDirectoryValidation = false;
-        await shell.Settings.SaveCommand.ExecuteAsync();
+        await shell.Settings.SaveCommand.InvokeAsync();
         Assert.IsNull(shell.Settings.SaveError);
         Assert.IsFalse(runtime.Settings.ReplaceOriginal);
         Assert.IsTrue(shell.CanNavigate);
@@ -212,7 +212,7 @@ public sealed class SettingsPersistenceTests
         using var runtime = new TestRuntime();
         var shell = runtime.Container.GetRequiredService<ShellViewModel>();
         var media = shell.Pages.OfType<MediaViewModel>().Single();
-        await shell.Settings.LoadCommand.ExecuteAsync();
+        await shell.Settings.LoadCommand.InvokeAsync();
         shell.Settings.IncludeSimple = true;
         await shell.Settings.SaveTask;
         var saved = runtime.Settings;
@@ -225,18 +225,18 @@ public sealed class SettingsPersistenceTests
         shell.Settings.ReplaceOriginal = true;
         await shell.Settings.SaveTask;
         Assert.IsFalse(shell.CanNavigate);
-        Assert.IsTrue(shell.Settings.DiscardChangesCommand.CanExecute());
+        Assert.IsTrue(shell.Settings.DiscardChangesCommand.CanExecute(null));
 
-        shell.Settings.DiscardChangesCommand.Execute();
+        shell.Settings.DiscardChangesCommand.Invoke();
 
         Assert.IsNull(shell.Settings.SaveError);
         Assert.AreEqual(saved, runtime.Settings);
         Assert.AreEqual("", shell.Settings.Temporary);
         Assert.IsTrue(shell.Settings.IncludeSimple);
         Assert.IsFalse(shell.Settings.ReplaceOriginal);
-        Assert.AreEqual(saved.Theme, runtime.AppliedTheme);
+        Assert.AreEqual(saved.Theme.ToThemePreference(), runtime.AppliedTheme);
         Assert.AreEqual("FEL: Simple only", media.FelSummary);
-        Assert.IsFalse(shell.Settings.DiscardChangesCommand.CanExecute());
+        Assert.IsFalse(shell.Settings.DiscardChangesCommand.CanExecute(null));
         Assert.IsTrue(shell.CanNavigate);
         await shell.CancelAndWaitAsync();
     }

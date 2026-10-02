@@ -1,7 +1,6 @@
 using System.ComponentModel;
 using DoViFixer.App.ViewModels;
 using DoViFixer.App.Presentation.Application;
-using DoViFixer.App.Presentation.Common;
 using Microsoft.VisualStudio.TestTools.UnitTesting;
 using Microsoft.Extensions.DependencyInjection;
 
@@ -48,15 +47,15 @@ public sealed class ViewModelTests
     {
         using var runtime = new TestRuntime { AnalysisCacheBytes = analysisBytes, FrameCacheBytes = frameBytes };
         var settings = runtime.Container.GetRequiredService<SettingsViewModel>();
-        await settings.LoadCommand.ExecuteAsync();
+        await settings.LoadCommand.InvokeAsync();
         Assert.AreEqual(expected, settings.CacheSizeText);
         Assert.AreEqual(runtime.RootDirectory, settings.CacheDirectory);
-        settings.OpenCacheFolderCommand.Execute();
+        settings.OpenCacheFolderCommand.Invoke();
         Assert.AreEqual(runtime.RootDirectory, runtime.OpenedFolder);
-        await settings.ClearCacheCommand.ExecuteAsync();
+        await settings.ClearCacheCommand.InvokeAsync();
         Assert.AreEqual("Cache: 0 B", settings.CacheSizeText);
         runtime.FrameCacheBytes = 1024;
-        await settings.LoadCommand.ExecuteAsync();
+        await settings.LoadCommand.InvokeAsync();
         Assert.AreEqual("Cache: 1 KiB", settings.CacheSizeText);
     }
 
@@ -72,7 +71,7 @@ public sealed class ViewModelTests
         foreach (string[] paths in new string[][] { [], [""], [@"C:\Media\Movie.mp4"], [@"C:\Media\Movie"] })
         {
             Assert.IsFalse(model.AddDroppedPathsCommand.CanExecute(paths));
-            await model.AddDroppedPathsCommand.ExecuteAsync(paths);
+            await model.AddDroppedPathsCommand.InvokeAsync(paths);
         }
         Assert.AreEqual(0, discoveries);
         Assert.IsEmpty(model.Files);
@@ -87,7 +86,7 @@ public sealed class ViewModelTests
         };
         string[] mixed = [@"C:\Media\Movie.srt", @"C:\Media\Movie.MKV", @"C:\Media\Folder.with.dots", @"C:\Media\Movie.mp4"];
         Assert.IsTrue(model.AddDroppedPathsCommand.CanExecute(mixed));
-        await model.AddDroppedPathsCommand.ExecuteAsync(mixed);
+        await model.AddDroppedPathsCommand.InvokeAsync(mixed);
         CollectionAssert.AreEqual(new[] { mixed[1], mixed[2] }, discovered.ToArray());
         CollectionAssert.AreEqual(new[] { mixed[1], @"C:\Media\Folder.with.dots\Nested.mkv" }, model.Files.Select(row => row.Path).ToArray());
         Assert.AreEqual(ViewStatus.Ready, model.Status);
@@ -157,12 +156,12 @@ public sealed class ViewModelTests
             };
         }
 
-        await model.ScanCommand.ExecuteAsync();
+        await model.ScanCommand.InvokeAsync();
         CollectionAssert.AreEqual(new[] { "Movie10.mkv", "movie2.mkv", "Movie1.mkv" }, processed, "Unsorted lists keep the order files were added.");
 
         model.FileSort.SortBy(MediaSortColumn.Name);
         processed.Clear();
-        await model.ScanCommand.ExecuteAsync();
+        await model.ScanCommand.InvokeAsync();
         CollectionAssert.AreEqual(new[] { "Movie1.mkv", "movie2.mkv", "Movie10.mkv" }, processed);
 
         model.FileSort.SortBy(MediaSortColumn.Name);
@@ -171,14 +170,14 @@ public sealed class ViewModelTests
             row.IsSelected = row.Name != "Movie10.mkv";
         }
         processed.Clear();
-        await model.InspectCommand.ExecuteAsync();
+        await model.InspectCommand.InvokeAsync();
         CollectionAssert.AreEqual(new[] { "movie2.mkv", "Movie1.mkv" }, processed, "Selected-file batches follow the sort too.");
 
         model.FileSort.SortBy(MediaSortColumn.Status);
         var sortedOrder = model.FileSort.Comparer;
         model.Files.Single(row => row.Name == "Movie1.mkv").Status = "Needs attention";
         processed.Clear();
-        await model.ScanCommand.ExecuteAsync();
+        await model.ScanCommand.InvokeAsync();
         Assert.AreNotSame(sortedOrder, model.FileSort.Comparer,"Starting a batch re-applies the sort so the screen matches the processing order.");
         CollectionAssert.AreEqual(new[] { "Movie1.mkv", "movie2.mkv", "Movie10.mkv" }, processed, "Blank statuses stay last and fall back to name order.");
     }
@@ -210,7 +209,7 @@ public sealed class ViewModelTests
             started.TrySetResult();
             await release.Task.WaitAsync(token);
         };
-        var scanning = model.ScanCommand.ExecuteAsync();
+        var scanning = model.ScanCommand.InvokeAsync();
         await started.Task.WaitAsync(TimeSpan.FromSeconds(10));
         var comparer = model.FileSort.Comparer;
 
@@ -246,17 +245,17 @@ public sealed class ViewModelTests
             started.TrySetResult();
             await Task.Delay(Timeout.Infinite, token);
         };
-        var scanning = model.ScanCommand.ExecuteAsync();
+        var scanning = model.ScanCommand.InvokeAsync();
         try
         {
             await started.Task.WaitAsync(TimeSpan.FromSeconds(10));
             Assert.IsFalse(model.RemoveFileCommand.CanExecute(first));
-            model.RemoveFileCommand.Execute(first);
+            model.RemoveFileCommand.Invoke(first);
             Assert.HasCount(2, model.Files);
         }
         finally
         {
-            model.CancelCommand.Execute();
+            model.CancelCommand.Invoke();
             await scanning.WaitAsync(TimeSpan.FromSeconds(10));
         }
 
@@ -264,7 +263,7 @@ public sealed class ViewModelTests
         var changes = new List<string?>();
         model.PropertyChanged += (_, e) => changes.Add(e.PropertyName);
         Assert.IsTrue(model.RemoveFileCommand.CanExecute(first));
-        model.RemoveFileCommand.Execute(first);
+        model.RemoveFileCommand.Invoke(first);
         Assert.AreSame(second, model.Files.Single());
         Assert.AreSame(second, model.Focused);
         Assert.AreEqual("1 item | 1 item selected", model.SelectionSummary);
@@ -276,7 +275,7 @@ public sealed class ViewModelTests
         first.IsSelected = !first.IsSelected;
         Assert.IsEmpty(changes, "Removed rows must no longer notify the page.");
 
-        model.RemoveFileCommand.Execute(second);
+        model.RemoveFileCommand.Invoke(second);
         Assert.IsTrue(model.IsFileListEmpty);
         Assert.IsNull(model.Focused);
         Assert.AreEqual(ViewStatus.FileListCleared, model.Status);
@@ -301,7 +300,7 @@ public sealed class ViewModelTests
         model.Files.Add(new MediaRow(@"C:\Media\Mountain.mkv"));
         model.Files.RemoveAt(0);
         model.Files.Add(new MediaRow(@"C:\Media\Ocean.mkv"));
-        model.ClearAllCommand.Execute();
+        model.ClearAllCommand.Invoke();
 
         CollectionAssert.AreEqual(new[] { false, true, false, true }, states);
         Assert.IsTrue(model.IsFileListEmpty);
@@ -321,7 +320,7 @@ public sealed class ViewModelTests
         row.IsSelected = false;
         archive.Input = row.Path;
 
-        media.OpenSettingsCommand.Execute();
+        media.OpenSettingsCommand.Invoke();
         await shell.Settings.Completion;
         Assert.AreSame(shell.Settings, shell.CurrentPage);
         Assert.IsTrue(shell.Settings.IncludeSimple);
@@ -342,7 +341,7 @@ public sealed class ViewModelTests
         var media = shell.CurrentPage;
         var archive = shell.Pages.OfType<ArchiveViewModel>().Single();
         runtime.DuringDependencyCheck = token => Task.Delay(Timeout.Infinite, token);
-        var checking = shell.Settings.CheckCommand.ExecuteAsync();
+        var checking = shell.Settings.CheckCommand.InvokeAsync();
         try
         {
             Assert.IsFalse(shell.CanNavigate);
@@ -351,7 +350,7 @@ public sealed class ViewModelTests
         }
         finally
         {
-            shell.Settings.CancelCommand.Execute();
+            shell.Settings.CancelCommand.Invoke();
             await checking.WaitAsync(TimeSpan.FromSeconds(10));
         }
 
@@ -362,7 +361,7 @@ public sealed class ViewModelTests
         shell.CurrentPage = archive;
         Assert.AreSame(shell.Settings, shell.CurrentPage);
         Assert.IsFalse(shell.CanNavigate);
-        shell.Settings.DiscardChangesCommand.Execute();
+        shell.Settings.DiscardChangesCommand.Invoke();
         shell.CurrentPage = archive;
         Assert.AreSame(archive, shell.CurrentPage);
         Assert.IsTrue(shell.CanNavigate);
@@ -382,7 +381,7 @@ public sealed class ViewModelTests
             started.TrySetResult();
             await release.Task.WaitAsync(token);
         };
-        Assert.IsFalse(model.PauseBatchCommand.CanExecute());
+        Assert.IsFalse(model.PauseBatchCommand.CanExecute(null));
         Assert.AreEqual("\uE769", model.PauseBatchIcon);
 
         var adding = model.AddAsync([@"C:\Media\Mountain.mkv", @"C:\Media\Ocean.mkv"]);
@@ -395,8 +394,8 @@ public sealed class ViewModelTests
                 paused.TrySetResult();
             }
         };
-        Assert.IsTrue(model.PauseBatchCommand.CanExecute());
-        model.PauseBatchCommand.Execute();
+        Assert.IsTrue(model.PauseBatchCommand.CanExecute(null));
+        model.PauseBatchCommand.Invoke();
         Assert.AreEqual("Resume", model.PauseBatchText);
         Assert.AreEqual("\uE768", model.PauseBatchIcon);
         StringAssert.Contains(model.ActiveProgressSummary, "Pausing after current job");
@@ -407,18 +406,18 @@ public sealed class ViewModelTests
 
         if (cancelBatch)
         {
-            model.CancelCommand.Execute();
+            model.CancelCommand.Invoke();
         }
         else
         {
-            model.PauseBatchCommand.Execute();
+            model.PauseBatchCommand.Invoke();
         }
 
         await adding.WaitAsync(TimeSpan.FromSeconds(10));
         Assert.AreEqual(cancelBatch ? 1 : 2, runtime.Analyses);
         Assert.AreEqual("Pause", model.PauseBatchText);
         Assert.AreEqual("\uE769", model.PauseBatchIcon);
-        Assert.IsFalse(model.PauseBatchCommand.CanExecute());
+        Assert.IsFalse(model.PauseBatchCommand.CanExecute(null));
         Assert.IsTrue(model.IsIdle);
     }
 
@@ -447,7 +446,7 @@ public sealed class ViewModelTests
         row.IsSelected = false;
         model.Focused = model.Files[1];
         int analyses = runtime.Analyses;
-        await model.InspectIncompleteCommand.ExecuteAsync(row);
+        await model.InspectIncompleteCommand.InvokeAsync(row);
         Assert.AreEqual(analyses + 1, runtime.Analyses);
         Assert.AreEqual(1, runtime.FullAnalyses);
         Assert.AreEqual(DoViFixer.Domain.Analysis.AnalysisMethod.FullRpu, row.Analysis!.Evidence.Method);
@@ -475,7 +474,7 @@ public sealed class ViewModelTests
             DoViFixer.Domain.Analysis.AnalysisMethod.FullRpu => model.InspectCommand,
             _ => model.DeepInspectCommand
         };
-        await command.ExecuteAsync();
+        await command.InvokeAsync();
         Assert.AreEqual(method == DoViFixer.Domain.Analysis.AnalysisMethod.SampledRpu ? "Scan failed" : "Inspection failed", row.Status);
         Assert.IsTrue(row.CanRetryAnalysis);
         Assert.IsTrue(row.DetailNotes.Contains("Fixture analysis failure"));
@@ -483,7 +482,7 @@ public sealed class ViewModelTests
         runtime.DuringAnalysis = null;
         row.IsSelected = false;
         model.Focused = model.Files[1];
-        await model.RetryAnalysisCommand.ExecuteAsync(row);
+        await model.RetryAnalysisCommand.InvokeAsync(row);
         Assert.AreEqual(analyses + 1, runtime.Analyses);
         Assert.AreEqual(method, row.Analysis!.Evidence.Method);
         Assert.AreEqual("", row.Status);
@@ -499,10 +498,10 @@ public sealed class ViewModelTests
         var model = runtime.Container.GetRequiredService<MediaViewModel>();
         await model.AddAsync([@"C:\Media\One\Mountain.mkv", @"C:\Media\Two\Ocean.mkv"]);
         model.Focused = null;
-        Assert.IsFalse(model.OpenFileLocationCommand.CanExecute());
+        Assert.IsFalse(model.OpenFileLocationCommand.CanExecute(null));
         model.Focused = model.Files[1];
-        Assert.IsTrue(model.OpenFileLocationCommand.CanExecute());
-        model.OpenFileLocationCommand.Execute();
+        Assert.IsTrue(model.OpenFileLocationCommand.CanExecute(null));
+        model.OpenFileLocationCommand.Invoke();
         Assert.AreEqual(@"C:\Media\Two\Ocean.mkv", runtime.ShownFile);
     }
 
@@ -512,12 +511,12 @@ public sealed class ViewModelTests
         using var runtime = new TestRuntime();
         var model = runtime.Container.GetRequiredService<MediaViewModel>();
         await model.AddAsync([@"C:\Media\One\Mountain.mkv", @"C:\Media\Two\Ocean.mkv"]);
-        await model.ConvertDv81Command.ExecuteAsync();
+        await model.ConvertDv81Command.InvokeAsync();
         model.Focused = model.Files[1];
-        model.OpenRowOutputCommand.Execute(model.Files[0]);
+        model.OpenRowOutputCommand.Invoke(model.Files[0]);
         Assert.AreEqual(@"C:\Media\One", runtime.OpenedFolder);
         Assert.AreEqual("Converted", model.Files[0].Status);
-        await model.ScanCommand.ExecuteAsync();
+        await model.ScanCommand.InvokeAsync();
         Assert.AreEqual("", model.Files[0].Status);
         Assert.IsFalse(model.Files[0].CanOpenResult);
         Assert.IsNotNull(model.Files[0].Result, "Analysis retains the previous conversion details.");
@@ -549,11 +548,11 @@ public sealed class ViewModelTests
         runtime.DuringAnalysis = null;
         if (cancelAll)
         {
-            model.CancelCommand.Execute();
+            model.CancelCommand.Invoke();
         }
         else
         {
-            model.CancelFileCommand.Execute(model.Files[0]);
+            model.CancelFileCommand.Invoke(model.Files[0]);
         }
 
         await adding.WaitAsync(TimeSpan.FromSeconds(10));
@@ -577,7 +576,7 @@ public sealed class ViewModelTests
         await model.AddAsync([@"C:\Media\Mountain.mkv", @"C:\Media\Ocean.mkv"]);
         Assert.HasCount(2, model.Files);
         Assert.AreEqual(2, runtime.Analyses);
-        model.ClearAllCommand.Execute();
+        model.ClearAllCommand.Invoke();
         runtime.Ready = false;
         await model.AddAsync([@"C:\Media\Mountain.mkv"]);
         Assert.AreEqual("", model.Files.Single().Status);
@@ -590,30 +589,30 @@ public sealed class ViewModelTests
     {
         using var runtime = new TestRuntime();
         var settings = runtime.Container.GetRequiredService<SettingsViewModel>();
-        await settings.LoadCommand.ExecuteAsync();
+        await settings.LoadCommand.InvokeAsync();
         Assert.IsTrue(settings.AutomaticallyScanAddedFiles);
         Assert.IsTrue(settings.UseCachedResults);
         settings.AutomaticallyScanAddedFiles = false;
         settings.UseCachedResults = false;
-        await settings.SaveCommand.ExecuteAsync();
+        await settings.SaveCommand.InvokeAsync();
         Assert.IsFalse(runtime.Settings.AutomaticallyScanAddedFiles);
         Assert.IsFalse(runtime.Settings.UseCachedResults);
         var model = runtime.Container.GetRequiredService<MediaViewModel>();
         await model.AddAsync([@"C:\Media\Mountain.mkv"]);
         Assert.AreEqual(0, runtime.Analyses);
-        await model.ScanCommand.ExecuteAsync();
-        await model.ScanCommand.ExecuteAsync();
+        await model.ScanCommand.InvokeAsync();
+        await model.ScanCommand.InvokeAsync();
         Assert.AreEqual(2, runtime.Analyses);
         Assert.AreEqual(2, runtime.Probes, "Disabling reuse must also bypass cached probe metadata.");
         settings.UseCachedResults = true;
-        await settings.SaveCommand.ExecuteAsync();
-        await model.ScanCommand.ExecuteAsync();
+        await settings.SaveCommand.InvokeAsync();
+        await model.ScanCommand.InvokeAsync();
         Assert.AreEqual(2, runtime.Analyses);
         runtime.CachedFrames = 2;
-        await settings.ClearCacheCommand.ExecuteAsync();
+        await settings.ClearCacheCommand.InvokeAsync();
         Assert.AreEqual(0, runtime.CachedFrames);
         StringAssert.Contains(settings.StatusMessage, "2 frame previews");
-        await model.ScanCommand.ExecuteAsync();
+        await model.ScanCommand.InvokeAsync();
         Assert.AreEqual(3, runtime.Analyses);
     }
 
@@ -622,33 +621,33 @@ public sealed class ViewModelTests
     {
         using var runtime = new TestRuntime();
         var settings = runtime.Container.GetRequiredService<SettingsViewModel>();
-        await settings.LoadCommand.ExecuteAsync();
+        await settings.LoadCommand.InvokeAsync();
         Assert.AreEqual(DoViFixer.Application.Settings.AppTheme.System, settings.SelectedTheme);
         Assert.IsTrue(settings.IsSystemTheme);
         Assert.IsFalse(settings.IsLightTheme);
         Assert.IsFalse(settings.IsDarkTheme);
-        Assert.AreEqual(DoViFixer.Application.Settings.AppTheme.System, runtime.AppliedTheme);
+        Assert.AreEqual(ThemePreference.System, runtime.AppliedTheme);
 
         settings.SelectedTheme = DoViFixer.Application.Settings.AppTheme.Dark;
         Assert.AreEqual(DoViFixer.Application.Settings.AppTheme.Dark, settings.SelectedTheme);
         Assert.IsFalse(settings.IsSystemTheme);
         Assert.IsFalse(settings.IsLightTheme);
         Assert.IsTrue(settings.IsDarkTheme);
-        Assert.AreEqual(DoViFixer.Application.Settings.AppTheme.Dark, runtime.AppliedTheme);
+        Assert.AreEqual(ThemePreference.Dark, runtime.AppliedTheme);
 
-        await settings.SaveCommand.ExecuteAsync();
+        await settings.SaveCommand.InvokeAsync();
         Assert.AreEqual(DoViFixer.Application.Settings.AppTheme.Dark, runtime.Settings.Theme);
 
         settings.IsLightTheme = true;
         Assert.AreEqual(DoViFixer.Application.Settings.AppTheme.Light, settings.SelectedTheme);
         Assert.IsTrue(settings.IsLightTheme);
-        Assert.AreEqual(DoViFixer.Application.Settings.AppTheme.Light, runtime.AppliedTheme);
+        Assert.AreEqual(ThemePreference.Light, runtime.AppliedTheme);
 
-        await settings.SaveCommand.ExecuteAsync();
+        await settings.SaveCommand.InvokeAsync();
         var newSettings = runtime.Container.GetRequiredService<SettingsViewModel>();
-        await newSettings.LoadCommand.ExecuteAsync();
+        await newSettings.LoadCommand.InvokeAsync();
         Assert.AreEqual(DoViFixer.Application.Settings.AppTheme.Light, newSettings.SelectedTheme);
-        Assert.AreEqual(DoViFixer.Application.Settings.AppTheme.Light, runtime.AppliedTheme);
+        Assert.AreEqual(ThemePreference.Light, runtime.AppliedTheme);
     }
 
     [TestMethod]
@@ -658,7 +657,7 @@ public sealed class ViewModelTests
         var model = runtime.Container.GetRequiredService<MediaViewModel>();
         await model.AddAsync([@"C:\Media\Mountain.mkv"]);
         var removedRow = model.Files.Single();
-        model.ClearAllCommand.Execute();
+        model.ClearAllCommand.Invoke();
         Assert.HasCount(0, model.Files);
         Assert.IsNull(model.Focused);
 
@@ -782,7 +781,7 @@ public sealed class ViewModelTests
         Assert.AreEqual("Dependency check failed", shell.Settings.Dependencies.WarningText);
         Assert.IsTrue(shell.CanNavigate);
         runtime.DuringDependencyCheck = null;
-        await shell.Settings.CheckCommand.ExecuteAsync();
+        await shell.Settings.CheckCommand.InvokeAsync();
         Assert.IsFalse(shell.Settings.Dependencies.HasWarning);
     }
 
@@ -822,7 +821,7 @@ public sealed class ViewModelTests
         Assert.IsEmpty(runtime.Reviews);
         Assert.IsTrue(shell.StatusItems.Contains(shell.Settings.Dependencies));
 
-        await shell.Settings.InstallCommand.ExecuteAsync();
+        await shell.Settings.InstallCommand.InvokeAsync();
         Assert.HasCount(1, runtime.Reviews, "An explicit setup request still explains why nothing can be installed.");
     }
 
@@ -861,11 +860,11 @@ public sealed class ViewModelTests
     {
         using var runtime = new TestRuntime();
         var settings = runtime.Container.GetRequiredService<SettingsViewModel>();
-        await settings.LoadCommand.ExecuteAsync();
+        await settings.LoadCommand.InvokeAsync();
         runtime.DuringDependencyCheck = _ => throw new IOException("Tool discovery failed");
         settings.ToolPath = @"C:\Tools\ffmpeg.exe";
 
-        await settings.SetToolCommand.ExecuteAsync();
+        await settings.SetToolCommand.InvokeAsync();
 
         Assert.AreEqual(ViewStatus.ToolPathSaved, settings.Status);
         Assert.IsTrue(settings.Dependencies.HasWarning);
@@ -919,7 +918,7 @@ public sealed class ViewModelTests
         Assert.AreEqual(0, runtime.FullAnalyses);
         Assert.AreEqual(0, runtime.Conversions);
 
-        await model.ConvertDv81Command.ExecuteAsync();
+        await model.ConvertDv81Command.InvokeAsync();
         Assert.AreEqual(1, runtime.FullAnalyses);
         Assert.AreEqual(1, runtime.Conversions);
         Assert.AreEqual("Converted", model.Files.Single().Status);
@@ -928,7 +927,7 @@ public sealed class ViewModelTests
         Assert.IsTrue(model.Files.Single().Result!.Output!.EndsWith(" - DV P8.1.mkv"));
 
         model.Files.Single().IsSelected = true;
-        await model.ConvertHdrCommand.ExecuteAsync();
+        await model.ConvertHdrCommand.InvokeAsync();
         Assert.AreEqual("Converted", model.Files.Single().Status);
         Assert.IsTrue(model.Files.Single().Result!.Output!.EndsWith(" - HDR10.mkv"));
     }
@@ -940,7 +939,7 @@ public sealed class ViewModelTests
         await runtime.UpdateAsync(s => s with { AllowFel = true }, default);
         var model = runtime.Container.GetRequiredService<MediaViewModel>();
         await model.AddAsync([@"C:\Media\Mountain.mkv", @"C:\Media\Ocean.mkv"]);
-        await model.ConvertDv81Command.ExecuteAsync();
+        await model.ConvertDv81Command.InvokeAsync();
 
         Assert.IsFalse(model.Files[0].HasWarning);
         Assert.IsNull(model.Files[0].Warning);
@@ -976,7 +975,7 @@ public sealed class ViewModelTests
         runtime.Archives.UnionWith([@"C:\Media\Movie.dovi", @"C:\Other\Keep.dovi"]);
         var model = runtime.Container.GetRequiredService<ArchiveViewModel>();
 
-        await model.CleanupCommand.ExecuteAsync();
+        await model.CleanupCommand.InvokeAsync();
 
         Assert.AreEqual("Delete", runtime.LastApproveLabel);
         Assert.HasCount(1, runtime.Reviews);
@@ -998,7 +997,7 @@ public sealed class ViewModelTests
         using var runtime = new TestRuntime();
         var model = runtime.Container.GetRequiredService<ArchiveViewModel>();
         model.Input = @"C:\Media\Mountain.mkv";
-        await model.BackupCommand.ExecuteAsync();
+        await model.BackupCommand.InvokeAsync();
         Assert.HasCount(1, runtime.Reviews);
         Assert.IsTrue(runtime.Reviews[0].Contains(@"C:\Media\Mountain.dovi"));
         Assert.AreEqual(ViewStatus.BackupNotApproved, model.Status);
@@ -1089,7 +1088,7 @@ public sealed class ViewModelTests
 
         // Turn on IncludeSimple and execute ScanCommand
         await runtime.UpdateAsync(s => s with { IncludeSimple = true }, default);
-        await model.ScanCommand.ExecuteAsync();
+        await model.ScanCommand.InvokeAsync();
 
         // All files were processed by ScanCommand:
         Assert.IsTrue(model.Files[0].IsSelected, "Mountain (MEL) must be auto-selected.");
@@ -1119,11 +1118,11 @@ public sealed class ViewModelTests
 
         await runtime.UpdateAsync(s => s with { UseCachedResults = false }, default);
         int analysesBefore = runtime.Analyses;
-        await settings.LoadCommand.ExecuteAsync();
+        await settings.LoadCommand.InvokeAsync();
         settings.IncludeSimple = true;
-        await settings.SaveCommand.ExecuteAsync();
+        await settings.SaveCommand.InvokeAsync();
         settings.ForceComplex = true;
-        await settings.SaveCommand.ExecuteAsync();
+        await settings.SaveCommand.InvokeAsync();
         await media.RefreshSettingsSummaryAsync();
 
         Assert.AreEqual(analysesBefore, runtime.Analyses, "Saving or refreshing settings must not launch a hidden scan.");
@@ -1131,7 +1130,7 @@ public sealed class ViewModelTests
         Assert.IsFalse(media.Files[1].IsSelected);
         Assert.IsFalse(media.Files[2].IsSelected);
 
-        await media.ScanCommand.ExecuteAsync();
+        await media.ScanCommand.InvokeAsync();
         Assert.IsTrue(media.Files[0].IsSelected);
         Assert.IsTrue(media.Files[1].IsSelected);
         Assert.IsTrue(media.Files[2].IsSelected);
@@ -1165,11 +1164,11 @@ public sealed class ViewModelTests
             "DeepInspect" => model.DeepInspectCommand,
             _ => model.ScanCommand
         };
-        var analysis = command.ExecuteAsync();
+        var analysis = command.InvokeAsync();
         await started.Task.WaitAsync(TimeSpan.FromSeconds(10));
         Assert.IsTrue(model.IsBusy);
         runtime.DuringAnalysis = null;
-        model.CancelCommand.Execute();
+        model.CancelCommand.Invoke();
         await analysis.WaitAsync(TimeSpan.FromSeconds(10));
 
         Assert.IsTrue(model.IsIdle);
@@ -1199,7 +1198,7 @@ public sealed class ViewModelTests
         Assert.IsTrue(row.CanInspectIncomplete);
         Assert.IsFalse(row.IsSelected);
 
-        await model.InspectIncompleteCommand.ExecuteAsync(row);
+        await model.InspectIncompleteCommand.InvokeAsync(row);
 
         Assert.AreEqual(DoViFixer.Domain.Analysis.AnalysisVerdict.Mel, row.Analysis!.Verdict);
         Assert.IsTrue(row.IsSelected, "Promoting incomplete scan to MEL via inspection must select the row.");
@@ -1215,7 +1214,7 @@ public sealed class ViewModelTests
         Assert.IsTrue(model.Files[0].IsSelected);
         Assert.IsFalse(model.Files[1].IsSelected);
 
-        model.ClearAllCommand.Execute();
+        model.ClearAllCommand.Invoke();
         runtime.Ready = false;
 
         await model.AddAsync([@"C:\Media\Mountain.mkv", @"C:\Media\City.mkv"]);
@@ -1228,10 +1227,10 @@ public sealed class ViewModelTests
     {
         using var runtime = new TestRuntime();
         var settings = runtime.Container.GetRequiredService<SettingsViewModel>();
-        await settings.LoadCommand.ExecuteAsync();
+        await settings.LoadCommand.InvokeAsync();
         Assert.IsTrue(settings.AutoSelectAfterScan);
         settings.AutoSelectAfterScan = false;
-        await settings.SaveCommand.ExecuteAsync();
+        await settings.SaveCommand.InvokeAsync();
         Assert.IsFalse(runtime.Settings.AutoSelectAfterScan);
 
         var model = runtime.Container.GetRequiredService<MediaViewModel>();
@@ -1281,7 +1280,7 @@ public sealed class ViewModelTests
             }
         };
 
-        var convertTask = model.ConvertDv81Command.ExecuteAsync();
+        var convertTask = model.ConvertDv81Command.InvokeAsync();
         await started.Task;
 
         Assert.IsTrue(model.IsBusy);
@@ -1321,15 +1320,15 @@ public sealed class ViewModelTests
             }
         };
 
-        var convertTask = model.ConvertDv81Command.ExecuteAsync();
+        var convertTask = model.ConvertDv81Command.InvokeAsync();
         await started.Task;
 
-        model.SkipCommand.Execute(model.Files[2]);
+        model.SkipCommand.Invoke(model.Files[2]);
         Assert.AreEqual("Conversion skipped", model.Files[2].Status);
         Assert.IsTrue(model.Files[2].HasWarning);
         Assert.AreEqual("Deselected before starting.", model.Files[2].Warning);
 
-        model.CancelFileCommand.Execute(model.Files[0]);
+        model.CancelFileCommand.Invoke(model.Files[0]);
         release.SetResult();
         await convertTask;
 
@@ -1346,7 +1345,7 @@ public sealed class ViewModelTests
         var model = runtime.Container.GetRequiredService<MediaViewModel>();
         await model.AddAsync([@"C:\FolderA\Movie.mkv", @"C:\FolderB\Movie.mkv"]);
 
-        await model.ConvertDv81Command.ExecuteAsync();
+        await model.ConvertDv81Command.InvokeAsync();
 
         Assert.AreEqual("Converted", model.Files[0].Status);
         Assert.AreEqual("Conversion skipped", model.Files[1].Status);
@@ -1360,17 +1359,17 @@ public sealed class ViewModelTests
     {
         using var runtime = new TestRuntime();
         var settings = runtime.Container.GetRequiredService<SettingsViewModel>();
-        await settings.LoadCommand.ExecuteAsync();
+        await settings.LoadCommand.InvokeAsync();
         Assert.IsFalse(settings.AllowFel);
         Assert.IsFalse(runtime.Settings.AllowFel);
 
         settings.AllowFel = true;
         Assert.IsTrue(settings.AllowFel);
-        await settings.SaveCommand.ExecuteAsync();
+        await settings.SaveCommand.InvokeAsync();
         Assert.IsTrue(runtime.Settings.AllowFel);
 
         var newSettings = runtime.Container.GetRequiredService<SettingsViewModel>();
-        await newSettings.LoadCommand.ExecuteAsync();
+        await newSettings.LoadCommand.InvokeAsync();
         Assert.IsTrue(newSettings.AllowFel);
     }
 
@@ -1379,7 +1378,7 @@ public sealed class ViewModelTests
     {
         using var runtime = new TestRuntime();
         var settings = runtime.Container.GetRequiredService<SettingsViewModel>();
-        await settings.LoadCommand.ExecuteAsync();
+        await settings.LoadCommand.InvokeAsync();
         Assert.IsFalse(settings.IncludeSimple);
         Assert.IsFalse(settings.ForceComplex);
         Assert.IsFalse(settings.AllowFel);
@@ -1389,14 +1388,14 @@ public sealed class ViewModelTests
         Assert.IsTrue(settings.IncludeSimple);
         Assert.IsFalse(settings.ForceComplex);
         Assert.IsTrue(settings.AllowFel);
-        await settings.SaveCommand.ExecuteAsync();
+        await settings.SaveCommand.InvokeAsync();
 
         Assert.IsTrue(runtime.Settings.IncludeSimple);
         Assert.IsFalse(runtime.Settings.ForceComplex);
         Assert.IsTrue(runtime.Settings.AllowFel);
 
         var newSettings1 = runtime.Container.GetRequiredService<SettingsViewModel>();
-        await newSettings1.LoadCommand.ExecuteAsync();
+        await newSettings1.LoadCommand.InvokeAsync();
         Assert.IsTrue(newSettings1.IncludeSimple);
         Assert.IsFalse(newSettings1.ForceComplex);
         Assert.IsTrue(newSettings1.AllowFel);
@@ -1404,14 +1403,14 @@ public sealed class ViewModelTests
         // Change only ForceComplex to true, reset IncludeSimple to false, and save
         newSettings1.IncludeSimple = false;
         newSettings1.ForceComplex = true;
-        await newSettings1.SaveCommand.ExecuteAsync();
+        await newSettings1.SaveCommand.InvokeAsync();
 
         Assert.IsFalse(runtime.Settings.IncludeSimple);
         Assert.IsTrue(runtime.Settings.ForceComplex);
         Assert.IsTrue(runtime.Settings.AllowFel);
 
         var newSettings2 = runtime.Container.GetRequiredService<SettingsViewModel>();
-        await newSettings2.LoadCommand.ExecuteAsync();
+        await newSettings2.LoadCommand.InvokeAsync();
         Assert.IsFalse(newSettings2.IncludeSimple);
         Assert.IsTrue(newSettings2.ForceComplex);
         Assert.IsTrue(newSettings2.AllowFel);
@@ -1419,14 +1418,14 @@ public sealed class ViewModelTests
         // Change both to true and save
         newSettings2.IncludeSimple = true;
         newSettings2.ForceComplex = true;
-        await newSettings2.SaveCommand.ExecuteAsync();
+        await newSettings2.SaveCommand.InvokeAsync();
 
         Assert.IsTrue(runtime.Settings.IncludeSimple);
         Assert.IsTrue(runtime.Settings.ForceComplex);
         Assert.IsTrue(runtime.Settings.AllowFel);
 
         var newSettings3 = runtime.Container.GetRequiredService<SettingsViewModel>();
-        await newSettings3.LoadCommand.ExecuteAsync();
+        await newSettings3.LoadCommand.InvokeAsync();
         Assert.IsTrue(newSettings3.IncludeSimple);
         Assert.IsTrue(newSettings3.ForceComplex);
         Assert.IsTrue(newSettings3.AllowFel);
@@ -1501,7 +1500,7 @@ public sealed class ViewModelTests
         Assert.IsNotNull(model.ActiveProgressToolTip);
 
         runtime.DuringAnalysis = null;
-        model.CancelCommand.Execute();
+        model.CancelCommand.Invoke();
         await task.WaitAsync(TimeSpan.FromSeconds(10));
 
         Assert.IsFalse(model.IsBusy);
@@ -1567,11 +1566,11 @@ public sealed class ViewModelTests
                 updatedStatusItems = media.StatusItems.Select(item => item.Text).ToArray();
             }
         };
-        await settings.LoadCommand.ExecuteAsync();
+        await settings.LoadCommand.InvokeAsync();
         settings.Destination = @"C:\Media\CustomOutput";
         settings.OtherFolder = true;
         settings.ReplaceOriginal = true;
-        await settings.SaveCommand.ExecuteAsync();
+        await settings.SaveCommand.InvokeAsync();
 
         Assert.AreEqual(@"Output: C:\Media\CustomOutput (Replace original)", media.OutputSummary);
         Assert.IsTrue(media.IsReplaceOriginalActive);
@@ -1592,8 +1591,8 @@ public sealed class ViewModelTests
         bool requested = false;
         media.RequestNavigateToSettings += () => requested = true;
 
-        Assert.IsTrue(media.OpenSettingsCommand.CanExecute());
-        media.OpenSettingsCommand.Execute();
+        Assert.IsTrue(media.OpenSettingsCommand.CanExecute(null));
+        media.OpenSettingsCommand.Invoke();
         Assert.IsTrue(requested);
     }
 
@@ -1642,7 +1641,7 @@ public sealed class ViewModelTests
     {
         using var runtime = new TestRuntime();
         var settings = runtime.Container.GetRequiredService<SettingsViewModel>();
-        await settings.LoadCommand.ExecuteAsync();
+        await settings.LoadCommand.InvokeAsync();
 
         Assert.IsFalse(runtime.Settings.IncludeSimple);
         settings.IncludeSimple = true;
@@ -1698,7 +1697,7 @@ public sealed class ViewModelTests
     {
         using var runtime = new TestRuntime();
         var settings = runtime.Container.GetRequiredService<SettingsViewModel>();
-        await settings.LoadCommand.ExecuteAsync();
+        await settings.LoadCommand.InvokeAsync();
 
         settings.Destination = "";
         settings.OtherFolder = true;

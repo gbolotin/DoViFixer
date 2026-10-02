@@ -1,5 +1,7 @@
 using DoViFixer.App.Composition;
 using DoViFixer.App.Dialogs;
+using WpfFoundation.Dialogs;
+using WpfFoundation.Theming;
 using DoViFixer.App.Presentation.Application;
 using DoViFixer.Application.Abstractions;
 using DoViFixer.Application.Dependencies;
@@ -12,7 +14,7 @@ using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
 
 namespace DoViFixer.App.Tests;
-internal sealed class TestRuntime : IFileDiscovery, IFileOperations, IMediaProbe, IMediaPreview, ISettingsStore, IDependencyDetector, IDependencyInstaller, ITemporaryWorkspaceFactory, IAnalysisCache, IVideoProcessor, IMediaVerifier, IOutputPublisher, IBackupArchiveStore, IUserDialogs, IThemeService, ISourceFileMonitor, IDisposable
+internal sealed class TestRuntime : IFileDiscovery, IFileOperations, IMediaProbe, IMediaPreview, ISettingsStore, IDependencyDetector, IDependencyInstaller, ITemporaryWorkspaceFactory, IAnalysisCache, IVideoProcessor, IMediaVerifier, IOutputPublisher, IBackupArchiveStore, IDialogService, IFileDialogService, IFileExplorer, IThemeService, ISourceFileMonitor, IDisposable
 {
     private ServiceProvider? container;
     public IServiceCollection Services { get; } = new ServiceCollection();
@@ -79,7 +81,7 @@ internal sealed class TestRuntime : IFileDiscovery, IFileOperations, IMediaProbe
     public TestRuntime()
     {
         AppComposition.Register(Services, new ConfigurationBuilder().Build(), false);
-        Type[] contracts = [typeof(IFileDiscovery), typeof(IFileOperations), typeof(IMediaProbe), typeof(IMediaPreview), typeof(ISettingsStore), typeof(IDependencyDetector), typeof(IDependencyInstaller), typeof(ITemporaryWorkspaceFactory), typeof(IAnalysisCache), typeof(IVideoProcessor), typeof(IMediaVerifier), typeof(IOutputPublisher), typeof(IBackupArchiveStore), typeof(IUserDialogs), typeof(IThemeService), typeof(ISourceFileMonitor)];
+        Type[] contracts = [typeof(IFileDiscovery), typeof(IFileOperations), typeof(IMediaProbe), typeof(IMediaPreview), typeof(ISettingsStore), typeof(IDependencyDetector), typeof(IDependencyInstaller), typeof(ITemporaryWorkspaceFactory), typeof(IAnalysisCache), typeof(IVideoProcessor), typeof(IMediaVerifier), typeof(IOutputPublisher), typeof(IBackupArchiveStore), typeof(IDialogService), typeof(IFileDialogService), typeof(IFileExplorer), typeof(IThemeService), typeof(ISourceFileMonitor)];
         foreach (var contract in contracts)
         {
             Services.AddSingleton(contract, this);
@@ -339,8 +341,14 @@ internal sealed class TestRuntime : IFileDiscovery, IFileOperations, IMediaProbe
     public IStagedOutput Stage(string destination) => new Staged(destination);
     public string[] PickedFiles { get; set; } = [];
     public string? PickedFolder { get; set; }
-    public string[] PickFiles(string filter = "Matroska media|*.mkv") => PickedFiles;
+    public List<string> FileFilters { get; } = [];
+    public IReadOnlyList<string> PickFiles(string filter, bool allowMultiple = true)
+    {
+        FileFilters.Add(filter);
+        return allowMultiple ? PickedFiles : PickedFiles.Take(1).ToArray();
+    }
     public string? PickFolder() => PickedFolder;
+    public string? PickSaveFile(string filter, string? fileName = null) => null;
     public string? OpenedFolder
     {
         get;
@@ -366,27 +374,44 @@ internal sealed class TestRuntime : IFileDiscovery, IFileOperations, IMediaProbe
     }
 
     public string? LastApproveLabel { get; private set; }
-    public bool Review(string title, string content, string approveLabel)
-    {
-        Reviews.Add(content);
-        LastApproveLabel = approveLabel;
-        return Approval;
-    }
-
     public List<string> Messages { get; } = [];
-    public void ShowMessage(string message, string title = "DoViFixer")
+
+    // Reviews answer with Approval; messages are recorded and closed.
+    public Task<bool> ShowAsync(DialogViewModel dialog)
     {
-        Messages.Add($"{title}: {message}");
+        switch (dialog)
+        {
+            case ReviewDialogViewModel review:
+                Reviews.Add(review.Content);
+                LastApproveLabel = review.Buttons[0].Label;
+                if (Approval)
+                {
+                    review.Accept();
+                }
+                else
+                {
+                    review.Cancel();
+                }
+                break;
+            case MessageDialogViewModel message:
+                Messages.Add($"{message.Title}: {message.Message}");
+                message.Accept();
+                break;
+            default:
+                throw new NotSupportedException($"The test runtime does not answer {dialog.GetType().Name}.");
+        }
+
+        return dialog.Completion;
     }
 
-    public AppTheme AppliedTheme
+    public ThemePreference AppliedTheme
     {
         get;
         set;
     }
-    = AppTheme.System;
-    AppTheme IThemeService.CurrentTheme => AppliedTheme;
-    void IThemeService.ApplyTheme(AppTheme theme) => AppliedTheme = theme;
+    = ThemePreference.System;
+    ThemePreference IThemeService.CurrentTheme => AppliedTheme;
+    void IThemeService.ApplyTheme(ThemePreference theme) => AppliedTheme = theme;
 
     private sealed class Workspace : ITemporaryWorkspace
     {

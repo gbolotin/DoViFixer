@@ -10,7 +10,6 @@ using System.Windows.Media.Imaging;
 using System.Windows.Threading;
 using DoViFixer.App.ViewModels;
 using DoViFixer.App.Presentation.Application;
-using DoViFixer.App.Presentation.Common;
 using DoViFixer.App.Views;
 using DoViFixer.Application.Dependencies;
 using DoViFixer.Domain.Analysis;
@@ -59,6 +58,11 @@ public sealed class VisualTests
     private static async Task ExerciseShellAsync()
     {
         var app = new System.Windows.Application { ShutdownMode = ShutdownMode.OnExplicitShutdown, ThemeMode = ThemeMode.System };
+        // The same dictionaries App.xaml merges.
+        app.Resources.MergedDictionaries.Add(new ResourceDictionary
+        {
+            Source = new Uri("pack://application:,,,/WpfFoundation;component/Themes/WpfFoundation.xaml", UriKind.Absolute)
+        });
         app.Resources.MergedDictionaries.Add(new ResourceDictionary
         {
             Source = new Uri("/DoViFixer.App;component/Resources/Common.xaml", UriKind.Relative)
@@ -123,15 +127,15 @@ public sealed class VisualTests
             Assert.AreEqual(0, runtime.Installations);
             SaveRender((FrameworkElement)window.Content, "startup-dependency-warning");
             runtime.MissingTools.Clear();
-            await shell.Settings.CheckCommand.ExecuteAsync();
+            await shell.Settings.CheckCommand.InvokeAsync();
             await LayoutAsync(window);
             Assert.IsFalse(Descendants<StackPanel>(window).Any(panel => System.Windows.Automation.AutomationProperties.GetName(panel) == "Dependency warning"));
             window.Width = 1400;
             window.Height = 900;
             await LayoutAsync(window);
             var navigation = Descendants<ListBox>(window).Single(list => ReferenceEquals(list.ItemsSource, shell.Pages));
-            var pageHost = Descendants<ItemsControl>(window).Single(control => control.Name == "PageHost");
-            var mediaView = (ContentPresenter)pageHost.ItemContainerGenerator.ContainerFromItem(media);
+            var pageHost = Descendants<RetainedPageHost>(window).Single();
+            var mediaView = PageView(pageHost, media);
             Assert.AreSame(media, navigation.SelectedItem);
             Assert.HasCount(3, navigation.Items);
             VerifyCommandIcons(mediaView);
@@ -179,10 +183,10 @@ public sealed class VisualTests
                 navigation.SelectedItem = page;
                 await shell.NavigationTask;
                 await LayoutAsync(window);
-                var workspace = (ContentPresenter)pageHost.ItemContainerGenerator.ContainerFromItem(page);
+                var workspace = PageView(pageHost, page);
                 Assert.AreSame(page, shell.CurrentPage);
                 var statusBar = Descendants<StatusBar>(window).Single();
-                CollectionAssert.AreEqual(page.StatusItems.Select(item => item.Text).ToArray(), Descendants<TextBlock>(statusBar).Select(text => text.Text).ToArray());
+                CollectionAssert.AreEqual(((OperationViewModel)page).StatusItems.Select(item => item.Text).ToArray(), Descendants<TextBlock>(statusBar).Select(text => text.Text).ToArray());
                 AssertInside(statusBar, (FrameworkElement)window.Content);
                 Assert.AreSame(page, workspace.Content);
                 Assert.IsTrue(Descendants<FrameworkElement>(workspace).Any(element => ReferenceEquals(element.DataContext, page) && element.ActualHeight > 0));
@@ -192,7 +196,7 @@ public sealed class VisualTests
                     Assert.AreSame(previousRoot, root, "Navigation must retain each page's visual tree.");
                 }
                 retainedRoots[page] = root;
-                var containers = shell.Pages.Select(item => (ContentPresenter)pageHost.ItemContainerGenerator.ContainerFromItem(item)).ToArray();
+                var containers = pageHost.RetainedPages.Select(item => PageView(pageHost, item)).ToArray();
                 Assert.AreEqual(1, containers.Count(container => container.IsVisible));
                 Assert.IsTrue(workspace.IsVisible);
                 foreach (var hidden in containers.Where(container => !ReferenceEquals(container, workspace)))
@@ -264,7 +268,7 @@ public sealed class VisualTests
             columns[0].Width = originalListWidth;
             columns[2].Width = originalDetailsWidth;
             fileColumn.Width = originalWidth;
-            Assert.AreSame(media.Files, list.ItemsSource);
+            Assert.AreSame(media.Files, ((System.ComponentModel.ICollectionView)list.ItemsSource).SourceCollection, "The sorted list shows its own view of the files.");
             Assert.AreSame(media.Focused, list.SelectedItem);
 
             await LayoutAsync(window);
@@ -291,7 +295,7 @@ public sealed class VisualTests
             Assert.AreEqual(media.Focused.Path, DisplayedText(fileLocation));
             var fileLocationLink = (System.Windows.Documents.Hyperlink)fileLocation.Inlines.FirstInline;
             Assert.AreSame(media.OpenFileLocationCommand, fileLocationLink.Command, "The file location link must open the folder.");
-            fileLocationLink.Command.Execute(fileLocationLink.CommandParameter);
+            fileLocationLink.Command.Invoke(fileLocationLink.CommandParameter);
             Assert.AreEqual(media.Focused.Path, runtime.ShownFile);
             SaveRender((FrameworkElement)window.Content, "command-icons-toolbar");
             await VerifyRowActionsAsync(runtime, media, list, window, navigation, mediaView);
@@ -318,7 +322,7 @@ public sealed class VisualTests
             await LayoutAsync(window);
             await shell.NavigationTask;
             Assert.AreSame(shell.Settings, navigation.SelectedItem);
-            var settingsView = (ContentPresenter)pageHost.ItemContainerGenerator.ContainerFromItem(shell.Settings);
+            var settingsView = PageView(pageHost, shell.Settings);
             await VerifySettingsRecoveryAsync(runtime, shell, window, navigation, settingsView);
             Assert.AreEqual("", errors.Errors.ToString(), "WPF binding errors were reported.");
         }
@@ -373,7 +377,7 @@ public sealed class VisualTests
     {
         var grid = (GridView)list.View;
         GridViewColumnHeader Header(int column) => Descendants<GridViewColumnHeader>(list).Single(header => ReferenceEquals(header.Column, grid.Columns[column]));
-        TextBlock Indicator(GridViewColumnHeader header) => Descendants<TextBlock>(header).Single(text => text.Style == list.FindResource("ColumnSortIndicator"));
+        TextBlock Indicator(GridViewColumnHeader header) => Descendants<TextBlock>(header).Single(text => text.Style == list.FindResource("WfColumnSortIndicatorStyle"));
         string ascending = char.ConvertFromUtf32(0xE70E);
         string descending = char.ConvertFromUtf32(0xE70D);
         void AssertIndicatorAboveCenter(GridViewColumnHeader header, string title)
@@ -392,7 +396,7 @@ public sealed class VisualTests
         var selectAll = Descendants<CheckBox>(fileHeader).Single();
         var original = media.Files.ToArray();
         var focused = media.Focused;
-        Assert.AreSame(list.FindResource("SortableColumnHeader"), profileHeader.ContentTemplate, "Columns without a header template use the shared sortable header.");
+        Assert.AreSame(list.FindResource("WfSortableColumnHeaderTemplate"), profileHeader.ContentTemplate, "Columns without a header template use the shared sortable header.");
         Assert.IsTrue(Descendants<TextBlock>(profileHeader).Any(text => text.Text == "Profile / Type"));
         Assert.IsFalse(Indicator(fileHeader).IsVisible);
 
@@ -543,7 +547,7 @@ public sealed class VisualTests
         finally
         {
             runtime.DiscoverFiles = null;
-            media.ClearAllCommand.Execute();
+            media.ClearAllCommand.Invoke();
             await LayoutAsync(window);
         }
     }
@@ -646,7 +650,7 @@ public sealed class VisualTests
             }
             return [];
         };
-        var discovering = media.AddFolderCommand.ExecuteAsync();
+        var discovering = media.AddFolderCommand.InvokeAsync();
         try
         {
             await started.Task.WaitAsync(TimeSpan.FromSeconds(10));
@@ -718,7 +722,7 @@ public sealed class VisualTests
         Assert.AreSame(list, Descendants<ListView>(mediaView).Single());
         Assert.AreEqual(400, fileColumn.Width, "Clearing and adding must retain column widths.");
         fileColumn.Width = originalWidth;
-        media.ClearAllCommand.Execute();
+        media.ClearAllCommand.Invoke();
         runtime.PickedFiles = [];
         runtime.PickedFolder = null;
         window.Width = 1400;
@@ -799,7 +803,7 @@ public sealed class VisualTests
         // A failed analysis must be retryable from the row even when another row is focused.
         await runtime.ClearAsync(default);
         runtime.DuringAnalysis = _ => throw new IOException("Analysis unavailable");
-        await media.ScanCommand.ExecuteAsync();
+        await media.ScanCommand.InvokeAsync();
         runtime.DuringAnalysis = null;
         Assert.IsTrue(row.CanRetryAnalysis);
         await LayoutAsync(window);
@@ -840,7 +844,7 @@ public sealed class VisualTests
                 await release.Task;
             }
         };
-        var converting = media.ConvertDv81Command.ExecuteAsync();
+        var converting = media.ConvertDv81Command.InvokeAsync();
         try
         {
             await started.Task.WaitAsync(TimeSpan.FromSeconds(10));
@@ -869,14 +873,14 @@ public sealed class VisualTests
         }
         finally
         {
-            media.CancelCommand.Execute();
+            media.CancelCommand.Invoke();
             release.TrySetResult();
             await converting.WaitAsync(TimeSpan.FromSeconds(10));
             runtime.DuringConversion = null;
         }
 
         row.IsSelected = true;
-        await media.ConvertDv81Command.ExecuteAsync();
+        await media.ConvertDv81Command.InvokeAsync();
         await LayoutAsync(window);
         AssertStableActionSlots(list, slots, "converted");
         Invoke(Button(container, "Open folder"));
@@ -944,7 +948,7 @@ public sealed class VisualTests
         Assert.IsFalse(outputPath.IsVisible);
 
         runtime.DuringDependencyCheck = token => Task.Delay(Timeout.Infinite, token);
-        var checking = shell.Settings.CheckCommand.ExecuteAsync();
+        var checking = shell.Settings.CheckCommand.InvokeAsync();
         try
         {
             await LayoutAsync(window);
@@ -961,7 +965,7 @@ public sealed class VisualTests
         }
         finally
         {
-            shell.Settings.CancelCommand.Execute();
+            shell.Settings.CancelCommand.Invoke();
             await checking.WaitAsync(TimeSpan.FromSeconds(10));
         }
         window.Close();
@@ -1077,6 +1081,10 @@ public sealed class VisualTests
         Assert.IsTrue(bounds.Left >= 0 && bounds.Top >= 0 && bounds.Right <= host.ActualWidth + 1 && bounds.Bottom <= host.ActualHeight + 1,
             $"{element} is clipped: {bounds} inside {host.RenderSize}.");
     }
+
+    // The retained host keeps one view per visited page, shown or collapsed.
+    private static ContentPresenter PageView(RetainedPageHost host, object page) =>
+        ((Grid)VisualTreeHelper.GetChild(host, 0)).Children.OfType<ContentPresenter>().Single(view => ReferenceEquals(view.Content, page));
 
     private static void SaveRender(FrameworkElement content, string name)
     {
