@@ -89,6 +89,11 @@ These rules apply throughout the repository. Application-specific project names,
 </StackPanel>
 ```
 
+## UI design
+
+- Follow Microsoft's Windows app design guidance (https://learn.microsoft.com/windows/apps/design/) for layout, typography, color, icons, controls, and wording.
+- For WPF specifics such as brush, text style, and corner radius keys, spacing values, and icon glyphs, the Design Guidance section of Microsoft's WPF Gallery app and the WPF Fluent theme take precedence.
+
 ## Testing
 
 - New domain and service logic should be unit-testable.
