@@ -27,32 +27,7 @@ public sealed class VisualTests
     {
         // WPF allows only one Application per process. Exercise the real templates
         // together on one STA dispatcher, using fake media services throughout.
-        var finished = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
-        var thread = new Thread(() =>
-        {
-            var dispatcher = Dispatcher.CurrentDispatcher;
-            SynchronizationContext.SetSynchronizationContext(new DispatcherSynchronizationContext(dispatcher));
-            dispatcher.BeginInvoke(new Action(async () =>
-            {
-                try
-                {
-                    await ExerciseShellAsync();
-                    finished.TrySetResult();
-                }
-                catch (Exception ex)
-                {
-                    finished.TrySetException(ex);
-                }
-                finally
-                {
-                    dispatcher.InvokeShutdown();
-                }
-            }));
-            Dispatcher.Run();
-        }) { IsBackground = true };
-        thread.SetApartmentState(ApartmentState.STA);
-        thread.Start();
-        await finished.Task.WaitAsync(TimeSpan.FromSeconds(45));
+        await DispatcherThread.RunAsync(ExerciseShellAsync, TimeSpan.FromSeconds(45));
     }
 
     private static async Task ExerciseShellAsync()

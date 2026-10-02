@@ -229,7 +229,11 @@ public sealed class ViewModelTests
     }
 
     [TestMethod]
-    public async Task RemoveFileUpdatesSelectionAndDetailsAndRejectsRemovalWhileBusy()
+    public Task RemoveFileUpdatesSelectionAndDetailsAndRejectsRemovalWhileBusy() =>
+        // Late scan callbacks must arrive on the UI thread, not race the change-list assertions.
+        DispatcherThread.RunAsync(ExerciseRemoveFileAsync, TimeSpan.FromSeconds(30));
+
+    private static async Task ExerciseRemoveFileAsync()
     {
         using var runtime = new TestRuntime();
         var model = runtime.Container.GetRequiredService<MediaViewModel>();
@@ -1461,7 +1465,12 @@ public sealed class ViewModelTests
     }
 
     [TestMethod]
-    public async Task ActiveProgressPropertiesReflectBatchAndNonBatchOperations()
+    public Task ActiveProgressPropertiesReflectBatchAndNonBatchOperations() =>
+        // Progress<T> needs the app's ordered UI context; on the thread pool, the earlier
+        // indeterminate stage report can land after the 40% report and reset the batch to 0%.
+        DispatcherThread.RunAsync(ExerciseActiveProgressAsync, TimeSpan.FromSeconds(30));
+
+    private static async Task ExerciseActiveProgressAsync()
     {
         using var runtime = new TestRuntime();
         var model = runtime.Container.GetRequiredService<MediaViewModel>();
