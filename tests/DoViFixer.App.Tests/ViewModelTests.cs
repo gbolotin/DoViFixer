@@ -355,6 +355,7 @@ public sealed class ViewModelTests
         }
 
         shell.CurrentPage = shell.Settings;
+        await shell.NavigationTask;
         await shell.Settings.Completion;
         shell.Settings.OtherFolder = true;
         await shell.Settings.SaveTask;
@@ -363,6 +364,7 @@ public sealed class ViewModelTests
         Assert.IsFalse(shell.CanNavigate);
         shell.Settings.DiscardChangesCommand.Invoke();
         shell.CurrentPage = archive;
+        await shell.NavigationTask;
         Assert.AreSame(archive, shell.CurrentPage);
         Assert.IsTrue(shell.CanNavigate);
     }
