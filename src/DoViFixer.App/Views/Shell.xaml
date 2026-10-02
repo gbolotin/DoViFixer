@@ -34,7 +34,7 @@
                                                FontWeight="SemiBold"
                                                Foreground="{DynamicResource SystemFillColorCautionBrush}"
                                                VerticalAlignment="Center"
-                                               Margin="0,0,6,0" />
+                                               Margin="0,0,8,0" />
                                     <TextBlock Text="{Binding WarningText}" VerticalAlignment="Center" />
                                 </StackPanel>
                             </DataTemplate>
@@ -48,7 +48,7 @@
                                     <Button Content="Cancel"
                                             Command="{Binding CancelCommand}"
                                             AutomationProperties.Name="Cancel dependency operation"
-                                            Padding="6,0"
+                                            Padding="8,0"
                                             Margin="8,0,0,0" />
                                 </StackPanel>
                             </DataTemplate>

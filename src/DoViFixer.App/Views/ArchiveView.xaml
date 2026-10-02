@@ -9,39 +9,38 @@
                 <Border Style="{StaticResource WfCardStyle}">
                     <StackPanel IsEnabled="{Binding IsIdle}">
                         <TextBlock Text="Enhancement-layer archives"
-                                   FontSize="20"
-                                   FontWeight="SemiBold" />
+                                   Style="{StaticResource SubtitleTextBlockStyle}" />
                         <TextBlock Text="Choose a Profile 7 file for backup, or a Profile 8.1 / HDR10 base file for restoration."
                                    Foreground="{DynamicResource TextFillColorSecondaryBrush}"
-                                   Margin="0,10,0,10"
+                                   Margin="0,8"
                                    TextWrapping="Wrap" />
-                                <TextBlock Text="Media file" Style="{StaticResource WfLabelTextStyle}" />
+                        <TextBlock Text="Media file" Style="{StaticResource WfLabelTextStyle}" />
                         <DockPanel>
                             <Button Content="Browse"
                                     DockPanel.Dock="Right"
                                     Command="{Binding BrowseInputCommand}"
-                                    Margin="10,0,0,0" />
-                                    <TextBox Text="{Binding Input, UpdateSourceTrigger=PropertyChanged}" />
+                                    Margin="8,0,0,0" />
+                            <TextBox Text="{Binding Input, UpdateSourceTrigger=PropertyChanged}" />
                         </DockPanel>
                         <TextBlock Text="EL archive for restoration" Style="{StaticResource WfLabelTextStyle}" />
                         <DockPanel>
                             <Button Content="Browse"
                                     DockPanel.Dock="Right"
                                     Command="{Binding BrowseArchiveCommand}"
-                                    Margin="10,0,0,0" />
-                                    <TextBox Text="{Binding Archive, UpdateSourceTrigger=PropertyChanged}" />
+                                    Margin="8,0,0,0" />
+                            <TextBox Text="{Binding Archive, UpdateSourceTrigger=PropertyChanged}" />
                         </DockPanel>
                         <TextBlock Text="Output folder (leave blank for the source folder)" Style="{StaticResource WfLabelTextStyle}" />
                         <DockPanel>
                             <Button Content="Browse"
                                     DockPanel.Dock="Right"
                                     Command="{Binding BrowseOutputCommand}"
-                                    Margin="10,0,0,0" />
-                                    <TextBox Text="{Binding Output, UpdateSourceTrigger=PropertyChanged}" />
+                                    Margin="8,0,0,0" />
+                            <TextBox Text="{Binding Output, UpdateSourceTrigger=PropertyChanged}" />
                         </DockPanel>
                         <CheckBox Content="Allow a legacy archive without verified source pairing"
-                          IsChecked="{Binding AllowLegacy}"
-                          Margin="0,18" />
+                                  IsChecked="{Binding AllowLegacy}"
+                                  Margin="0,16" />
                         <StackPanel Orientation="Horizontal">
                             <Button Content="Review backup"
                                     Command="{Binding BackupCommand}"
@@ -52,11 +51,10 @@
                         </StackPanel>
                     </StackPanel>
                 </Border>
-                <Border Style="{StaticResource WfCardStyle}" Margin="0,20,0,0">
+                <Border Style="{StaticResource WfCardStyle}" Margin="0,24,0,0">
                     <StackPanel>
                         <TextBlock Text="Clean up retained backups"
-                                   FontSize="20"
-                                   FontWeight="SemiBold" />
+                                   Style="{StaticResource SubtitleTextBlockStyle}" />
                         <TextBlock Text="Find .dovi and .bak.dovi_convert files in a folder and its subfolders. Review exact files before permanent deletion."
                                    TextWrapping="Wrap"
                                    Foreground="{DynamicResource TextFillColorSecondaryBrush}"
@@ -66,7 +64,7 @@
                                 HorizontalAlignment="Left" />
                     </StackPanel>
                 </Border>
-                <ProgressBar Margin="0,20,0,10"
+                <ProgressBar Margin="0,24,0,8"
                              Value="{Binding Percent, Mode=OneWay}"
                              IsIndeterminate="{Binding IsIndeterminate}"
                              Visibility="{Binding IsBusy, Converter={StaticResource WfBooleanToVisibilityConverter}}" />
