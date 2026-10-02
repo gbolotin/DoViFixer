@@ -39,17 +39,17 @@ public abstract class OperationViewModel : ObservableObject
         {
             if (e.PropertyName is nameof(ProgressViewModel.Percent) or nameof(ProgressViewModel.StagePercent))
             {
-                RaisePropertyChanged(nameof(Percent));
+                OnPropertyChanged(nameof(Percent));
             }
 
             if (e.PropertyName is nameof(ProgressViewModel.IsIndeterminate))
             {
-                RaisePropertyChanged(nameof(IsIndeterminate));
+                OnPropertyChanged(nameof(IsIndeterminate));
             }
 
             if (e.PropertyName is nameof(ProgressViewModel.Stage))
             {
-                RaisePropertyChanged(nameof(Stage));
+                OnPropertyChanged(nameof(Stage));
             }
         };
     }
@@ -60,9 +60,9 @@ public abstract class OperationViewModel : ObservableObject
         private set
         {
             SetProperty(ref isBusy, value);
-            RaisePropertyChanged(nameof(IsIdle));
+            OnPropertyChanged(nameof(IsIdle));
             CommandsChanged();
-            CancelCommand.RaiseCanExecuteChanged();
+            CancelCommand.NotifyCanExecuteChanged();
         }
     }
 
@@ -80,16 +80,16 @@ public abstract class OperationViewModel : ObservableObject
         statusMessage = message;
         if (statusChanged)
         {
-            RaisePropertyChanged(nameof(Status));
+            OnPropertyChanged(nameof(Status));
         }
         if (messageChanged)
         {
-            RaisePropertyChanged(nameof(StatusMessage));
+            OnPropertyChanged(nameof(StatusMessage));
         }
         if (statusChanged || messageChanged)
         {
-            RaisePropertyChanged(nameof(StatusText));
-            RaisePropertyChanged(nameof(StatusItems));
+            OnPropertyChanged(nameof(StatusText));
+            OnPropertyChanged(nameof(StatusItems));
         }
     }
 

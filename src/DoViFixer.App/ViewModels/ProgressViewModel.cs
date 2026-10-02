@@ -36,11 +36,11 @@ public sealed class ProgressViewModel : ObservableObject
     {
         Stage = stage;
         stagePercent = percent is { } value && double.IsFinite(value) ? Math.Clamp(value, 0, 100) : null;
-        RaisePropertyChanged(nameof(Percent));
-        RaisePropertyChanged(nameof(StagePercent));
-        RaisePropertyChanged(nameof(IsIndeterminate));
-        RaisePropertyChanged(nameof(ProgressText));
-        RaisePropertyChanged(nameof(StageProgressText));
+        OnPropertyChanged(nameof(Percent));
+        OnPropertyChanged(nameof(StagePercent));
+        OnPropertyChanged(nameof(IsIndeterminate));
+        OnPropertyChanged(nameof(ProgressText));
+        OnPropertyChanged(nameof(StageProgressText));
     }
 
     public void Update(OperationProgress progress)
@@ -51,9 +51,9 @@ public sealed class ProgressViewModel : ObservableObject
     public void End()
     {
         IsRunning = false;
-        RaisePropertyChanged(nameof(IsIndeterminate));
-        RaisePropertyChanged(nameof(ProgressText));
-        RaisePropertyChanged(nameof(StageProgressText));
+        OnPropertyChanged(nameof(IsIndeterminate));
+        OnPropertyChanged(nameof(ProgressText));
+        OnPropertyChanged(nameof(StageProgressText));
     }
 
     public void Reset()
@@ -61,11 +61,11 @@ public sealed class ProgressViewModel : ObservableObject
         IsRunning = false;
         Stage = "";
         stagePercent = null;
-        RaisePropertyChanged(nameof(Percent));
-        RaisePropertyChanged(nameof(StagePercent));
-        RaisePropertyChanged(nameof(IsIndeterminate));
-        RaisePropertyChanged(nameof(ProgressText));
-        RaisePropertyChanged(nameof(StageProgressText));
+        OnPropertyChanged(nameof(Percent));
+        OnPropertyChanged(nameof(StagePercent));
+        OnPropertyChanged(nameof(IsIndeterminate));
+        OnPropertyChanged(nameof(ProgressText));
+        OnPropertyChanged(nameof(StageProgressText));
     }
 }
 

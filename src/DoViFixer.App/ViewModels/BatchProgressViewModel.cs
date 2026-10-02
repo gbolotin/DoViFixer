@@ -35,8 +35,8 @@ public sealed class BatchProgressViewModel : ObservableObject
             IsRunning = true;
         }
 
-        RaisePropertyChanged(nameof(Total));
-        RaisePropertyChanged(nameof(Operation));
+        OnPropertyChanged(nameof(Total));
+        OnPropertyChanged(nameof(Operation));
         NotifyBatchProgress();
     }
 
@@ -51,7 +51,7 @@ public sealed class BatchProgressViewModel : ObservableObject
         }
 
         row.Progress.Start(initialStage);
-        RaisePropertyChanged(nameof(Percent));
+        OnPropertyChanged(nameof(Percent));
         // Each job owns its callback, so late reports cannot update another file or batch.
         return new Progress<OperationProgress>(progress =>
         {
@@ -63,7 +63,7 @@ public sealed class BatchProgressViewModel : ObservableObject
                 }
 
                 row.Progress.Update(progress);
-                RaisePropertyChanged(nameof(Percent));
+                OnPropertyChanged(nameof(Percent));
                 if (row.LastAnalysisMethod is null || row.CurrentOperation == "Conversion planning")
                 {
                     row.Status = progress.Stage;
@@ -99,13 +99,13 @@ public sealed class BatchProgressViewModel : ObservableObject
             CurrentJob = null;
         }
 
-        RaisePropertyChanged(nameof(Percent));
+        OnPropertyChanged(nameof(Percent));
     }
 
     private void NotifyBatchProgress()
     {
-        RaisePropertyChanged(nameof(Processed));
-        RaisePropertyChanged(nameof(Percent));
-        RaisePropertyChanged(nameof(Summary));
+        OnPropertyChanged(nameof(Processed));
+        OnPropertyChanged(nameof(Percent));
+        OnPropertyChanged(nameof(Summary));
     }
 }

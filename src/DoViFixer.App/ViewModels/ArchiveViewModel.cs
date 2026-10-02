@@ -1,6 +1,5 @@
 using DoViFixer.App.Navigation;
 using DoViFixer.App.Dialogs;
-using DoViFixer.App.Presentation.Common;
 using DoViFixer.App.Presentation.Application;
 using DoViFixer.Application.Backup;
 using DoViFixer.Application.Cleanup;
@@ -143,23 +142,23 @@ public sealed class ArchiveViewModel : OperationViewModel, INavigationPage
     {
         get;
     }
-    public AsyncCommand BackupCommand
+    public AsyncRelayCommand BackupCommand
     {
         get;
     }
-    public AsyncCommand RestoreCommand
+    public AsyncRelayCommand RestoreCommand
     {
         get;
     }
-    public AsyncCommand CleanupCommand
+    public AsyncRelayCommand CleanupCommand
     {
         get;
     }
 
     protected override void CommandsChanged()
     {
-        BackupCommand?.RaiseCanExecuteChanged();
-        RestoreCommand?.RaiseCanExecuteChanged();
-        CleanupCommand?.RaiseCanExecuteChanged();
+        BackupCommand?.NotifyCanExecuteChanged();
+        RestoreCommand?.NotifyCanExecuteChanged();
+        CleanupCommand?.NotifyCanExecuteChanged();
     }
 }

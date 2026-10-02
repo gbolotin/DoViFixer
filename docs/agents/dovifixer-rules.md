@@ -21,6 +21,7 @@ Main projects:
 - Put interfaces needed by application workflows in DoViFixer.Application/Abstractions; keep domain-specific abstractions in Domain when appropriate.
 - DoViFixer.Infrastructure implements the inner layers' abstractions. Neither Domain nor Application may reference Infrastructure, Console, or App.
 - Keep WPF navigation, dialogs, and ViewModels in DoViFixer.App. Reusable presentation infrastructure belongs in WpfFoundation, not in DoViFixer; never move DoViFixer workflows or wording into it.
+- Use CommunityToolkit.Mvvm's `ObservableObject`, `RelayCommand` and `AsyncRelayCommand` directly. Their `Execute` and `ExecuteAsync` do not check `CanExecute`, so tests invoke commands through `CommandInvocation`, as a bound button would.
 - ViewModels and console commands call application services; they must not implement conversion rules or low-level tool/file operations.
 - Neither DoViFixer.Console nor DoViFixer.App references the other. Shared functionality belongs in the shared libraries.
 - Keep media analysis, conversion policy, workflow coordination, tool execution, and UI presentation separated.

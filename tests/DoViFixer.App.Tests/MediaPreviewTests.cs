@@ -43,12 +43,12 @@ public sealed class MediaPreviewTests
                 return image;
             };
 
-            await (rescan ? model.ScanCommand.ExecuteAsync() : model.AddAsync(paths)).WaitAsync(TimeSpan.FromSeconds(5));
+            await (rescan ? model.ScanCommand.InvokeAsync() : model.AddAsync(paths)).WaitAsync(TimeSpan.FromSeconds(5));
             await started.Task.WaitAsync(TimeSpan.FromSeconds(5));
             Assert.IsFalse(model.IsBusy, "Preview generation must not extend the scan/add busy state.");
             Assert.IsTrue(shell.CanNavigate);
             Assert.IsTrue(model.AddFilesCommand.CanExecute(null));
-            Assert.IsTrue(model.ClearAllCommand.CanExecute());
+            Assert.IsTrue(model.ClearAllCommand.CanExecute(null));
             Assert.IsTrue(model.ScanCommand.CanExecute(null));
             release.SetResult();
             await finished.Task.WaitAsync(TimeSpan.FromSeconds(5));
@@ -84,11 +84,11 @@ public sealed class MediaPreviewTests
         await started.Task.WaitAsync(TimeSpan.FromSeconds(5));
         if (action == "files")
         {
-            model.ClearAllCommand.Execute();
+            model.ClearAllCommand.Invoke();
         }
         else if (action == "cache")
         {
-            await shell.Settings.ClearCacheCommand.ExecuteAsync().WaitAsync(TimeSpan.FromSeconds(5));
+            await shell.Settings.ClearCacheCommand.InvokeAsync().WaitAsync(TimeSpan.FromSeconds(5));
         }
         else
         {

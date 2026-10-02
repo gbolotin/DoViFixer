@@ -10,6 +10,7 @@
     <PackageReference Include="Microsoft.Extensions.Hosting" />
     <PackageReference Include="Serilog.Extensions.Hosting" />
     <PackageReference Include="Serilog.Sinks.File" />
+    <PackageReference Include="CommunityToolkit.Mvvm" />
     <ProjectReference Include="../DoViFixer.Application/DoViFixer.Application.csproj" />
     <ProjectReference Include="../DoViFixer.Infrastructure/DoViFixer.Infrastructure.csproj" />
   </ItemGroup>

@@ -1,7 +1,6 @@
 using System.Collections.ObjectModel;
 using System.ComponentModel;
 using DoViFixer.App.Navigation;
-using DoViFixer.App.Presentation.Common;
 using DoViFixer.App.Presentation.Application;
 
 namespace DoViFixer.App.ViewModels;
@@ -89,7 +88,7 @@ public sealed class ShellViewModel : ObservableObject, IInitializeAsync, IDispos
     private async Task InitializeCoreAsync(CancellationToken cancellationToken)
     {
         using var linked = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken, startupCancellation.Token);
-        using var registration = linked.Token.Register(() => dependencyCheck.CancelCommand.Execute());
+        using var registration = linked.Token.Register(() => dependencyCheck.CancelCommand.Execute(null));
         try
         {
             foreach (var page in Pages.OfType<IInitializeAsync>())
@@ -127,7 +126,7 @@ public sealed class ShellViewModel : ObservableObject, IInitializeAsync, IDispos
     private async Task NavigateAsync(INavigationPage page)
     {
         navigating = true;
-        RaisePropertyChanged(nameof(CanNavigate));
+        OnPropertyChanged(nameof(CanNavigate));
 
         try
         {
@@ -141,7 +140,7 @@ public sealed class ShellViewModel : ObservableObject, IInitializeAsync, IDispos
             RefreshStatusItems();
             if (ReferenceEquals(page, Settings))
             {
-                await Settings.LoadCommand.ExecuteAsync();
+                await Settings.LoadCommand.ExecuteAsync(null);
             }
             else if (ReferenceEquals(page, media))
             {
@@ -155,7 +154,7 @@ public sealed class ShellViewModel : ObservableObject, IInitializeAsync, IDispos
         finally
         {
             navigating = false;
-            RaisePropertyChanged(nameof(CanNavigate));
+            OnPropertyChanged(nameof(CanNavigate));
         }
     }
 
@@ -184,7 +183,7 @@ public sealed class ShellViewModel : ObservableObject, IInitializeAsync, IDispos
 
         if (e.PropertyName is nameof(OperationViewModel.IsBusy) or nameof(SettingsViewModel.IsSaving) or nameof(SettingsViewModel.SaveError))
         {
-            RaisePropertyChanged(nameof(CanNavigate));
+            OnPropertyChanged(nameof(CanNavigate));
         }
     }
 
@@ -194,10 +193,10 @@ public sealed class ShellViewModel : ObservableObject, IInitializeAsync, IDispos
     public async Task CancelAndWaitAsync()
     {
         startupCancellation.Cancel();
-        dependencyCheck.CancelCommand.Execute();
+        dependencyCheck.CancelCommand.Execute(null);
         foreach (var operation in operations)
         {
-            operation.CancelCommand.Execute();
+            operation.CancelCommand.Execute(null);
         }
 
         await NavigationTask;

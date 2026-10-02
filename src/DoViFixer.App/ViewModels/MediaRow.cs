@@ -41,7 +41,7 @@ public sealed class MediaRow(string path) : ObservableObject
         set
         {
             SetProperty(ref restoreArchive, value);
-            RaisePropertyChanged(nameof(CanRestore));
+            OnPropertyChanged(nameof(CanRestore));
         }
     }
     public bool IsCancellationRequested
@@ -66,13 +66,13 @@ public sealed class MediaRow(string path) : ObservableObject
         {
             if (SetProperty(ref missing, value))
             {
-                RaisePropertyChanged(nameof(Status));
-                RaisePropertyChanged(nameof(StatusToolTip));
-                RaisePropertyChanged(nameof(SelectionEnabled));
-                RaisePropertyChanged(nameof(CanRestore));
-                RaisePropertyChanged(nameof(CanRetryAnalysis));
-                RaisePropertyChanged(nameof(CanInspectIncomplete));
-                RaisePropertyChanged(nameof(DetailNotes));
+                OnPropertyChanged(nameof(Status));
+                OnPropertyChanged(nameof(StatusToolTip));
+                OnPropertyChanged(nameof(SelectionEnabled));
+                OnPropertyChanged(nameof(CanRestore));
+                OnPropertyChanged(nameof(CanRetryAnalysis));
+                OnPropertyChanged(nameof(CanInspectIncomplete));
+                OnPropertyChanged(nameof(DetailNotes));
             }
         }
     }
@@ -89,13 +89,13 @@ public sealed class MediaRow(string path) : ObservableObject
         {
             if (SetProperty(ref state, value))
             {
-                RaisePropertyChanged(nameof(CanOpenResult));
-                RaisePropertyChanged(nameof(CanRestore));
-                RaisePropertyChanged(nameof(Warning));
-                RaisePropertyChanged(nameof(HasWarning));
-                RaisePropertyChanged(nameof(Status));
-                RaisePropertyChanged(nameof(StatusToolTip));
-                RaisePropertyChanged(nameof(DetailNotes));
+                OnPropertyChanged(nameof(CanOpenResult));
+                OnPropertyChanged(nameof(CanRestore));
+                OnPropertyChanged(nameof(Warning));
+                OnPropertyChanged(nameof(HasWarning));
+                OnPropertyChanged(nameof(Status));
+                OnPropertyChanged(nameof(StatusToolTip));
+                OnPropertyChanged(nameof(DetailNotes));
             }
         }
     }
@@ -112,8 +112,8 @@ public sealed class MediaRow(string path) : ObservableObject
         set
         {
             SetProperty(ref warning, value);
-            RaisePropertyChanged(nameof(HasWarning));
-            RaisePropertyChanged(nameof(StatusToolTip));
+            OnPropertyChanged(nameof(HasWarning));
+            OnPropertyChanged(nameof(StatusToolTip));
         }
     }
     public bool HasWarning => !string.IsNullOrWhiteSpace(Warning);
@@ -133,7 +133,7 @@ public sealed class MediaRow(string path) : ObservableObject
         set
         {
             SetProperty(ref pending, value);
-            RaisePropertyChanged(nameof(CanInspectIncomplete));
+            OnPropertyChanged(nameof(CanInspectIncomplete));
         }
     }
     public bool IsActive
@@ -142,7 +142,7 @@ public sealed class MediaRow(string path) : ObservableObject
         set
         {
             SetProperty(ref active, value);
-            RaisePropertyChanged(nameof(CanInspectIncomplete));
+            OnPropertyChanged(nameof(CanInspectIncomplete));
         }
     }
     public string Status
@@ -151,8 +151,8 @@ public sealed class MediaRow(string path) : ObservableObject
         set
         {
             SetProperty(ref status, value);
-            RaisePropertyChanged(nameof(CanOpenResult));
-            RaisePropertyChanged(nameof(StatusToolTip));
+            OnPropertyChanged(nameof(CanOpenResult));
+            OnPropertyChanged(nameof(StatusToolTip));
         }
     }
     public string PlannedOutput
@@ -167,10 +167,10 @@ public sealed class MediaRow(string path) : ObservableObject
         set
         {
             SetProperty(ref notice, value);
-            RaisePropertyChanged(nameof(Warning));
-            RaisePropertyChanged(nameof(HasWarning));
-            RaisePropertyChanged(nameof(DetailNotes));
-            RaisePropertyChanged(nameof(StatusToolTip));
+            OnPropertyChanged(nameof(Warning));
+            OnPropertyChanged(nameof(HasWarning));
+            OnPropertyChanged(nameof(DetailNotes));
+            OnPropertyChanged(nameof(StatusToolTip));
         }
     }
 
@@ -213,11 +213,11 @@ public sealed class MediaRow(string path) : ObservableObject
         set
         {
             SetProperty(ref analysisError, value);
-            RaisePropertyChanged(nameof(Classification));
-            RaisePropertyChanged(nameof(HasAnalysisError));
-            RaisePropertyChanged(nameof(DetailRows));
-            RaisePropertyChanged(nameof(DetailNotes));
-            RaisePropertyChanged(nameof(StatusToolTip));
+            OnPropertyChanged(nameof(Classification));
+            OnPropertyChanged(nameof(HasAnalysisError));
+            OnPropertyChanged(nameof(DetailRows));
+            OnPropertyChanged(nameof(DetailNotes));
+            OnPropertyChanged(nameof(StatusToolTip));
         }
     }
 
@@ -227,9 +227,9 @@ public sealed class MediaRow(string path) : ObservableObject
         set
         {
             SetProperty(ref result, value);
-            RaisePropertyChanged(nameof(ResultDetails));
-            RaisePropertyChanged(nameof(CanOpenResult));
-            RaisePropertyChanged(nameof(StatusToolTip));
+            OnPropertyChanged(nameof(ResultDetails));
+            OnPropertyChanged(nameof(CanOpenResult));
+            OnPropertyChanged(nameof(StatusToolTip));
         }
     }
 
@@ -239,13 +239,13 @@ public sealed class MediaRow(string path) : ObservableObject
         set
         {
             SetProperty(ref analysis, value);
-            RaisePropertyChanged(nameof(IsProfile7));
-            RaisePropertyChanged(nameof(CanRestore));
-            RaisePropertyChanged(nameof(HasIncompleteScan));
-            RaisePropertyChanged(nameof(CanInspectIncomplete));
-            RaisePropertyChanged(nameof(Classification));
-            RaisePropertyChanged(nameof(DetailRows));
-            RaisePropertyChanged(nameof(DetailNotes));
+            OnPropertyChanged(nameof(IsProfile7));
+            OnPropertyChanged(nameof(CanRestore));
+            OnPropertyChanged(nameof(HasIncompleteScan));
+            OnPropertyChanged(nameof(CanInspectIncomplete));
+            OnPropertyChanged(nameof(Classification));
+            OnPropertyChanged(nameof(DetailRows));
+            OnPropertyChanged(nameof(DetailNotes));
         }
     }
 

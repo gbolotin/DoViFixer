@@ -5,6 +5,7 @@
     <Application.Resources>
         <ResourceDictionary>
             <ResourceDictionary.MergedDictionaries>
+                <ResourceDictionary Source="pack://application:,,,/WpfFoundation;component/Themes/WpfFoundation.xaml" />
                 <ResourceDictionary Source="Resources/Common.xaml" />
             </ResourceDictionary.MergedDictionaries>
         </ResourceDictionary>

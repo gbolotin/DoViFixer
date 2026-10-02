@@ -91,9 +91,9 @@ public sealed class OperationViewModelTests
 
         await started.Task;
         Assert.IsTrue(model.IsBusy);
-        Assert.IsTrue(model.CancelCommand.CanExecute());
+        Assert.IsTrue(model.CancelCommand.CanExecute(null));
 
-        model.CancelCommand.Execute();
+        model.CancelCommand.Invoke();
         await task;
 
         Assert.IsFalse(model.IsBusy);

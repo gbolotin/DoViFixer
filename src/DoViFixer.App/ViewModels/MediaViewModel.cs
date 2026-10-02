@@ -3,7 +3,6 @@ using System.Collections.ObjectModel;
 using System.ComponentModel;
 using System.Windows.Media.Imaging;
 using DoViFixer.App.Dialogs;
-using DoViFixer.App.Presentation.Common;
 using DoViFixer.App.Presentation.Application;
 using DoViFixer.Application.Abstractions;
 using DoViFixer.Application.Conversion;
@@ -70,21 +69,21 @@ public sealed class MediaViewModel : OperationViewModel, INavigationPage, IIniti
 
         AddFilesCommand = new(() => AddAsync(dialogs.PickFiles()), () => IsIdle);
         AddFolderCommand = new(() => AddAsync(dialogs.PickFolder() is { } folder ? [folder] : []), () => IsIdle);
-        AddDroppedPathsCommand = new(paths => AddAsync(paths.Where(discovery.IsSupportedInput)),
-            paths => IsIdle && paths.Any(discovery.IsSupportedInput));
+        AddDroppedPathsCommand = new(paths => AddAsync((paths ?? []).Where(discovery.IsSupportedInput)),
+            paths => IsIdle && paths is not null && paths.Any(discovery.IsSupportedInput));
         ScanCommand = new(ScanAllAsync, CanScan);
         Files.CollectionChanged += (_, _) =>
         {
             sourceFiles.Watch(Files.Select(row => row.Path));
-            RaisePropertyChanged(nameof(IsFileListEmpty));
-            RaisePropertyChanged(nameof(HasMissingFiles));
+            OnPropertyChanged(nameof(IsFileListEmpty));
+            OnPropertyChanged(nameof(HasMissingFiles));
             CommandsChanged();
         };
         InspectCommand = new(() => AnalyzeAsync(AnalysisMethod.FullRpu), CanOperate);
         DeepInspectCommand = new(() => AnalyzeAsync(AnalysisMethod.DeepInspection), CanOperate);
         ConvertDv81Command = new(() => ConvertBatchAsync(ConversionTarget.Profile81), CanOperate);
-        ConvertRowDv81Command = new(row => ConvertBatchAsync(ConversionTarget.Profile81, [row]), row => IsIdle && Files.Contains(row) && row.IsProfile7 && !row.IsMissing);
-        RestoreRowCommand = new(RestoreRowAsync, row => IsIdle && Files.Contains(row) && row.CanRestore);
+        ConvertRowDv81Command = new(row => ConvertBatchAsync(ConversionTarget.Profile81, [row!]), row => row is not null && IsIdle && Files.Contains(row) && row.IsProfile7 && !row.IsMissing);
+        RestoreRowCommand = new(row => RestoreRowAsync(row!), row => row is not null && IsIdle && Files.Contains(row) && row.CanRestore);
         ConvertHdrCommand = new(() => ConvertBatchAsync(ConversionTarget.Hdr10), CanOperate);
 
         SkipCommand = new RelayCommand<MediaRow>(Skip);
@@ -115,14 +114,14 @@ public sealed class MediaViewModel : OperationViewModel, INavigationPage, IIniti
         }, () => BatchProgress.IsRunning);
 
         OpenOutputCommand = new(() => dialogs.OpenFolder(Path.GetDirectoryName(Focused!.Result!.Output!)!), () => Focused?.Result?.Output is not null);
-        OpenRowOutputCommand = new(row => dialogs.OpenFolder(Path.GetDirectoryName(row.Result!.Output!)!), row => row is not null && row.CanOpenResult);
+        OpenRowOutputCommand = new(row => dialogs.OpenFolder(Path.GetDirectoryName(row!.Result!.Output!)!), row => row is not null && row.CanOpenResult);
         OpenFileLocationCommand = new(() => dialogs.ShowInFolder(Focused!.Path), () => Focused is not null);
-        RetryAnalysisCommand = new(row => RunAsync((token, _) => AnalyzeRowsAsync([row], row.LastAnalysisMethod!.Value, token)), row => IsIdle && Files.Contains(row) && row.CanRetryAnalysis && row.LastAnalysisMethod is not null);
-        InspectIncompleteCommand = new(row => RunAsync((token, _) => AnalyzeRowsAsync([row], AnalysisMethod.FullRpu, token)), row => IsIdle && Files.Contains(row) && row.CanInspectIncomplete);
+        RetryAnalysisCommand = new(row => RunAsync((token, _) => AnalyzeRowsAsync([row!], row!.LastAnalysisMethod!.Value, token)), row => row is not null && IsIdle && Files.Contains(row) && row.CanRetryAnalysis && row.LastAnalysisMethod is not null);
+        InspectIncompleteCommand = new(row => RunAsync((token, _) => AnalyzeRowsAsync([row!], AnalysisMethod.FullRpu, token)), row => row is not null && IsIdle && Files.Contains(row) && row.CanInspectIncomplete);
         OpenLogsCommand = new(dialogs.OpenLogs);
         ToggleSelectAllCommand = new(ToggleSelectAll, () => IsIdle && Files.Any(row => row.SelectionEnabled));
         ClearAllCommand = new(ClearAll, () => IsIdle && Files.Count > 0);
-        RemoveFileCommand = new(RemoveFile, row => IsIdle && Files.Contains(row));
+        RemoveFileCommand = new(RemoveFile, row => row is not null && IsIdle && Files.Contains(row));
         RemoveMissingCommand = new(RemoveMissing, () => IsIdle && HasMissingFiles);
         OpenSettingsCommand = new(() => RequestNavigateToSettings?.Invoke(), () => IsIdle);
         FileSort = new((column, direction) => new MediaRowComparer((MediaSortColumn)column, direction), () => IsIdle);
@@ -132,7 +131,7 @@ public sealed class MediaViewModel : OperationViewModel, INavigationPage, IIniti
         {
             if (e.PropertyName == nameof(SelectionSummary))
             {
-                RaisePropertyChanged(nameof(StatusItems));
+                OnPropertyChanged(nameof(StatusItems));
             }
 
             if (e.PropertyName is nameof(StatusMessage) or nameof(IsBusy))
@@ -172,8 +171,8 @@ public sealed class MediaViewModel : OperationViewModel, INavigationPage, IIniti
         {
             if (SetProperty(ref focused, value))
             {
-                OpenOutputCommand.RaiseCanExecuteChanged();
-                OpenFileLocationCommand.RaiseCanExecuteChanged();
+                OpenOutputCommand.NotifyCanExecuteChanged();
+                OpenFileLocationCommand.NotifyCanExecuteChanged();
                 previewCompletion = Task.WhenAll(previewCompletion, LoadPreviewAsync(value));
             }
         }
@@ -398,8 +397,8 @@ public sealed class MediaViewModel : OperationViewModel, INavigationPage, IIniti
 
         if (changed)
         {
-            RaisePropertyChanged(nameof(HasMissingFiles));
-            ConvertRowDv81Command.RaiseCanExecuteChanged();
+            OnPropertyChanged(nameof(HasMissingFiles));
+            ConvertRowDv81Command.NotifyCanExecuteChanged();
             CommandsChanged();
         }
     }
@@ -434,23 +433,23 @@ public sealed class MediaViewModel : OperationViewModel, INavigationPage, IIniti
     /// </summary>
     public ColumnSort<MediaRow> FileSort { get; }
     public bool CanInspect => CanOperate();
-    public AsyncCommand AddFilesCommand { get; }
-    public AsyncCommand AddFolderCommand { get; }
-    public AsyncCommand<string[]> AddDroppedPathsCommand { get; }
-    public AsyncCommand ScanCommand { get; }
-    public AsyncCommand InspectCommand { get; }
-    public AsyncCommand DeepInspectCommand { get; }
-    public AsyncCommand ConvertDv81Command { get; }
-    public AsyncCommand<MediaRow> ConvertRowDv81Command { get; }
-    public AsyncCommand<MediaRow> RestoreRowCommand { get; }
-    public AsyncCommand ConvertHdrCommand { get; }
+    public AsyncRelayCommand AddFilesCommand { get; }
+    public AsyncRelayCommand AddFolderCommand { get; }
+    public AsyncRelayCommand<string[]> AddDroppedPathsCommand { get; }
+    public AsyncRelayCommand ScanCommand { get; }
+    public AsyncRelayCommand InspectCommand { get; }
+    public AsyncRelayCommand DeepInspectCommand { get; }
+    public AsyncRelayCommand ConvertDv81Command { get; }
+    public AsyncRelayCommand<MediaRow> ConvertRowDv81Command { get; }
+    public AsyncRelayCommand<MediaRow> RestoreRowCommand { get; }
+    public AsyncRelayCommand ConvertHdrCommand { get; }
     public RelayCommand<MediaRow> SkipCommand { get; }
     public RelayCommand<MediaRow> CancelFileCommand { get; }
     public RelayCommand OpenOutputCommand { get; }
     public RelayCommand OpenFileLocationCommand { get; }
     public RelayCommand OpenLogsCommand { get; }
-    public AsyncCommand<MediaRow> RetryAnalysisCommand { get; }
-    public AsyncCommand<MediaRow> InspectIncompleteCommand { get; }
+    public AsyncRelayCommand<MediaRow> RetryAnalysisCommand { get; }
+    public AsyncRelayCommand<MediaRow> InspectIncompleteCommand { get; }
     public RelayCommand<MediaRow> OpenRowOutputCommand { get; }
     public RelayCommand OpenSettingsCommand { get; }
     public event Action? RequestNavigateToSettings;
@@ -539,7 +538,7 @@ public sealed class MediaViewModel : OperationViewModel, INavigationPage, IIniti
         sb.AppendLine();
         sb.Append("Click to view or change settings.");
         OutputSummaryToolTip = sb.ToString();
-        RaisePropertyChanged(nameof(StatusItems));
+        OnPropertyChanged(nameof(StatusItems));
     }
 
     public Task InitializeAsync(CancellationToken token = default) => RefreshSettingsSummaryAsync(token);
@@ -561,25 +560,25 @@ public sealed class MediaViewModel : OperationViewModel, INavigationPage, IIniti
 
     protected override void CommandsChanged()
     {
-        RaisePropertyChanged(nameof(CanInspect));
-        RetryAnalysisCommand?.RaiseCanExecuteChanged();
-        InspectIncompleteCommand?.RaiseCanExecuteChanged();
-        OpenRowOutputCommand?.RaiseCanExecuteChanged();
-        ToggleSelectAllCommand?.RaiseCanExecuteChanged();
-        ClearAllCommand?.RaiseCanExecuteChanged();
-        RemoveFileCommand?.RaiseCanExecuteChanged();
-        RemoveMissingCommand?.RaiseCanExecuteChanged();
-        OpenSettingsCommand?.RaiseCanExecuteChanged();
-        AddFilesCommand?.RaiseCanExecuteChanged();
-        AddFolderCommand?.RaiseCanExecuteChanged();
-        AddDroppedPathsCommand?.RaiseCanExecuteChanged();
-        ScanCommand?.RaiseCanExecuteChanged();
-        InspectCommand?.RaiseCanExecuteChanged();
-        DeepInspectCommand?.RaiseCanExecuteChanged();
-        ConvertDv81Command?.RaiseCanExecuteChanged();
-        ConvertRowDv81Command?.RaiseCanExecuteChanged();
-        RestoreRowCommand?.RaiseCanExecuteChanged();
-        ConvertHdrCommand?.RaiseCanExecuteChanged();
+        OnPropertyChanged(nameof(CanInspect));
+        RetryAnalysisCommand?.NotifyCanExecuteChanged();
+        InspectIncompleteCommand?.NotifyCanExecuteChanged();
+        OpenRowOutputCommand?.NotifyCanExecuteChanged();
+        ToggleSelectAllCommand?.NotifyCanExecuteChanged();
+        ClearAllCommand?.NotifyCanExecuteChanged();
+        RemoveFileCommand?.NotifyCanExecuteChanged();
+        RemoveMissingCommand?.NotifyCanExecuteChanged();
+        OpenSettingsCommand?.NotifyCanExecuteChanged();
+        AddFilesCommand?.NotifyCanExecuteChanged();
+        AddFolderCommand?.NotifyCanExecuteChanged();
+        AddDroppedPathsCommand?.NotifyCanExecuteChanged();
+        ScanCommand?.NotifyCanExecuteChanged();
+        InspectCommand?.NotifyCanExecuteChanged();
+        DeepInspectCommand?.NotifyCanExecuteChanged();
+        ConvertDv81Command?.NotifyCanExecuteChanged();
+        ConvertRowDv81Command?.NotifyCanExecuteChanged();
+        RestoreRowCommand?.NotifyCanExecuteChanged();
+        ConvertHdrCommand?.NotifyCanExecuteChanged();
     }
 
     public Task AddAsync(IEnumerable<string> inputs) => RunAsync(async (token, _) =>
@@ -615,8 +614,8 @@ public sealed class MediaViewModel : OperationViewModel, INavigationPage, IIniti
             StartBackgroundPreviews();
         }
         InvalidatePlan();
-        RaisePropertyChanged(nameof(SelectionSummary));
-        RaisePropertyChanged(nameof(AllFilesSelected));
+        OnPropertyChanged(nameof(SelectionSummary));
+        OnPropertyChanged(nameof(AllFilesSelected));
         if (added.Count > 0 && (await settings.ReadAsync(token)).AutomaticallyScanAddedFiles)
         {
             await AnalyzeRowsAsync(InDisplayOrder(added), AnalysisMethod.SampledRpu, token);
@@ -631,29 +630,29 @@ public sealed class MediaViewModel : OperationViewModel, INavigationPage, IIniti
 
         if (e.PropertyName == nameof(MediaRow.Result))
         {
-            OpenOutputCommand.RaiseCanExecuteChanged();
+            OpenOutputCommand.NotifyCanExecuteChanged();
         }
 
         if (e.PropertyName == nameof(MediaRow.IsProfile7))
         {
-            ConvertRowDv81Command.RaiseCanExecuteChanged();
+            ConvertRowDv81Command.NotifyCanExecuteChanged();
         }
 
         if (e.PropertyName == nameof(MediaRow.CanRestore))
         {
-            RestoreRowCommand.RaiseCanExecuteChanged();
+            RestoreRowCommand.NotifyCanExecuteChanged();
         }
 
         if (e.PropertyName is nameof(MediaRow.IsActive) or nameof(MediaRow.IsCancellationRequested))
         {
-            CancelFileCommand.RaiseCanExecuteChanged();
+            CancelFileCommand.NotifyCanExecuteChanged();
         }
 
         if (e.PropertyName is nameof(MediaRow.CanRetryAnalysis) or nameof(MediaRow.CanOpenResult) or nameof(MediaRow.CanInspectIncomplete))
         {
-            InspectIncompleteCommand.RaiseCanExecuteChanged();
-            RetryAnalysisCommand.RaiseCanExecuteChanged();
-            OpenRowOutputCommand.RaiseCanExecuteChanged();
+            InspectIncompleteCommand.NotifyCanExecuteChanged();
+            RetryAnalysisCommand.NotifyCanExecuteChanged();
+            OpenRowOutputCommand.NotifyCanExecuteChanged();
         }
 
         if (e.PropertyName != nameof(MediaRow.IsSelected))
@@ -670,8 +669,8 @@ public sealed class MediaViewModel : OperationViewModel, INavigationPage, IIniti
             InvalidatePlan();
         }
 
-        RaisePropertyChanged(nameof(SelectionSummary));
-        RaisePropertyChanged(nameof(AllFilesSelected));
+        OnPropertyChanged(nameof(SelectionSummary));
+        OnPropertyChanged(nameof(AllFilesSelected));
         CommandsChanged();
     }
 
@@ -683,7 +682,7 @@ public sealed class MediaViewModel : OperationViewModel, INavigationPage, IIniti
         }
     }
 
-    private void Skip(MediaRow row)
+    private void Skip(MediaRow? row)
     {
         if (row is null || !row.IsPending || control?.Skip(row.Path) != true)
         {
@@ -1091,9 +1090,9 @@ public sealed class MediaViewModel : OperationViewModel, INavigationPage, IIniti
         }
     });
 
-    private void RemoveFile(MediaRow row)
+    private void RemoveFile(MediaRow? row)
     {
-        if (!RemoveFileCommand.CanExecute(row))
+        if (row is null || !RemoveFileCommand.CanExecute(row))
         {
             return;
         }
@@ -1112,8 +1111,8 @@ public sealed class MediaViewModel : OperationViewModel, INavigationPage, IIniti
         {
             SetStatus(ViewStatus.FileListCleared);
         }
-        RaisePropertyChanged(nameof(SelectionSummary));
-        RaisePropertyChanged(nameof(AllFilesSelected));
+        OnPropertyChanged(nameof(SelectionSummary));
+        OnPropertyChanged(nameof(AllFilesSelected));
     }
 
     private void RemoveMissing()
@@ -1141,8 +1140,8 @@ public sealed class MediaViewModel : OperationViewModel, INavigationPage, IIniti
         Focused = null;
         InvalidatePlan();
         SetStatus(ViewStatus.FileListCleared);
-        RaisePropertyChanged(nameof(SelectionSummary));
-        RaisePropertyChanged(nameof(AllFilesSelected));
+        OnPropertyChanged(nameof(SelectionSummary));
+        OnPropertyChanged(nameof(AllFilesSelected));
         CommandsChanged();
     }
 
@@ -1168,19 +1167,19 @@ public sealed class MediaViewModel : OperationViewModel, INavigationPage, IIniti
             row.IsSelected = selectAll;
         }
 
-        RaisePropertyChanged(nameof(AllFilesSelected));
+        OnPropertyChanged(nameof(AllFilesSelected));
     }
     private void NotifyActiveProgress()
     {
-        RaisePropertyChanged(nameof(PauseBatchText));
-        RaisePropertyChanged(nameof(PauseBatchIcon));
-        PauseBatchCommand.RaiseCanExecuteChanged();
-        RaisePropertyChanged(nameof(ActiveProgressPercent));
-        RaisePropertyChanged(nameof(ActiveProgressIndeterminate));
-        RaisePropertyChanged(nameof(ActiveProgressTitle));
-        RaisePropertyChanged(nameof(ActiveProgressText));
-        RaisePropertyChanged(nameof(ActiveProgressSummary));
-        RaisePropertyChanged(nameof(ActiveProgressToolTip));
+        OnPropertyChanged(nameof(PauseBatchText));
+        OnPropertyChanged(nameof(PauseBatchIcon));
+        PauseBatchCommand.NotifyCanExecuteChanged();
+        OnPropertyChanged(nameof(ActiveProgressPercent));
+        OnPropertyChanged(nameof(ActiveProgressIndeterminate));
+        OnPropertyChanged(nameof(ActiveProgressTitle));
+        OnPropertyChanged(nameof(ActiveProgressText));
+        OnPropertyChanged(nameof(ActiveProgressSummary));
+        OnPropertyChanged(nameof(ActiveProgressToolTip));
     }
 }
 

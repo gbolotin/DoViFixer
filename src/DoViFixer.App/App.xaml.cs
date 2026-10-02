@@ -1,6 +1,6 @@
+using DoViFixer.App.Navigation;
 using System.Windows;
 using DoViFixer.App.Composition;
-using DoViFixer.App.Presentation.Common;
 using DoViFixer.App.Presentation.Application;
 using DoViFixer.App.ViewModels;
 using DoViFixer.App.Views;
