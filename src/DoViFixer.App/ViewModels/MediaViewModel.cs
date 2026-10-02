@@ -1,4 +1,3 @@
-using DoViFixer.App.Navigation;
 using System.Collections.ObjectModel;
 using System.ComponentModel;
 using System.Windows.Media.Imaging;
@@ -15,7 +14,7 @@ using DoViFixer.Domain.Conversion;
 using Microsoft.Extensions.Logging;
 
 namespace DoViFixer.App.ViewModels;
-public sealed class MediaViewModel : OperationViewModel, INavigationPage, IInitializeAsync, IDisposable
+public sealed class MediaViewModel : OperationViewModel, INavigationPage, IPageActivation, IDisposable
 {
     public string NavigationName => "Media";
     public string? NavigationIcon => "\uE714";
@@ -545,7 +544,7 @@ public sealed class MediaViewModel : OperationViewModel, INavigationPage, IIniti
         OnPropertyChanged(nameof(StatusItems));
     }
 
-    public Task InitializeAsync(CancellationToken token = default) => RefreshSettingsSummaryAsync(token);
+    public Task OnActivatedAsync(CancellationToken cancellationToken) => RefreshSettingsSummaryAsync(cancellationToken);
 
     public async Task RefreshSettingsSummaryAsync(CancellationToken token = default)
     {

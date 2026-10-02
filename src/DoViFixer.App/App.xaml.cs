@@ -1,4 +1,3 @@
-using DoViFixer.App.Navigation;
 using System.Windows;
 using DoViFixer.App.Composition;
 using DoViFixer.App.Presentation.Application;
@@ -36,9 +35,9 @@ public partial class App : System.Windows.Application
             // If settings cannot be loaded, keep the default theme.
         }
 
-        if (MainWindow.DataContext is IInitializeAsync initializable)
+        if (MainWindow.DataContext is ShellViewModel shell)
         {
-            await initializable.InitializeAsync();
+            await shell.InitializeAsync();
         }
     }
 

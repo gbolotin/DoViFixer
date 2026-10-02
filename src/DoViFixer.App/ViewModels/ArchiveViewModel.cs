@@ -1,4 +1,3 @@
-using DoViFixer.App.Navigation;
 using DoViFixer.App.Dialogs;
 using DoViFixer.App.Presentation.Application;
 using DoViFixer.Application.Backup;

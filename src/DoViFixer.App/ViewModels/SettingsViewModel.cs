@@ -1,4 +1,3 @@
-using DoViFixer.App.Navigation;
 using DoViFixer.App.Dialogs;
 using DoViFixer.App.Presentation.Application;
 using DoViFixer.Application.Dependencies;
@@ -6,7 +5,7 @@ using DoViFixer.Application.Settings;
 using DoViFixer.Application.Abstractions;
 
 namespace DoViFixer.App.ViewModels;
-public sealed class SettingsViewModel : OperationViewModel, INavigationPage
+public sealed class SettingsViewModel : OperationViewModel, INavigationPage, IPageActivation
 {
     public string NavigationName => "Settings";
     public string? NavigationIcon => "\uE713";
@@ -546,6 +545,9 @@ public sealed class SettingsViewModel : OperationViewModel, INavigationPage
         get;
     }
     = Enum.GetValues<NativeTool>();
+    /// <summary>Settings reload every time the page is shown.</summary>
+    public Task OnActivatedAsync(CancellationToken cancellationToken) => LoadCommand.ExecuteAsync(null);
+
     public AsyncRelayCommand LoadCommand
     {
         get;

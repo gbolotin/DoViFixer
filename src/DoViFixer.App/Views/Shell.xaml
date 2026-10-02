@@ -3,6 +3,7 @@
         xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
         xmlns:viewModels="clr-namespace:DoViFixer.App.ViewModels"
         xmlns:p="clr-namespace:DoViFixer.App.Presentation.Application"
+        xmlns:navigation="clr-namespace:WpfFoundation.Navigation;assembly=WpfFoundation"
         Title="DoViFixer"
         MinWidth="800"
         MinHeight="600"
@@ -57,43 +58,8 @@
                              SelectedItem="{Binding CurrentPage}"
                              IsEnabled="{Binding CanNavigate}"
                              DockPanel.Dock="Left"
-                             BorderBrush="{DynamicResource DividerStrokeColorDefaultBrush}"
-                             BorderThickness="0,0,1,0"
-                             Padding="8"
-                             KeyboardNavigation.DirectionalNavigation="Cycle">
-                        <ListBox.ItemTemplate>
-                            <DataTemplate>
-                                <StackPanel Orientation="Horizontal">
-                                    <TextBlock Text="{Binding NavigationIcon}"
-                                               FontFamily="{StaticResource SymbolThemeFontFamily}"
-                                               VerticalAlignment="Center"
-                                               Margin="0,0,8,0" />
-                                    <TextBlock Text="{Binding NavigationName}" VerticalAlignment="Center" />
-                                </StackPanel>
-                            </DataTemplate>
-                        </ListBox.ItemTemplate>
-                    </ListBox>
-                    <ItemsControl x:Name="PageHost"
-                                  ItemsSource="{Binding Pages}"
-                                  Margin="8,0">
-                        <ItemsControl.ItemsPanel>
-                            <ItemsPanelTemplate>
-                                <Grid />
-                            </ItemsPanelTemplate>
-                        </ItemsControl.ItemsPanel>
-                        <ItemsControl.ItemContainerStyle>
-                            <Style TargetType="ContentPresenter">
-                                <Setter Property="Visibility">
-                                    <Setter.Value>
-                                        <MultiBinding Converter="{StaticResource WfReferenceEqualsToVisibilityConverter}">
-                                            <Binding Path="Content" RelativeSource="{RelativeSource Self}" />
-                                            <Binding Path="DataContext.CurrentPage" RelativeSource="{RelativeSource AncestorType=Window}" />
-                                        </MultiBinding>
-                                    </Setter.Value>
-                                </Setter>
-                            </Style>
-                        </ItemsControl.ItemContainerStyle>
-                    </ItemsControl>
+                             Style="{StaticResource WfNavigationSidebarStyle}" />
+                    <navigation:RetainedPageHost Navigation="{Binding Navigation}" Margin="8,0" />
                 </DockPanel>
             </DataTemplate>
 

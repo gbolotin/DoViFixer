@@ -134,8 +134,8 @@ public sealed class VisualTests
             window.Height = 900;
             await LayoutAsync(window);
             var navigation = Descendants<ListBox>(window).Single(list => ReferenceEquals(list.ItemsSource, shell.Pages));
-            var pageHost = Descendants<ItemsControl>(window).Single(control => control.Name == "PageHost");
-            var mediaView = (ContentPresenter)pageHost.ItemContainerGenerator.ContainerFromItem(media);
+            var pageHost = Descendants<RetainedPageHost>(window).Single();
+            var mediaView = PageView(pageHost, media);
             Assert.AreSame(media, navigation.SelectedItem);
             Assert.HasCount(3, navigation.Items);
             VerifyCommandIcons(mediaView);
@@ -183,10 +183,10 @@ public sealed class VisualTests
                 navigation.SelectedItem = page;
                 await shell.NavigationTask;
                 await LayoutAsync(window);
-                var workspace = (ContentPresenter)pageHost.ItemContainerGenerator.ContainerFromItem(page);
+                var workspace = PageView(pageHost, page);
                 Assert.AreSame(page, shell.CurrentPage);
                 var statusBar = Descendants<StatusBar>(window).Single();
-                CollectionAssert.AreEqual(page.StatusItems.Select(item => item.Text).ToArray(), Descendants<TextBlock>(statusBar).Select(text => text.Text).ToArray());
+                CollectionAssert.AreEqual(((OperationViewModel)page).StatusItems.Select(item => item.Text).ToArray(), Descendants<TextBlock>(statusBar).Select(text => text.Text).ToArray());
                 AssertInside(statusBar, (FrameworkElement)window.Content);
                 Assert.AreSame(page, workspace.Content);
                 Assert.IsTrue(Descendants<FrameworkElement>(workspace).Any(element => ReferenceEquals(element.DataContext, page) && element.ActualHeight > 0));
@@ -196,7 +196,7 @@ public sealed class VisualTests
                     Assert.AreSame(previousRoot, root, "Navigation must retain each page's visual tree.");
                 }
                 retainedRoots[page] = root;
-                var containers = shell.Pages.Select(item => (ContentPresenter)pageHost.ItemContainerGenerator.ContainerFromItem(item)).ToArray();
+                var containers = pageHost.RetainedPages.Select(item => PageView(pageHost, item)).ToArray();
                 Assert.AreEqual(1, containers.Count(container => container.IsVisible));
                 Assert.IsTrue(workspace.IsVisible);
                 foreach (var hidden in containers.Where(container => !ReferenceEquals(container, workspace)))
@@ -322,7 +322,7 @@ public sealed class VisualTests
             await LayoutAsync(window);
             await shell.NavigationTask;
             Assert.AreSame(shell.Settings, navigation.SelectedItem);
-            var settingsView = (ContentPresenter)pageHost.ItemContainerGenerator.ContainerFromItem(shell.Settings);
+            var settingsView = PageView(pageHost, shell.Settings);
             await VerifySettingsRecoveryAsync(runtime, shell, window, navigation, settingsView);
             Assert.AreEqual("", errors.Errors.ToString(), "WPF binding errors were reported.");
         }
@@ -1081,6 +1081,10 @@ public sealed class VisualTests
         Assert.IsTrue(bounds.Left >= 0 && bounds.Top >= 0 && bounds.Right <= host.ActualWidth + 1 && bounds.Bottom <= host.ActualHeight + 1,
             $"{element} is clipped: {bounds} inside {host.RenderSize}.");
     }
+
+    // The retained host keeps one view per visited page, shown or collapsed.
+    private static ContentPresenter PageView(RetainedPageHost host, object page) =>
+        ((Grid)VisualTreeHelper.GetChild(host, 0)).Children.OfType<ContentPresenter>().Single(view => ReferenceEquals(view.Content, page));
 
     private static void SaveRender(FrameworkElement content, string name)
     {
