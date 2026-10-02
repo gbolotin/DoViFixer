@@ -1,0 +1,29 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+permissions:
+  contents: read
+
+jobs:
+  build:
+    runs-on: windows-latest
+    env:
+      DOTNET_NOLOGO: true
+      DOTNET_CLI_TELEMETRY_OPTOUT: true
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-dotnet@v4
+        with:
+          global-json-file: global.json
+
+      # Always build against the pinned WpfFoundation package, never a local checkout.
+      - name: Build
+        run: dotnet build DoViFixer.sln -c Release -p:UseLocalWpfFoundation=false
+
+      - name: Test
+        run: dotnet test DoViFixer.sln -c Release --no-build -p:UseLocalWpfFoundation=false --filter "TestCategory!=NativeIntegration"

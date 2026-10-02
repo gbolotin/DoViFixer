@@ -1,4 +1,4 @@
-﻿<Project Sdk="Microsoft.NET.Sdk">
+<Project Sdk="Microsoft.NET.Sdk">
   <PropertyGroup>
     <OutputType>WinExe</OutputType>
     <TargetFramework>net10.0-windows</TargetFramework>
@@ -12,5 +12,11 @@
     <PackageReference Include="Serilog.Sinks.File" />
     <ProjectReference Include="../DoViFixer.Application/DoViFixer.Application.csproj" />
     <ProjectReference Include="../DoViFixer.Infrastructure/DoViFixer.Infrastructure.csproj" />
+  </ItemGroup>
+  <ItemGroup Condition="'$(UseLocalWpfFoundation)' == 'true'">
+    <ProjectReference Include="$(WpfFoundationProject)" />
+  </ItemGroup>
+  <ItemGroup Condition="'$(UseLocalWpfFoundation)' != 'true'">
+    <PackageReference Include="WpfFoundation" />
   </ItemGroup>
 </Project>

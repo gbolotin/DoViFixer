@@ -20,6 +20,12 @@ dotnet run --project src/DoViFixer.Console --no-build -- dependencies check
 
 Help and argument validation do not start the host, probe executables, install tools, or create settings/workspaces.
 
+The WPF app uses the [WpfFoundation](https://github.com/gbolotin/WpfFoundation) package. When the WpfFoundation repository is checked out next to this one (`..\WpfFoundation`), builds reference its source project instead, and `DoViFixer.Local.sln` opens both together. Release builds turn that off so they use the pinned package:
+
+```powershell
+dotnet build DoViFixer.sln -c Release -p:UseLocalWpfFoundation=false
+```
+
 ## WPF desktop application
 
 Phase 4 follows the Studio v3 Media mockups and v2 Backup & Restore / Settings designs. Launch `src/DoViFixer.App/bin/Debug/net10.0-windows/DoViFixer.App.exe` after building. See [WPF implementation and verification](docs/wpf.md).

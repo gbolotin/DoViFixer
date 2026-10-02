@@ -64,18 +64,14 @@ DoViFixer/
 |   |   |-- Interaction/
 |   |   |-- Composition/
 |   |   `-- Program.cs
-|   |-- DoViFixer.App/                 # Later
-|   |   |-- Views/
-|   |   |-- ViewModels/
-|   |   |-- Dialogs/
-|   |   |-- Navigation/
-|   |   |-- Composition/
-|   |   |-- Resources/
-|   |   `-- App.xaml
-|   `-- DoViFixer.Common.Wpf/          # Optional, when useful reuse exists
-|       |-- Controls/
-|       |-- Behaviors/
-|       `-- Converters/
+|   `-- DoViFixer.App/
+|       |-- Views/
+|       |-- ViewModels/
+|       |-- Dialogs/
+|       |-- Navigation/
+|       |-- Composition/
+|       |-- Resources/
+|       `-- App.xaml
 |-- tests/
 |   |-- DoViFixer.Domain.Tests/
 |   |-- DoViFixer.Application.Tests/
@@ -96,8 +92,8 @@ Folders are organizational boundaries, not additional projects. Do not create em
 | Application | Scan, inspect, plan, convert, verify, backup, restore, cleanup, settings and update use cases; requests, results, progress; required external interfaces | Domain |
 | Infrastructure | Native-tool adapters, parsing, files, temporary workspaces, archive serialization, settings persistence and HTTP | Application, Domain |
 | Console | Entry point, DI composition, command parsing, prompts, rendering and exit-code mapping | Application, Infrastructure; Domain when directly using its models |
-| App | WPF entry point and DI composition, views, ViewModels, dialogs and WPF navigation | Application, Infrastructure; Domain when directly using its models; Common.Wpf if extracted |
-| Common.Wpf | Reusable WPF controls, behaviors and converters | No DoViFixer business projects |
+| App | WPF entry point and DI composition, views, ViewModels, dialogs and WPF navigation | Application, Infrastructure; Domain when directly using its models; the WpfFoundation package (or its local project) |
+| WpfFoundation (external) | Reusable WPF styles, controls, behaviors, converters, navigation, dialogs and theme service, in its own repository | No DoViFixer projects |
 
 Each test project references the code it exercises. Infrastructure and console tests can use inner-layer contracts and fixtures without introducing references from production code to tests.
 
@@ -110,7 +106,7 @@ flowchart TD
     Infrastructure --> Application
     Infrastructure --> Domain[DoViFixer.Domain]
     Application --> Domain
-    App --> Common[DoViFixer.Common.Wpf]
+    App --> WpfFoundation[WpfFoundation package]
 ```
 
 The diagram shows the main reference direction. Executable references to Infrastructure support registration in the composition root. Commands and ViewModels use injected application services for their work.
@@ -279,7 +275,7 @@ Use .NET 10 LTS. The machine had SDK `10.0.400` installed when reviewed; pin the
 
 - Domain and Application: `net10.0`.
 - Infrastructure and Console: `net10.0-windows` for the Windows implementation.
-- App and Common.Wpf: `net10.0-windows`, with WPF enabled.
+- App: `net10.0-windows`, with WPF enabled.
 - Tests: target the framework required by the projects under test.
 
 Use `Directory.Build.props` for shared compiler settings and `Directory.Packages.props` for central package versions. App uses standard WPF and Microsoft DI packages; Console uses Microsoft hosting and DI packages.
@@ -293,7 +289,7 @@ Keep service instances shared within one process only. Running the console and W
 1. **Solution foundation:** create the four initial production projects and focused test projects; configure targets and package versions; implement DI registrations and console composition. Validate references, service resolution, lifetimes and disposal with inert test doubles.
 2. **Dependency setup and read-only media workflows:** dependency detection, approved automatic installation, post-install validation and current-process path refresh; then media probing, scan and inspect, pure classification rules, typed results, cancellation and console output. Test detection/installation coordination with fakes and validate media analysis against representative tool-output fixtures.
 3. **Media workflows:** conversion planning/execution, verification, publication, backup, restore and cleanup. Add batch coordination and settings persistence. Compare supported commands with the upstream parity checklist and run integration checks using explicitly selected media fixtures.
-4. **WPF presentation:** add standard WPF startup and Microsoft DI composition and verify shared registrations. Build dependency setup, scan, inspection, conversion, backup/restore and settings views over existing services. Test cancellation/progress and add focused ViewModel/composition tests. Extract Common.Wpf only when reusable components emerge.
+4. **WPF presentation:** add standard WPF startup and Microsoft DI composition and verify shared registrations. Build dependency setup, scan, inspection, conversion, backup/restore and settings views over existing services. Test cancellation/progress and add focused ViewModel/composition tests. Reusable presentation infrastructure later moved to the WpfFoundation library.
 
 For native-media integration checks, cover supported profile/EL cases, spaces and punctuation in paths, output collisions, cancellation, missing tools, malformed output, verification failures and archive mismatches. Keep these separate from fast unit tests.
 

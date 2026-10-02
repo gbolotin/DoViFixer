@@ -13,14 +13,14 @@ Main projects:
 - DoViFixer.Infrastructure: repositories, persistence, configuration, file system, and other infrastructure.
 - DoViFixer.Console: console entry point, command parsing, interaction, rendering, and dependency injection composition.
 - DoViFixer.App: WPF entry point, views, ViewModels, commands, dialogs, WPF navigation, and dependency injection composition.
-- DoViFixer.Common.Wpf: optional shared WPF utilities and reusable UI infrastructure; add when there is concrete reuse.
+- WpfFoundation (separate repository and NuGet package): shared WPF styles, controls, behaviors, converters, navigation, dialogs and theme service. DoViFixer.App references the package pinned in `Directory.Packages.props`, or `..\WpfFoundation` through a project reference when that checkout exists (see [WpfFoundation reference](#wpffoundation-reference)).
 
 ## Layering and media workflows
 
 - Keep domain logic in DoViFixer.Domain and use-case coordination in DoViFixer.Application.
 - Put interfaces needed by application workflows in DoViFixer.Application/Abstractions; keep domain-specific abstractions in Domain when appropriate.
 - DoViFixer.Infrastructure implements the inner layers' abstractions. Neither Domain nor Application may reference Infrastructure, Console, or App.
-- Keep WPF navigation, dialogs, and ViewModels in DoViFixer.App. Common.Wpf must remain reusable presentation infrastructure.
+- Keep WPF navigation, dialogs, and ViewModels in DoViFixer.App. Reusable presentation infrastructure belongs in WpfFoundation, not in DoViFixer; never move DoViFixer workflows or wording into it.
 - ViewModels and console commands call application services; they must not implement conversion rules or low-level tool/file operations.
 - Neither DoViFixer.Console nor DoViFixer.App references the other. Shared functionality belongs in the shared libraries.
 - Keep media analysis, conversion policy, workflow coordination, tool execution, and UI presentation separated.
@@ -33,6 +33,11 @@ Main projects:
 - Define AddDoViFixerApplication and AddDoViFixerInfrastructure registration extensions in their respective libraries, using Microsoft.Extensions.DependencyInjection.Abstractions.
 - Do not build additional service providers inside registration extensions or alongside the application root.
 - WPF does not provide automatic per-job scopes; introduce explicit operation scopes only when scoped dependencies are introduced.
+
+- `Directory.Build.props` turns on `UseLocalWpfFoundation` when `..\WpfFoundation\src\WpfFoundation\WpfFoundation.csproj` exists. DoViFixer.App then references that project instead of the `WpfFoundation` package, so library code can be debugged and edited in the same session.
+- `DoViFixer.sln` lists only DoViFixer's projects so it builds anywhere. `DoViFixer.Local.sln` also lists the WpfFoundation project for local work.
+- Upgrade the library by changing the `WpfFoundation` version in `Directory.Packages.props`.
+- CI and release builds pass `-p:UseLocalWpfFoundation=false`, so a shipped build always uses the pinned package, never local, possibly uncommitted library code.
 
 ## Native dependencies
 
