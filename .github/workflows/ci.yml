@@ -3,6 +3,7 @@ name: CI
 on:
   push:
     branches: [main]
+    tags: ['v*']
   pull_request:
 
 permissions:
@@ -26,9 +27,22 @@ jobs:
         shell: pwsh
         run: Set-DisplayResolution -Width 1920 -Height 1080 -Force
 
+      # A vX.Y.Z tag builds version X.Y.Z; every other build is <VersionPrefix>-ci.<run number>.
+      - name: Choose version
+        id: version
+        shell: pwsh
+        run: |
+          if ($env:GITHUB_REF_TYPE -eq 'tag') {
+            $version = $env:GITHUB_REF_NAME.TrimStart('v')
+            if ($version -notmatch '^\d+\.\d+\.\d+(-[0-9A-Za-z.]+)?$') { throw "Tag $env:GITHUB_REF_NAME is not vMAJOR.MINOR.PATCH[-prerelease]." }
+            "property=-p:Version=$version" >> $env:GITHUB_OUTPUT
+          } else {
+            "property=-p:VersionSuffix=ci.$env:GITHUB_RUN_NUMBER" >> $env:GITHUB_OUTPUT
+          }
+
       # Always build against the pinned WpfFoundation package, never a local checkout.
       - name: Build
-        run: dotnet build DoViFixer.sln -c Release -p:UseLocalWpfFoundation=false
+        run: dotnet build DoViFixer.sln -c Release -p:UseLocalWpfFoundation=false ${{ steps.version.outputs.property }}
 
       - name: Test
         run: dotnet test DoViFixer.sln -c Release --no-build -p:UseLocalWpfFoundation=false --filter "TestCategory!=NativeIntegration"

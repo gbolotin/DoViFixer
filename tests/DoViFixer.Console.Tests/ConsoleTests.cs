@@ -13,6 +13,12 @@ namespace DoViFixer.Console.Tests;
 public sealed class ConsoleTests
 {
     [TestMethod]
+    [DataRow("version")]
+    [DataRow("--version")]
+    [DataRow("-version")]
+    public void VersionIsACommand(string argument) => Assert.AreEqual("version", CommandLine.Parse([argument]).Command);
+
+    [TestMethod]
     public void InspectSimpleIsAnOptInScanOption()
     {
         var command = CommandLine.Parse(["scan", "movies", "--inspect-simple", "-r", "--json", "--temp", "scratch"]);
@@ -229,7 +235,7 @@ public sealed class ConsoleTests
     }
 
     [TestMethod]
-    public async Task HelpAndArgumentErrorsDoNotCreateSettingsOrProbeTools()
+    public async Task HelpVersionAndArgumentErrorsDoNotCreateSettingsOrProbeTools()
     {
         string path = Path.Combine(Path.GetTempPath(), "DoViFixer-help-test-" + Guid.NewGuid().ToString("N"));
         string? previous = Environment.GetEnvironmentVariable("DoViFixer__DataDirectory");
@@ -239,6 +245,10 @@ public sealed class ConsoleTests
             Assert.AreEqual(0, await DoViFixer.Console.Program.Main(new[]
             {
                 "--help"
+            }));
+            Assert.AreEqual(0, await DoViFixer.Console.Program.Main(new[]
+            {
+                "--version"
             }));
             Assert.AreEqual(2, await DoViFixer.Console.Program.Main(new[]
             {

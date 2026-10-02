@@ -3,6 +3,7 @@ using DoViFixer.App.Presentation.Application;
 using DoViFixer.App.ViewModels;
 using DoViFixer.App.Views;
 using DoViFixer.Application;
+using DoViFixer.Application.Updates;
 using DoViFixer.Infrastructure;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
@@ -45,7 +46,7 @@ public static class AppComposition
         string directory = Path.Combine(root, "Logs");
         Directory.CreateDirectory(directory);
         var json = new JsonFormatter(renderMessage: true);
-        logging.MinimumLevel.Debug().Enrich.FromLogContext().Enrich.WithProperty("SessionId", Guid.NewGuid()).Enrich.WithProperty("ProcessId", Environment.ProcessId).Enrich.WithProperty("Application", "DoViFixer.App").WriteTo.File(json, Path.Combine(directory, "app-diagnostic-.jsonl"), rollingInterval: RollingInterval.Day, retainedFileCountLimit: 14, fileSizeLimitBytes: 10485760, rollOnFileSizeLimit: true, shared: true).WriteTo.Logger(s => s.Filter.ByIncludingOnly(e => IsKind(e, "History")).WriteTo.File(json, Path.Combine(directory, "app-history-.jsonl"), rollingInterval: RollingInterval.Day, retainedFileCountLimit: 90, fileSizeLimitBytes: 10485760, rollOnFileSizeLimit: true, shared: true)).WriteTo.Logger(s => s.Filter.ByIncludingOnly(e => IsKind(e, "Audit")).WriteTo.File(json, Path.Combine(directory, "app-audit-.jsonl"), rollingInterval: RollingInterval.Day, retainedFileCountLimit: 90, fileSizeLimitBytes: 10485760, rollOnFileSizeLimit: true, shared: true));
+        logging.MinimumLevel.Debug().Enrich.FromLogContext().Enrich.WithProperty("SessionId", Guid.NewGuid()).Enrich.WithProperty("ProcessId", Environment.ProcessId).Enrich.WithProperty("Application", "DoViFixer.App").Enrich.WithProperty("ApplicationVersion", ApplicationVersion.Of(typeof(AppComposition).Assembly)).WriteTo.File(json, Path.Combine(directory, "app-diagnostic-.jsonl"), rollingInterval: RollingInterval.Day, retainedFileCountLimit: 14, fileSizeLimitBytes: 10485760, rollOnFileSizeLimit: true, shared: true).WriteTo.Logger(s => s.Filter.ByIncludingOnly(e => IsKind(e, "History")).WriteTo.File(json, Path.Combine(directory, "app-history-.jsonl"), rollingInterval: RollingInterval.Day, retainedFileCountLimit: 90, fileSizeLimitBytes: 10485760, rollOnFileSizeLimit: true, shared: true)).WriteTo.Logger(s => s.Filter.ByIncludingOnly(e => IsKind(e, "Audit")).WriteTo.File(json, Path.Combine(directory, "app-audit-.jsonl"), rollingInterval: RollingInterval.Day, retainedFileCountLimit: 90, fileSizeLimitBytes: 10485760, rollOnFileSizeLimit: true, shared: true));
     }
 
     private static bool IsKind(LogEvent entry, string kind) => entry.Properties.TryGetValue("LogKind", out var value) && value is ScalarValue

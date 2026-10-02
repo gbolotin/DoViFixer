@@ -200,6 +200,7 @@ public sealed class VisualTests
                         var cacheLocationLink = cacheLocation.Inlines.OfType<System.Windows.Documents.Hyperlink>().Single();
                         Assert.AreEqual(shell.Settings.CacheDirectory, ((System.Windows.Documents.Run)cacheLocationLink.Inlines.FirstInline).Text);
                         Assert.AreSame(shell.Settings.OpenCacheFolderCommand, cacheLocationLink.Command, "The cache location link must open the cache folder.");
+                        Assert.HasCount(1, Descendants<TextBlock>(workspace).Where(text => text.Text == "DoViFixer " + shell.Settings.Version));
                         Assert.IsTrue(cacheSize.IsVisible);
                         AssertInside(cacheSize, (FrameworkElement)window.Content);
                         AssertInside(cacheLocation, (FrameworkElement)window.Content);

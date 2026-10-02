@@ -252,9 +252,12 @@
                             </HeaderedContentControl>
                         </StackPanel>
                     </Border>
+                    <TextBlock Text="{Binding Version, StringFormat='DoViFixer {0}'}"
+                               Foreground="{DynamicResource TextFillColorSecondaryBrush}"
+                               Margin="0,24,0,0" />
                     <TextBlock Text="Operation history, audit and diagnostics: %LOCALAPPDATA%\DoViFixer\Logs"
                                Foreground="{DynamicResource TextFillColorSecondaryBrush}"
-                               Margin="0,24" />
+                               Margin="0,4,0,24" />
                     <ProgressBar Value="{Binding Percent, Mode=OneWay}"
                                  IsIndeterminate="{Binding IsIndeterminate}"
                                  Visibility="{Binding IsBusy, Converter={StaticResource WfBooleanToVisibilityConverter}}" />

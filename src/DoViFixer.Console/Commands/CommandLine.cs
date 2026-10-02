@@ -14,6 +14,11 @@ public sealed record CommandLine(string Command, IReadOnlyList<string> Arguments
             return new("help", [], new Dictionary<string, string?>());
         }
 
+        if (args[0] is "version" or "--version" or "-version")
+        {
+            return new("version", [], new Dictionary<string, string?>());
+        }
+
         string command = args[0].ToLowerInvariant();
         string[] allowed = command switch
         {

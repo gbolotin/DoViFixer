@@ -26,6 +26,12 @@ The WPF app uses the [WpfFoundation](https://github.com/gbolotin/WpfFoundation) 
 dotnet build DoViFixer.sln -c Release -p:UseLocalWpfFoundation=false
 ```
 
+## Versioning
+
+Every DoViFixer assembly gets one [SemVer](https://semver.org) version from `VersionPrefix` in `Directory.Build.props`. Local builds are `0.1.0-dev`, CI builds are `0.1.0-ci.<run number>`, and pushing a `vX.Y.Z` tag makes CI build `X.Y.Z`. The SDK appends the commit hash, so the version also says which commit a build came from. `DoViFixer.Console --version`, the help header, the Settings page, and every log entry (`ApplicationVersion`) show it.
+
+To release, bump `VersionPrefix` if needed, merge, and tag that commit, for example `git tag v0.1.0 && git push origin v0.1.0`. After the release, raise `VersionPrefix` to the next version so later builds sort after it.
+
 ## WPF desktop application
 
 Phase 4 follows the Studio v3 Media mockups and v2 Backup & Restore / Settings designs. Launch `src/DoViFixer.App/bin/Debug/net10.0-windows/DoViFixer.App.exe` after building. See [WPF implementation and verification](docs/wpf.md).
