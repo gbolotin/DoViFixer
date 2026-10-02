@@ -21,17 +21,20 @@ public sealed class MediaRow(string path) : ObservableObject
     private string? warning;
     private string notice = "";
     private string? restoreArchive;
+    private bool missing;
 
     #endregion
 
     #region Public fields
 
     public const string FileLocationLabel = "File location";
+    public const string MissingStatus = "File not found";
+    public const string MissingNote = "File not found. It was deleted, moved or renamed outside DoViFixer. Restore it to this location, or remove it from the list.";
     public string Path { get; } = path;
     public string Name => System.IO.Path.GetFileName(Path);
     public ProgressViewModel Progress { get; } = new();
     public bool IsProfile7 => Analysis?.Media.Profile == Domain.Media.DolbyVisionProfile.Profile7;
-    public bool CanRestore => Analysis?.Media.Profile == Domain.Media.DolbyVisionProfile.Profile81 && RestoreArchive is not null && State != MediaRowState.Restored;
+    public bool CanRestore => Analysis?.Media.Profile == Domain.Media.DolbyVisionProfile.Profile81 && RestoreArchive is not null && State != MediaRowState.Restored && !IsMissing;
     public string? RestoreArchive
     {
         get => restoreArchive;
@@ -51,7 +54,31 @@ public sealed class MediaRow(string path) : ObservableObject
         && Analysis.Verdict == AnalysisVerdict.Unknown
         && Analysis.Evidence.Method == AnalysisMethod.SampledRpu
         && (Analysis.Evidence.Frames <= 0 || Analysis.Evidence.SuccessfulSamples < Analysis.Evidence.RequestedSamples);
-    public bool CanInspectIncomplete => HasIncompleteScan && !IsActive && !IsPending;
+    public bool CanInspectIncomplete => HasIncompleteScan && !IsActive && !IsPending && !IsMissing;
+
+    /// <summary>
+    /// The source file no longer exists at <see cref="Path"/>. The row keeps its last results so the file can be restored or removed.
+    /// </summary>
+    public bool IsMissing
+    {
+        get => missing;
+        set
+        {
+            if (SetProperty(ref missing, value))
+            {
+                RaisePropertyChanged(nameof(Status));
+                RaisePropertyChanged(nameof(StatusToolTip));
+                RaisePropertyChanged(nameof(SelectionEnabled));
+                RaisePropertyChanged(nameof(CanRestore));
+                RaisePropertyChanged(nameof(CanRetryAnalysis));
+                RaisePropertyChanged(nameof(CanInspectIncomplete));
+                RaisePropertyChanged(nameof(DetailNotes));
+            }
+        }
+    }
+
+    /// <summary>A converted row keeps its result when Replace original moved the source away on purpose.</summary>
+    private bool ShowsMissing => IsMissing && State != MediaRowState.Converted;
     public AnalysisMethod? LastAnalysisMethod { get; set;} = AnalysisMethod.SampledRpu;
     public string? CurrentOperation { get; set; }
     public string OperationName => CurrentOperation ?? (LastAnalysisMethod is null ? "Conversion" : LastAnalysisMethod == AnalysisMethod.SampledRpu ? "Scan" : "Inspection");
@@ -66,13 +93,15 @@ public sealed class MediaRow(string path) : ObservableObject
                 RaisePropertyChanged(nameof(CanRestore));
                 RaisePropertyChanged(nameof(Warning));
                 RaisePropertyChanged(nameof(HasWarning));
+                RaisePropertyChanged(nameof(Status));
                 RaisePropertyChanged(nameof(StatusToolTip));
+                RaisePropertyChanged(nameof(DetailNotes));
             }
         }
     }
     public bool CanRetryAnalysis
     {
-        get => canRetryAnalysis;
+        get => canRetryAnalysis && !IsMissing;
         set => SetProperty(ref canRetryAnalysis, value);
     }
     public bool CanOpenResult => Result?.Output is not null && State is MediaRowState.Converted or MediaRowState.Restored;
@@ -95,7 +124,7 @@ public sealed class MediaRow(string path) : ObservableObject
     }
     public bool SelectionEnabled
     {
-        get => selectionEnabled;
+        get => selectionEnabled && !IsMissing;
         set => SetProperty(ref selectionEnabled, value);
     }
     public bool IsPending
@@ -118,7 +147,7 @@ public sealed class MediaRow(string path) : ObservableObject
     }
     public string Status
     {
-        get => status;
+        get => ShowsMissing ? MissingStatus : status;
         set
         {
             SetProperty(ref status, value);
@@ -149,6 +178,11 @@ public sealed class MediaRow(string path) : ObservableObject
     {
         get
         {
+            if (ShowsMissing)
+            {
+                return MissingNote;
+            }
+
             if (!string.IsNullOrWhiteSpace(Notice))
             {
                 return Notice;
@@ -268,6 +302,7 @@ public sealed class MediaRow(string path) : ObservableObject
 
     public string DetailNotes => string.Join("\n\n", new[]
     {
+        ShowsMissing ? MissingNote : null,
         AnalysisError is not null ? $"Analysis failed\n{AnalysisError}" : Analysis?.Reason,
         Analysis?.Evidence.SampleDiagnostics,
         HasIncompleteScan ? "Suggested action: Inspect. Standard inspection examines the full RPU metadata stream instead of short samples. It may take longer; missing metadata may still prevent classification." : null,

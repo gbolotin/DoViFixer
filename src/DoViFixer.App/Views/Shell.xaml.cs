@@ -18,6 +18,7 @@ public partial class Shell : Window
         InitializeComponent();
         DataContext = model;
         Closing += OnClosing;
+        Activated += (_, _) => model.WindowActivated();
     }
 
     private async void OnClosing(object? sender, CancelEventArgs e)

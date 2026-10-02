@@ -13,7 +13,12 @@ internal sealed class FileOperations : IFileOperations, IFileDiscovery
         string full = Path.GetFullPath(path);
         RejectReparsePoints(full);
         var info = new FileInfo(full);
-        if (!info.Exists || info.Length == 0)
+        if (!info.Exists)
+        {
+            throw new FileNotFoundException("Source file not found. It may have been deleted, moved or renamed.", full);
+        }
+
+        if (info.Length == 0)
         {
             throw new FileNotFoundException("A nonempty source file is required.", full);
         }

@@ -721,6 +721,8 @@ public sealed class VisualTests
     private static async Task VerifyRowActionsAsync(TestRuntime runtime, MediaViewModel media, ListView list, Window window, ListBox navigation, DependencyObject mediaView)
     {
         await LayoutAsync(window);
+        var slots = new Dictionary<string, Rect>();
+        AssertStableActionSlots(list, slots, "initial rows");
         var row = media.Files[0];
         var container = (ListViewItem)list.ItemContainerGenerator.ContainerFromItem(row);
         var remove = Descendants<Button>(container).Single(button => Equals(button.ToolTip, "Remove"));
@@ -729,7 +731,7 @@ public sealed class VisualTests
         Assert.AreSame(media.RestoreRowCommand, restore.Command);
         Assert.AreSame(row, restore.CommandParameter);
         Assert.AreEqual("\uE7A7", restore.Content);
-        Assert.AreEqual(Visibility.Collapsed, restore.Visibility);
+        Assert.AreEqual(Visibility.Hidden, restore.Visibility);
         Assert.AreSame(media.ConvertRowDv81Command, convert.Command);
         Assert.AreSame(row, convert.CommandParameter);
         Assert.AreEqual("Convert to DV8.1", System.Windows.Automation.AutomationProperties.GetName(convert));
@@ -741,20 +743,24 @@ public sealed class VisualTests
         var originalAnalysis = row.Analysis!;
         row.Analysis = originalAnalysis with { Media = originalAnalysis.Media with { Profile = DolbyVisionProfile.Profile81 } };
         await LayoutAsync(window);
-        Assert.AreEqual(Visibility.Collapsed, convert.Visibility);
-        Assert.AreEqual(Visibility.Collapsed, restore.Visibility);
+        AssertStableActionSlots(list, slots, "Profile 8.1");
+        Assert.AreEqual(Visibility.Hidden, convert.Visibility);
+        Assert.AreEqual(Visibility.Hidden, restore.Visibility);
         row.RestoreArchive = Path.ChangeExtension(row.Path, ".dovi");
         await LayoutAsync(window);
+        AssertStableActionSlots(list, slots, "restore archive found");
         Assert.AreEqual(Visibility.Hidden, restore.Visibility);
         Assert.IsTrue(restore.IsEnabled);
         row.Analysis = null;
         await LayoutAsync(window);
-        Assert.AreEqual(Visibility.Collapsed, convert.Visibility);
-        Assert.AreEqual(Visibility.Collapsed, restore.Visibility);
+        AssertStableActionSlots(list, slots, "no analysis");
+        Assert.AreEqual(Visibility.Hidden, convert.Visibility);
+        Assert.AreEqual(Visibility.Hidden, restore.Visibility);
         row.Analysis = originalAnalysis;
         await LayoutAsync(window);
+        AssertStableActionSlots(list, slots, "Profile 7 again");
         Assert.AreEqual(Visibility.Hidden, convert.Visibility);
-        Assert.AreEqual(Visibility.Collapsed, restore.Visibility);
+        Assert.AreEqual(Visibility.Hidden, restore.Visibility);
         row.RestoreArchive = null;
         Assert.AreSame(media.RemoveFileCommand, remove.Command);
         Assert.AreSame(row, remove.CommandParameter);
@@ -763,11 +769,13 @@ public sealed class VisualTests
         Assert.IsFalse(remove.IsVisible);
         container.IsSelected = true;
         await LayoutAsync(window);
+        AssertStableActionSlots(list, slots, "row selected");
         Assert.IsFalse(remove.IsVisible, "Selecting a row without hovering must keep hover actions hidden.");
         Assert.IsFalse(convert.IsVisible);
         container.IsSelected = false;
         media.Focused = media.Files[1];
         await LayoutAsync(window);
+        AssertStableActionSlots(list, slots, "other row focused");
         Assert.IsFalse(remove.IsVisible, "An unselected row without hover must hide delete.");
         foreach (var (caption, command) in new (string, object)[]
         {
@@ -787,8 +795,10 @@ public sealed class VisualTests
         runtime.DuringAnalysis = null;
         Assert.IsTrue(row.CanRetryAnalysis);
         await LayoutAsync(window);
+        AssertStableActionSlots(list, slots, "analysis failed");
         Invoke(Button(container, "Retry"));
         await LayoutAsync(window);
+        AssertStableActionSlots(list, slots, "retry started");
         await media.Completion;
         Assert.IsFalse(row.CanRetryAnalysis);
         Assert.IsTrue(media.Files[1].CanRetryAnalysis, "Retry must affect only the clicked row.");
@@ -796,9 +806,11 @@ public sealed class VisualTests
         var analysis = row.Analysis!;
         row.Analysis = DoViFixer.Domain.Analysis.MediaClassifier.Classify(analysis.Media, analysis.Evidence with { SuccessfulSamples = 9 });
         await LayoutAsync(window);
+        AssertStableActionSlots(list, slots, "incomplete scan");
         int fullAnalyses = runtime.FullAnalyses;
         Invoke(Button(container, "Inspect"));
         await LayoutAsync(window);
+        AssertStableActionSlots(list, slots, "inspected");
         await media.Completion;
         Assert.AreEqual(fullAnalyses + 1, runtime.FullAnalyses);
         Assert.IsFalse(row.CanInspectIncomplete);
@@ -825,18 +837,23 @@ public sealed class VisualTests
         {
             await started.Task.WaitAsync(TimeSpan.FromSeconds(10));
             await LayoutAsync(window);
+            AssertStableActionSlots(list, slots, "conversion running");
             Assert.IsFalse(navigation.IsEnabled);
+            Assert.IsFalse(convert.IsEnabled);
+            Assert.AreEqual(Visibility.Hidden, convert.Visibility, "A disabled Profile 7 convert action keeps its space.");
             Assert.AreSame(row, media.BatchProgress.CurrentJob);
             Assert.AreEqual(45, row.Progress.StagePercent);
             var pending = (ListViewItem)list.ItemContainerGenerator.ContainerFromItem(media.Files[1]);
             Invoke(Button(pending, "Skip"));
             await LayoutAsync(window);
+            AssertStableActionSlots(list, slots, "queued row skipped");
             Assert.AreEqual("Conversion skipped", media.Files[1].Status);
             Assert.IsFalse(media.Files[1].IsPending);
             var cancel = Button(container, "Cancel");
             Invoke(cancel);
             await recovering.Task.WaitAsync(TimeSpan.FromSeconds(10));
             await LayoutAsync(window);
+            AssertStableActionSlots(list, slots, "job cancelling");
             Assert.AreEqual("Cancelling…", row.Progress.Stage);
             Assert.IsFalse(cancel.IsEnabled);
             Assert.IsFalse(Button(mediaView, "Cancel job").IsEnabled);
@@ -853,9 +870,34 @@ public sealed class VisualTests
         row.IsSelected = true;
         await media.ConvertDv81Command.ExecuteAsync();
         await LayoutAsync(window);
+        AssertStableActionSlots(list, slots, "converted");
         Invoke(Button(container, "Open folder"));
         await LayoutAsync(window);
+        AssertStableActionSlots(list, slots, "output folder opened");
         Assert.AreEqual(@"C:\Media", runtime.OpenedFolder);
+
+        var removeMissing = Button(window, "Remove missing");
+        Assert.AreEqual(Visibility.Collapsed, removeMissing.Visibility);
+        var missing = media.Files[1];
+        media.Focused = missing;
+        runtime.MissingFiles.Add(missing.Path);
+        runtime.RaiseSourceFilesChanged();
+        await LayoutAsync(window);
+        AssertStableActionSlots(list, slots, "source file missing");
+        var missingContainer = (ListViewItem)list.ItemContainerGenerator.ContainerFromItem(missing);
+        var missingStatus = Descendants<TextBlock>(missingContainer).Single(text => text.Text == MediaRow.MissingStatus);
+        Assert.AreEqual(window.FindResource("SystemFillColorCautionBrush"), missingStatus.Foreground);
+        Assert.AreEqual(TextDecorationLocation.Strikethrough, Descendants<TextBlock>(missingContainer).Single(text => text.Text == missing.Name).TextDecorations.Single().Location);
+        Assert.IsFalse(Descendants<CheckBox>(missingContainer).Single().IsEnabled);
+        Assert.AreEqual(Visibility.Visible, removeMissing.Visibility);
+        Assert.IsTrue(removeMissing.IsEnabled);
+        AssertInside(removeMissing, (FrameworkElement)window.Content);
+        SaveRender((FrameworkElement)window.Content, "missing-source-file");
+        runtime.MissingFiles.Clear();
+        runtime.RaiseSourceFilesChanged();
+        await LayoutAsync(window);
+        AssertStableActionSlots(list, slots, "source file restored");
+        Assert.AreEqual(Visibility.Collapsed, removeMissing.Visibility);
     }
 
     private static async Task VerifySettingsRecoveryAsync(TestRuntime runtime, ShellViewModel shell, Window window, ListBox navigation, DependencyObject settingsView)
@@ -924,6 +966,42 @@ public sealed class VisualTests
 
     private static TextBlock StatusItem(DependencyObject window, int index) =>
         Descendants<TextBlock>(Descendants<StatusBar>(window).Single()).ElementAt(index);
+
+    /// <summary>
+    /// Each row action occupies the same place in every row and state, so showing or hiding one action never
+    /// moves another: hover actions always keep their space, and a row shows at most one primary action.
+    /// </summary>
+    private static void AssertStableActionSlots(ListView list, Dictionary<string, Rect> slots, string checkpoint)
+    {
+        string[] primaryActions = ["Cancel", "Skip", "Retry", "Inspect", "Open folder"];
+        foreach (var item in list.Items)
+        {
+            var container = (ListViewItem)list.ItemContainerGenerator.ContainerFromItem(item);
+            int shownPrimaryActions = 0;
+            foreach (var button in Descendants<Button>(container))
+            {
+                string name = System.Windows.Automation.AutomationProperties.GetName(button) is { Length: > 0 } automationName
+                    ? automationName : (string)button.Content;
+                bool primary = primaryActions.Contains(name);
+                if (primary && button.Visibility == Visibility.Collapsed)
+                {
+                    continue;
+                }
+
+                shownPrimaryActions += primary ? 1 : 0;
+                Assert.IsTrue(button.ActualWidth > 0, $"{name} must keep its space ({checkpoint}).");
+                var bounds = button.TransformToAncestor(container).TransformBounds(new Rect(button.RenderSize));
+                if (!slots.TryAdd(name, bounds))
+                {
+                    var expected = slots[name];
+                    Assert.IsTrue(Math.Abs(expected.X - bounds.X) < 0.5 && Math.Abs(expected.Width - bounds.Width) < 0.5,
+                        $"{name} moved from {expected} to {bounds} ({checkpoint}).");
+                }
+            }
+
+            Assert.IsTrue(shownPrimaryActions <= 1, $"Primary actions share one slot ({checkpoint}).");
+        }
+    }
 
     private static void Invoke(Button button)
     {

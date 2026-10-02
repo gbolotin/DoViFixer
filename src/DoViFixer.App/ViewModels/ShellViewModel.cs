@@ -188,6 +188,9 @@ public sealed class ShellViewModel : ObservableObject, IInitializeAsync, IDispos
         }
     }
 
+    /// <summary>Files may have been deleted or moved in Explorer while the user was away from the window.</summary>
+    public void WindowActivated() => media.CheckSourceFiles();
+
     public async Task CancelAndWaitAsync()
     {
         startupCancellation.Cancel();

@@ -12,7 +12,7 @@ using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
 
 namespace DoViFixer.App.Tests;
-internal sealed class TestRuntime : IFileDiscovery, IFileOperations, IMediaProbe, IMediaPreview, ISettingsStore, IDependencyDetector, IDependencyInstaller, ITemporaryWorkspaceFactory, IAnalysisCache, IVideoProcessor, IMediaVerifier, IOutputPublisher, IBackupArchiveStore, IUserDialogs, IThemeService, IDisposable
+internal sealed class TestRuntime : IFileDiscovery, IFileOperations, IMediaProbe, IMediaPreview, ISettingsStore, IDependencyDetector, IDependencyInstaller, ITemporaryWorkspaceFactory, IAnalysisCache, IVideoProcessor, IMediaVerifier, IOutputPublisher, IBackupArchiveStore, IUserDialogs, IThemeService, ISourceFileMonitor, IDisposable
 {
     private ServiceProvider? container;
     public IServiceCollection Services { get; } = new ServiceCollection();
@@ -79,7 +79,7 @@ internal sealed class TestRuntime : IFileDiscovery, IFileOperations, IMediaProbe
     public TestRuntime()
     {
         AppComposition.Register(Services, new ConfigurationBuilder().Build(), false);
-        Type[] contracts = [typeof(IFileDiscovery), typeof(IFileOperations), typeof(IMediaProbe), typeof(IMediaPreview), typeof(ISettingsStore), typeof(IDependencyDetector), typeof(IDependencyInstaller), typeof(ITemporaryWorkspaceFactory), typeof(IAnalysisCache), typeof(IVideoProcessor), typeof(IMediaVerifier), typeof(IOutputPublisher), typeof(IBackupArchiveStore), typeof(IUserDialogs), typeof(IThemeService)];
+        Type[] contracts = [typeof(IFileDiscovery), typeof(IFileOperations), typeof(IMediaProbe), typeof(IMediaPreview), typeof(ISettingsStore), typeof(IDependencyDetector), typeof(IDependencyInstaller), typeof(ITemporaryWorkspaceFactory), typeof(IAnalysisCache), typeof(IVideoProcessor), typeof(IMediaVerifier), typeof(IOutputPublisher), typeof(IBackupArchiveStore), typeof(IUserDialogs), typeof(IThemeService), typeof(ISourceFileMonitor)];
         foreach (var contract in contracts)
         {
             Services.AddSingleton(contract, this);
@@ -122,11 +122,22 @@ internal sealed class TestRuntime : IFileDiscovery, IFileOperations, IMediaProbe
         return Archives.Where(path => string.Equals(Path.GetDirectoryName(path), input, StringComparison.OrdinalIgnoreCase)).ToArray();
     }
     public HashSet<string> Archives { get; } = new(StringComparer.OrdinalIgnoreCase);
+    public HashSet<string> MissingFiles { get; } = new(StringComparer.OrdinalIgnoreCase);
+    public IReadOnlyList<string> WatchedPaths { get; private set; } = [];
+    public event EventHandler? Changed;
+    public void Watch(IEnumerable<string> paths) => WatchedPaths = [.. paths];
+    public bool Exists(string path) => !MissingFiles.Contains(path);
+    public void RaiseSourceFilesChanged() => Changed?.Invoke(this, EventArgs.Empty);
     public FileIdentity Identify(string path)
     {
         if (path.EndsWith(".dovi", StringComparison.OrdinalIgnoreCase) && !Archives.Contains(path))
         {
             throw new FileNotFoundException("Archive missing.", path);
+        }
+
+        if (MissingFiles.Contains(path))
+        {
+            throw new FileNotFoundException("Source file not found.", path);
         }
         return new(Path.GetFullPath(path), 40000000000, new DateTime(2026, 9, 11));
     }
