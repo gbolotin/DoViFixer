@@ -11,7 +11,7 @@
                                TextWrapping="Wrap"
                                FontWeight="SemiBold" />
                     <TextBlock Text="{Binding SaveError}" TextWrapping="Wrap" />
-                    <WrapPanel Margin="0,6,0,0">
+                    <WrapPanel Margin="0,8,0,0">
                         <Button Content="Retry saving settings"
                                 Command="{Binding SaveCommand}"
                                 Margin="0,0,8,4" />
@@ -27,8 +27,7 @@
                     <Border Style="{StaticResource WfCardStyle}">
                         <StackPanel>
                             <TextBlock Text="Appearance"
-                                       FontSize="20"
-                                       FontWeight="SemiBold" />
+                                       Style="{StaticResource SubtitleTextBlockStyle}" />
                             <HeaderedContentControl Header="App theme"
                                                     AutomationProperties.HelpText="Select whether DoViFixer follows your Windows system color theme, or uses Light or Dark theme."
                                                     Style="{StaticResource WfSettingRowStyle}">
@@ -39,11 +38,10 @@
                             </HeaderedContentControl>
                         </StackPanel>
                     </Border>
-                    <Border Style="{StaticResource WfCardStyle}" Margin="0,18,0,0">
+                    <Border Style="{StaticResource WfCardStyle}" Margin="0,24,0,0">
                         <StackPanel IsEnabled="{Binding IsIdle}">
                             <TextBlock Text="Conversion options"
-                                       FontSize="20"
-                                       FontWeight="SemiBold" />
+                                       Style="{StaticResource SubtitleTextBlockStyle}" />
                             <HeaderedContentControl Header="Temporary storage folder"
                                                     AutomationProperties.HelpText="Working space for extracted video, Dolby Vision metadata and verification files during scans, inspections, conversions, backups and restores. Each operation uses its own subfolder and attempts to remove it when finished, including after failure or cancellation. Final output files use the output folder selected below. Leave blank to use the Windows temporary folder."
                                                     Style="{StaticResource WfStackedSettingRowStyle}">
@@ -64,7 +62,7 @@
                                     <ComboBoxItem Content="Other output folder" IsSelected="{Binding OtherFolder}" />
                                 </ComboBox>
                             </HeaderedContentControl>
-                            <DockPanel Visibility="{Binding OtherFolder, Converter={StaticResource WfBooleanToVisibilityConverter}}" Margin="0,0,0,10">
+                            <DockPanel Visibility="{Binding OtherFolder, Converter={StaticResource WfBooleanToVisibilityConverter}}" Margin="0,0,0,12">
                                 <Button Content="Browse"
                                         DockPanel.Dock="Right"
                                         Command="{Binding BrowseDestinationCommand}"
@@ -108,11 +106,10 @@
                             </TextBlock>
                         </StackPanel>
                     </Border>
-                    <Border Style="{StaticResource WfCardStyle}" Margin="0,18,0,0">
+                    <Border Style="{StaticResource WfCardStyle}" Margin="0,24,0,0">
                         <StackPanel>
                             <TextBlock Text="Scanning and cache"
-                                       FontSize="20"
-                                       FontWeight="SemiBold" />
+                                       Style="{StaticResource SubtitleTextBlockStyle}" />
                             <CheckBox Content="Automatically scan added files"
                                       AutomationProperties.HelpText="Starts a scan as soon as files are added to the Media list."
                                       IsChecked="{Binding AutomaticallyScanAddedFiles}"
@@ -123,7 +120,7 @@
                                       IsChecked="{Binding UseCachedResults}"
                                       Style="{StaticResource WfToggleSwitchStyle}" />
                             <Separator />
-                            <DockPanel Margin="0,10">
+                            <DockPanel Margin="0,12">
                                 <Button Content="Clear cache"
                                         DockPanel.Dock="Right"
                                         Command="{Binding ClearCacheCommand}"
@@ -155,11 +152,10 @@
                                       Style="{StaticResource WfToggleSwitchStyle}" />
                         </StackPanel>
                     </Border>
-                    <Border Style="{StaticResource WfCardStyle}" Margin="0,18,0,0">
+                    <Border Style="{StaticResource WfCardStyle}" Margin="0,24,0,0">
                         <StackPanel>
                             <TextBlock Text="Native tools"
-                                       FontSize="20"
-                                       FontWeight="SemiBold" />
+                                       Style="{StaticResource SubtitleTextBlockStyle}" />
                             <HeaderedContentControl Header="Tool status"
                                                     AutomationProperties.HelpText="Command-line tools DoViFixer uses to read, extract and rebuild media files."
                                                     Style="{StaticResource WfSettingRowStyle}">
@@ -207,7 +203,7 @@
                                                                FontSize="12"
                                                                Foreground="{DynamicResource SystemFillColorCautionBrush}"
                                                                VerticalAlignment="Center"
-                                                               Margin="0,0,6,0" />
+                                                               Margin="0,0,8,0" />
                                                     <TextBlock Text="{Binding StateText}"
                                                                MaxWidth="200"
                                                                TextTrimming="CharacterEllipsis"
@@ -258,7 +254,7 @@
                     </Border>
                     <TextBlock Text="Operation history, audit and diagnostics: %LOCALAPPDATA%\DoViFixer\Logs"
                                Foreground="{DynamicResource TextFillColorSecondaryBrush}"
-                               Margin="0,20" />
+                               Margin="0,24" />
                     <ProgressBar Value="{Binding Percent, Mode=OneWay}"
                                  IsIndeterminate="{Binding IsIndeterminate}"
                                  Visibility="{Binding IsBusy, Converter={StaticResource WfBooleanToVisibilityConverter}}" />

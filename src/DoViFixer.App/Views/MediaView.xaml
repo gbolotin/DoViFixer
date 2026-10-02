@@ -112,11 +112,11 @@
                                             </TextBlock.Style>
                                         </TextBlock>
                                         <TextBlock Text="{Binding PlannedOutput}"
-                                                   FontSize="11"
+                                                   FontSize="{StaticResource CaptionTextBlockFontSize}"
                                                    Foreground="{DynamicResource TextFillColorSecondaryBrush}"
                                                    TextTrimming="CharacterEllipsis"
                                                    ToolTip="{Binding PlannedOutput}"
-                                                   Margin="0,5,0,0">
+                                                   Margin="0,4,0,0">
                                             <TextBlock.Style>
                                                 <Style TargetType="TextBlock">
                                                     <Style.Triggers>
@@ -145,28 +145,28 @@
                                            TextWrapping="Wrap">
                                     <TextBlock.Style>
                                         <Style TargetType="TextBlock">
-                                            <Setter Property="Foreground" Value="#A6B6C3" />
+                                            <Setter Property="Foreground" Value="{DynamicResource TextFillColorSecondaryBrush}" />
                                             <Style.Triggers>
                                                 <DataTrigger Binding="{Binding Analysis.Verdict}" Value="{x:Static analysis:AnalysisVerdict.Mel}">
-                                                    <Setter Property="Foreground" Value="#66D94B" />
+                                                    <Setter Property="Foreground" Value="{DynamicResource SystemFillColorSuccessBrush}" />
                                                 </DataTrigger>
                                                 <DataTrigger Binding="{Binding Analysis.Verdict}" Value="{x:Static analysis:AnalysisVerdict.SimpleFel}">
-                                                    <Setter Property="Foreground" Value="#29AEFA" />
+                                                    <Setter Property="Foreground" Value="{DynamicResource AccentTextFillColorPrimaryBrush}" />
                                                 </DataTrigger>
                                                 <DataTrigger Binding="{Binding Analysis.Verdict}" Value="{x:Static analysis:AnalysisVerdict.ComplexFel}">
-                                                    <Setter Property="Foreground" Value="#FF625A" />
+                                                    <Setter Property="Foreground" Value="{DynamicResource SystemFillColorCriticalBrush}" />
                                                 </DataTrigger>
                                                 <DataTrigger Binding="{Binding Analysis.Verdict}" Value="{x:Static analysis:AnalysisVerdict.AnalysisFailed}">
-                                                    <Setter Property="Foreground" Value="#FF625A" />
+                                                    <Setter Property="Foreground" Value="{DynamicResource SystemFillColorCriticalBrush}" />
                                                 </DataTrigger>
                                                 <DataTrigger Binding="{Binding Analysis.Verdict}" Value="{x:Static analysis:AnalysisVerdict.Unknown}">
-                                                    <Setter Property="Foreground" Value="#FFD166" />
+                                                    <Setter Property="Foreground" Value="{DynamicResource SystemFillColorCautionBrush}" />
                                                 </DataTrigger>
                                                 <DataTrigger Binding="{Binding Analysis.Verdict}" Value="{x:Static analysis:AnalysisVerdict.FelUnclassified}">
-                                                    <Setter Property="Foreground" Value="#FFD166" />
+                                                    <Setter Property="Foreground" Value="{DynamicResource SystemFillColorCautionBrush}" />
                                                 </DataTrigger>
                                                 <DataTrigger Binding="{Binding HasAnalysisError}" Value="True">
-                                                    <Setter Property="Foreground" Value="#FF625A" />
+                                                    <Setter Property="Foreground" Value="{DynamicResource SystemFillColorCriticalBrush}" />
                                                 </DataTrigger>
                                             </Style.Triggers>
                                         </Style>
@@ -218,7 +218,7 @@
                                                        FontFamily="{StaticResource SymbolThemeFontFamily}"
                                                        FontWeight="SemiBold"
                                                        Foreground="{DynamicResource SystemFillColorCautionBrush}"
-                                                       Margin="6,0,0,0"
+                                                       Margin="8,0,0,0"
                                                        VerticalAlignment="Center"
                                                        Visibility="{Binding HasWarning, Converter={StaticResource WfBooleanToVisibilityConverter}}"
                                                        ToolTip="{Binding Warning}"
@@ -229,11 +229,11 @@
                                                 <TextBlock Text="{Binding Stage}"
                                                        TextTrimming="CharacterEllipsis"
                                                        ToolTip="{Binding Stage}" />
-                                                <DockPanel Margin="0,6,0,0">
+                                                <DockPanel Margin="0,4,0,0">
                                                     <TextBlock Text="{Binding StageProgressText}"
                                                                DockPanel.Dock="Right"
-                                                               Foreground="{DynamicResource {x:Static SystemColors.AccentColorBrushKey}}"
-                                                               FontSize="12"
+                                                               Foreground="{DynamicResource AccentTextFillColorPrimaryBrush}"
+                                                               FontSize="{StaticResource CaptionTextBlockFontSize}"
                                                                Margin="8,0,0,0" />
                                                     <ProgressBar Value="{Binding StagePercent, Mode=OneWay}"
                                                                  IsIndeterminate="{Binding IsIndeterminate}"
@@ -415,9 +415,9 @@
         <Border Style="{StaticResource WfCardStyle}">
             <ScrollViewer VerticalScrollBarVisibility="Auto" Padding="0,0,12,0">
                 <StackPanel>
-                    <Border Margin="0,0,0,14"
+                    <Border Margin="0,0,0,12"
                             Background="Black"
-                            CornerRadius="6">
+                            CornerRadius="{DynamicResource ControlCornerRadius}">
                         <Border.Style>
                             <Style TargetType="Border">
                                 <Style.Triggers>
@@ -441,31 +441,30 @@
                                        Margin="16" />
                         </Grid>
                     </Border>
-                    <DockPanel Margin="0,0,0,14">
+                    <DockPanel Margin="0,0,0,12">
                         <TextBlock DockPanel.Dock="Right"
                                    Text="&#xE7BA;"
                                    FontFamily="{StaticResource SymbolThemeFontFamily}"
                                    FontWeight="SemiBold"
                                    Foreground="{DynamicResource SystemFillColorCautionBrush}"
-                                   Margin="6,0,0,0"
+                                   Margin="8,0,0,0"
                                    VerticalAlignment="Center"
                                    Visibility="{Binding Focused.HasWarning, Converter={StaticResource WfBooleanToVisibilityConverter}, FallbackValue=Collapsed}"
                                    ToolTip="{Binding Focused.Warning}"
                                    AutomationProperties.Name="Conversion warning" />
                         <TextBlock Text="{Binding Focused.Name, TargetNullValue='Select a file to view details', FallbackValue='Select a file to view details'}"
-                                   FontSize="18"
-                                   FontWeight="SemiBold"
+                                   Style="{StaticResource SubtitleTextBlockStyle}"
                                    TextWrapping="Wrap" />
                     </DockPanel>
                     <TextBlock Text="Details"
-                               FontWeight="SemiBold"
+                               Style="{StaticResource BodyStrongTextBlockStyle}"
                                Margin="0,0,0,12" />
                     <ItemsControl ItemsSource="{Binding Focused.DetailRows}"
                                   Grid.IsSharedSizeScope="True"
                                   Foreground="{DynamicResource TextFillColorSecondaryBrush}">
                         <ItemsControl.ItemTemplate>
                             <DataTemplate>
-                                <Grid Margin="0,0,0,6">
+                                <Grid Margin="0,0,0,8">
                                     <Grid.ColumnDefinitions>
                                         <ColumnDefinition Width="Auto" SharedSizeGroup="MediaDetailLabels" />
                                         <ColumnDefinition Width="*" />
@@ -515,7 +514,7 @@
                                Margin="0,12,0,0" />
                     <Border BorderBrush="{DynamicResource DividerStrokeColorDefaultBrush}"
                             BorderThickness="0,1,0,0"
-                            Margin="0,20,0,0"
+                            Margin="0,24,0,0"
                             Padding="0,16,0,0">
                             <TextBlock Text="{Binding Focused.ResultDetails}" TextWrapping="Wrap" />
                     </Border>
@@ -581,7 +580,7 @@
                 <DockPanel Margin="0,8,0,8" TextBlock.FontSize="16">
                     <TextBlock Text="{Binding BatchProgress.CurrentJob.Progress.ProgressText}"
                                DockPanel.Dock="Right"
-                               Foreground="{DynamicResource {x:Static SystemColors.AccentColorBrushKey}}"
+                               Foreground="{DynamicResource AccentTextFillColorPrimaryBrush}"
                                Margin="12,0,0,0" />
                     <TextBlock Text="{Binding BatchProgress.CurrentJob.Name}"
                                TextTrimming="CharacterEllipsis"
@@ -628,7 +627,7 @@
                 <DockPanel Margin="0,8,0,8" TextBlock.FontSize="16">
                     <TextBlock Text="{Binding ActiveProgressText}"
                                DockPanel.Dock="Right"
-                               Foreground="{DynamicResource {x:Static SystemColors.AccentColorBrushKey}}"
+                               Foreground="{DynamicResource AccentTextFillColorPrimaryBrush}"
                                Margin="12,0,0,0" />
                     <TextBlock Text="{Binding ActiveProgressTitle}"
                                VerticalAlignment="Center"
@@ -698,7 +697,7 @@
                        Foreground="{DynamicResource TextFillColorSecondaryBrush}"
                        TextAlignment="Center"
                        TextWrapping="Wrap" />
-            <WrapPanel HorizontalAlignment="Center" Margin="0,20,0,0">
+            <WrapPanel HorizontalAlignment="Center" Margin="0,24,0,0">
                 <Button Content="Add files"
                         Tag="&#xE8A5;"
                         ContentTemplate="{StaticResource AddIconButtonContent}"

@@ -317,35 +317,35 @@ public sealed class VisualTests
         var media = await runtime.ProbeAsync(row.Path, default);
         var evidence = new RpuEvidence(AnalysisMethod.FullRpu, EnhancementLayer.Mel, 1000, null, 1, 1);
 
-        async Task AssertColorAsync(string expected)
+        async Task AssertColorAsync(string brushKey)
         {
             await Dispatcher.Yield(DispatcherPriority.ApplicationIdle);
-            Assert.AreEqual((Color)ColorConverter.ConvertFromString(expected), ((SolidColorBrush)text.Foreground).Color);
+            Assert.AreEqual(((SolidColorBrush)list.FindResource(brushKey)).Color, ((SolidColorBrush)text.Foreground).Color, brushKey);
         }
 
-        await AssertColorAsync("#A6B6C3");
+        await AssertColorAsync("TextFillColorSecondaryBrush");
         foreach (var (verdict, color) in new[]
         {
-            (AnalysisVerdict.Mel, "#66D94B"),
-            (AnalysisVerdict.SimpleFel, "#29AEFA"),
-            (AnalysisVerdict.ComplexFel, "#FF625A"),
-            (AnalysisVerdict.AnalysisFailed, "#FF625A"),
-            (AnalysisVerdict.Unknown, "#FFD166"),
-            (AnalysisVerdict.FelUnclassified, "#FFD166"),
-            (AnalysisVerdict.NotApplicable, "#A6B6C3")
+            (AnalysisVerdict.Mel, "SystemFillColorSuccessBrush"),
+            (AnalysisVerdict.SimpleFel, "AccentTextFillColorPrimaryBrush"),
+            (AnalysisVerdict.ComplexFel, "SystemFillColorCriticalBrush"),
+            (AnalysisVerdict.AnalysisFailed, "SystemFillColorCriticalBrush"),
+            (AnalysisVerdict.Unknown, "SystemFillColorCautionBrush"),
+            (AnalysisVerdict.FelUnclassified, "SystemFillColorCautionBrush"),
+            (AnalysisVerdict.NotApplicable, "TextFillColorSecondaryBrush")
         })
         {
             row.Analysis = new MediaAnalysis(media, evidence, verdict, "Test classification");
             await AssertColorAsync(color);
             row.AnalysisError = "";
-            await AssertColorAsync("#FF625A");
+            await AssertColorAsync("SystemFillColorCriticalBrush");
             row.AnalysisError = null;
             await AssertColorAsync(color);
         }
         row.Analysis = null;
-        await AssertColorAsync("#A6B6C3");
+        await AssertColorAsync("TextFillColorSecondaryBrush");
         row.AnalysisError = "Analysis failed";
-        await AssertColorAsync("#FF625A");
+        await AssertColorAsync("SystemFillColorCriticalBrush");
     }
 
     private static async Task VerifyHeaderSortingAsync(MediaViewModel media, ListView list, Window window)

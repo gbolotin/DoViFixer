@@ -9,7 +9,7 @@
                   VerticalAlignment="Center">
                 <TextBlock Text="{Binding Tag, RelativeSource={RelativeSource AncestorType=Button}}"
                            FontFamily="{StaticResource SymbolThemeFontFamily}"
-                           FontSize="16"
+                           FontSize="{StaticResource DefaultIconFontSize}"
                            HorizontalAlignment="Left"
                            VerticalAlignment="Top">
                     <TextBlock.Clip>
