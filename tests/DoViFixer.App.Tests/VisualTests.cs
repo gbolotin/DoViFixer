@@ -214,10 +214,13 @@ public sealed class VisualTests
                     else
                     {
                         var cacheSize = Descendants<TextBlock>(workspace).Single(text => text.Text == shell.Settings.CacheSizeText);
-                        var cacheLocation = Descendants<TextBlock>(workspace).Single(text => text.Text == "Location: " + shell.Settings.CacheDirectory);
                         var cacheCard = (FrameworkElement)((FrameworkElement)cacheSize.Parent).Parent;
                         cacheCard.BringIntoView();
                         await LayoutAsync(window);
+                        var cacheLocation = Descendants<TextBlock>(workspace).Single(text => text.Inlines.FirstInline is System.Windows.Documents.Run { Text: "Location: " });
+                        var cacheLocationLink = cacheLocation.Inlines.OfType<System.Windows.Documents.Hyperlink>().Single();
+                        Assert.AreEqual(shell.Settings.CacheDirectory, ((System.Windows.Documents.Run)cacheLocationLink.Inlines.FirstInline).Text);
+                        Assert.AreSame(shell.Settings.OpenCacheFolderCommand, cacheLocationLink.Command, "The cache location link must open the cache folder.");
                         Assert.IsTrue(cacheSize.IsVisible);
                         AssertInside(cacheSize, (FrameworkElement)window.Content);
                         AssertInside(cacheLocation, (FrameworkElement)window.Content);

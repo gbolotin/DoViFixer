@@ -91,6 +91,7 @@ public sealed class SettingsViewModel : OperationViewModel, INavigationPage
         BrowseTemporaryCommand = new(() => Temporary = dialogs.PickFolder() ?? Temporary);
         BrowseDestinationCommand = new(() => Destination = dialogs.PickFolder() ?? Destination);
         BrowseToolCommand = new(() => ToolPath = dialogs.PickFiles("Executables|*.exe").FirstOrDefault() ?? ToolPath);
+        OpenCacheFolderCommand = new(() => dialogs.OpenFolder(CacheDirectory));
         SaveCommand = new(() => RunAsync(async (token, _) => await SaveAsync(token)), () => IsIdle);
         DiscardChangesCommand = new(DiscardChanges, () => IsIdle && !IsSaving && HasSaveError && lastSavedSettings is not null);
         ClearCacheCommand = new(() => RunAsync(async (token, _) =>
@@ -580,6 +581,10 @@ public sealed class SettingsViewModel : OperationViewModel, INavigationPage
         get;
     }
     public RelayCommand BrowseToolCommand
+    {
+        get;
+    }
+    public RelayCommand OpenCacheFolderCommand
     {
         get;
     }

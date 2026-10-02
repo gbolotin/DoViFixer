@@ -137,11 +137,15 @@
                                                Foreground="{DynamicResource TextFillColorSecondaryBrush}"
                                                ToolTip="Total disk space used by cached analysis results and movie frame previews."
                                                Margin="0,2,0,0" />
-                                    <TextBlock Text="{Binding CacheDirectory, StringFormat=Location: {0}}"
-                                               TextWrapping="Wrap"
+                                    <TextBlock TextWrapping="Wrap"
                                                Style="{StaticResource CaptionTextBlockStyle}"
                                                Foreground="{DynamicResource TextFillColorSecondaryBrush}"
-                                               ToolTip="{Binding CacheDirectory}" />
+                                               ToolTip="{Binding CacheDirectory}">
+                                        <Run Text="Location: " /><Hyperlink Command="{Binding OpenCacheFolderCommand}"
+                                                   AutomationProperties.Name="Open cache folder">
+                                            <Run Text="{Binding CacheDirectory, Mode=OneWay}" />
+                                        </Hyperlink>
+                                    </TextBlock>
                                 </StackPanel>
                             </DockPanel>
                             <Separator />

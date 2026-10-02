@@ -51,6 +51,8 @@ public sealed class ViewModelTests
         await settings.LoadCommand.ExecuteAsync();
         Assert.AreEqual(expected, settings.CacheSizeText);
         Assert.AreEqual(runtime.RootDirectory, settings.CacheDirectory);
+        settings.OpenCacheFolderCommand.Execute();
+        Assert.AreEqual(runtime.RootDirectory, runtime.OpenedFolder);
         await settings.ClearCacheCommand.ExecuteAsync();
         Assert.AreEqual("Cache: 0 B", settings.CacheSizeText);
         runtime.FrameCacheBytes = 1024;
