@@ -21,6 +21,11 @@ jobs:
         with:
           global-json-file: global.json
 
+      # The WPF visual tests size windows up to 1800 px, and Windows clamps windows to the screen.
+      - name: Use a 1920x1080 display
+        shell: pwsh
+        run: Set-DisplayResolution -Width 1920 -Height 1080 -Force
+
       # Always build against the pinned WpfFoundation package, never a local checkout.
       - name: Build
         run: dotnet build DoViFixer.sln -c Release -p:UseLocalWpfFoundation=false
