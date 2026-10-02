@@ -35,8 +35,8 @@ Main projects:
 - Do not build additional service providers inside registration extensions or alongside the application root.
 - WPF does not provide automatic per-job scopes; introduce explicit operation scopes only when scoped dependencies are introduced.
 
-- `Directory.Build.props` turns on `UseLocalWpfFoundation` when `..\WpfFoundation\src\WpfFoundation\WpfFoundation.csproj` exists. DoViFixer.App then references that project instead of the `WpfFoundation` package, so library code can be debugged and edited in the same session.
-- `DoViFixer.sln` lists only DoViFixer's projects so it builds anywhere. `DoViFixer.Local.sln` also lists the WpfFoundation project for local work.
+- `Directory.Build.props` turns on `UseLocalWpfFoundation` only when building `DoViFixer.Local.sln` and `..\WpfFoundation\src\WpfFoundation\WpfFoundation.csproj` exists. DoViFixer.App then references that project instead of the `WpfFoundation` package, so library code can be debugged and edited in the same session. Keep the switch tied to that solution: Visual Studio restore fails with NU1105 when a project references one the open solution does not list.
+- `DoViFixer.sln` lists only DoViFixer's projects and always uses the pinned package, so it builds anywhere. `DoViFixer.Local.sln` also lists the WpfFoundation project for local work.
 - Upgrade the library by changing the `WpfFoundation` version in `Directory.Packages.props`.
 - CI and release builds pass `-p:UseLocalWpfFoundation=false`, so a shipped build always uses the pinned package, never local, possibly uncommitted library code.
 

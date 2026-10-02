@@ -6,9 +6,11 @@
     <TreatWarningsAsErrors>true</TreatWarningsAsErrors>
     <Deterministic>true</Deterministic>
   </PropertyGroup>
-  <!-- Use the WpfFoundation source next to this repository when it is checked out; -p:UseLocalWpfFoundation=false uses the pinned package. -->
+  <!-- DoViFixer.Local.sln builds against the WpfFoundation source next to this repository; every other build uses the pinned package.
+       Only that solution lists the library project, and Visual Studio restore fails (NU1105) on a ProjectReference the open solution does not contain.
+       -p:UseLocalWpfFoundation=true|false overrides. -->
   <PropertyGroup>
     <WpfFoundationProject>$(MSBuildThisFileDirectory)..\WpfFoundation\src\WpfFoundation\WpfFoundation.csproj</WpfFoundationProject>
-    <UseLocalWpfFoundation Condition="'$(UseLocalWpfFoundation)' == '' and Exists('$(WpfFoundationProject)')">true</UseLocalWpfFoundation>
+    <UseLocalWpfFoundation Condition="'$(UseLocalWpfFoundation)' == '' and '$(SolutionFileName)' == 'DoViFixer.Local.sln' and Exists('$(WpfFoundationProject)')">true</UseLocalWpfFoundation>
   </PropertyGroup>
 </Project>
