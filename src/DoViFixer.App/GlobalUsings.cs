@@ -4,3 +4,5 @@ global using CommunityToolkit.Mvvm.Input;
 global using DoViFixer.App.Presentation.Application;
 global using WpfFoundation.Behaviors;
 global using WpfFoundation.Controls;
+global using WpfFoundation.Dialogs;
+global using WpfFoundation.Theming;

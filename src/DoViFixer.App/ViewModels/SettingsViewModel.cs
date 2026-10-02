@@ -71,7 +71,7 @@ public sealed class SettingsViewModel : OperationViewModel, INavigationPage
 
     public DependencyReportViewModel Dependencies { get; }
 
-    public SettingsViewModel(SettingsService settings, DependencySetup setup, DependencyReportViewModel dependencies, IUserDialogs dialogs, IAnalysisCache cache, IThemeService themeService, IMediaPreview mediaPreview)
+    public SettingsViewModel(SettingsService settings, DependencySetup setup, DependencyReportViewModel dependencies, IFileDialogService files, IFileExplorer explorer, IAnalysisCache cache, IThemeService themeService, IMediaPreview mediaPreview)
     {
         this.settings = settings;
         this.themeService = themeService;
@@ -87,10 +87,10 @@ public sealed class SettingsViewModel : OperationViewModel, INavigationPage
             await RefreshCacheSizeAsync(token);
             SetStatus(ViewStatus.SettingsLoaded);
         }), () => IsIdle);
-        BrowseTemporaryCommand = new(() => Temporary = dialogs.PickFolder() ?? Temporary);
-        BrowseDestinationCommand = new(() => Destination = dialogs.PickFolder() ?? Destination);
-        BrowseToolCommand = new(() => ToolPath = dialogs.PickFiles("Executables|*.exe").FirstOrDefault() ?? ToolPath);
-        OpenCacheFolderCommand = new(() => dialogs.OpenFolder(CacheDirectory));
+        BrowseTemporaryCommand = new(() => Temporary = files.PickFolder() ?? Temporary);
+        BrowseDestinationCommand = new(() => Destination = files.PickFolder() ?? Destination);
+        BrowseToolCommand = new(() => ToolPath = files.PickFiles("Executables|*.exe", allowMultiple: false).FirstOrDefault() ?? ToolPath);
+        OpenCacheFolderCommand = new(() => explorer.OpenFolder(CacheDirectory));
         SaveCommand = new(() => RunAsync(async (token, _) => await SaveAsync(token)), () => IsIdle);
         DiscardChangesCommand = new(DiscardChanges, () => IsIdle && !IsSaving && HasSaveError && lastSavedSettings is not null);
         ClearCacheCommand = new(() => RunAsync(async (token, _) =>
@@ -180,7 +180,7 @@ public sealed class SettingsViewModel : OperationViewModel, INavigationPage
             OnPropertyChanged(nameof(IsSystemTheme));
             OnPropertyChanged(nameof(IsLightTheme));
             OnPropertyChanged(nameof(IsDarkTheme));
-            themeService.ApplyTheme(value.Theme);
+            themeService.ApplyTheme(value.Theme.ToThemePreference());
         }
         finally
         {
@@ -212,7 +212,7 @@ public sealed class SettingsViewModel : OperationViewModel, INavigationPage
                 OnPropertyChanged(nameof(IsSystemTheme));
                 OnPropertyChanged(nameof(IsLightTheme));
                 OnPropertyChanged(nameof(IsDarkTheme));
-                themeService.ApplyTheme(value);
+                themeService.ApplyTheme(value.ToThemePreference());
                 TriggerAutoSave();
             }
         }

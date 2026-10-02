@@ -626,14 +626,14 @@ public sealed class ViewModelTests
         Assert.IsTrue(settings.IsSystemTheme);
         Assert.IsFalse(settings.IsLightTheme);
         Assert.IsFalse(settings.IsDarkTheme);
-        Assert.AreEqual(DoViFixer.Application.Settings.AppTheme.System, runtime.AppliedTheme);
+        Assert.AreEqual(ThemePreference.System, runtime.AppliedTheme);
 
         settings.SelectedTheme = DoViFixer.Application.Settings.AppTheme.Dark;
         Assert.AreEqual(DoViFixer.Application.Settings.AppTheme.Dark, settings.SelectedTheme);
         Assert.IsFalse(settings.IsSystemTheme);
         Assert.IsFalse(settings.IsLightTheme);
         Assert.IsTrue(settings.IsDarkTheme);
-        Assert.AreEqual(DoViFixer.Application.Settings.AppTheme.Dark, runtime.AppliedTheme);
+        Assert.AreEqual(ThemePreference.Dark, runtime.AppliedTheme);
 
         await settings.SaveCommand.InvokeAsync();
         Assert.AreEqual(DoViFixer.Application.Settings.AppTheme.Dark, runtime.Settings.Theme);
@@ -641,13 +641,13 @@ public sealed class ViewModelTests
         settings.IsLightTheme = true;
         Assert.AreEqual(DoViFixer.Application.Settings.AppTheme.Light, settings.SelectedTheme);
         Assert.IsTrue(settings.IsLightTheme);
-        Assert.AreEqual(DoViFixer.Application.Settings.AppTheme.Light, runtime.AppliedTheme);
+        Assert.AreEqual(ThemePreference.Light, runtime.AppliedTheme);
 
         await settings.SaveCommand.InvokeAsync();
         var newSettings = runtime.Container.GetRequiredService<SettingsViewModel>();
         await newSettings.LoadCommand.InvokeAsync();
         Assert.AreEqual(DoViFixer.Application.Settings.AppTheme.Light, newSettings.SelectedTheme);
-        Assert.AreEqual(DoViFixer.Application.Settings.AppTheme.Light, runtime.AppliedTheme);
+        Assert.AreEqual(ThemePreference.Light, runtime.AppliedTheme);
     }
 
     [TestMethod]

@@ -234,7 +234,7 @@ public sealed class SettingsPersistenceTests
         Assert.AreEqual("", shell.Settings.Temporary);
         Assert.IsTrue(shell.Settings.IncludeSimple);
         Assert.IsFalse(shell.Settings.ReplaceOriginal);
-        Assert.AreEqual(saved.Theme, runtime.AppliedTheme);
+        Assert.AreEqual(saved.Theme.ToThemePreference(), runtime.AppliedTheme);
         Assert.AreEqual("FEL: Simple only", media.FelSummary);
         Assert.IsFalse(shell.Settings.DiscardChangesCommand.CanExecute(null));
         Assert.IsTrue(shell.CanNavigate);

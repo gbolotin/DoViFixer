@@ -4,7 +4,7 @@ using DoViFixer.Application.Operations;
 using Microsoft.Extensions.Logging;
 
 namespace DoViFixer.App.Presentation.Application;
-public sealed class DependencySetup(DependencyService dependencies, DependencyReportViewModel status, IUserDialogs dialogs, ILogger<DependencySetup> logger) : IDisposable
+public sealed class DependencySetup(DependencyService dependencies, DependencyReportViewModel status, IDialogService dialogs, ILogger<DependencySetup> logger) : IDisposable
 {
     private readonly SemaphoreSlim gate = new(1, 1);
     private int completedEnsures;
@@ -84,12 +84,12 @@ public sealed class DependencySetup(DependencyService dependencies, DependencyRe
         {
             if (reportUnavailable)
             {
-                dialogs.Review("Dependency setup unavailable", details + "\nSet executable paths in Settings, then retry.", "Close");
+                await dialogs.ReviewAsync("Dependency setup unavailable", details + "\nSet executable paths in Settings, then retry.", "Close");
             }
             return false;
         }
 
-        if (!dialogs.Review("Dependency setup", details, "Install displayed tools"))
+        if (!await dialogs.ReviewAsync("Dependency setup", details, "Install displayed tools"))
         {
             return false;
         }
@@ -99,7 +99,7 @@ public sealed class DependencySetup(DependencyService dependencies, DependencyRe
         status.Update(result.Report);
         if (!result.Report.Ready)
         {
-            dialogs.Review("Dependency setup incomplete", string.Join("\n", result.Outcomes.Select(o => $"{o.Id}: {o.Message}")) + "\n" + string.Join("\n", result.Report.Tools.Where(t => t.State != DependencyState.Ready).Select(t => $"{t.Tool}: {t.Diagnostic}")), "Close");
+            await dialogs.ReviewAsync("Dependency setup incomplete", string.Join("\n", result.Outcomes.Select(o => $"{o.Id}: {o.Message}")) + "\n" + string.Join("\n", result.Report.Tools.Where(t => t.State != DependencyState.Ready).Select(t => $"{t.Tool}: {t.Diagnostic}")), "Close");
         }
 
         return result.Report.Ready;

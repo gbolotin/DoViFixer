@@ -25,8 +25,11 @@ public static class AppComposition
         services.AddDoViFixerApplication();
         services.AddDoViFixerInfrastructure(configuration);
         string root = configuration["DoViFixer:DataDirectory"] ?? Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData), "DoViFixer");
-        services.AddSingleton<IThemeService, ThemeService>();
-        services.AddTransient<IUserDialogs>(_ => new UserDialogs(Path.Combine(root, "Logs")));
+        // WPF-bound services act on the running application; they are only used once it exists.
+        services.AddSingleton<IThemeService>(_ => new ThemeService(System.Windows.Application.Current));
+        services.AddSingleton<IDialogService>(_ => new DialogService(System.Windows.Application.Current));
+        services.AddSingleton<IFileDialogService>(_ => new FileDialogService(System.Windows.Application.Current));
+        services.AddSingleton<IFileExplorer>(provider => new FileExplorer(Path.Combine(root, "Logs"), provider.GetRequiredService<IDialogService>()));
         services.AddSingleton<DependencyReportViewModel>();
         services.AddSingleton<DependencySetup>();
         services.AddTransient<StartupDependencyCheckViewModel>();

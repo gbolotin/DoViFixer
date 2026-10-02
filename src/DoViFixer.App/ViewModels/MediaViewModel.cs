@@ -36,7 +36,9 @@ public sealed class MediaViewModel : OperationViewModel, INavigationPage, IIniti
     private readonly ControlledBatchService batch;
     private readonly SettingsService settings;
     private readonly DependencySetup dependencies;
-    private readonly IUserDialogs dialogs;
+    private readonly IDialogService dialogs;
+    private readonly IFileDialogService files;
+    private readonly IFileExplorer explorer;
     private readonly ILogger<MediaViewModel> logger;
     private BatchControl? control;
     private MediaRow? focused;
@@ -51,7 +53,7 @@ public sealed class MediaViewModel : OperationViewModel, INavigationPage, IIniti
     private int availabilityCheckQueued;
 
     private static string Summary(BatchResult result) => string.Join(" · ", result.Items.GroupBy(r => r.Status).Select(g => $"{g.Count()} {g.Key}"));
-    public MediaViewModel(IFileDiscovery discovery, InspectionService inspection, ConversionService conversion, ControlledBatchService batch, SettingsService settings, DependencySetup dependencies, IUserDialogs dialogs, ILogger<MediaViewModel> logger, IMediaPreview mediaPreview, RestoreService restore, ISourceFileMonitor sourceFiles)
+    public MediaViewModel(IFileDiscovery discovery, InspectionService inspection, ConversionService conversion, ControlledBatchService batch, SettingsService settings, DependencySetup dependencies, IDialogService dialogs, IFileDialogService files, IFileExplorer explorer, ILogger<MediaViewModel> logger, IMediaPreview mediaPreview, RestoreService restore, ISourceFileMonitor sourceFiles)
     {
         this.discovery = discovery;
         this.sourceFiles = sourceFiles;
@@ -64,11 +66,13 @@ public sealed class MediaViewModel : OperationViewModel, INavigationPage, IIniti
         this.settings = settings;
         this.dependencies = dependencies;
         this.dialogs = dialogs;
+        this.files = files;
+        this.explorer = explorer;
         this.logger = logger;
         this.mediaPreview = mediaPreview;
 
-        AddFilesCommand = new(() => AddAsync(dialogs.PickFiles()), () => IsIdle);
-        AddFolderCommand = new(() => AddAsync(dialogs.PickFolder() is { } folder ? [folder] : []), () => IsIdle);
+        AddFilesCommand = new(() => AddAsync(files.PickFiles("Matroska media|*.mkv")), () => IsIdle);
+        AddFolderCommand = new(() => AddAsync(files.PickFolder() is { } folder ? [folder] : []), () => IsIdle);
         AddDroppedPathsCommand = new(paths => AddAsync((paths ?? []).Where(discovery.IsSupportedInput)),
             paths => IsIdle && paths is not null && paths.Any(discovery.IsSupportedInput));
         ScanCommand = new(ScanAllAsync, CanScan);
@@ -113,12 +117,12 @@ public sealed class MediaViewModel : OperationViewModel, INavigationPage, IIniti
             NotifyActiveProgress();
         }, () => BatchProgress.IsRunning);
 
-        OpenOutputCommand = new(() => dialogs.OpenFolder(Path.GetDirectoryName(Focused!.Result!.Output!)!), () => Focused?.Result?.Output is not null);
-        OpenRowOutputCommand = new(row => dialogs.OpenFolder(Path.GetDirectoryName(row!.Result!.Output!)!), row => row is not null && row.CanOpenResult);
-        OpenFileLocationCommand = new(() => dialogs.ShowInFolder(Focused!.Path), () => Focused is not null);
+        OpenOutputCommand = new(() => explorer.OpenFolder(Path.GetDirectoryName(Focused!.Result!.Output!)!), () => Focused?.Result?.Output is not null);
+        OpenRowOutputCommand = new(row => explorer.OpenFolder(Path.GetDirectoryName(row!.Result!.Output!)!), row => row is not null && row.CanOpenResult);
+        OpenFileLocationCommand = new(() => explorer.ShowInFolder(Focused!.Path), () => Focused is not null);
         RetryAnalysisCommand = new(row => RunAsync((token, _) => AnalyzeRowsAsync([row!], row!.LastAnalysisMethod!.Value, token)), row => row is not null && IsIdle && Files.Contains(row) && row.CanRetryAnalysis && row.LastAnalysisMethod is not null);
         InspectIncompleteCommand = new(row => RunAsync((token, _) => AnalyzeRowsAsync([row!], AnalysisMethod.FullRpu, token)), row => row is not null && IsIdle && Files.Contains(row) && row.CanInspectIncomplete);
-        OpenLogsCommand = new(dialogs.OpenLogs);
+        OpenLogsCommand = new(explorer.OpenLogs);
         ToggleSelectAllCommand = new(ToggleSelectAll, () => IsIdle && Files.Any(row => row.SelectionEnabled));
         ClearAllCommand = new(ClearAll, () => IsIdle && Files.Count > 0);
         RemoveFileCommand = new(RemoveFile, row => row is not null && IsIdle && Files.Contains(row));
@@ -887,7 +891,7 @@ public sealed class MediaViewModel : OperationViewModel, INavigationPage, IIniti
             throw;
         }
         string review = $"Base file: {plan.Media.Source.Path}\nArchive: {plan.Archive.Path}\nOutput: {plan.Output}\nScratch: {plan.ScratchBytes / 1073741824d:0.0} GiB\nVerified source pairing required.\nOriginal retained.";
-        if (!dialogs.Review("Review restoration", review, "Approve and start"))
+        if (!await dialogs.ReviewAsync("Review restoration", review, "Approve and start"))
         {
             SetStatus(ViewStatus.RestoreNotApproved);
             return;
@@ -955,9 +959,9 @@ public sealed class MediaViewModel : OperationViewModel, INavigationPage, IIniti
             string tempPath = Path.GetFullPath(userSettings.TemporaryDirectory);
             if (!Directory.Exists(tempPath))
             {
-                dialogs.ShowMessage(
-                    $"The configured temporary storage folder does not exist:\n{tempPath}\n\nPlease check your Settings.",
-                    "Temporary storage folder not found");
+                await dialogs.ShowMessageAsync(
+                    "Temporary storage folder not found",
+                    $"The configured temporary storage folder does not exist:\n{tempPath}\n\nPlease check your Settings.");
                 return;
             }
         }
@@ -970,9 +974,9 @@ public sealed class MediaViewModel : OperationViewModel, INavigationPage, IIniti
             }
             catch (Exception ex)
             {
-                dialogs.ShowMessage(
-                    $"The configured output folder cannot be created or accessed:\n{userSettings.OutputDirectory}\n\n{ex.Message}",
-                    "Output folder error");
+                await dialogs.ShowMessageAsync(
+                    "Output folder error",
+                    $"The configured output folder cannot be created or accessed:\n{userSettings.OutputDirectory}\n\n{ex.Message}");
                 return;
             }
         }

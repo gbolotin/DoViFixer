@@ -28,7 +28,7 @@ public partial class App : System.Windows.Application
             var settings = await settingsService.ReadAsync(CancellationToken.None);
             if (services is not null)
             {
-                themeService.ApplyTheme(settings.Theme);
+                themeService.ApplyTheme(settings.Theme.ToThemePreference());
             }
         }
         catch
