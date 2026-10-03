@@ -469,7 +469,8 @@ public sealed class WorkflowTests
         Assert.AreEqual(0, runtime.Renamed);
         Assert.AreEqual(0, runtime.Restored);
         Assert.AreEqual(0, runtime.Deleted);
-        StringAssert.Contains(result.Message, "Original retained at " + Plan("good.mkv").Analysis.Media.Source.Path + ".");
+        StringAssert.Contains(result.Message, "Original retained.");
+        Assert.AreEqual(Plan("good.mkv").Analysis.Media.Source.Path, result.Original);
     }
 
     [TestMethod]

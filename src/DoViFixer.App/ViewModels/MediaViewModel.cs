@@ -119,6 +119,7 @@ public sealed class MediaViewModel : OperationViewModel, INavigationPage, IPageA
         OpenOutputCommand = new(() => explorer.ShowInFolder(Focused!.Result!.Output!), () => Focused?.CanOpenResult == true);
         OpenRowOutputCommand = new(row => explorer.ShowInFolder(row!.Result!.Output!), row => row is not null && row.CanOpenResult);
         OpenFileLocationCommand = new(() => explorer.ShowInFolder(Focused!.Path), () => Focused is not null);
+        ShowResultFileCommand = new(path => explorer.ShowInFolder(path!), path => !string.IsNullOrEmpty(path));
         RetryAnalysisCommand = new(row => RunAsync((token, _) => AnalyzeRowsAsync([row!], row!.LastAnalysisMethod!.Value, token)), row => row is not null && IsIdle && Files.Contains(row) && row.CanRetryAnalysis && row.LastAnalysisMethod is not null);
         InspectIncompleteCommand = new(row => RunAsync((token, _) => AnalyzeRowsAsync([row!], AnalysisMethod.FullRpu, token)), row => row is not null && IsIdle && Files.Contains(row) && row.CanInspectIncomplete);
         ToggleSelectAllCommand = new(ToggleSelectAll, () => IsIdle && Files.Any(row => row.SelectionEnabled));
@@ -449,6 +450,7 @@ public sealed class MediaViewModel : OperationViewModel, INavigationPage, IPageA
     public RelayCommand<MediaRow> CancelFileCommand { get; }
     public RelayCommand OpenOutputCommand { get; }
     public RelayCommand OpenFileLocationCommand { get; }
+    public RelayCommand<string> ShowResultFileCommand { get; }
     public AsyncRelayCommand<MediaRow> RetryAnalysisCommand { get; }
     public AsyncRelayCommand<MediaRow> InspectIncompleteCommand { get; }
     public RelayCommand<MediaRow> OpenRowOutputCommand { get; }

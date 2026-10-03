@@ -528,6 +528,13 @@ public sealed class ViewModelTests
         model.Focused = model.Files[0];
         model.OpenOutputCommand.Invoke();
         Assert.AreEqual(output, runtime.ShownFile);
+        var resultFiles = model.Files[0].ResultFiles;
+        Assert.AreEqual(output, resultFiles.Single(file => file.Label == "Output").Path);
+        string original = resultFiles.Single(file => file.Label == "Original").Path;
+        Assert.AreEqual(model.Files[0].Path, original, "The default conversion keeps the original in place.");
+        model.ShowResultFileCommand.Invoke(original);
+        Assert.AreEqual(original, runtime.ShownFile);
+        Assert.IsFalse(model.ShowResultFileCommand.CanExecute(null));
         Assert.AreEqual("Converted", model.Files[0].Status);
         await model.ScanCommand.InvokeAsync();
         Assert.AreEqual("", model.Files[0].Status);

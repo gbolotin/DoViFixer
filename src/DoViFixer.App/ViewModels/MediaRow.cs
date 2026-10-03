@@ -229,7 +229,8 @@ public sealed class MediaRow(string path) : ObservableObject
         set
         {
             SetProperty(ref result, value);
-            OnPropertyChanged(nameof(ResultDetails));
+            OnPropertyChanged(nameof(HasResult));
+            OnPropertyChanged(nameof(ResultFiles));
             OnPropertyChanged(nameof(CanOpenResult));
             OnPropertyChanged(nameof(DetailRows));
             OnPropertyChanged(nameof(StatusToolTip));
@@ -313,7 +314,14 @@ public sealed class MediaRow(string path) : ObservableObject
         HasIncompleteScan ? "Suggested action: Inspect. Standard inspection examines the full RPU metadata stream instead of short samples. It may take longer; missing metadata may still prevent classification." : null,
         Notice
     }.Where(text => !string.IsNullOrWhiteSpace(text)));
-    public string ResultDetails => Result is null ? "" : $"Last operation result\n{Result.Status}\n{Result.Output}\n{Result.Message}";
+    public bool HasResult => Result is not null;
+    /// <summary>The files the last operation produced or kept, each shown as its own link.</summary>
+    public IReadOnlyList<ResultFile> ResultFiles => Result is null ? [] : new[]
+    {
+        Result.Output is { } output ? new ResultFile("Output", output) : null,
+        Result.Original is { } original ? new ResultFile("Original", original) : null,
+        Result.Archive is { } archive ? new ResultFile("Archive", archive) : null
+    }.OfType<ResultFile>().ToArray();
 
     #endregion
 
@@ -408,3 +416,5 @@ public sealed class MediaRow(string path) : ObservableObject
         _ => "Metadata only"
     };
 }
+
+public sealed record ResultFile(string Label, string Path);

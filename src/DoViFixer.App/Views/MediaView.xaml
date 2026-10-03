@@ -536,8 +536,53 @@
                     <Border BorderBrush="{DynamicResource DividerStrokeColorDefaultBrush}"
                             BorderThickness="0,1,0,0"
                             Margin="0,24,0,0"
-                            Padding="0,16,0,0">
-                            <TextBlock Text="{Binding Focused.ResultDetails}" TextWrapping="Wrap" />
+                            Padding="0,16,0,0"
+                            Visibility="{Binding Focused.HasResult, Converter={StaticResource WfBooleanToVisibilityConverter}, FallbackValue=Collapsed}">
+                        <StackPanel Grid.IsSharedSizeScope="True">
+                            <TextBlock Text="Last operation result"
+                                       Style="{StaticResource BodyStrongTextBlockStyle}"
+                                       Margin="0,0,0,12" />
+                            <Grid Margin="0,0,0,8">
+                                <Grid.ColumnDefinitions>
+                                    <ColumnDefinition Width="Auto" SharedSizeGroup="MediaResultLabels" />
+                                    <ColumnDefinition Width="*" />
+                                </Grid.ColumnDefinitions>
+                                <TextBlock Text="Status"
+                                           Foreground="{DynamicResource TextFillColorSecondaryBrush}"
+                                           Margin="0,0,12,0" />
+                                <TextBlock Grid.Column="1"
+                                           Text="{Binding Focused.Result.Status}"
+                                           Foreground="{DynamicResource TextFillColorSecondaryBrush}"
+                                           TextAlignment="Right" />
+                            </Grid>
+                            <ItemsControl ItemsSource="{Binding Focused.ResultFiles}"
+                                          Foreground="{DynamicResource TextFillColorSecondaryBrush}">
+                                <ItemsControl.ItemTemplate>
+                                    <DataTemplate DataType="{x:Type viewModels:ResultFile}">
+                                        <Grid Margin="0,0,0,8">
+                                            <Grid.ColumnDefinitions>
+                                                <ColumnDefinition Width="Auto" SharedSizeGroup="MediaResultLabels" />
+                                                <ColumnDefinition Width="*" />
+                                            </Grid.ColumnDefinitions>
+                                            <TextBlock Text="{Binding Label}" Margin="0,0,12,0" />
+                                            <TextBlock Grid.Column="1"
+                                                       TextAlignment="Right"
+                                                       TextTrimming="CharacterEllipsis"
+                                                       ToolTip="{Binding Path}">
+                                                <Hyperlink Command="{Binding DataContext.ShowResultFileCommand, RelativeSource={RelativeSource AncestorType=ItemsControl}}"
+                                                           CommandParameter="{Binding Path}"
+                                                           AutomationProperties.Name="{Binding Label, StringFormat='Show {0} file'}">
+                                                    <Run Text="{Binding Path, Mode=OneWay}" />
+                                                </Hyperlink>
+                                            </TextBlock>
+                                        </Grid>
+                                    </DataTemplate>
+                                </ItemsControl.ItemTemplate>
+                            </ItemsControl>
+                            <TextBlock Text="{Binding Focused.Result.Message}"
+                                       TextWrapping="Wrap"
+                                       Foreground="{DynamicResource TextFillColorSecondaryBrush}" />
+                        </StackPanel>
                     </Border>
                 </StackPanel>
             </ScrollViewer>
