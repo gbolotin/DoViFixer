@@ -30,7 +30,7 @@ dotnet build DoViFixer.sln -c Release -p:UseLocalWpfFoundation=false
 
 Every DoViFixer assembly gets one [SemVer](https://semver.org) version from `VersionPrefix` in `Directory.Build.props`. Local builds are `0.1.0-dev`, CI builds are `0.1.0-ci.<run number>`, and pushing a `vX.Y.Z` tag makes CI build `X.Y.Z`. The SDK appends the commit hash, so the version also says which commit a build came from. `DoViFixer.Console --version`, the help header, the Settings page, and every log entry (`ApplicationVersion`) show it.
 
-To release, bump `VersionPrefix` if needed, merge, and tag that commit, for example `git tag v0.1.0 && git push origin v0.1.0`. After the release, raise `VersionPrefix` to the next version so later builds sort after it.
+To release, bump `VersionPrefix` if needed, merge, and tag that commit, for example `git tag v0.1.0 && git push origin v0.1.0`. CI then creates a GitHub release named after the tag, with `DoViFixer.App-X.Y.Z.zip` and `DoViFixer.Console-X.Y.Z.zip` attached (framework-dependent; they need the .NET 10 Desktop Runtime). A tag with a pre-release suffix, such as `v0.2.0-beta.1`, is marked as a pre-release. Every other CI run attaches the same zips to the run as an `apps` artifact. After the release, raise `VersionPrefix` to the next version so later builds sort after it.
 
 ## WPF desktop application
 

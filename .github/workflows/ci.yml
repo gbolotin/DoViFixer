@@ -37,8 +37,11 @@ jobs:
             if ($version -notmatch '^\d+\.\d+\.\d+(-[0-9A-Za-z.]+)?$') { throw "Tag $env:GITHUB_REF_NAME is not vMAJOR.MINOR.PATCH[-prerelease]." }
             "property=-p:Version=$version" >> $env:GITHUB_OUTPUT
           } else {
+            $version = dotnet msbuild src/DoViFixer.Domain/DoViFixer.Domain.csproj -getProperty:Version -p:VersionSuffix=ci.$env:GITHUB_RUN_NUMBER
+            if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
             "property=-p:VersionSuffix=ci.$env:GITHUB_RUN_NUMBER" >> $env:GITHUB_OUTPUT
           }
+          "version=$version" >> $env:GITHUB_OUTPUT
 
       # Always build against the pinned WpfFoundation package, never a local checkout.
       - name: Build
@@ -46,3 +49,42 @@ jobs:
 
       - name: Test
         run: dotnet test DoViFixer.sln -c Release --no-build -p:UseLocalWpfFoundation=false --filter "TestCategory!=NativeIntegration"
+
+      # Framework-dependent: both apps need the .NET 10 Desktop Runtime.
+      - name: Publish apps
+        shell: pwsh
+        run: |
+          $version = '${{ steps.version.outputs.version }}'
+          foreach ($app in 'DoViFixer.App', 'DoViFixer.Console') {
+            dotnet publish src/$app/$app.csproj -c Release --no-self-contained -p:UseLocalWpfFoundation=false ${{ steps.version.outputs.property }} -o out/$app
+            if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+            Compress-Archive -Path out/$app/* -DestinationPath "out/$app-$version.zip"
+          }
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: apps
+          path: out/*.zip
+
+  release:
+    if: startsWith(github.ref, 'refs/tags/v')
+    needs: build
+    runs-on: windows-latest
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/download-artifact@v4
+        with:
+          name: apps
+          path: out
+
+      - name: Create GitHub release with the apps
+        shell: pwsh
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          $options = @('--repo', $env:GITHUB_REPOSITORY, '--title', $env:GITHUB_REF_NAME, '--generate-notes')
+          if ($env:GITHUB_REF_NAME.Contains('-')) {
+            $options += '--prerelease'
+          }
+          gh release create $env:GITHUB_REF_NAME (Get-ChildItem out/*.zip).FullName @options
