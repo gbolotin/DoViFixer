@@ -93,6 +93,8 @@ These rules apply throughout the repository. Application-specific project names,
 
 - Follow Microsoft's Windows app design guidance (https://learn.microsoft.com/windows/apps/design/) for layout, typography, color, icons, controls, and wording.
 - For WPF specifics such as brush, text style, and corner radius keys, spacing values, and icon glyphs, the Design Guidance section of Microsoft's WPF Gallery app and the WPF Fluent theme take precedence.
+- CI runs the XAML design check from WpfFoundation's `tools/XamlDesignCheck`. It fails on literal colors and `SystemColors`, margins and padding off the spacing steps (0, 4, 8, 12, 16, 24, 32, 48), and literal font sizes, font weights, font families, and corner radii. Use the Fluent brushes, type ramp styles, and `ControlCornerRadius` or `OverlayCornerRadius` instead.
+- Run the check before opening a pull request that changes XAML. When a literal value is justified, add it to `xaml-design-allowlist.txt` with the reason; remove the entry when the value goes away.
 
 ## Testing
 

@@ -1,0 +1,23 @@
+# Exceptions to the XAML design check (WpfFoundation tools/XamlDesignCheck), one per line:
+#   path | rule | attribute as written | reason
+# Rules: color, spacing, typography, corner-radius. A path ending in / covers a folder, and * matches any rule or attribute.
+# Every entry needs a reason. An entry that no longer matches anything fails the check, so remove it when you fix the XAML.
+# Entries marked "Open audit finding" are listed in the design guidance audit and wait on a decision.
+
+mockup/ | * | * | Design mockups with their own palettes; not shipped.
+
+src/DoViFixer.App/Resources/Common.xaml | corner-radius | CornerRadius="6" | The add-icon badge is a 12 px circle.
+src/DoViFixer.App/Resources/Common.xaml | typography | FontSize="8" | Plus glyph inside the 12 px add-icon badge.
+src/DoViFixer.App/Resources/Common.xaml | typography | FontWeight="SemiBold" | Plus glyph inside the add-icon badge is drawn bolder to stay legible at 8 px.
+src/DoViFixer.App/Views/MediaView.xaml | spacing | Margin="4,6,12,14" | Open audit finding: toolbar separator, 4,4,12,12 suggested.
+src/DoViFixer.App/Views/MediaView.xaml | spacing | Margin="1,0,0,0" | Same 1 px header nudge as WpfFoundation's sortable column header template.
+src/DoViFixer.App/Views/MediaView.xaml | typography | FontWeight="SemiBold" | Warning glyphs next to text are drawn SemiBold.
+src/DoViFixer.App/Views/MediaView.xaml | spacing | Padding="7,6" | Open audit finding: row action buttons, Fluent ButtonPadding or a shared compact style.
+src/DoViFixer.App/Views/MediaView.xaml | color | Background="Black" | Video frame letterbox.
+src/DoViFixer.App/Views/MediaView.xaml | color | Foreground="White" | Text on the black video letterbox.
+src/DoViFixer.App/Views/MediaView.xaml | spacing | Padding="10,8" | Open audit finding: details buttons, drop for the default padding.
+src/DoViFixer.App/Views/MediaView.xaml | typography | TextBlock.FontSize="16" | Open audit finding: progress header, Body 14 or Subtitle 20.
+src/DoViFixer.App/Views/SettingsView.xaml | typography | FontWeight="SemiBold" | Save error heading and warning glyphs; BodyStrongTextBlockStyle would fit the heading.
+src/DoViFixer.App/Views/SettingsView.xaml | spacing | Margin="0,2,0,0" | Open audit finding: 0,4,0,0 suggested.
+src/DoViFixer.App/Views/SettingsView.xaml | typography | FontSize="12" | Settings state icon; CaptionTextBlockFontSize has the same value.
+src/DoViFixer.App/Views/Shell.xaml | typography | FontWeight="SemiBold" | Warning glyph in the status bar is drawn SemiBold.
