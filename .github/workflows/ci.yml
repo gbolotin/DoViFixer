@@ -22,6 +22,11 @@ jobs:
         with:
           global-json-file: global.json
 
+      # Shared with WpfFoundation; pinned to a commit so a change there can't break this build unannounced.
+      # Literal colors, off-step spacing, and literal fonts or corner radii fail here; exceptions are in xaml-design-allowlist.txt.
+      - name: XAML design check
+        uses: gbolotin/WpfFoundation/.github/actions/xaml-design-check@222e37c4082b438e717820cec5c0545504931c79
+
       # The WPF visual tests size windows up to 1800 px, and Windows clamps windows to the screen.
       - name: Use a 1920x1080 display
         shell: pwsh
