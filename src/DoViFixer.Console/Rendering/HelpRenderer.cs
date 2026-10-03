@@ -7,7 +7,7 @@ internal sealed class HelpRenderer(ConsoleRenderer renderer)
     private readonly int width = System.Console.IsOutputRedirected ? 100 : Math.Clamp(System.Console.WindowWidth - 1, 20, 120);
     public void Write()
     {
-        renderer.Write($"DoViFixer {ApplicationVersion.Of(typeof(HelpRenderer).Assembly)} - native Windows Dolby Vision tools", ConsoleColor.Cyan);
+        renderer.Write($"{ApplicationTitle.Name} {ApplicationVersion.Of(typeof(HelpRenderer).Assembly)} - native Windows Dolby Vision tools", ConsoleColor.Cyan);
         Paragraph("Usage: DoViFixer.Console <command> [arguments] [options]");
         Paragraph("Help: -help, --help, -h, or help. Version: --version or version. [brackets] mean optional; <angles> mean required.");
         Paragraph("Groups: File Scanning & Analysis | File Conversion | Backup & Restore | Cleanup | Dependencies | Settings | Updates");
@@ -47,8 +47,8 @@ internal sealed class HelpRenderer(ConsoleRenderer renderer)
         Command("settings add-to-path", "Add this app folder to your user PATH. No administrator rights needed. Reopen your terminal afterwards and keep the app in that folder.");
         Examples(("settings show", "Show current configuration"), ("settings tool FFmpeg \"C:\\Tools\\ffmpeg.exe\"", "Set a tool path"), ("settings temp \"D:\\DoViScratch\"", "Set the working directory for temporary files"));
         Group("Updates");
-        Command("update-check [--json]", "Compare this version with the latest DoViFixer release on GitHub. Nothing is downloaded or installed.");
-        Examples(("update-check", "Check for a newer DoViFixer release"));
+        Command("update-check [--json]", $"Compare this version with the latest {ApplicationTitle.Name} release on GitHub. Nothing is downloaded or installed.");
+        Examples(("update-check", $"Check for a newer {ApplicationTitle.Name} release"));
         Group("Shared Options & Exit Codes");
         Options(("-t, --temp directory", "Temporary workspace for scan, inspect, convert, backup, and restore."), ("--plan", "Analyze and display exact planned outputs for convert, backup, or restore without executing the plan."), ("-y, --yes", "Approve a convert, backup, or restore plan. Does not approve software installation."), ("--install-dependencies", "Separate installation consent for scan, inspect, convert, backup, and restore. Cannot combine with --json."), ("--", "End option parsing before filenames that begin with a dash."));
         Paragraph("Quote paths containing spaces. Color is disabled for redirected output, NO_COLOR, or TERM=dumb.");

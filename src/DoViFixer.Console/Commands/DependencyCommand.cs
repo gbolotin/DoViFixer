@@ -81,7 +81,7 @@ public sealed class DependencyCommand(DependencyService dependencies, ConsoleRen
             foreach (var replacement in (plan.Replacements ?? []).Where(t => item.Tools.Contains(t.Tool)))
             {
                 renderer.Write($"{replacement.Tool}: {replacement.State} at {replacement.Path ?? "unknown path"}. {replacement.Diagnostic}");
-                renderer.Write($"After validation, DoViFixer will save and use the replacement CLI from {item.Destination}. The existing executable will not be removed.");
+                renderer.Write($"After validation, {ApplicationTitle.Name} will save and use the replacement CLI from {item.Destination}. The existing executable will not be removed.");
             }
 
             interaction.RecordPlan(plan.Id, "InstallDependency", item);

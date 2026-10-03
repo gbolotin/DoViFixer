@@ -1,6 +1,7 @@
 using DoViFixer.App.Dialogs;
 using DoViFixer.Application.Dependencies;
 using DoViFixer.Application.Operations;
+using DoViFixer.Application.Updates;
 using Microsoft.Extensions.Logging;
 
 namespace DoViFixer.App.Presentation.Application;
@@ -76,7 +77,7 @@ public sealed class DependencySetup(DependencyService dependencies, DependencyRe
         token.ThrowIfCancellationRequested();
         string installed = string.Join("\n", report.Tools.Where(t => t.State == DependencyState.Ready).Select(t => $"{t.Tool}: Installed and ready — {t.Version}\n{t.Path}"));
         string missing = string.Join("\n", report.Tools.Where(t => t.State != DependencyState.Ready).Select(t => $"{t.Tool}: {t.State}\n{t.Path}\n{t.Diagnostic}"));
-        string details = "DoViFixer uses these command-line tools to inspect and process media. Install the missing or unusable tools to enable those operations. You can cancel now and install them later from Settings.\n\n"
+        string details = $"{ApplicationTitle.Name} uses these command-line tools to inspect and process media. Install the missing or unusable tools to enable those operations. You can cancel now and install them later from Settings.\n\n"
             + NativeToolDescriptions.Summary +"\n\nInstalled and ready\n" + (installed.Length == 0 ? "None" : installed) + "\n\nMissing or needs attention\n" + missing;
         details += "\n\nInstallation plan\n" + string.Join("\n\n", plan.Items.Select(i => $"{i.Id} {i.Version}\nTools: {string.Join(", ", i.Tools)}\nSource: {i.Source}\nDestination: {i.Destination}\nScope: {i.Scope}; elevation: {i.RequiresElevation}\nProvider: {i.Provider}\nSHA-256: {i.Sha256 ?? "Not supplied"}"));
         details += "\n" + string.Join("\n", plan.Unavailable);

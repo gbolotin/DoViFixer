@@ -3,8 +3,9 @@
         xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
         xmlns:viewModels="clr-namespace:DoViFixer.App.ViewModels"
         xmlns:p="clr-namespace:DoViFixer.App.Presentation.Application"
+        xmlns:updates="clr-namespace:DoViFixer.Application.Updates;assembly=DoViFixer.Application"
         xmlns:navigation="clr-namespace:WpfFoundation.Navigation;assembly=WpfFoundation"
-        Title="DoViFixer"
+        Title="{x:Static updates:ApplicationTitle.Name}"
         MinWidth="800"
         MinHeight="600"
         WindowStartupLocation="CenterScreen">
