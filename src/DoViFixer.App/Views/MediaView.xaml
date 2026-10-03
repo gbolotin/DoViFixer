@@ -523,12 +523,6 @@
                                 Tag="&#xE8B7;"
                                 ContentTemplate="{StaticResource WfIconContentTemplate}"
                                 Command="{Binding OpenOutputCommand}"
-                                Margin="0,0,8,8"
-                                Padding="10,8" />
-                        <Button Content="View logs"
-                                Tag="&#xE9F9;"
-                                ContentTemplate="{StaticResource WfIconContentTemplate}"
-                                Command="{Binding OpenLogsCommand}"
                                 Margin="0,0,0,8"
                                 Padding="10,8" />
                     </WrapPanel>
