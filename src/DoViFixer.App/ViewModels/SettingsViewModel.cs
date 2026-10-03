@@ -3,12 +3,14 @@ using DoViFixer.App.Presentation.Application;
 using DoViFixer.Application.Dependencies;
 using DoViFixer.Application.Settings;
 using DoViFixer.Application.Abstractions;
+using DoViFixer.Application.Updates;
 
 namespace DoViFixer.App.ViewModels;
 public sealed class SettingsViewModel : OperationViewModel, INavigationPage, IPageActivation
 {
     public string NavigationName => "Settings";
     public string? NavigationIcon => "\uE713";
+    public string Version { get; } = ApplicationVersion.Of(typeof(SettingsViewModel).Assembly);
 
     private readonly SettingsService settings;
     private readonly IThemeService themeService;

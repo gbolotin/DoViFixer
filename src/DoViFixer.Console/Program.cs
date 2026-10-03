@@ -1,4 +1,5 @@
 using DoViFixer.Application.Operations;
+using DoViFixer.Application.Updates;
 using DoViFixer.Console.Commands;
 using DoViFixer.Console.Composition;
 using DoViFixer.Console.Rendering;
@@ -27,6 +28,12 @@ public static class Program
         {
             using var renderer = new ConsoleRenderer();
             new HelpRenderer(renderer).Write();
+            return 0;
+        }
+
+        if (command.Command == "version")
+        {
+            await System.Console.Out.WriteLineAsync(ApplicationVersion.Of(typeof(Program).Assembly));
             return 0;
         }
 

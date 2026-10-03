@@ -1,3 +1,5 @@
+using DoViFixer.Application.Updates;
+
 namespace DoViFixer.Console.Rendering;
 /// <summary>Command reference rendered without host startup or dependency discovery.</summary>
 internal sealed class HelpRenderer(ConsoleRenderer renderer)
@@ -5,9 +7,9 @@ internal sealed class HelpRenderer(ConsoleRenderer renderer)
     private readonly int width = System.Console.IsOutputRedirected ? 100 : Math.Clamp(System.Console.WindowWidth - 1, 20, 120);
     public void Write()
     {
-        renderer.Write("DoViFixer 0.1.0 - native Windows Dolby Vision tools", ConsoleColor.Cyan);
+        renderer.Write($"DoViFixer {ApplicationVersion.Of(typeof(HelpRenderer).Assembly)} - native Windows Dolby Vision tools", ConsoleColor.Cyan);
         Paragraph("Usage: DoViFixer.Console <command> [arguments] [options]");
-        Paragraph("Help: -help, --help, -h, or help. [brackets] mean optional; <angles> mean required.");
+        Paragraph("Help: -help, --help, -h, or help. Version: --version or version. [brackets] mean optional; <angles> mean required.");
         Paragraph("Groups: File Scanning & Analysis | File Conversion | Backup & Restore | Cleanup | Dependencies | Settings | Updates");
         Group("File Scanning & Analysis");
         Command("scan [file-or-directory] [-r [depth]] [--inspect-simple] [--candidates-only] [--json]", "Find media files, identify Dolby Vision profiles, and classify conversion candidates. With no path, scan the current directory. Subfolders are included only when recursion is requested.");
