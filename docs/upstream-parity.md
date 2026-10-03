@@ -19,7 +19,7 @@ Behavioral baseline: cryptochrome/dovi_convert **8.2.0**, local commit `7b682ebb
 | restore | Validates manifest/payload, checks exact BL pairing, reconstructs EL, remuxes and verifies | Upstream `el.hevc`-only TAR is accepted with source pairing reported as unverified. The adjacent archive is discovered automatically; `--source` overrides it. Container byte identity is not expected. |
 | cleanup | Exact `.dovi` and `.bak.dovi_convert` selection; preview by default; revalidation before handle-bound deletion | Permanent deletion requires `--delete-backups` plus exact interactive approval or `--yes`. Does not delete original `.mkv` files or arbitrary temporary files. |
 | Settings | Shared JSON settings, cross-process writer lock, atomic replacement; immediate validated tool-path refresh | `--temp` and `--output` do not persist. No database or background queue. |
-| update-check | Explicit upstream release metadata retrieval | No own release URL exists, so output names upstream distinctly. No self-update/download or background update check. |
+| update-check | Explicit release metadata retrieval | Checks DoViFixer's own GitHub releases against the running version, not upstream's. No self-update/download or background update check. |
 
 ## Dependency sources
 
