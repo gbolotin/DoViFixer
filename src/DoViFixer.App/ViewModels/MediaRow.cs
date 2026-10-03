@@ -28,6 +28,7 @@ public sealed class MediaRow(string path) : ObservableObject
     #region Public fields
 
     public const string FileLocationLabel = "File location";
+    public const string ConvertedFileLabel = "Converted file";
     public const string MissingStatus = "File not found";
     public const string MissingNote = "File not found. It was deleted, moved or renamed outside DoViFixer. Restore it to this location, or remove it from the list.";
     public string Path { get; } = path;
@@ -90,6 +91,7 @@ public sealed class MediaRow(string path) : ObservableObject
             if (SetProperty(ref state, value))
             {
                 OnPropertyChanged(nameof(CanOpenResult));
+                OnPropertyChanged(nameof(DetailRows));
                 OnPropertyChanged(nameof(CanRestore));
                 OnPropertyChanged(nameof(Warning));
                 OnPropertyChanged(nameof(HasWarning));
@@ -229,6 +231,7 @@ public sealed class MediaRow(string path) : ObservableObject
             SetProperty(ref result, value);
             OnPropertyChanged(nameof(ResultDetails));
             OnPropertyChanged(nameof(CanOpenResult));
+            OnPropertyChanged(nameof(DetailRows));
             OnPropertyChanged(nameof(StatusToolTip));
         }
     }
@@ -270,9 +273,10 @@ public sealed class MediaRow(string path) : ObservableObject
     {
         get
         {
+            KeyValuePair<string, string>[] convertedFile = CanOpenResult ? [new(ConvertedFileLabel, Result!.Output!)] : [];
             if (Analysis is not { } a)
             {
-                return [new(FileLocationLabel, Path)];
+                return [new(FileLocationLabel, Path), .. convertedFile];
             }
 
             string length = "Unknown";
@@ -288,6 +292,7 @@ public sealed class MediaRow(string path) : ObservableObject
                 new("Size", a.Media.Source.Length >= 1073741824
                     ? $"{a.Media.Source.Length / 1073741824d:0.##} GiB" : $"{a.Media.Source.Length / 1048576d:0.##} MiB"),
                 new(FileLocationLabel, Path),
+                .. convertedFile,
                 new("Date modified", a.Media.Source.LastWriteUtc.ToLocalTime().ToString("g")),
                 new("Length", length),
                 new("Profile / Type", Classification),

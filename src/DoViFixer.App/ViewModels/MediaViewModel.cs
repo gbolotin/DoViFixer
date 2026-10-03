@@ -116,8 +116,8 @@ public sealed class MediaViewModel : OperationViewModel, INavigationPage, IPageA
             NotifyActiveProgress();
         }, () => BatchProgress.IsRunning);
 
-        OpenOutputCommand = new(() => explorer.OpenFolder(Path.GetDirectoryName(Focused!.Result!.Output!)!), () => Focused?.Result?.Output is not null);
-        OpenRowOutputCommand = new(row => explorer.OpenFolder(Path.GetDirectoryName(row!.Result!.Output!)!), row => row is not null && row.CanOpenResult);
+        OpenOutputCommand = new(() => explorer.ShowInFolder(Focused!.Result!.Output!), () => Focused?.CanOpenResult == true);
+        OpenRowOutputCommand = new(row => explorer.ShowInFolder(row!.Result!.Output!), row => row is not null && row.CanOpenResult);
         OpenFileLocationCommand = new(() => explorer.ShowInFolder(Focused!.Path), () => Focused is not null);
         RetryAnalysisCommand = new(row => RunAsync((token, _) => AnalyzeRowsAsync([row!], row!.LastAnalysisMethod!.Value, token)), row => row is not null && IsIdle && Files.Contains(row) && row.CanRetryAnalysis && row.LastAnalysisMethod is not null);
         InspectIncompleteCommand = new(row => RunAsync((token, _) => AnalyzeRowsAsync([row!], AnalysisMethod.FullRpu, token)), row => row is not null && IsIdle && Files.Contains(row) && row.CanInspectIncomplete);
@@ -629,7 +629,7 @@ public sealed class MediaViewModel : OperationViewModel, INavigationPage, IPageA
             return;
         }
 
-        if (e.PropertyName == nameof(MediaRow.Result))
+        if (e.PropertyName == nameof(MediaRow.CanOpenResult))
         {
             OpenOutputCommand.NotifyCanExecuteChanged();
         }

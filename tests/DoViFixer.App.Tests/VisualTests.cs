@@ -768,13 +768,15 @@ public sealed class VisualTests
         foreach (var (caption, command) in new (string, object)[]
         {
             ("Cancel", media.CancelFileCommand), ("Retry", media.RetryAnalysisCommand),
-            ("Inspect", media.InspectIncompleteCommand), ("Open folder", media.OpenRowOutputCommand), ("Skip", media.SkipCommand)
+            ("Inspect", media.InspectIncompleteCommand), ("Skip", media.SkipCommand)
         })
         {
             var button = Button(container, caption);
             Assert.AreSame(command, button.Command, caption + " must resolve through the actual page template.");
             Assert.AreSame(row, button.CommandParameter);
         }
+        Assert.AreSame(media.OpenRowOutputCommand, ConvertedFileLink(container).Command, "The converted file link must resolve through the actual page template.");
+        Assert.AreSame(row, ConvertedFileLink(container).CommandParameter);
 
         // A failed analysis must be retryable from the row even when another row is focused.
         await runtime.ClearAsync(default);
@@ -859,10 +861,12 @@ public sealed class VisualTests
         await media.ConvertDv81Command.InvokeAsync();
         await LayoutAsync(window);
         AssertStableActionSlots(list, slots, "converted");
-        Invoke(Button(container, "Open folder"));
+        var convertedFile = ConvertedFileLink(container);
+        Assert.AreEqual(Visibility.Visible, ((TextBlock)convertedFile.Parent).Visibility);
+        convertedFile.Command.Invoke(convertedFile.CommandParameter);
         await LayoutAsync(window);
-        AssertStableActionSlots(list, slots, "output folder opened");
-        Assert.AreEqual(@"C:\Media", runtime.OpenedFolder);
+        AssertStableActionSlots(list, slots, "converted file shown");
+        Assert.AreEqual(row.Result!.Output, runtime.ShownFile);
 
         var removeMissing = Button(window, "Remove missing");
         Assert.AreEqual(Visibility.Collapsed, removeMissing.Visibility);
@@ -969,11 +973,11 @@ public sealed class VisualTests
     /// </summary>
     private static void AssertStableActionSlots(ListView list, Dictionary<string, Rect> slots, string checkpoint)
     {
-        string[] primaryActions = ["Cancel", "Skip", "Retry", "Inspect", "Open folder"];
+        string[] primaryActions = ["Cancel", "Skip", "Retry", "Inspect"];
         foreach (var item in list.Items)
         {
             var container = (ListViewItem)list.ItemContainerGenerator.ContainerFromItem(item);
-            int shownPrimaryActions = 0;
+            int shownPrimaryActions = ((TextBlock)ConvertedFileLink(container).Parent).Visibility == Visibility.Collapsed ? 0 : 1;
             foreach (var button in Descendants<Button>(container))
             {
                 string name = System.Windows.Automation.AutomationProperties.GetName(button) is { Length: > 0 } automationName
@@ -998,6 +1002,10 @@ public sealed class VisualTests
             Assert.IsTrue(shownPrimaryActions <= 1, $"Primary actions share one slot ({checkpoint}).");
         }
     }
+
+    private static System.Windows.Documents.Hyperlink ConvertedFileLink(DependencyObject row) => Descendants<TextBlock>(row)
+        .SelectMany(text => text.Inlines.OfType<System.Windows.Documents.Hyperlink>())
+        .Single(link => System.Windows.Automation.AutomationProperties.GetName(link) == "Show converted file");
 
     private static void Invoke(Button button)
     {

@@ -512,19 +512,28 @@ public sealed class ViewModelTests
     }
 
     [TestMethod]
-    public async Task OpenFolderUsesClickedRowRatherThanFocusedRow()
+    public async Task ConvertedFileLinksShowTheConvertedFile()
     {
         using var runtime = new TestRuntime();
         var model = runtime.Container.GetRequiredService<MediaViewModel>();
         await model.AddAsync([@"C:\Media\One\Mountain.mkv", @"C:\Media\Two\Ocean.mkv"]);
+        Assert.IsFalse(model.Files[0].DetailRows.Any(detail => detail.Key == MediaRow.ConvertedFileLabel));
         await model.ConvertDv81Command.InvokeAsync();
+        string output = model.Files[0].Result!.Output!;
+        StringAssert.StartsWith(output, @"C:\Media\One\");
+        Assert.AreEqual(output, model.Files[0].DetailRows.Single(detail => detail.Key == MediaRow.ConvertedFileLabel).Value);
         model.Focused = model.Files[1];
         model.OpenRowOutputCommand.Invoke(model.Files[0]);
-        Assert.AreEqual(@"C:\Media\One", runtime.OpenedFolder);
+        Assert.AreEqual(output, runtime.ShownFile, "The row link uses the clicked row rather than the focused row.");
+        model.Focused = model.Files[0];
+        model.OpenOutputCommand.Invoke();
+        Assert.AreEqual(output, runtime.ShownFile);
         Assert.AreEqual("Converted", model.Files[0].Status);
         await model.ScanCommand.InvokeAsync();
         Assert.AreEqual("", model.Files[0].Status);
         Assert.IsFalse(model.Files[0].CanOpenResult);
+        Assert.IsFalse(model.Files[0].DetailRows.Any(detail => detail.Key == MediaRow.ConvertedFileLabel), "Without a converted file the link is hidden.");
+        Assert.IsFalse(model.OpenOutputCommand.CanExecute(null));
         Assert.IsNotNull(model.Files[0].Result, "Analysis retains the previous conversion details.");
     }
 
