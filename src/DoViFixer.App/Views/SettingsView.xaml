@@ -1,6 +1,7 @@
 <ResourceDictionary xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
                     xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
-                    xmlns:viewModels="clr-namespace:DoViFixer.App.ViewModels">
+                    xmlns:viewModels="clr-namespace:DoViFixer.App.ViewModels"
+                    xmlns:updates="clr-namespace:DoViFixer.Application.Updates;assembly=DoViFixer.Application">
     <DataTemplate DataType="{x:Type viewModels:SettingsViewModel}">
         <DockPanel>
             <StackPanel DockPanel.Dock="Bottom" Margin="0,8,0,0">
@@ -29,7 +30,7 @@
                             <TextBlock Text="Appearance"
                                        Style="{StaticResource SubtitleTextBlockStyle}" />
                             <HeaderedContentControl Header="App theme"
-                                                    AutomationProperties.HelpText="Select whether DoViFixer follows your Windows system color theme, or uses Light or Dark theme."
+                                                    AutomationProperties.HelpText="{Binding Source={x:Static updates:ApplicationTitle.Name}, StringFormat='Select whether {0} follows your Windows system color theme, or uses Light or Dark theme.'}"
                                                     Style="{StaticResource WfSettingRowStyle}">
                                 <ComboBox ItemsSource="{Binding Themes}"
                                           SelectedItem="{Binding SelectedTheme}"
@@ -157,7 +158,7 @@
                             <TextBlock Text="Native tools"
                                        Style="{StaticResource SubtitleTextBlockStyle}" />
                             <HeaderedContentControl Header="Tool status"
-                                                    AutomationProperties.HelpText="Command-line tools DoViFixer uses to read, extract and rebuild media files."
+                                                    AutomationProperties.HelpText="{Binding Source={x:Static updates:ApplicationTitle.Name}, StringFormat='Command-line tools {0} uses to read, extract and rebuild media files.'}"
                                                     Style="{StaticResource WfSettingRowStyle}">
                                 <StackPanel Orientation="Horizontal">
                                     <Button Content="Check tools"
@@ -252,9 +253,15 @@
                             </HeaderedContentControl>
                         </StackPanel>
                     </Border>
-                    <TextBlock Text="{Binding Version, StringFormat='DoViFixer {0}'}"
-                               Foreground="{DynamicResource TextFillColorSecondaryBrush}"
-                               Margin="0,24,0,0" />
+                    <TextBlock Foreground="{DynamicResource TextFillColorSecondaryBrush}"
+                               Margin="0,24,0,0">
+                        <TextBlock.Text>
+                            <MultiBinding StringFormat="{}{0} {1}">
+                                <Binding Source="{x:Static updates:ApplicationTitle.Name}" />
+                                <Binding Path="Version" />
+                            </MultiBinding>
+                        </TextBlock.Text>
+                    </TextBlock>
                     <TextBlock TextWrapping="Wrap"
                                Foreground="{DynamicResource TextFillColorSecondaryBrush}"
                                Margin="0,4,0,24">

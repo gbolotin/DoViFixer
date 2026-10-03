@@ -30,7 +30,7 @@ public static class DependencyInjection
             {
                 Timeout = TimeSpan.FromMinutes(30)
             };
-            http.DefaultRequestHeaders.UserAgent.ParseAdd($"DoViFixer/{ApplicationVersion.Of(typeof(DependencyInjection).Assembly)}");
+            http.DefaultRequestHeaders.UserAgent.ParseAdd($"{ApplicationTitle.Name}/{ApplicationVersion.Of(typeof(DependencyInjection).Assembly)}");
             return http;
         });
         services.AddTransient<IProcessRunner, ProcessRunner>();

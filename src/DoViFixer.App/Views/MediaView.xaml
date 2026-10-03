@@ -2,7 +2,8 @@
                     xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
                     xmlns:wf="clr-namespace:WpfFoundation.Behaviors;assembly=WpfFoundation"
                     xmlns:viewModels="clr-namespace:DoViFixer.App.ViewModels"
-                    xmlns:analysis="clr-namespace:DoViFixer.Domain.Analysis;assembly=DoViFixer.Domain">
+                    xmlns:analysis="clr-namespace:DoViFixer.Domain.Analysis;assembly=DoViFixer.Domain"
+                    xmlns:updates="clr-namespace:DoViFixer.Application.Updates;assembly=DoViFixer.Application">
 
     <DataTemplate x:Key="MediaToolBarTemplate" DataType="{x:Type viewModels:MediaViewModel}">
         <WrapPanel>
@@ -26,8 +27,11 @@
                     ContentTemplate="{StaticResource WfIconContentTemplate}"
                     Command="{Binding RemoveMissingCommand}"
                     Visibility="{Binding HasMissingFiles, Converter={StaticResource WfBooleanToVisibilityConverter}}"
-                    ToolTip="Remove files that were deleted, moved or renamed outside DoViFixer from the list."
-                    Margin="0,0,8,8" />
+                    Margin="0,0,8,8">
+                <Button.ToolTip>
+                    <TextBlock Text="{Binding Source={x:Static updates:ApplicationTitle.Name}, StringFormat='Remove files that were deleted, moved or renamed outside {0} from the list.'}" />
+                </Button.ToolTip>
+            </Button>
             <Border Width="1"
                     Margin="4,6,12,14"
                     Background="{DynamicResource DividerStrokeColorDefaultBrush}" />

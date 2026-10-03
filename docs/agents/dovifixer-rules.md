@@ -23,6 +23,7 @@ Main projects:
 - Keep WPF navigation, dialogs, and ViewModels in DoViFixer.App. Reusable presentation infrastructure belongs in WpfFoundation, not in DoViFixer; never move DoViFixer workflows or wording into it.
 - Use CommunityToolkit.Mvvm's `ObservableObject`, `RelayCommand` and `AsyncRelayCommand` directly. Their `Execute` and `ExecuteAsync` do not check `CanExecute`, so tests invoke commands through `CommandInvocation`, as a bound button would.
 - ViewModels and console commands call application services; they must not implement conversion rules or low-level tool/file operations.
+- Never hardcode the app name in text users see or services receive (window titles, version text, help, messages, user agents). Use `ApplicationTitle.Name` (DoViFixer.Application/Updates), which reads the `AssemblyTitle` set in Directory.Build.props; XAML binds it with `{x:Static}`. Namespaces, executable and solution names, data folders, configuration keys and repository URLs keep their literal names.
 - Neither DoViFixer.Console nor DoViFixer.App references the other. Shared functionality belongs in the shared libraries.
 - Keep media analysis, conversion policy, workflow coordination, tool execution, and UI presentation separated.
 - Use interfaces at the media-specific boundaries: media probing and processing; file discovery, temporary storage, and output publication; archive storage and repositories where persistence is needed.

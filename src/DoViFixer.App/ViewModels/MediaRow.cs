@@ -1,4 +1,5 @@
 using DoViFixer.Application.Operations;
+using DoViFixer.Application.Updates;
 using DoViFixer.Domain.Analysis;
 
 namespace DoViFixer.App.ViewModels;
@@ -30,7 +31,7 @@ public sealed class MediaRow(string path) : ObservableObject
     public const string FileLocationLabel = "File location";
     public const string ConvertedFileLabel = "Converted file";
     public const string MissingStatus = "File not found";
-    public const string MissingNote = "File not found. It was deleted, moved or renamed outside DoViFixer. Restore it to this location, or remove it from the list.";
+    public static readonly string MissingNote = $"File not found. It was deleted, moved or renamed outside {ApplicationTitle.Name}. Restore it to this location, or remove it from the list.";
     public string Path { get; } = path;
     public string Name => System.IO.Path.GetFileName(Path);
     public ProgressViewModel Progress { get; } = new();

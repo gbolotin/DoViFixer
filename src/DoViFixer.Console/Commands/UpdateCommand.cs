@@ -39,9 +39,9 @@ public sealed class UpdateCommand(UpdateService updates, ConsoleRenderer rendere
         }
     }
 
-    internal static string Format(UpdateCheckResult result) => $"DoViFixer {result.CurrentVersion}\n" + result switch
+    internal static string Format(UpdateCheckResult result) => $"{ApplicationTitle.Name} {result.CurrentVersion}\n" + result switch
     {
-        { Latest: null } => "No DoViFixer release has been published yet.",
+        { Latest: null } => $"No {ApplicationTitle.Name} release has been published yet.",
         { Latest: { } latest, IsUpdateAvailable: true } => $"Update available: {latest.Version}\n{latest.Url}",
         { Latest: { } latest } => $"Up to date. Latest release: {latest.Version}",
     };
