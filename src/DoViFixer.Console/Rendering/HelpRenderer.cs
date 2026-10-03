@@ -47,8 +47,8 @@ internal sealed class HelpRenderer(ConsoleRenderer renderer)
         Command("settings add-to-path", "Add this app folder to your user PATH. No administrator rights needed. Reopen your terminal afterwards and keep the app in that folder.");
         Examples(("settings show", "Show current configuration"), ("settings tool FFmpeg \"C:\\Tools\\ffmpeg.exe\"", "Set a tool path"), ("settings temp \"D:\\DoViScratch\"", "Set the working directory for temporary files"));
         Group("Updates");
-        Command("update-check [--json]", "Check upstream dovi_convert releases. No DoViFixer release feed exists yet.");
-        Examples(("update-check", "Show available upstream release information"));
+        Command("update-check [--json]", "Compare this version with the latest DoViFixer release on GitHub. Nothing is downloaded or installed.");
+        Examples(("update-check", "Check for a newer DoViFixer release"));
         Group("Shared Options & Exit Codes");
         Options(("-t, --temp directory", "Temporary workspace for scan, inspect, convert, backup, and restore."), ("--plan", "Analyze and display exact planned outputs for convert, backup, or restore without executing the plan."), ("-y, --yes", "Approve a convert, backup, or restore plan. Does not approve software installation."), ("--install-dependencies", "Separate installation consent for scan, inspect, convert, backup, and restore. Cannot combine with --json."), ("--", "End option parsing before filenames that begin with a dash."));
         Paragraph("Quote paths containing spaces. Color is disabled for redirected output, NO_COLOR, or TERM=dumb.");

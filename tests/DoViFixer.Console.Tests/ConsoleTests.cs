@@ -19,6 +19,14 @@ public sealed class ConsoleTests
     public void VersionIsACommand(string argument) => Assert.AreEqual("version", CommandLine.Parse([argument]).Command);
 
     [TestMethod]
+    public void UpdateCheckReportsTheRunningVersionAndTheLatestRelease()
+    {
+        Assert.AreEqual("DoViFixer 0.1.0-dev\nNo DoViFixer release has been published yet.", UpdateCommand.Format(new("0.1.0-dev", null, false)));
+        Assert.AreEqual("DoViFixer 0.1.0\nUpdate available: v0.2.0\nhttps://example.test/v0.2.0", UpdateCommand.Format(new("0.1.0", new("v0.2.0", "https://example.test/v0.2.0"), true)));
+        Assert.AreEqual("DoViFixer 0.2.0\nUp to date. Latest release: v0.2.0", UpdateCommand.Format(new("0.2.0", new("v0.2.0", "https://example.test/v0.2.0"), false)));
+    }
+
+    [TestMethod]
     public void InspectSimpleIsAnOptInScanOption()
     {
         var command = CommandLine.Parse(["scan", "movies", "--inspect-simple", "-r", "--json", "--temp", "scratch"]);
