@@ -1,7 +1,6 @@
 using DoViFixer.Application.Abstractions;
 using DoViFixer.Application.Dependencies;
 using DoViFixer.Domain.Analysis;
-using DoViFixer.Domain.Conversion;
 using DoViFixer.Domain.Media;
 using DoViFixer.Application.Operations;
 using Microsoft.Extensions.Logging;
@@ -93,12 +92,22 @@ public sealed class InspectionService(DependencyService dependencies, IMediaProb
             return metadata;
         }
 
-        long space = method is AnalysisMethod.FullRpu or AnalysisMethod.DeepInspection ? ConversionPolicy.RequiredScratchBytes(media.Source.Length) : 1L << 30;
-        await using var workspace = await workspaces.CreateAsync(space, temporaryDirectory ?? snapshot.TemporaryDirectory, cancellationToken);
+        await using var workspace = await workspaces.CreateAsync(RequiredScratchBytes(media.Source.Length, method), temporaryDirectory ?? snapshot.TemporaryDirectory, cancellationToken);
         var evidence = await probe.AnalyzeAsync(media, method, workspace, cancellationToken, progress);
         progress?.Report(new(Guid.Empty, "Saving analysis", path));
         var analysis = MediaClassifier.Classify(media, evidence);
         await cache.WriteAsync(analysis, cancellationToken);
         return analysis;
     }
+
+    /// <summary>
+    /// Scratch space an inspection needs: full inspection extracts the video track (at most the source size) plus RPU metadata and its JSON export;
+    /// deep inspection also demuxes that track into base and enhancement layers. Sampled scans extract only short clips.
+    /// </summary>
+    public static long RequiredScratchBytes(long sourceLength, AnalysisMethod method) => method switch
+    {
+        AnalysisMethod.FullRpu => checked(sourceLength + (2L << 30)),
+        AnalysisMethod.DeepInspection => checked(sourceLength * 2 + (2L << 30)),
+        _ => 1L << 30
+    };
 }

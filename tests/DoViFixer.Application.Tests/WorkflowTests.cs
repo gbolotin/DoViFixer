@@ -91,6 +91,16 @@ public sealed class WorkflowTests
         await Assert.ThrowsExactlyAsync<OperationCanceledException>(() => inspection.InspectAsync("good.mkv", AnalysisMethod.FullRpu, null, cancelled.Token));
     }
 
+    [TestMethod]
+    public void InspectionReservesFarLessScratchThanConversion()
+    {
+        long source = 77L << 30;
+        Assert.AreEqual(source + (2L << 30), InspectionService.RequiredScratchBytes(source, AnalysisMethod.FullRpu));
+        Assert.AreEqual(source * 2 + (2L << 30), InspectionService.RequiredScratchBytes(source, AnalysisMethod.DeepInspection));
+        Assert.AreEqual(1L << 30, InspectionService.RequiredScratchBytes(source, AnalysisMethod.SampledRpu));
+        Assert.IsLessThan(ConversionPolicy.RequiredScratchBytes(source), InspectionService.RequiredScratchBytes(source, AnalysisMethod.DeepInspection));
+    }
+
     private sealed class MemoryCache : IAnalysisCache
     {
         public string RootDirectory => @"C:\FixtureData\cache";

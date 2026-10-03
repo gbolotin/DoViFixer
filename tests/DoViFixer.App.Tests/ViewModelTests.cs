@@ -462,6 +462,24 @@ public sealed class ViewModelTests
     }
 
     [TestMethod]
+    public async Task FailedInspectionKeepsPreviousFileDetails()
+    {
+        using var runtime = new TestRuntime();
+        var model = runtime.Container.GetRequiredService<MediaViewModel>();
+        await model.AddAsync([@"C:\Media\Mountain.mkv"]);
+        var row = model.Files[0];
+        var scanned = row.Analysis;
+        Assert.IsNotNull(scanned);
+        await runtime.ClearAsync(default);
+        runtime.DuringAnalysis = _ => throw new IOException("Fixture analysis failure");
+        await model.InspectCommand.InvokeAsync();
+        Assert.AreEqual("Inspection failed", row.Status);
+        Assert.AreSame(scanned, row.Analysis);
+        Assert.IsTrue(row.DetailRows.Any(detail => detail.Label == "Resolution"));
+        StringAssert.Contains(row.DetailNotes, "Fixture analysis failure");
+    }
+
+    [TestMethod]
     [DataRow(DoViFixer.Domain.Analysis.AnalysisMethod.SampledRpu)]
     [DataRow(DoViFixer.Domain.Analysis.AnalysisMethod.FullRpu)]
     [DataRow(DoViFixer.Domain.Analysis.AnalysisMethod.DeepInspection)]

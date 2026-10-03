@@ -787,12 +787,12 @@ public sealed class MediaViewModel : OperationViewModel, INavigationPage, IPageA
                 var jobProgress = Activate(row, method == AnalysisMethod.SampledRpu ? "Scanning" : "Inspecting");
                 row.AnalysisError = null;
                 row.Notice = "";
-                row.Analysis = null;
                 row.RestoreArchive = null;
                 try
                 {
-                    row.Analysis = await Task.Run(() => inspection.ReadCachedAsync(row.Path, method, itemToken), itemToken);
-                    if (row.Analysis is null)
+                    // The previous analysis stays until a new one replaces it, so a failed inspection keeps the file details.
+                    var analysis = await Task.Run(() => inspection.ReadCachedAsync(row.Path, method, itemToken), itemToken);
+                    if (analysis is null)
                     {
                         toolsReady ??= await dependencies.EnsureAsync(jobProgress, itemToken);
                         if (toolsReady != true)
@@ -800,8 +800,10 @@ public sealed class MediaViewModel : OperationViewModel, INavigationPage, IPageA
                             return new OperationItemResult(row.Path, OperationStatus.Failed, null, "Required tools are unavailable. Open Settings to configure tools, then retry Scan.");
                         }
 
-                        row.Analysis = await Task.Run(() => inspection.InspectAsync(row.Path, method, null, itemToken, jobProgress), itemToken);
+                        analysis = await Task.Run(() => inspection.InspectAsync(row.Path, method, null, itemToken, jobProgress), itemToken);
                     }
+
+                    row.Analysis = analysis;
 
                     await RefreshRestoreArchiveAsync(row, pairing, itemToken);
                     if (row.Result is null && await Task.Run(() => conversion.ReadPublishedResultAsync(row.Path, itemToken), itemToken) is { } published)
