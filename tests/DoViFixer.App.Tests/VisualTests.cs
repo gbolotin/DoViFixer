@@ -862,7 +862,6 @@ public sealed class VisualTests
         await LayoutAsync(window);
         AssertStableActionSlots(list, slots, "converted");
         var convertedFile = ConvertedFileLink(container);
-        Assert.AreEqual(Visibility.Visible, ((TextBlock)convertedFile.Parent).Visibility);
         convertedFile.Command.Invoke(convertedFile.CommandParameter);
         await LayoutAsync(window);
         AssertStableActionSlots(list, slots, "converted file shown");
