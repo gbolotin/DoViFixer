@@ -59,7 +59,7 @@
                              IsEnabled="{Binding CanNavigate}"
                              DockPanel.Dock="Left"
                              Style="{StaticResource WfNavigationSidebarStyle}" />
-                    <navigation:RetainedPageHost Navigation="{Binding Navigation}" Margin="8,0" />
+                    <navigation:RetainedPageHost Navigation="{Binding Navigation}" Margin="8,12,8,0" />
                 </DockPanel>
             </DataTemplate>
 

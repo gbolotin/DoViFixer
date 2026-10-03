@@ -767,6 +767,8 @@ public sealed class MediaViewModel : OperationViewModel, INavigationPage, IPageA
         bool autoSelect = userSettings.AutoSelectAfterScan;
         bool? toolsReady = null;
         var pairing = BeginArchivePairing();
+        // Conversions published in an earlier session, shown once the analysis of their unchanged source completes.
+        var publishedResults = new Dictionary<MediaRow, OperationItemResult>();
         foreach (var row in rows)
         {
             row.LastAnalysisMethod = method;
@@ -802,6 +804,12 @@ public sealed class MediaViewModel : OperationViewModel, INavigationPage, IPageA
                     }
 
                     await RefreshRestoreArchiveAsync(row, pairing, itemToken);
+                    if (row.Result is null && await Task.Run(() => conversion.ReadPublishedResultAsync(row.Path, itemToken), itemToken) is { } published)
+                    {
+                        await ReadResultMetadataAsync(row, published, itemToken);
+                        publishedResults[row] = published;
+                    }
+
                     return new OperationItemResult(row.Path, row.Analysis.Verdict == AnalysisVerdict.AnalysisFailed ? OperationStatus.Failed : OperationStatus.Completed, null, row.Analysis.Reason);
                 }
                 finally
@@ -830,6 +838,11 @@ public sealed class MediaViewModel : OperationViewModel, INavigationPage, IPageA
                     {
                         row.IsSelected = ConversionPolicy.ShouldAutoSelectAfterAnalysis(row.Analysis, userSettings.IncludeSimple, userSettings.ForceComplex);
                     }
+
+                    if (publishedResults.Remove(row, out var published))
+                    {
+                        row.SetConverted(published);
+                    }
                 }
                 else if (result.Status == OperationStatus.Failed)
                 {
@@ -841,6 +854,25 @@ public sealed class MediaViewModel : OperationViewModel, INavigationPage, IPageA
         finally
         {
             EndBatch();
+        }
+    }
+
+    /// <summary>Reads the produced file's metadata for the details comparison. Best effort: the operation result stands either way.</summary>
+    private async Task ReadResultMetadataAsync(MediaRow row, OperationItemResult result, CancellationToken token)
+    {
+        row.ResultAnalysis = null;
+        if (result.Status is not (OperationStatus.Completed or OperationStatus.Partial) || result.Output is not { } output)
+        {
+            return;
+        }
+
+        try
+        {
+            row.ResultAnalysis = await Task.Run(() => inspection.ReadMetadataAsync(output, token), token);
+        }
+        catch (Exception ex)
+        {
+            logger.LogWarning(ex, "Could not read metadata of produced file {Output}", output);
         }
     }
 
@@ -908,7 +940,9 @@ public sealed class MediaViewModel : OperationViewModel, INavigationPage, IPageA
             var result = await batch.ExecuteAsync(new[] { row }, item => item.Path, async (item, itemToken) =>
             {
                 var jobProgress = Activate(item, "Restoring Profile 7");
-                return await Task.Run(() => restore.ExecuteAsync(plan, jobProgress, itemToken), itemToken);
+                var restored = await Task.Run(() => restore.ExecuteAsync(plan, jobProgress, itemToken), itemToken);
+                await ReadResultMetadataAsync(item, restored, itemToken);
+                return restored;
             }, control!, new InlineProgress<OperationItemResult>(itemResult =>
             {
                 BatchProgress.Complete(itemResult.Status);
@@ -994,6 +1028,34 @@ public sealed class MediaViewModel : OperationViewModel, INavigationPage, IPageA
 
         string opName = target == ConversionTarget.Profile81 ? "Conversion to DV8.1" : "Conversion to HDR10";
         var outputs = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+        var existingOutput = ExistingOutputHandling.Skip;
+        CandidateConversionRequest Request(MediaRow row) => new(
+            row.Path,
+            target,
+            userSettings.OutputDirectory,
+            userSettings.TemporaryDirectory,
+            userSettings.ReplaceOriginal,
+            userSettings.CreateElArchive,
+            userSettings.IncludeSimple,
+            userSettings.ForceComplex,
+            outputs)
+        {
+            ExistingOutput = existingOutput
+        };
+
+        // A single file asks what to do with an existing output; batches keep skipping such files.
+        if (rows.Length == 1 && sourceFiles.Exists(rows[0].Path)
+            && await Task.Run(() => conversion.FindExistingOutput(Request(rows[0])), token) is { } existing)
+        {
+            var question = new ExistingOutputDialogViewModel(existing);
+            if (!await dialogs.ShowAsync(question))
+            {
+                SetStatus(ViewStatus.ConversionNotStarted);
+                return;
+            }
+
+            existingOutput = question.Choice;
+        }
 
         foreach (var row in rows)
         {
@@ -1021,17 +1083,7 @@ public sealed class MediaViewModel : OperationViewModel, INavigationPage, IPageA
                 using var cancellationRegistration = itemToken.Register(row.ClearPlan);
                 try
                 {
-                    var req = new CandidateConversionRequest(
-                        row.Path,
-                        target,
-                        userSettings.OutputDirectory,
-                        userSettings.TemporaryDirectory,
-                        userSettings.ReplaceOriginal,
-                        userSettings.CreateElArchive,
-                        userSettings.IncludeSimple,
-                        userSettings.ForceComplex,
-                        outputs);
-
+                    var req = Request(row);
                     var prep = await Task.Run(() => conversion.PrepareCandidateAsync(req, jobProgress, itemToken), itemToken);
                     itemToken.ThrowIfCancellationRequested();
                     if (prep is CandidatePreparationResult.Skipped skipped)
@@ -1049,7 +1101,9 @@ public sealed class MediaViewModel : OperationViewModel, INavigationPage, IPageA
                         row.Analysis = success.Plan.Analysis;
                         row.SetPlan(success.Plan.Output, success.Warning);
                         jobProgress.Report(new(success.Plan.Id, "Converting", row.Path));
-                        return await Task.Run(() => conversion.ExecuteAsync(success.Plan, jobProgress, itemToken), itemToken);
+                        var converted = await Task.Run(() => conversion.ExecuteAsync(success.Plan, jobProgress, itemToken), itemToken);
+                        await ReadResultMetadataAsync(row, converted, itemToken);
+                        return converted;
                     }
 
                     return new OperationItemResult(row.Path, OperationStatus.Failed, null, "Candidate preparation produced no result.");

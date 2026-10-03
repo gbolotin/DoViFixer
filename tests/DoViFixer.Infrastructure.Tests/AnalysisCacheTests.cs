@@ -1,3 +1,4 @@
+using DoViFixer.Application.Operations;
 using DoViFixer.Domain.Analysis;
 using DoViFixer.Domain.Media;
 using DoViFixer.Infrastructure.Configuration;
@@ -35,6 +36,24 @@ public sealed class AnalysisCacheTests
         Assert.AreEqual(1, await cache.ClearAsync(default));
         Assert.IsNull(await cache.ReadBaseLayerHashAsync(source, default));
         Assert.AreEqual(0L, await cache.GetSizeAsync(default));
+    }
+
+    [TestMethod]
+    public async Task ConversionResultPersistsForTheUnchangedSourceAndIsIncludedInCacheCleanup()
+    {
+        var source = Analysis().Media.Source;
+        var result = new OperationItemResult(source.Path, OperationStatus.Completed, Path.Combine(directory, "Movie - DV P8.1.mkv"), "Verified output published. Original retained.")
+        {
+            Original = source.Path, Archive = Path.Combine(directory, "Movie.dovi")
+        };
+        await Cache().WriteConversionResultAsync(source, result, default);
+        var cache = Cache();
+        Assert.AreEqual(result, await cache.ReadConversionResultAsync(source, default), "A later run reads the stored result.");
+        Assert.IsNull(await cache.ReadConversionResultAsync(source with { Length = source.Length + 1 }, default));
+        Assert.IsNull(await cache.ReadConversionResultAsync(source with { LastWriteUtc = source.LastWriteUtc.AddSeconds(1) }, default));
+        Assert.IsNull(await cache.ReadAsync(source, AnalysisMethod.FullRpu, default), "The result does not replace analysis entries.");
+        Assert.AreEqual(1, await cache.ClearAsync(default));
+        Assert.IsNull(await cache.ReadConversionResultAsync(source, default));
     }
 
     [TestMethod]

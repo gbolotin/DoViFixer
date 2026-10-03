@@ -16,6 +16,7 @@ public sealed class MediaRow(string path) : ObservableObject
     private bool canRetryAnalysis;
     private string output = "";
     private MediaAnalysis? analysis;
+    private MediaAnalysis? resultAnalysis;
     private OperationItemResult? result;
     private string? analysisError;
     private string? warning;
@@ -28,7 +29,6 @@ public sealed class MediaRow(string path) : ObservableObject
     #region Public fields
 
     public const string FileLocationLabel = "File location";
-    public const string ConvertedFileLabel = "Converted file";
     public const string MissingStatus = "File not found";
     public const string MissingNote = "File not found. It was deleted, moved or renamed outside DoViFixer. Restore it to this location, or remove it from the list.";
     public string Path { get; } = path;
@@ -91,7 +91,9 @@ public sealed class MediaRow(string path) : ObservableObject
             if (SetProperty(ref state, value))
             {
                 OnPropertyChanged(nameof(CanOpenResult));
+                OnPropertyChanged(nameof(ShowsResultComparison));
                 OnPropertyChanged(nameof(DetailRows));
+                OnPropertyChanged(nameof(ResultFiles));
                 OnPropertyChanged(nameof(CanRestore));
                 OnPropertyChanged(nameof(Warning));
                 OnPropertyChanged(nameof(HasWarning));
@@ -154,6 +156,7 @@ public sealed class MediaRow(string path) : ObservableObject
         {
             SetProperty(ref status, value);
             OnPropertyChanged(nameof(CanOpenResult));
+            OnPropertyChanged(nameof(ShowsResultComparison));
             OnPropertyChanged(nameof(StatusToolTip));
         }
     }
@@ -232,10 +235,25 @@ public sealed class MediaRow(string path) : ObservableObject
             OnPropertyChanged(nameof(HasResult));
             OnPropertyChanged(nameof(ResultFiles));
             OnPropertyChanged(nameof(CanOpenResult));
+            OnPropertyChanged(nameof(ShowsResultComparison));
             OnPropertyChanged(nameof(DetailRows));
             OnPropertyChanged(nameof(StatusToolTip));
         }
     }
+
+    /// <summary>Container metadata of the file the last conversion or restoration produced, when it could be read.</summary>
+    public MediaAnalysis? ResultAnalysis
+    {
+        get => resultAnalysis;
+        set
+        {
+            SetProperty(ref resultAnalysis, value);
+            OnPropertyChanged(nameof(DetailRows));
+        }
+    }
+
+    /// <summary>Details compare the original with the produced file side by side.</summary>
+    public bool ShowsResultComparison => CanOpenResult;
 
     public MediaAnalysis? Analysis
     {
@@ -261,44 +279,39 @@ public sealed class MediaRow(string path) : ObservableObject
         AnalysisVerdict.FelUnclassified => "Profile 7 · FEL · Unclassified",
         AnalysisVerdict.AnalysisFailed => "Analysis failed",
         AnalysisVerdict.Unknown => HasIncompleteScan ? "Profile 7 · Incomplete scan" : "Unknown",
-        _ => Analysis.Media.Profile switch
-        {
-            Domain.Media.DolbyVisionProfile.Profile81 => "Profile 8.1",
-            Domain.Media.DolbyVisionProfile.Profile5 => "Profile 5",
-            Domain.Media.DolbyVisionProfile.None => "No Dolby Vision",
-            _ => "Other / unknown profile"
-        }
+        _ => ProfileName(Analysis.Media.Profile)
     };
     public bool HasAnalysisError => AnalysisError is not null;
-    public IReadOnlyList<KeyValuePair<string, string>> DetailRows
+    /// <summary>
+    /// Labeled file details. With <see cref="ShowsResultComparison"/>, <see cref="MediaDetail.Result"/> holds the produced file's value
+    /// and the file row shows names instead of full paths.
+    /// </summary>
+    public IReadOnlyList<MediaDetail> DetailRows
     {
         get
         {
-            KeyValuePair<string, string>[] convertedFile = CanOpenResult ? [new(ConvertedFileLabel, Result!.Output!)] : [];
+            bool compare = ShowsResultComparison;
+            var produced = compare ? ResultAnalysis : null;
+            var file = compare
+                ? new MediaDetail(FileLocationLabel, Name, System.IO.Path.GetFileName(Result!.Output!))
+                : new MediaDetail(FileLocationLabel, Path);
             if (Analysis is not { } a)
             {
-                return [new(FileLocationLabel, Path), .. convertedFile];
+                return [file];
             }
 
-            string length = "Unknown";
-            if (a.Media.DurationSeconds is { } seconds && double.IsFinite(seconds) && seconds >= 0 && seconds < TimeSpan.MaxValue.TotalSeconds)
-            {
-                var duration = TimeSpan.FromSeconds(seconds);
-                length = $"{(long)duration.TotalHours:00}:{duration.Minutes:00}:{duration.Seconds:00}";
-            }
+            MediaDetail Compared(string label, string value, Func<MediaAnalysis, string> resultValue) =>
+                new(label, value, !compare ? "" : produced is null ? "Unknown" : resultValue(produced));
 
             return
             [
-                new("Type", "Matroska"),
-                new("Size", a.Media.Source.Length >= 1073741824
-                    ? $"{a.Media.Source.Length / 1073741824d:0.##} GiB" : $"{a.Media.Source.Length / 1048576d:0.##} MiB"),
-                new(FileLocationLabel, Path),
-                .. convertedFile,
-                new("Date modified", a.Media.Source.LastWriteUtc.ToLocalTime().ToString("g")),
-                new("Length", length),
-                new("Profile / Type", Classification),
-                new("Resolution", $"{a.Media.Width} × {a.Media.Height}"),
-                new("Frame rate", a.Media.FramesPerSecond is { } fps ? $"{fps:0.###} fps" : "Unknown"),
+                file,
+                Compared("Size", FormatSize(a), FormatSize),
+                Compared("Date modified", FormatDate(a), FormatDate),
+                Compared("Length", FormatLength(a), FormatLength),
+                Compared("Profile / Type", Classification, produced => ProfileName(produced.Media.Profile)),
+                Compared("Resolution", FormatResolution(a), FormatResolution),
+                Compared("Frame rate", FormatFrameRate(a), FormatFrameRate),
                 new("Evidence", EvidenceName(a.Evidence.Method)),
                 new("Frames", a.Evidence.Frames.ToString("N0")),
                 new("Samples", $"{a.Evidence.SuccessfulSamples}/{a.Evidence.RequestedSamples}")
@@ -315,11 +328,14 @@ public sealed class MediaRow(string path) : ObservableObject
         Notice
     }.Where(text => !string.IsNullOrWhiteSpace(text)));
     public bool HasResult => Result is not null;
-    /// <summary>The files the last operation produced or kept, each shown as its own link.</summary>
+    /// <summary>
+    /// The files the last operation produced or kept, each shown as its own link.
+    /// Files the comparison table already links are left out.
+    /// </summary>
     public IReadOnlyList<ResultFile> ResultFiles => Result is null ? [] : new[]
     {
-        Result.Output is { } output ? new ResultFile("Output", output) : null,
-        Result.Original is { } original ? new ResultFile("Original", original) : null,
+        Result.Output is { } output && !ShowsResultComparison ? new ResultFile("Output", output) : null,
+        Result.Original is { } original && !(ShowsResultComparison && string.Equals(original, Path, StringComparison.OrdinalIgnoreCase)) ? new ResultFile("Original", original) : null,
         Result.Archive is { } archive ? new ResultFile("Archive", archive) : null
     }.OfType<ResultFile>().ToArray();
 
@@ -408,6 +424,35 @@ public sealed class MediaRow(string path) : ObservableObject
         State = MediaRowState.Failed;
     }
 
+    private static string FormatSize(MediaAnalysis analysis) => analysis.Media.Source.Length >= 1073741824
+        ? $"{analysis.Media.Source.Length / 1073741824d:0.##} GiB" : $"{analysis.Media.Source.Length / 1048576d:0.##} MiB";
+
+    private static string FormatDate(MediaAnalysis analysis) => analysis.Media.Source.LastWriteUtc.ToLocalTime().ToString("g");
+
+    private static string FormatResolution(MediaAnalysis analysis) => $"{analysis.Media.Width} × {analysis.Media.Height}";
+
+    private static string FormatFrameRate(MediaAnalysis analysis) => analysis.Media.FramesPerSecond is { } fps ? $"{fps:0.###} fps" : "Unknown";
+
+    private static string FormatLength(MediaAnalysis analysis)
+    {
+        if (analysis.Media.DurationSeconds is { } seconds && double.IsFinite(seconds) && seconds >= 0 && seconds < TimeSpan.MaxValue.TotalSeconds)
+        {
+            var duration = TimeSpan.FromSeconds(seconds);
+            return $"{(long)duration.TotalHours:00}:{duration.Minutes:00}:{duration.Seconds:00}";
+        }
+
+        return "Unknown";
+    }
+
+    private static string ProfileName(Domain.Media.DolbyVisionProfile profile) => profile switch
+    {
+        Domain.Media.DolbyVisionProfile.Profile7 => "Profile 7",
+        Domain.Media.DolbyVisionProfile.Profile81 => "Profile 8.1",
+        Domain.Media.DolbyVisionProfile.Profile5 => "Profile 5",
+        Domain.Media.DolbyVisionProfile.None => "No Dolby Vision",
+        _ => "Other / unknown profile"
+    };
+
     private static string EvidenceName(AnalysisMethod method) => method switch
     {
         AnalysisMethod.SampledRpu => "Sampled RPU metadata",
@@ -418,3 +463,6 @@ public sealed class MediaRow(string path) : ObservableObject
 }
 
 public sealed record ResultFile(string Label, string Path);
+
+/// <summary>One labeled detail; <see cref="Result"/> is empty unless the details compare an original with its produced file.</summary>
+public sealed record MediaDetail(string Label, string Value, string Result = "");

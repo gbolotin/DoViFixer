@@ -260,7 +260,7 @@ public sealed class VisualTests
             Assert.IsTrue(frame.IsVisible);
             Assert.IsTrue(frame.ActualHeight <= 240);
             var detailValues = Descendants<TextBlock>(mediaView)
-                .Where(text => text.DataContext is KeyValuePair<string, string> && Grid.GetColumn(text) == 1 && text.IsVisible).ToArray();
+                .Where(text => text.DataContext is MediaDetail && Grid.GetColumn(text) == 1 && text.IsVisible).ToArray();
             Assert.AreEqual(media.Focused!.DetailRows.Count, detailValues.Length);
             foreach (var value in detailValues)
             {
@@ -285,6 +285,17 @@ public sealed class VisualTests
                 AssertInside(Descendants<Button>(mediaView).Single(button => Equals(button.Content, caption) && button.IsVisible), content);
             }
             SaveRender(content, "media-minimum");
+            var focusedBeforeComparison = media.Focused;
+            var converted = media.Files.FirstOrDefault(row => row.ShowsResultComparison);
+            if (converted is not null)
+            {
+                media.Focused = converted;
+                await LayoutAsync(window);
+                Assert.IsTrue(Descendants<TextBlock>(mediaView).Any(text => text.Text == "Result" && text.IsVisible), "Converted files compare the original with the result.");
+                SaveRender(content, "media-details-comparison");
+                media.Focused = focusedBeforeComparison;
+                await LayoutAsync(window);
+            }
 
             var mediaStatusBar = Descendants<StatusBar>(window).Single();
             foreach (string summary in new[] { media.OutputSummary, media.RetentionSummary, media.FelSummary, media.ArchiveSummary })

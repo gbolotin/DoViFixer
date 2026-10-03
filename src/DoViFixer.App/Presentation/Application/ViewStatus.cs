@@ -11,6 +11,7 @@ public enum ViewStatus
     ToolsUnavailable,
     BackupNotApproved,
     RestoreNotApproved,
+    ConversionNotStarted,
     CleanupNotApproved,
     NoBackupsFound,
     SettingsLoaded,

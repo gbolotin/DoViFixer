@@ -12,6 +12,7 @@ public abstract class OperationViewModel : ObservableObject
         [ViewStatus.ToolsUnavailable] = "Required tools are unavailable.",
         [ViewStatus.BackupNotApproved] = "Backup not approved.",
         [ViewStatus.RestoreNotApproved] = "Restore not approved.",
+        [ViewStatus.ConversionNotStarted] = "Conversion cancelled; the existing file was kept.",
         [ViewStatus.CleanupNotApproved] = "Cleanup not approved.",
         [ViewStatus.NoBackupsFound] = "No retained backup files found.",
         [ViewStatus.SettingsLoaded] = "Settings loaded.",

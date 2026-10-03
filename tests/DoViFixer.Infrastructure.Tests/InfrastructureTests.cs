@@ -88,7 +88,38 @@ public sealed class InfrastructureTests
         string output = files.PrepareOutputPath(source, outputDirectory, ".mkv", true);
         Assert.IsTrue(Directory.Exists(outputDirectory));
         await File.WriteAllTextAsync(output, "existing");
-        Assert.ThrowsExactly<IOException>(() => files.PrepareOutputPath(source, outputDirectory, ".mkv", true));
+        Assert.AreEqual(output, Assert.ThrowsExactly<OutputExistsException>(() => files.PrepareOutputPath(source, outputDirectory, ".mkv", true)).Path);
+    }
+
+    [TestMethod]
+    public async Task ExistingConversionOutputIsReplacedOrKeptBesideANumberedOutput()
+    {
+        string source = Path.Combine(directory, "title_t01.mkv");
+        await File.WriteAllTextAsync(source, "original");
+        string output = Path.Combine(directory, "title_t01 - DV P8.1.mkv");
+        await File.WriteAllTextAsync(output, "existing");
+        await File.WriteAllTextAsync(Path.Combine(directory, "title_t01 - DV P8.1 (1).mkv"), "existing too");
+        Assert.AreEqual(output, files.PrepareOutputPath(source, null, " - DV P8.1.mkv", existing: ExistingOutputHandling.Replace));
+        Assert.AreEqual(Path.Combine(directory, "title_t01 - DV P8.1 (2).mkv"), files.PrepareOutputPath(source, null, " - DV P8.1.mkv", existing: ExistingOutputHandling.KeepBoth));
+        Assert.AreEqual(Path.Combine(directory, "title_t01.dovi"), files.PrepareOutputPath(source, null, ".dovi", existing: ExistingOutputHandling.KeepBoth), "A free path needs no number.");
+        Assert.ThrowsExactly<IOException>(() => files.PrepareOutputPath(source, null, ".mkv", existing: ExistingOutputHandling.Replace), "The source is never replaced.");
+    }
+
+    [TestMethod]
+    public async Task PublisherReplacesAnExistingOutputOnlyWhenAsked()
+    {
+        string output = Path.Combine(directory, "movie.mkv");
+        await File.WriteAllTextAsync(output, "existing");
+        var publisher = new OutputPublisher(NullLogger<OutputPublisher>.Instance);
+        Assert.ThrowsExactly<IOException>(() => publisher.Stage(output));
+        await using (var staged = publisher.Stage(output, replaceExisting: true))
+        {
+            await File.WriteAllTextAsync(staged.Path, "verified");
+            Assert.AreEqual("existing", await File.ReadAllTextAsync(output), "The existing file stays until publication.");
+            await staged.PublishAsync(default);
+        }
+
+        Assert.AreEqual("verified", await File.ReadAllTextAsync(output));
     }
 
     [TestMethod]

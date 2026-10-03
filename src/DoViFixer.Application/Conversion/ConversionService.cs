@@ -9,7 +9,7 @@ using Microsoft.Extensions.Logging;
 
 namespace DoViFixer.Application.Conversion;
 public sealed record ConversionRequest(string Input, int RecursiveDepth = 0, ConversionTarget Target = ConversionTarget.Profile81, string? OutputDirectory = null, string? TemporaryDirectory = null, bool IncludeSimple = false, bool ForceComplex = false, bool CreateBackup = false, bool Safe = false, bool DeleteBackup = false, IReadOnlyList<string>? AdditionalInputs = null);
-public sealed record ConversionPlan(Guid Id, MediaAnalysis Analysis, ConversionTarget Target, string Output, string? Archive, string? TemporaryDirectory, long ScratchBytes, string Decision, bool Safe = false, bool DeleteBackup = false);
+public sealed record ConversionPlan(Guid Id, MediaAnalysis Analysis, ConversionTarget Target, string Output, string? Archive, string? TemporaryDirectory, long ScratchBytes, string Decision, bool Safe = false, bool DeleteBackup = false, bool ReplaceExistingOutput = false);
 public sealed record ConversionPlanningResult(IReadOnlyList<ConversionPlan> Plans, IReadOnlyList<OperationItemResult> Skipped);
 
 public sealed record CandidateConversionRequest(
@@ -37,6 +37,9 @@ public sealed record CandidateConversionRequest(
     }
 
     public bool AllowFel => IncludeSimple || ForceComplex;
+
+    /// <summary>What to do when the output or archive already exists. Skipping is the default.</summary>
+    public ExistingOutputHandling ExistingOutput { get; init; }
 }
 
 public abstract record CandidatePreparationResult
@@ -123,6 +126,54 @@ public sealed class ConversionPlanner(IFileDiscovery discovery, IFileOperations 
 
 public sealed class ConversionService(DependencyService dependencies, IFileOperations files, ITemporaryWorkspaceFactory workspaces, IVideoProcessor processor, IMediaVerifier verifier, IOutputPublisher publisher, IBackupArchiveStore archives, ILogger<ConversionService> logger, IAnalysisCache cache, InspectionService? inspection = null)
 {
+    /// <summary>The last conversion of the unchanged file at <paramref name="path"/>, while its output still exists; otherwise null.</summary>
+    public async Task<OperationItemResult?> ReadPublishedResultAsync(string path, CancellationToken cancellationToken)
+    {
+        try
+        {
+            var result = await cache.ReadConversionResultAsync(files.Identify(path), cancellationToken);
+            if (result?.Output is not { } output)
+            {
+                return null;
+            }
+
+            files.Identify(output);
+            return result;
+        }
+        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException or ArgumentException)
+        {
+            return null;
+        }
+    }
+
+    /// <summary>The existing output or archive that would stop <paramref name="request"/> from converting, or null.</summary>
+    public string? FindExistingOutput(CandidateConversionRequest request)
+    {
+        try
+        {
+            files.PrepareOutputPath(request.Path, request.OutputDirectory, OutputSuffix(request), allowInput: request.ReplaceOriginal);
+            if (request.CreateElArchive)
+            {
+                files.PrepareOutputPath(request.Path, request.OutputDirectory, ".dovi");
+            }
+
+            return null;
+        }
+        catch (OutputExistsException ex)
+        {
+            return ex.Path;
+        }
+        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException or ArgumentException)
+        {
+            // Preparation reports other problems for the file itself.
+            return null;
+        }
+    }
+
+    private static string OutputSuffix(CandidateConversionRequest request) => request.ReplaceOriginal
+        ? Path.GetExtension(request.Path)
+        : request.Target == ConversionTarget.Profile81 ? " - DV P8.1.mkv" : " - HDR10.mkv";
+
     public async Task<CandidatePreparationResult> PrepareCandidateAsync(CandidateConversionRequest request, IProgress<OperationProgress>? progress, CancellationToken cancellationToken)
     {
         cancellationToken.ThrowIfCancellationRequested();
@@ -147,15 +198,12 @@ public sealed class ConversionService(DependencyService dependencies, IFileOpera
             return new CandidatePreparationResult.Skipped($"Insufficient temporary disk space: requires {scratchBytes:N0} bytes.");
         }
 
-        string suffix = request.ReplaceOriginal
-            ? Path.GetExtension(request.Path)
-            : (request.Target == ConversionTarget.Profile81 ? " - DV P8.1.mkv" : " - HDR10.mkv");
         string output;
         string? archive;
         try
         {
-            output = files.PrepareOutputPath(request.Path, request.OutputDirectory, suffix, allowInput: request.ReplaceOriginal);
-            archive = request.CreateElArchive ? files.PrepareOutputPath(request.Path, request.OutputDirectory, ".dovi") : null;
+            output = files.PrepareOutputPath(request.Path, request.OutputDirectory, OutputSuffix(request), allowInput: request.ReplaceOriginal, request.ExistingOutput);
+            archive = request.CreateElArchive ? files.PrepareOutputPath(request.Path, request.OutputDirectory, ".dovi", existing: request.ExistingOutput) : null;
         }
         catch (Exception ex) when (ex is IOException or UnauthorizedAccessException or ArgumentException)
         {
@@ -247,7 +295,8 @@ public sealed class ConversionService(DependencyService dependencies, IFileOpera
             scratchBytes,
             decision.Reason,
             Safe: false,
-            DeleteBackup: request.ReplaceOriginal);
+            DeleteBackup: request.ReplaceOriginal,
+            ReplaceExistingOutput: request.ExistingOutput == ExistingOutputHandling.Replace);
 
         return new CandidatePreparationResult.Success(plan, warning);
     }
@@ -295,7 +344,7 @@ public sealed class ConversionService(DependencyService dependencies, IFileOpera
             {
                 if (approvedPlan.Archive is not null)
                 {
-                    await using var stagedArchive = publisher.Stage(approvedPlan.Archive);
+                    await using var stagedArchive = publisher.Stage(approvedPlan.Archive, approvedPlan.ReplaceExistingOutput);
                     progress?.Report(new(approvedPlan.Id, "Backing up enhancement layer", media.Source.Path));
                     var manifest = await processor.ExtractBackupAsync(media, workspace, cancellationToken);
                     baseLayerHash = manifest.BaseLayerSha256;
@@ -312,7 +361,7 @@ public sealed class ConversionService(DependencyService dependencies, IFileOpera
 
                 for (int attempt = 0;; attempt++)
                 {
-                    await using var staged = publisher.Stage(approvedPlan.Output);
+                    await using var staged = publisher.Stage(approvedPlan.Output, approvedPlan.ReplaceExistingOutput);
                     bool safe = approvedPlan.Safe || attempt > 0;
                     try
                     {
@@ -352,10 +401,17 @@ public sealed class ConversionService(DependencyService dependencies, IFileOpera
                 OperationLog.Audit(logger, "DeleteOriginalBackup", backupIdentity.Path, "Completed", approvedPlan.Id);
             }
 
-            return new(approvedPlan.Analysis.Media.Source.Path, OperationStatus.Completed, approvedPlan.Output, "Verified output published. " + (approvedPlan.DeleteBackup ? "Original backup deleted." : "Original retained.") + archiveNote)
+            var completed = new OperationItemResult(approvedPlan.Analysis.Media.Source.Path, OperationStatus.Completed, approvedPlan.Output, "Verified output published. " + (approvedPlan.DeleteBackup ? "Original backup deleted." : "Original retained.") + archiveNote)
             {
                 Original = approvedPlan.DeleteBackup ? null : backupIdentity.Path, Archive = archive
             };
+            if (!approvedPlan.DeleteBackup)
+            {
+                // Best effort, like the hash cache: the retained original can show this result when it is opened again.
+                await cache.WriteConversionResultAsync(approvedPlan.Analysis.Media.Source, completed, CancellationToken.None);
+            }
+
+            return completed;
         }
         catch (Exception ex)
         {

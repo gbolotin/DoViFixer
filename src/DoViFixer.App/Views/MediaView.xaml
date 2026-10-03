@@ -458,17 +458,19 @@
                     <TextBlock Text="Details"
                                Style="{StaticResource BodyStrongTextBlockStyle}"
                                Margin="0,0,0,12" />
+                    <!-- Before an operation produces a file: one value per label. -->
                     <ItemsControl ItemsSource="{Binding Focused.DetailRows}"
                                   Grid.IsSharedSizeScope="True"
-                                  Foreground="{DynamicResource TextFillColorSecondaryBrush}">
+                                  Foreground="{DynamicResource TextFillColorSecondaryBrush}"
+                                  Visibility="{Binding Focused.ShowsResultComparison, Converter={StaticResource WfInverseBooleanToVisibilityConverter}, FallbackValue=Visible}">
                         <ItemsControl.ItemTemplate>
-                            <DataTemplate>
+                            <DataTemplate DataType="{x:Type viewModels:MediaDetail}">
                                 <Grid Margin="0,0,0,8">
                                     <Grid.ColumnDefinitions>
                                         <ColumnDefinition Width="Auto" SharedSizeGroup="MediaDetailLabels" />
                                         <ColumnDefinition Width="*" />
                                     </Grid.ColumnDefinitions>
-                                    <TextBlock Text="{Binding Key}" Margin="0,0,12,0" />
+                                    <TextBlock Text="{Binding Label}" Margin="0,0,12,0" />
                                     <TextBlock Grid.Column="1"
                                                Text="{Binding Value}"
                                                TextAlignment="Right"
@@ -477,10 +479,7 @@
                                         <TextBlock.Style>
                                             <Style TargetType="TextBlock">
                                                 <Style.Triggers>
-                                                    <DataTrigger Binding="{Binding Key}" Value="{x:Static viewModels:MediaRow.FileLocationLabel}">
-                                                        <Setter Property="Visibility" Value="Collapsed" />
-                                                    </DataTrigger>
-                                                    <DataTrigger Binding="{Binding Key}" Value="{x:Static viewModels:MediaRow.ConvertedFileLabel}">
+                                                    <DataTrigger Binding="{Binding Label}" Value="{x:Static viewModels:MediaRow.FileLocationLabel}">
                                                         <Setter Property="Visibility" Value="Collapsed" />
                                                     </DataTrigger>
                                                 </Style.Triggers>
@@ -495,7 +494,7 @@
                                             <Style TargetType="TextBlock">
                                                 <Setter Property="Visibility" Value="Collapsed" />
                                                 <Style.Triggers>
-                                                    <DataTrigger Binding="{Binding Key}" Value="{x:Static viewModels:MediaRow.FileLocationLabel}">
+                                                    <DataTrigger Binding="{Binding Label}" Value="{x:Static viewModels:MediaRow.FileLocationLabel}">
                                                         <Setter Property="Visibility" Value="Visible" />
                                                     </DataTrigger>
                                                 </Style.Triggers>
@@ -506,29 +505,109 @@
                                             <Run Text="{Binding Value, Mode=OneWay}" />
                                         </Hyperlink>
                                     </TextBlock>
-                                    <TextBlock Grid.Column="1"
-                                               TextAlignment="Right"
-                                               TextTrimming="CharacterEllipsis"
-                                               ToolTip="{Binding Value}">
-                                        <TextBlock.Style>
-                                            <Style TargetType="TextBlock">
-                                                <Setter Property="Visibility" Value="Collapsed" />
-                                                <Style.Triggers>
-                                                    <DataTrigger Binding="{Binding Key}" Value="{x:Static viewModels:MediaRow.ConvertedFileLabel}">
-                                                        <Setter Property="Visibility" Value="Visible" />
-                                                    </DataTrigger>
-                                                </Style.Triggers>
-                                            </Style>
-                                        </TextBlock.Style>
-                                        <Hyperlink Command="{Binding DataContext.OpenOutputCommand, RelativeSource={RelativeSource AncestorType=ItemsControl}}"
-                                                   AutomationProperties.Name="Show converted file">
-                                            <Run Text="{Binding Value, Mode=OneWay}" />
-                                        </Hyperlink>
-                                    </TextBlock>
                                 </Grid>
                             </DataTemplate>
                         </ItemsControl.ItemTemplate>
                     </ItemsControl>
+                    <!-- After an operation produced a file: the original and the result side by side. -->
+                    <StackPanel Grid.IsSharedSizeScope="True"
+                                TextBlock.Foreground="{DynamicResource TextFillColorSecondaryBrush}"
+                                Visibility="{Binding Focused.ShowsResultComparison, Converter={StaticResource WfBooleanToVisibilityConverter}, FallbackValue=Collapsed}">
+                        <Grid Margin="0,0,0,8">
+                            <Grid.ColumnDefinitions>
+                                <ColumnDefinition Width="Auto" SharedSizeGroup="MediaComparisonLabels" />
+                                <ColumnDefinition Width="*" />
+                                <ColumnDefinition Width="*" />
+                            </Grid.ColumnDefinitions>
+                            <TextBlock Grid.Column="1"
+                                       Text="Original"
+                                       Style="{StaticResource BodyStrongTextBlockStyle}"
+                                       Margin="0,0,12,0" />
+                            <TextBlock Grid.Column="2"
+                                       Text="Result"
+                                       Style="{StaticResource BodyStrongTextBlockStyle}" />
+                        </Grid>
+                        <ItemsControl ItemsSource="{Binding Focused.DetailRows}">
+                            <ItemsControl.ItemTemplate>
+                                <DataTemplate DataType="{x:Type viewModels:MediaDetail}">
+                                    <Grid Margin="0,0,0,8">
+                                        <Grid.ColumnDefinitions>
+                                            <ColumnDefinition Width="Auto" SharedSizeGroup="MediaComparisonLabels" />
+                                            <ColumnDefinition Width="*" />
+                                            <ColumnDefinition Width="*" />
+                                        </Grid.ColumnDefinitions>
+                                        <TextBlock Text="{Binding Label}" Margin="0,0,12,0" />
+                                        <TextBlock Grid.Column="1"
+                                                   Text="{Binding Value}"
+                                                   TextTrimming="CharacterEllipsis"
+                                                   ToolTip="{Binding Value}"
+                                                   Margin="0,0,12,0">
+                                            <TextBlock.Style>
+                                                <Style TargetType="TextBlock">
+                                                    <Style.Triggers>
+                                                        <DataTrigger Binding="{Binding Label}" Value="{x:Static viewModels:MediaRow.FileLocationLabel}">
+                                                            <Setter Property="Visibility" Value="Collapsed" />
+                                                        </DataTrigger>
+                                                    </Style.Triggers>
+                                                </Style>
+                                            </TextBlock.Style>
+                                        </TextBlock>
+                                        <TextBlock Grid.Column="2"
+                                                   Text="{Binding Result}"
+                                                   TextTrimming="CharacterEllipsis"
+                                                   ToolTip="{Binding Result}">
+                                            <TextBlock.Style>
+                                                <Style TargetType="TextBlock">
+                                                    <Style.Triggers>
+                                                        <DataTrigger Binding="{Binding Label}" Value="{x:Static viewModels:MediaRow.FileLocationLabel}">
+                                                            <Setter Property="Visibility" Value="Collapsed" />
+                                                        </DataTrigger>
+                                                    </Style.Triggers>
+                                                </Style>
+                                            </TextBlock.Style>
+                                        </TextBlock>
+                                        <TextBlock Grid.Column="1"
+                                                   TextTrimming="CharacterEllipsis"
+                                                   ToolTip="{Binding DataContext.Focused.Path, RelativeSource={RelativeSource AncestorType=ItemsControl}}"
+                                                   Margin="0,0,12,0">
+                                            <TextBlock.Style>
+                                                <Style TargetType="TextBlock">
+                                                    <Setter Property="Visibility" Value="Collapsed" />
+                                                    <Style.Triggers>
+                                                        <DataTrigger Binding="{Binding Label}" Value="{x:Static viewModels:MediaRow.FileLocationLabel}">
+                                                            <Setter Property="Visibility" Value="Visible" />
+                                                        </DataTrigger>
+                                                    </Style.Triggers>
+                                                </Style>
+                                            </TextBlock.Style>
+                                            <Hyperlink Command="{Binding DataContext.OpenFileLocationCommand, RelativeSource={RelativeSource AncestorType=ItemsControl}}"
+                                                       AutomationProperties.Name="Open file location">
+                                                <Run Text="{Binding Value, Mode=OneWay}" />
+                                            </Hyperlink>
+                                        </TextBlock>
+                                        <TextBlock Grid.Column="2"
+                                                   TextTrimming="CharacterEllipsis"
+                                                   ToolTip="{Binding DataContext.Focused.Result.Output, RelativeSource={RelativeSource AncestorType=ItemsControl}}">
+                                            <TextBlock.Style>
+                                                <Style TargetType="TextBlock">
+                                                    <Setter Property="Visibility" Value="Collapsed" />
+                                                    <Style.Triggers>
+                                                        <DataTrigger Binding="{Binding Label}" Value="{x:Static viewModels:MediaRow.FileLocationLabel}">
+                                                            <Setter Property="Visibility" Value="Visible" />
+                                                        </DataTrigger>
+                                                    </Style.Triggers>
+                                                </Style>
+                                            </TextBlock.Style>
+                                            <Hyperlink Command="{Binding DataContext.OpenOutputCommand, RelativeSource={RelativeSource AncestorType=ItemsControl}}"
+                                                       AutomationProperties.Name="Show result file">
+                                                <Run Text="{Binding Result, Mode=OneWay}" />
+                                            </Hyperlink>
+                                        </TextBlock>
+                                    </Grid>
+                                </DataTemplate>
+                            </ItemsControl.ItemTemplate>
+                        </ItemsControl>
+                    </StackPanel>
                     <TextBlock Text="{Binding Focused.DetailNotes}"
                                TextWrapping="Wrap"
                                Foreground="{DynamicResource TextFillColorSecondaryBrush}"

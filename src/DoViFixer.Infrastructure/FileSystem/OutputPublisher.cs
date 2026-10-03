@@ -4,11 +4,11 @@ using Microsoft.Extensions.Logging;
 namespace DoViFixer.Infrastructure.FileSystem;
 internal sealed class OutputPublisher(ILogger<OutputPublisher> logger) : IOutputPublisher
 {
-    public IStagedOutput Stage(string destination)
+    public IStagedOutput Stage(string destination, bool replaceExisting = false)
     {
         string full = Path.GetFullPath(destination);
         FileOperations.RejectReparsePoints(full);
-        if (File.Exists(full) || Directory.Exists(full))
+        if ((File.Exists(full) && !replaceExisting) || Directory.Exists(full))
         {
             throw new IOException($"Output already exists: {full}");
         }
@@ -17,10 +17,10 @@ internal sealed class OutputPublisher(ILogger<OutputPublisher> logger) : IOutput
         string directory = Path.Combine(Path.GetDirectoryName(full)!, ".dovifixer-" + Guid.NewGuid().ToString("N"));
         Directory.CreateDirectory(directory);
         logger.LogDebug("Staging {Output} in {Directory}", full, directory);
-        return new StagedOutput(full, directory, logger);
+        return new StagedOutput(full, directory, replaceExisting, logger);
     }
 
-    private sealed class StagedOutput(string destination, string directory, ILogger logger) : IStagedOutput
+    private sealed class StagedOutput(string destination, string directory, bool replaceExisting, ILogger logger) : IStagedOutput
     {
         public string Path => System.IO.Path.Combine(directory, "output.partial");
 
@@ -37,7 +37,8 @@ internal sealed class OutputPublisher(ILogger<OutputPublisher> logger) : IOutput
                 FileOperations.RejectReparsePoints(destination);
                 try
                 {
-                    File.Move(Path, destination, overwrite: false);
+                    // Replacement happens only here, after the new output was verified.
+                    File.Move(Path, destination, overwrite: replaceExisting);
                     logger.LogDebug("Published output {Output}", destination);
                     return;
                 }

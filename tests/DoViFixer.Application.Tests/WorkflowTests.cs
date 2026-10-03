@@ -98,6 +98,13 @@ public sealed class WorkflowTests
         private readonly Dictionary<(FileIdentity, AnalysisMethod), MediaAnalysis> entries = new();
         private readonly Dictionary<FileIdentity, string> hashes = new();
         public Task<string?> ReadBaseLayerHashAsync(FileIdentity source, CancellationToken cancellationToken) => Task.FromResult(hashes.GetValueOrDefault(source));
+        public Dictionary<FileIdentity, OperationItemResult> ConversionResults { get; } = new();
+        public Task<OperationItemResult?> ReadConversionResultAsync(FileIdentity source, CancellationToken cancellationToken) => Task.FromResult(ConversionResults.GetValueOrDefault(source));
+        public Task WriteConversionResultAsync(FileIdentity source, OperationItemResult result, CancellationToken cancellationToken)
+        {
+            ConversionResults[source] = result;
+            return Task.CompletedTask;
+        }
         public CancellationTokenSource? CancelOnBaseLayerHashWrite { get; init; }
         public FileIdentity? BaseLayerHashSource { get; private set; }
         public string? BaseLayerHash { get; private set; }
@@ -884,7 +891,7 @@ public sealed class WorkflowTests
             Restored++;
         }
 
-        public string PrepareOutputPath(string input, string? outputDirectory, string suffix, bool allowInput = false) => Path.Combine(outputDirectory ?? Path.GetDirectoryName(Path.GetFullPath(input))!, Path.GetFileNameWithoutExtension(input) + suffix);
+        public string PrepareOutputPath(string input, string? outputDirectory, string suffix, bool allowInput = false, ExistingOutputHandling existing = ExistingOutputHandling.Skip) => Path.Combine(outputDirectory ?? Path.GetDirectoryName(Path.GetFullPath(input))!, Path.GetFileNameWithoutExtension(input) + suffix);
 
         public bool FailAvailableSpace
         {
@@ -933,7 +940,7 @@ public sealed class WorkflowTests
         }
 
         public ValueTask<ITemporaryWorkspace> CreateAsync(long requiredBytes, string? directory, CancellationToken cancellationToken) => ValueTask.FromResult<ITemporaryWorkspace>(new Owned(this));
-        public IStagedOutput Stage(string destination) => new Owned(this);
+        public IStagedOutput Stage(string destination, bool replaceExisting = false) => new Owned(this);
         public Task ConvertAsync(MediaInfo media, ConversionTarget target, ITemporaryWorkspace workspace, string stagedOutput, IProgress<OperationProgress>? progress, Guid operationId, CancellationToken cancellationToken, bool safe = false)
         {
             ConvertCalls++;
