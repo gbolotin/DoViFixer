@@ -30,7 +30,7 @@ public static class DependencyInjection
             {
                 Timeout = TimeSpan.FromMinutes(30)
             };
-            http.DefaultRequestHeaders.UserAgent.ParseAdd("DoViFixer/0.1.0");
+            http.DefaultRequestHeaders.UserAgent.ParseAdd($"DoViFixer/{ApplicationVersion.Of(typeof(DependencyInjection).Assembly)}");
             return http;
         });
         services.AddTransient<IProcessRunner, ProcessRunner>();
@@ -48,7 +48,7 @@ public static class DependencyInjection
         services.AddTransient<IVideoProcessor, VideoProcessor>();
         services.AddTransient<IMediaVerifier, MediaVerifier>();
         services.AddTransient<IBackupArchiveStore, BackupArchiveStore>();
-        services.AddTransient<IUpdateSource, UpstreamReleaseSource>();
+        services.AddTransient<IUpdateSource, GitHubReleaseSource>();
         return services;
     }
 }

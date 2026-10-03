@@ -23,14 +23,14 @@ public sealed class UpdateCommand(UpdateService updates, ConsoleRenderer rendere
         switch (command.Command)
         {
             case "update-check":
-                var release = await updates.CheckAsync(cancellationToken);
+                var result = await updates.CheckAsync(ApplicationVersion.Of(typeof(UpdateCommand).Assembly), cancellationToken);
             if (command.Has("json"))
             {
-                renderer.Json(release);
+                renderer.Json(result);
             }
             else
             {
-                renderer.Write($"{release.Product}: {release.Version}\n{release.Url}\nReviewed baseline: 8.2.0.");
+                renderer.Write(Format(result));
             }
 
             return 0;
@@ -38,4 +38,11 @@ public sealed class UpdateCommand(UpdateService updates, ConsoleRenderer rendere
                 throw new ArgumentException("Unsupported command.");
         }
     }
+
+    internal static string Format(UpdateCheckResult result) => $"DoViFixer {result.CurrentVersion}\n" + result switch
+    {
+        { Latest: null } => "No DoViFixer release has been published yet.",
+        { Latest: { } latest, IsUpdateAvailable: true } => $"Update available: {latest.Version}\n{latest.Url}",
+        { Latest: { } latest } => $"Up to date. Latest release: {latest.Version}",
+    };
 }
