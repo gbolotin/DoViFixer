@@ -57,6 +57,13 @@ public sealed class ClassificationTests
     }
 
     [TestMethod]
+    public void ConversionScratchSpaceIsBoundedByThreeSourceCopies()
+    {
+        const long source = 66L * 1024 * 1024 * 1024;
+        Assert.AreEqual(source * 3 + (2L << 30), ConversionPolicy.RequiredScratchBytes(source));
+    }
+
+    [TestMethod]
     public void PartialSampleCoverageIsUnknownEvenForMel()
     {
         var analysis = MediaClassifier.Classify(Media(), new(AnalysisMethod.SampledRpu, EnhancementLayer.Mel, 24, null, 9, 10));

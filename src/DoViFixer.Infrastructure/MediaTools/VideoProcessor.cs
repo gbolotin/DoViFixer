@@ -70,6 +70,7 @@ internal sealed class VideoProcessor(IToolCatalog tools, IProcessRunner processe
         progress?.Report(new(operationId, "Remuxing", media.Source.Path));
         logger.LogDebug("Stage {Stage}", "Remuxing");
         await RemuxAsync(media, processed, stagedOutput, workspace, cancellationToken, new MkvProgress(progress, operationId, "Remuxing", media.Source.Path).Report);
+        File.Delete(processed);
         progress?.Report(new(operationId, "Remuxing", media.Source.Path, 100));
     }
 
@@ -133,6 +134,7 @@ internal sealed class VideoProcessor(IToolCatalog tools, IProcessRunner processe
 
         File.Delete(verifiedEl);
         await RemuxAsync(media, restored, stagedOutput, workspace, cancellationToken);
+        File.Delete(restored);
     }
 
     internal Task ExtractVideoAsync(MediaInfo media, string output, CancellationToken cancellationToken, Action<string>? outputLine = null) => processes.RunAsync(new(tools.GetPath(NativeTool.MkvExtract), new[]

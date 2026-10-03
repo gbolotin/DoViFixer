@@ -41,5 +41,10 @@ public static class ConversionPolicy
         return Evaluate(analysis, includeSimple, forceComplex).Allowed;
     }
 
-    public static long RequiredScratchBytes(long sourceLength) => checked(sourceLength * 8 + (1L << 30));
+    /// <summary>
+    /// Scratch space a conversion, backup or restore needs. At most three video-sized files exist at once:
+    /// the enhancement-layer backup plus an extracted track and its processed copy, or during verification
+    /// an extracted track and its cleaned base layer. Each is bounded by the source size.
+    /// </summary>
+    public static long RequiredScratchBytes(long sourceLength) => checked(sourceLength * 3 + (2L << 30));
 }
