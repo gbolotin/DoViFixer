@@ -49,53 +49,31 @@ internal sealed class AnalysisCache(StorageOptions options, ILogger<AnalysisCach
 
     public async Task<MediaAnalysis?> ReadAsync(FileIdentity source, AnalysisMethod method, CancellationToken cancellationToken)
     {
-        cancellationToken.ThrowIfCancellationRequested();
-        try
+        var entry = await ReadEntryAsync<Entry>(CachePath(source, method.ToString()), "Analysis", source.Path, cancellationToken);
+        if (entry?.Version != version || entry.Analysis is not
         {
-            await using var stream = new FileStream(CachePath(source, method.ToString()), FileMode.Open, FileAccess.Read, FileShare.Read | FileShare.Delete, 4096, true);
-            var entry = await JsonSerializer.DeserializeAsync<Entry>(stream, cancellationToken: cancellationToken);
-            if (entry?.Version != version || entry.Analysis is not
+            Media.Source:
             {
-                Media.Source:
-                {
-                }
-                identity, Evidence:
-                {
-                }
-                evidence
             }
-            analysis || !string.Equals(identity.Path, source.Path, StringComparison.OrdinalIgnoreCase) || identity.Length != source.Length || identity.LastWriteUtc != source.LastWriteUtc || evidence.Method != method || !Cacheable(analysis))
+            identity, Evidence:
             {
-                return null;
             }
-
-            // Recompute the verdict instead of trusting a serialized decision.
-            return MediaClassifier.Classify(analysis.Media, evidence);
+            evidence
         }
-        catch (Exception ex)when (ex is IOException or UnauthorizedAccessException or JsonException)
+        analysis || !SameFile(identity, source) || evidence.Method != method || !Cacheable(analysis))
         {
-            logger.LogDebug(ex, "Analysis cache miss for {Input}", source.Path);
             return null;
         }
+
+        // Recompute the verdict instead of trusting a serialized decision.
+        return MediaClassifier.Classify(analysis.Media, evidence);
     }
 
     public async Task<string?> ReadBaseLayerHashAsync(FileIdentity source, CancellationToken cancellationToken)
     {
-        cancellationToken.ThrowIfCancellationRequested();
-        try
-        {
-            await using var stream = new FileStream(CachePath(source, "base-layer"), FileMode.Open, FileAccess.Read, FileShare.Read | FileShare.Delete, 4096, true);
-            var entry = await JsonSerializer.DeserializeAsync<HashEntry>(stream, cancellationToken: cancellationToken);
-            return entry?.Version == version && entry.Source is { } identity
-                && string.Equals(identity.Path, source.Path, StringComparison.OrdinalIgnoreCase)
-                && identity.Length == source.Length && identity.LastWriteUtc == source.LastWriteUtc
-                && entry.Sha256 is { Length: 64 } && entry.Sha256.All(Uri.IsHexDigit) ? entry.Sha256 : null;
-        }
-        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException or JsonException)
-        {
-            logger.LogDebug(ex, "Base-layer hash cache miss for {Input}", source.Path);
-            return null;
-        }
+        var entry = await ReadEntryAsync<HashEntry>(CachePath(source, "base-layer"), "Base-layer hash", source.Path, cancellationToken);
+        return entry?.Version == version && entry.Source is { } identity && SameFile(identity, source)
+            && entry.Sha256 is { Length: 64 } && entry.Sha256.All(Uri.IsHexDigit) ? entry.Sha256 : null;
     }
 
     public Task WriteBaseLayerHashAsync(FileIdentity source, string sha256, CancellationToken cancellationToken) =>
@@ -103,19 +81,9 @@ internal sealed class AnalysisCache(StorageOptions options, ILogger<AnalysisCach
 
     public async Task<OperationItemResult?> ReadConversionResultAsync(FileIdentity source, CancellationToken cancellationToken)
     {
-        cancellationToken.ThrowIfCancellationRequested();
-        try
-        {
-            await using var stream = new FileStream(CachePath(source, "conversion"), FileMode.Open, FileAccess.Read, FileShare.Read | FileShare.Delete, 4096, true);
-            var entry = await JsonSerializer.DeserializeAsync<ResultEntry>(stream, cancellationToken: cancellationToken);
-            return entry?.Version == version && entry.Source is { } identity && SameFile(identity, source)
-                && entry.Result is { Output: not null } result ? result : null;
-        }
-        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException or JsonException)
-        {
-            logger.LogDebug(ex, "Conversion result cache miss for {Input}", source.Path);
-            return null;
-        }
+        var entry = await ReadEntryAsync<ResultEntry>(CachePath(source, "conversion"), "Conversion result", source.Path, cancellationToken);
+        return entry?.Version == version && entry.Source is { } identity && SameFile(identity, source)
+            && entry.Result is { Output: not null } result ? result : null;
     }
 
     public Task WriteConversionResultAsync(FileIdentity source, OperationItemResult result, CancellationToken cancellationToken) =>
@@ -133,6 +101,21 @@ internal sealed class AnalysisCache(StorageOptions options, ILogger<AnalysisCach
         }
 
         return WriteEntryAsync(CachePath(analysis.Media.Source, analysis.Evidence.Method.ToString()), new Entry(version, analysis), analysis.Media.Source.Path, cancellationToken);
+    }
+
+    private async Task<T?> ReadEntryAsync<T>(string path, string kind, string input, CancellationToken cancellationToken) where T : class
+    {
+        cancellationToken.ThrowIfCancellationRequested();
+        try
+        {
+            await using var stream = new FileStream(path, FileMode.Open, FileAccess.Read, FileShare.Read | FileShare.Delete, 4096, true);
+            return await JsonSerializer.DeserializeAsync<T>(stream, cancellationToken: cancellationToken);
+        }
+        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException or JsonException)
+        {
+            logger.LogDebug(ex, "{Kind} cache miss for {Input}", kind, input);
+            return null;
+        }
     }
 
     private async Task WriteEntryAsync<T>(string destination, T entry, string input, CancellationToken cancellationToken)
