@@ -352,16 +352,20 @@ public sealed class ConversionService(DependencyService dependencies, IFileOpera
                 OperationLog.Audit(logger, "DeleteOriginalBackup", backupIdentity.Path, "Completed", approvedPlan.Id);
             }
 
-            return new(approvedPlan.Analysis.Media.Source.Path, OperationStatus.Completed, approvedPlan.Output, "Verified output published. " + (approvedPlan.DeleteBackup ? "Original backup deleted." : "Original retained.") + archiveNote,
-                approvedPlan.DeleteBackup ? null : backupIdentity.Path, archive);
+            return new(approvedPlan.Analysis.Media.Source.Path, OperationStatus.Completed, approvedPlan.Output, "Verified output published. " + (approvedPlan.DeleteBackup ? "Original backup deleted." : "Original retained.") + archiveNote)
+            {
+                Original = approvedPlan.DeleteBackup ? null : backupIdentity.Path, Archive = archive
+            };
         }
         catch (Exception ex)
         {
             if (published)
             {
                 logger.LogWarning(ex, "Conversion verified and published, but original backup cleanup did not complete: {BackupPath}", backupIdentity.Path);
-                return new(approvedPlan.Analysis.Media.Source.Path, OperationStatus.Partial, approvedPlan.Output, $"Conversion verified and published. Original backup cleanup did not complete: {ex.Message} Original retained." + archiveNote,
-                    backupIdentity.Path, archive);
+                return new(approvedPlan.Analysis.Media.Source.Path, OperationStatus.Partial, approvedPlan.Output, $"Conversion verified and published. Original backup cleanup did not complete: {ex.Message} Original retained." + archiveNote)
+                {
+                    Original = backupIdentity.Path, Archive = archive
+                };
             }
 
             string recovery = " Original retained.";
@@ -383,8 +387,10 @@ public sealed class ConversionService(DependencyService dependencies, IFileOpera
             }
 
             logger.LogError(ex, "Conversion failed: {Reason} Original: {OriginalPath} Archive: {ArchivePath}", ex.Message, original, archive);
-            return new(approvedPlan.Analysis.Media.Source.Path, ex is OperationCanceledException ? OperationStatus.Cancelled : OperationStatus.Failed, published ? approvedPlan.Output : null, ex.Message + recovery + archiveNote,
-                original, archive);
+            return new(approvedPlan.Analysis.Media.Source.Path, ex is OperationCanceledException ? OperationStatus.Cancelled : OperationStatus.Failed, published ? approvedPlan.Output : null, ex.Message + recovery + archiveNote)
+            {
+                Original = original, Archive = archive
+            };
         }
     }
 }
