@@ -67,17 +67,19 @@ internal sealed class MediaVerifier(MediaProbe probe, VideoProcessor processor, 
         ReportCheckpoint();
         bool compareSourceRpu = source.Profile == DolbyVisionProfile.Profile7 && expectedProfile == DolbyVisionProfile.Profile81;
         string beforeBase = await CleanBaseAsync(source, workspace, "before", cancellationToken, compareSourceRpu);
+        // Hash now so the cleaned base layer does not occupy scratch space during RPU verification.
+        string beforeBaseHash = await VideoProcessor.HashAsync(beforeBase, cancellationToken);
+        File.Delete(beforeBase);
         ReportCheckpoint();
         await VerifyRpuAsync(source, target, expectedProfile, outputFrames, workspace, failures, cancellationToken);
         File.Delete(workspace.File("before.hevc"));
         ReportCheckpoint();
         string afterBase = await CleanBaseAsync(target, workspace, "after", cancellationToken);
-        if (await VideoProcessor.HashAsync(beforeBase, cancellationToken) != await VideoProcessor.HashAsync(afterBase, cancellationToken))
+        if (beforeBaseHash != await VideoProcessor.HashAsync(afterBase, cancellationToken))
         {
             failures.Add("Base-layer video payload changed.");
         }
 
-        File.Delete(beforeBase);
         File.Delete(afterBase);
         ReportCheckpoint();
         await VerifyAttachmentsAsync(source, target, workspace, failures, cancellationToken);
