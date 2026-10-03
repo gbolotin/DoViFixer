@@ -1,6 +1,7 @@
 using System.ComponentModel;
 using DoViFixer.App.ViewModels;
 using DoViFixer.App.Presentation.Application;
+using DoViFixer.Application.Abstractions;
 using Microsoft.VisualStudio.TestTools.UnitTesting;
 using Microsoft.Extensions.DependencyInjection;
 
@@ -23,9 +24,8 @@ public sealed class ViewModelTests
         row.PropertyChanged += (_, e) => changes.Add(e.PropertyName);
         row.Analysis = DoViFixer.Domain.Analysis.MediaClassifier.Classify(media,
             new(DoViFixer.Domain.Analysis.AnalysisMethod.SampledRpu, DoViFixer.Domain.Media.EnhancementLayer.Mel, 390, 900, 10, 10));
-        var details = row.DetailRows.ToDictionary();
+        var details = row.DetailRows.ToDictionary(detail => detail.Label, detail => detail.Value);
         Assert.AreEqual(expectedLength, details["Length"]);
-        Assert.AreEqual("Matroska", details["Type"]);
         Assert.AreEqual(path, details["File location"]);
         Assert.AreEqual("3840 × 2160", details["Resolution"]);
         Assert.AreEqual("10/10", details["Samples"]);
@@ -441,7 +441,7 @@ public sealed class ViewModelTests
         };
         row.Analysis = DoViFixer.Domain.Analysis.MediaClassifier.Classify(row.Analysis.Media, evidence);
         Assert.AreEqual("Profile 7 · Incomplete scan", row.Classification);
-        Assert.AreEqual("9/10", row.DetailRows.Single(detail => detail.Key == "Samples").Value);
+        Assert.AreEqual("9/10", row.DetailRows.Single(detail => detail.Label == "Samples").Value);
         Assert.IsTrue(row.DetailNotes.Contains("No RPU was found in input file"));
         Assert.IsTrue(row.DetailNotes.Contains("Suggested action: Inspect"));
         Assert.IsFalse(row.CanRetryAnalysis);
@@ -517,31 +517,123 @@ public sealed class ViewModelTests
         using var runtime = new TestRuntime();
         var model = runtime.Container.GetRequiredService<MediaViewModel>();
         await model.AddAsync([@"C:\Media\One\Mountain.mkv", @"C:\Media\Two\Ocean.mkv"]);
-        Assert.IsFalse(model.Files[0].DetailRows.Any(detail => detail.Key == MediaRow.ConvertedFileLabel));
+        Assert.IsFalse(model.Files[0].ShowsResultComparison);
+        Assert.IsTrue(model.Files[0].DetailRows.All(detail => detail.Result == ""), "Before conversion details have no result column.");
+        Assert.AreEqual(model.Files[0].Path, model.Files[0].DetailRows.Single(detail => detail.Label == MediaRow.FileLocationLabel).Value);
         await model.ConvertDv81Command.InvokeAsync();
         string output = model.Files[0].Result!.Output!;
         StringAssert.StartsWith(output, @"C:\Media\One\");
-        Assert.AreEqual(output, model.Files[0].DetailRows.Single(detail => detail.Key == MediaRow.ConvertedFileLabel).Value);
+        Assert.IsTrue(model.Files[0].ShowsResultComparison);
+        Assert.IsNotNull(model.Files[0].ResultAnalysis, "The produced file's metadata is read for the comparison.");
+        var file = model.Files[0].DetailRows.Single(detail => detail.Label == MediaRow.FileLocationLabel);
+        Assert.AreEqual("Mountain.mkv", file.Value);
+        Assert.AreEqual(Path.GetFileName(output), file.Result);
+        Assert.AreEqual("3840 × 2160", model.Files[0].DetailRows.Single(detail => detail.Label == "Resolution").Result);
+        Assert.IsFalse(model.Files[0].DetailRows.Any(detail => detail.Label == "Type"), "Every file is Matroska, so the type is not shown.");
+        Assert.AreEqual(0, model.Files[0].ResultFiles.Count, "The comparison already links the output and the unchanged original.");
         model.Focused = model.Files[1];
         model.OpenRowOutputCommand.Invoke(model.Files[0]);
         Assert.AreEqual(output, runtime.ShownFile, "The row link uses the clicked row rather than the focused row.");
         model.Focused = model.Files[0];
         model.OpenOutputCommand.Invoke();
         Assert.AreEqual(output, runtime.ShownFile);
-        var resultFiles = model.Files[0].ResultFiles;
-        Assert.AreEqual(output, resultFiles.Single(file => file.Label == "Output").Path);
-        string original = resultFiles.Single(file => file.Label == "Original").Path;
-        Assert.AreEqual(model.Files[0].Path, original, "The default conversion keeps the original in place.");
-        model.ShowResultFileCommand.Invoke(original);
-        Assert.AreEqual(original, runtime.ShownFile);
-        Assert.IsFalse(model.ShowResultFileCommand.CanExecute(null));
+        Assert.AreEqual(model.Files[0].Path, model.Files[0].Result!.Original, "The default conversion keeps the original in place.");
         Assert.AreEqual("Converted", model.Files[0].Status);
         await model.ScanCommand.InvokeAsync();
         Assert.AreEqual("", model.Files[0].Status);
         Assert.IsFalse(model.Files[0].CanOpenResult);
-        Assert.IsFalse(model.Files[0].DetailRows.Any(detail => detail.Key == MediaRow.ConvertedFileLabel), "Without a converted file the link is hidden.");
+        Assert.IsFalse(model.Files[0].ShowsResultComparison, "Without a converted file the comparison is hidden.");
+        Assert.AreEqual(model.Files[0].Path, model.Files[0].DetailRows.Single(detail => detail.Label == MediaRow.FileLocationLabel).Value);
         Assert.IsFalse(model.OpenOutputCommand.CanExecute(null));
         Assert.IsNotNull(model.Files[0].Result, "Analysis retains the previous conversion details.");
+        var resultFiles = model.Files[0].ResultFiles;
+        Assert.AreEqual(output, resultFiles.Single(resultFile => resultFile.Label == "Output").Path);
+        string original = resultFiles.Single(resultFile => resultFile.Label == "Original").Path;
+        model.ShowResultFileCommand.Invoke(original);
+        Assert.AreEqual(original, runtime.ShownFile);
+        Assert.IsFalse(model.ShowResultFileCommand.CanExecute(null));
+    }
+
+    [TestMethod]
+    [DataRow(null, null)]
+    [DataRow(ExistingOutputHandling.Replace, @"C:\Media\One\Mountain - DV P8.1.mkv")]
+    [DataRow(ExistingOutputHandling.KeepBoth, @"C:\Media\One\Mountain - DV P8.1 (1).mkv")]
+    public async Task SingleFileConversionAsksWhatToDoWithAnExistingOutput(ExistingOutputHandling? answer, string? expectedOutput)
+    {
+        using var runtime = new TestRuntime { ExistingOutputAnswer = answer };
+        const string existing = @"C:\Media\One\Mountain - DV P8.1.mkv";
+        runtime.ExistingOutputFiles.Add(existing);
+        var model = runtime.Container.GetRequiredService<MediaViewModel>();
+        await model.AddAsync([@"C:\Media\One\Mountain.mkv"]);
+        int conversions = runtime.Conversions;
+        await model.ConvertDv81Command.InvokeAsync();
+        var row = model.Files.Single();
+        CollectionAssert.AreEqual(new[] { existing }, runtime.ExistingOutputQuestions);
+        if (expectedOutput is null)
+        {
+            Assert.AreEqual(conversions, runtime.Conversions, "Cancel does not convert.");
+            Assert.AreNotEqual(MediaRowState.Skipped, row.State, "Cancel does not mark the file skipped.");
+            Assert.IsNull(row.Result);
+            return;
+        }
+
+        Assert.AreEqual(MediaRowState.Converted, row.State);
+        Assert.AreEqual(expectedOutput, row.Result!.Output);
+        Assert.AreEqual((expectedOutput, answer == ExistingOutputHandling.Replace), runtime.StagedOutputs.Single(staged => staged.Path == expectedOutput));
+    }
+
+    [TestMethod]
+    public async Task BatchConversionSkipsExistingOutputsWithoutAsking()
+    {
+        using var runtime = new TestRuntime { ExistingOutputAnswer = ExistingOutputHandling.Replace };
+        runtime.ExistingOutputFiles.Add(@"C:\Media\One\Mountain - DV P8.1.mkv");
+        var model = runtime.Container.GetRequiredService<MediaViewModel>();
+        await model.AddAsync([@"C:\Media\One\Mountain.mkv", @"C:\Media\Two\Ocean.mkv"]);
+        foreach (var file in model.Files)
+        {
+            file.IsSelected = true;
+        }
+
+        Assert.AreEqual(2, model.Files.Count(file => file.IsSelected));
+        await model.ConvertDv81Command.InvokeAsync();
+        Assert.AreEqual(0, runtime.ExistingOutputQuestions.Count);
+        Assert.AreEqual(MediaRowState.Skipped, model.Files[0].State);
+        StringAssert.Contains(model.Files[0].Notice, "Output collision");
+        Assert.IsFalse(runtime.StagedOutputs.Any(staged => staged.ReplaceExisting), "Batches never replace existing files.");
+    }
+
+    [TestMethod]
+    [DataRow(false)]
+    [DataRow(true)]
+    public async Task ReopenedOriginalShowsItsEarlierConversionWhileTheOutputExists(bool outputDeleted)
+    {
+        using var runtime = new TestRuntime();
+        const string source = @"C:\Media\One\Mountain.mkv";
+        var firstRun = runtime.Container.GetRequiredService<MediaViewModel>();
+        await firstRun.AddAsync([source]);
+        await firstRun.ConvertDv81Command.InvokeAsync();
+        var converted = firstRun.Files[0].Result!;
+        if (outputDeleted)
+        {
+            runtime.MissingFiles.Add(converted.Output!);
+        }
+
+        var nextRun = ActivatorUtilities.CreateInstance<MediaViewModel>(runtime.Container);
+        await nextRun.AddAsync([source]);
+        var row = nextRun.Files.Single();
+        Assert.IsNotNull(row.Analysis, "Added files are scanned automatically.");
+        if (outputDeleted)
+        {
+            Assert.IsNull(row.Result, "A deleted output is not shown.");
+            Assert.IsFalse(row.ShowsResultComparison);
+            return;
+        }
+
+        Assert.AreEqual(converted, row.Result);
+        Assert.AreEqual("Converted", row.Status);
+        Assert.IsTrue(row.ShowsResultComparison);
+        Assert.IsNotNull(row.ResultAnalysis);
+        Assert.AreEqual(Path.GetFileName(converted.Output), row.DetailRows.Single(detail => detail.Label == MediaRow.FileLocationLabel).Result);
     }
 
     [TestMethod]

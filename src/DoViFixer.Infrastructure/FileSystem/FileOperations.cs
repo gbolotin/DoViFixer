@@ -61,7 +61,7 @@ internal sealed class FileOperations : IFileOperations, IFileDiscovery
         return [.. Directory.EnumerateFiles(full, "*", enumeration).Where(Matches).Order(StringComparer.OrdinalIgnoreCase)];
     }
 
-    public string PrepareOutputPath(string input, string? outputDirectory, string suffix, bool allowInput = false)
+    public string PrepareOutputPath(string input, string? outputDirectory, string suffix, bool allowInput = false, ExistingOutputHandling existing = ExistingOutputHandling.Skip)
     {
         string source = Path.GetFullPath(input);
         string directory = Path.GetFullPath(outputDirectory ?? Path.GetDirectoryName(source)!);
@@ -73,12 +73,35 @@ internal sealed class FileOperations : IFileOperations, IFileDiscovery
 
         RejectReparsePoints(directory);
         string output = Path.Combine(directory, Path.GetFileNameWithoutExtension(source) + suffix);
-        if (!(allowInput && string.Equals(output, source, StringComparison.OrdinalIgnoreCase)) && (File.Exists(output) || Directory.Exists(output) || string.Equals(output, source, StringComparison.OrdinalIgnoreCase)))
+        bool isSource = string.Equals(output, source, StringComparison.OrdinalIgnoreCase);
+        if (allowInput && isSource)
+        {
+            return output;
+        }
+
+        if (isSource || Directory.Exists(output))
         {
             throw new IOException($"Output collision: {output}. Existing files will not be overwritten.");
         }
 
-        return output;
+        if (!File.Exists(output) || existing == ExistingOutputHandling.Replace)
+        {
+            return output;
+        }
+
+        if (existing == ExistingOutputHandling.Skip)
+        {
+            throw new OutputExistsException(output);
+        }
+
+        for (int number = 1;; number++)
+        {
+            string numbered = Path.Combine(directory, $"{Path.GetFileNameWithoutExtension(output)} ({number}){Path.GetExtension(output)}");
+            if (!File.Exists(numbered) && !Directory.Exists(numbered) && !string.Equals(numbered, source, StringComparison.OrdinalIgnoreCase))
+            {
+                return numbered;
+            }
+        }
     }
 
     public FileIdentity RenameOriginal(FileIdentity identity)

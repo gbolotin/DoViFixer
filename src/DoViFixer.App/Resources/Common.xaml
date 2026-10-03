@@ -1,6 +1,7 @@
 <!-- DoViFixer-specific resources. Shared styles, templates and converters come from the WpfFoundation entry dictionary (Wf* keys). -->
 <ResourceDictionary xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
-                    xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml">
+                    xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+                    xmlns:dialogs="clr-namespace:DoViFixer.App.Dialogs">
     <DataTemplate x:Key="AddIconButtonContent">
         <StackPanel Orientation="Horizontal">
             <Grid Width="24"
@@ -38,5 +39,10 @@
             </Grid>
             <TextBlock Text="{Binding}" VerticalAlignment="Center" />
         </StackPanel>
+    </DataTemplate>
+    <DataTemplate DataType="{x:Type dialogs:ExistingOutputDialogViewModel}">
+        <TextBlock Text="{Binding Message}"
+                   TextWrapping="Wrap"
+                   MaxWidth="544" />
     </DataTemplate>
 </ResourceDictionary>

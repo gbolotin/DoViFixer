@@ -16,6 +16,15 @@ public sealed class InspectionService(DependencyService dependencies, IMediaProb
         return analysis;
     }, cancellationToken, result => result.Verdict == AnalysisVerdict.AnalysisFailed ? OperationStatus.Failed : OperationStatus.Completed);
     
+    /// <summary>Reads container metadata only, without RPU analysis, for describing a produced output file.</summary>
+    public async Task<MediaAnalysis> ReadMetadataAsync(string path, CancellationToken cancellationToken)
+    {
+        var source = files.Identify(path);
+        await using var lease = await files.AcquireReadLeaseAsync(source, cancellationToken);
+        var media = await probe.ProbeAsync(source.Path, cancellationToken);
+        return MediaClassifier.Classify(media, new(AnalysisMethod.MetadataOnly, EnhancementLayer.Unknown, 0, null, 0, 0));
+    }
+
     public async Task<MediaAnalysis?> ReadCachedAsync(string path, AnalysisMethod method, CancellationToken cancellationToken)
     {
         cancellationToken.ThrowIfCancellationRequested();

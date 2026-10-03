@@ -10,7 +10,9 @@ public interface IFileDiscovery
 public interface IFileOperations
 {
     FileIdentity Identify(string path);
-    string PrepareOutputPath(string input, string? outputDirectory, string suffix, bool allowInput = false);
+    /// <summary>The output path for <paramref name="input"/>; an existing file there is handled as <paramref name="existing"/> says.</summary>
+    /// <exception cref="OutputExistsException">The output exists and <paramref name="existing"/> is <see cref="ExistingOutputHandling.Skip"/>.</exception>
+    string PrepareOutputPath(string input, string? outputDirectory, string suffix, bool allowInput = false, ExistingOutputHandling existing = ExistingOutputHandling.Skip);
     FileIdentity RenameOriginal(FileIdentity identity);
     void RestoreOriginal(FileIdentity backupIdentity, string originalPath);
     void EnsureAvailableSpace(string directory, long requiredBytes);
@@ -46,5 +48,21 @@ public interface IStagedOutput : IAsyncDisposable
 
 public interface IOutputPublisher
 {
-    IStagedOutput Stage(string destination);
+    IStagedOutput Stage(string destination, bool replaceExisting = false);
+}
+
+/// <summary>What to do when a conversion output already exists.</summary>
+public enum ExistingOutputHandling
+{
+    /// <summary>Leave the existing file and do not convert.</summary>
+    Skip,
+    /// <summary>Replace the existing file once the new output is verified.</summary>
+    Replace,
+    /// <summary>Keep the existing file and save under a numbered name, such as "Movie - DV P8.1 (1).mkv".</summary>
+    KeepBoth
+}
+
+public sealed class OutputExistsException(string path) : IOException($"Output collision: {path}. Existing files will not be overwritten.")
+{
+    public string Path { get; } = path;
 }

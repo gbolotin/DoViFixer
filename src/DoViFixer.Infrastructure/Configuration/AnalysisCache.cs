@@ -2,6 +2,7 @@ using System.Security.Cryptography;
 using System.Text;
 using System.Text.Json;
 using DoViFixer.Application.Abstractions;
+using DoViFixer.Application.Operations;
 using DoViFixer.Domain.Analysis;
 using DoViFixer.Domain.Media;
 using Microsoft.Extensions.Logging;
@@ -14,6 +15,7 @@ internal sealed class AnalysisCache(StorageOptions options, ILogger<AnalysisCach
     private const int version = 1;
     private sealed record Entry(int Version, MediaAnalysis Analysis);
     private sealed record HashEntry(int Version, FileIdentity Source, string Sha256);
+    private sealed record ResultEntry(int Version, FileIdentity Source, OperationItemResult Result);
     public Task<long> GetSizeAsync(CancellationToken cancellationToken)
     {
         cancellationToken.ThrowIfCancellationRequested();
@@ -98,6 +100,29 @@ internal sealed class AnalysisCache(StorageOptions options, ILogger<AnalysisCach
 
     public Task WriteBaseLayerHashAsync(FileIdentity source, string sha256, CancellationToken cancellationToken) =>
         WriteEntryAsync(CachePath(source, "base-layer"), new HashEntry(version, source, sha256), source.Path, cancellationToken);
+
+    public async Task<OperationItemResult?> ReadConversionResultAsync(FileIdentity source, CancellationToken cancellationToken)
+    {
+        cancellationToken.ThrowIfCancellationRequested();
+        try
+        {
+            await using var stream = new FileStream(CachePath(source, "conversion"), FileMode.Open, FileAccess.Read, FileShare.Read | FileShare.Delete, 4096, true);
+            var entry = await JsonSerializer.DeserializeAsync<ResultEntry>(stream, cancellationToken: cancellationToken);
+            return entry?.Version == version && entry.Source is { } identity && SameFile(identity, source)
+                && entry.Result is { Output: not null } result ? result : null;
+        }
+        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException or JsonException)
+        {
+            logger.LogDebug(ex, "Conversion result cache miss for {Input}", source.Path);
+            return null;
+        }
+    }
+
+    public Task WriteConversionResultAsync(FileIdentity source, OperationItemResult result, CancellationToken cancellationToken) =>
+        WriteEntryAsync(CachePath(source, "conversion"), new ResultEntry(version, source, result), source.Path, cancellationToken);
+
+    private static bool SameFile(FileIdentity cached, FileIdentity source) =>
+        string.Equals(cached.Path, source.Path, StringComparison.OrdinalIgnoreCase) && cached.Length == source.Length && cached.LastWriteUtc == source.LastWriteUtc;
 
     public Task WriteAsync(MediaAnalysis analysis, CancellationToken cancellationToken)
     {

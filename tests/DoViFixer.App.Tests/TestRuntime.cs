@@ -143,7 +143,24 @@ internal sealed class TestRuntime : IFileDiscovery, IFileOperations, IMediaProbe
         }
         return new(Path.GetFullPath(path), 40000000000, new DateTime(2026, 9, 11));
     }
-    public string PrepareOutputPath(string input, string? outputDirectory, string suffix, bool allowInput = false) => Path.Combine(outputDirectory ?? Path.GetDirectoryName(input)!, Path.GetFileNameWithoutExtension(input) + suffix);
+    /// <summary>Output paths that already exist on the fixture disk.</summary>
+    public HashSet<string> ExistingOutputFiles { get; } = new(StringComparer.OrdinalIgnoreCase);
+    public List<(string Path, bool ReplaceExisting)> StagedOutputs { get; } = [];
+    public string PrepareOutputPath(string input, string? outputDirectory, string suffix, bool allowInput = false, ExistingOutputHandling existing = ExistingOutputHandling.Skip)
+    {
+        string output = Path.Combine(outputDirectory ?? Path.GetDirectoryName(input)!, Path.GetFileNameWithoutExtension(input) + suffix);
+        if (!ExistingOutputFiles.Contains(output) || existing == ExistingOutputHandling.Replace)
+        {
+            return output;
+        }
+
+        if (existing == ExistingOutputHandling.Skip)
+        {
+            throw new OutputExistsException(output);
+        }
+
+        return Enumerable.Range(1, 100).Select(number => Path.Combine(Path.GetDirectoryName(output)!, $"{Path.GetFileNameWithoutExtension(output)} ({number}){Path.GetExtension(output)}")).First(path => !ExistingOutputFiles.Contains(path));
+    }
     public FileIdentity RenameOriginal(FileIdentity identity) => identity with
     {
         Path = identity.Path + ".bak.dovi_convert"
@@ -263,6 +280,13 @@ internal sealed class TestRuntime : IFileDiscovery, IFileOperations, IMediaProbe
     public ValueTask<ITemporaryWorkspace> CreateAsync(long requiredBytes, string? directory, CancellationToken cancellationToken) => ValueTask.FromResult<ITemporaryWorkspace>(new Workspace());
     private readonly Dictionary<(FileIdentity, AnalysisMethod), MediaAnalysis> cache = new();
     private readonly Dictionary<FileIdentity, string> hashCache = new();
+    public Dictionary<FileIdentity, OperationItemResult> ConversionResults { get; } = [];
+    public Task<OperationItemResult?> ReadConversionResultAsync(FileIdentity source, CancellationToken cancellationToken) => Task.FromResult(ConversionResults.GetValueOrDefault(source));
+    public Task WriteConversionResultAsync(FileIdentity source, OperationItemResult result, CancellationToken cancellationToken)
+    {
+        ConversionResults[source] = result;
+        return Task.CompletedTask;
+    }
     public Task<string?> ReadBaseLayerHashAsync(FileIdentity source, CancellationToken cancellationToken) => Task.FromResult(hashCache.GetValueOrDefault(source));
     public Task WriteBaseLayerHashAsync(FileIdentity source, string sha256, CancellationToken cancellationToken)
     {
@@ -338,7 +362,11 @@ internal sealed class TestRuntime : IFileDiscovery, IFileOperations, IMediaProbe
         return Task.FromResult<ArchiveManifest?>(new(1, "source.mkv", new string('A', 64), new string('B', 64), 1000, 1000, DateTimeOffset.UnixEpoch));
     }
     public Task<IReadOnlyList<string>> VerifyAsync(MediaInfo source, string output, DolbyVisionProfile expectedProfile, ITemporaryWorkspace workspace, CancellationToken cancellationToken, IProgress<OperationProgress>? progress = null, Guid operationId = default) => Task.FromResult<IReadOnlyList<string>>([]);
-    public IStagedOutput Stage(string destination) => new Staged(destination);
+    public IStagedOutput Stage(string destination, bool replaceExisting = false)
+    {
+        StagedOutputs.Add((destination, replaceExisting));
+        return new Staged(destination);
+    }
     public string[] PickedFiles { get; set; } = [];
     public string? PickedFolder { get; set; }
     public List<string> FileFilters { get; } = [];
@@ -375,6 +403,9 @@ internal sealed class TestRuntime : IFileDiscovery, IFileOperations, IMediaProbe
 
     public string? LastApproveLabel { get; private set; }
     public List<string> Messages { get; } = [];
+    public List<string> ExistingOutputQuestions { get; } = [];
+    /// <summary>The answer to "File already exists"; null cancels.</summary>
+    public ExistingOutputHandling? ExistingOutputAnswer { get; set; }
 
     // Reviews answer with Approval; messages are recorded and closed.
     public Task<bool> ShowAsync(DialogViewModel dialog)
@@ -396,6 +427,17 @@ internal sealed class TestRuntime : IFileDiscovery, IFileOperations, IMediaProbe
             case MessageDialogViewModel message:
                 Messages.Add($"{message.Title}: {message.Message}");
                 message.Accept();
+                break;
+            case ExistingOutputDialogViewModel existing:
+                ExistingOutputQuestions.Add(existing.ExistingPath);
+                if (ExistingOutputAnswer is { } answer)
+                {
+                    existing.Choose(answer);
+                }
+                else
+                {
+                    existing.Cancel();
+                }
                 break;
             default:
                 throw new NotSupportedException($"The test runtime does not answer {dialog.GetType().Name}.");
