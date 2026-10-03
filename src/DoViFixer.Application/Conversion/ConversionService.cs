@@ -151,12 +151,7 @@ public sealed class ConversionService(DependencyService dependencies, IFileOpera
     {
         try
         {
-            files.PrepareOutputPath(request.Path, request.OutputDirectory, OutputSuffix(request), allowInput: request.ReplaceOriginal);
-            if (request.CreateElArchive)
-            {
-                files.PrepareOutputPath(request.Path, request.OutputDirectory, ".dovi");
-            }
-
+            PrepareOutputPaths(request, ExistingOutputHandling.Skip);
             return null;
         }
         catch (OutputExistsException ex)
@@ -170,9 +165,15 @@ public sealed class ConversionService(DependencyService dependencies, IFileOpera
         }
     }
 
-    private static string OutputSuffix(CandidateConversionRequest request) => request.ReplaceOriginal
-        ? Path.GetExtension(request.Path)
-        : request.Target == ConversionTarget.Profile81 ? " - DV P8.1.mkv" : " - HDR10.mkv";
+    private (string Output, string? Archive) PrepareOutputPaths(CandidateConversionRequest request, ExistingOutputHandling existing)
+    {
+        string suffix = request.ReplaceOriginal
+            ? Path.GetExtension(request.Path)
+            : request.Target == ConversionTarget.Profile81 ? " - DV P8.1.mkv" : " - HDR10.mkv";
+        string output = files.PrepareOutputPath(request.Path, request.OutputDirectory, suffix, allowInput: request.ReplaceOriginal, existing);
+        string? archive = request.CreateElArchive ? files.PrepareOutputPath(request.Path, request.OutputDirectory, ".dovi", existing: existing) : null;
+        return (output, archive);
+    }
 
     public async Task<CandidatePreparationResult> PrepareCandidateAsync(CandidateConversionRequest request, IProgress<OperationProgress>? progress, CancellationToken cancellationToken)
     {
@@ -202,8 +203,7 @@ public sealed class ConversionService(DependencyService dependencies, IFileOpera
         string? archive;
         try
         {
-            output = files.PrepareOutputPath(request.Path, request.OutputDirectory, OutputSuffix(request), allowInput: request.ReplaceOriginal, request.ExistingOutput);
-            archive = request.CreateElArchive ? files.PrepareOutputPath(request.Path, request.OutputDirectory, ".dovi", existing: request.ExistingOutput) : null;
+            (output, archive) = PrepareOutputPaths(request, request.ExistingOutput);
         }
         catch (Exception ex) when (ex is IOException or UnauthorizedAccessException or ArgumentException)
         {
