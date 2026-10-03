@@ -51,7 +51,12 @@ public static class OperationStatusAggregator
 
 public sealed record OperationProgress(Guid OperationId, string Stage, string? Item = null, double? Percent = null);
 
-public sealed record OperationItemResult(string Item, OperationStatus Status, string? Output = null, string Message = "") : IOperationItemResult;
+/// <summary>Original and Archive name the retained source and the enhancement-layer archive when an operation keeps them.</summary>
+public sealed record OperationItemResult(string Item, OperationStatus Status, string? Output = null, string Message = "") : IOperationItemResult
+{
+    public string? Original { get; init; }
+    public string? Archive { get; init; }
+}
 
 public record BatchResult<T>(IReadOnlyList<T> Items) where T : IOperationResult
 {

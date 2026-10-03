@@ -469,7 +469,8 @@ public sealed class WorkflowTests
         Assert.AreEqual(0, runtime.Renamed);
         Assert.AreEqual(0, runtime.Restored);
         Assert.AreEqual(0, runtime.Deleted);
-        StringAssert.Contains(result.Message, "Original retained at " + Plan("good.mkv").Analysis.Media.Source.Path + ".");
+        StringAssert.Contains(result.Message, "Original retained.");
+        Assert.AreEqual(Plan("good.mkv").Analysis.Media.Source.Path, result.Original);
     }
 
     [TestMethod]
@@ -519,7 +520,7 @@ public sealed class WorkflowTests
         Assert.AreEqual(1, runtime.Published);
         Assert.AreEqual(0, runtime.Restored);
         StringAssert.Contains(result.Message, "Conversion verified and published");
-        StringAssert.Contains(result.Message, "good.mkv.bak.dovi_convert");
+        StringAssert.Contains(result.Original!, "good.mkv.bak.dovi_convert");
         Assert.AreEqual(OperationStatus.Partial, new BatchResult([result]).Status);
     }
 
@@ -574,7 +575,7 @@ public sealed class WorkflowTests
         }, null, default);
         Assert.AreEqual(OperationStatus.Failed, result.Status);
         StringAssert.Contains(result.Message, "invalid frame count");
-        StringAssert.Contains(result.Message, "bad.mkv.bak.dovi_convert");
+        StringAssert.Contains(result.Original!, "bad.mkv.bak.dovi_convert");
         StringAssert.Contains(result.Message, "Automatic recovery failed");
         Assert.AreEqual(0, runtime.Deleted);
     }

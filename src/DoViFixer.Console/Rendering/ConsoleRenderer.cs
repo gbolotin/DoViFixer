@@ -127,5 +127,7 @@ public sealed class ConsoleRenderer : IProgress<OperationProgress>, IDisposable
         }
     }
 
-    public void Result(IOperationItemResult result) => Write($"{result.Status.ToString().ToUpperInvariant()}: {result.Item}\n  {result.Message}{(result.Output is null ? "" : $"\n  Output: {result.Output}")}");
+    public void Result(IOperationItemResult result) => Write($"{result.Status.ToString().ToUpperInvariant()}: {result.Item}\n  {result.Message}{(result.Output is null ? "" : $"\n  Output: {result.Output}")}"
+        + (result is OperationItemResult { Original: { } original } ? $"\n  Original: {original}" : "")
+        + (result is OperationItemResult { Archive: { } archive } ? $"\n  Archive: {archive}" : ""));
 }
