@@ -31,6 +31,40 @@ public sealed class GitHubReleaseSourceTests
         await Assert.ThrowsExactlyAsync<HttpRequestException>(() => new GitHubReleaseSource(http).GetLatestAsync(CancellationToken.None));
     }
 
+    [TestMethod]
+    public async Task NoConnectionIsReportedAsUnreachable()
+    {
+        using var http = new HttpClient(new FailingHandler(_ => throw new HttpRequestException("No such host is known.")));
+        var error = await Assert.ThrowsExactlyAsync<HttpRequestException>(() => new GitHubReleaseSource(http).GetLatestAsync(CancellationToken.None));
+        StringAssert.Contains(error.Message, "Could not reach GitHub");
+    }
+
+    [TestMethod]
+    public async Task ASilentNetworkTimesOutInsteadOfLookingCancelled()
+    {
+        using var http = new HttpClient(new FailingHandler(token => Task.Delay(System.Threading.Timeout.Infinite, token)));
+        var source = new GitHubReleaseSource(http) { Timeout = TimeSpan.FromMilliseconds(50) };
+        await Assert.ThrowsExactlyAsync<TimeoutException>(() => source.GetLatestAsync(CancellationToken.None));
+    }
+
+    [TestMethod]
+    public async Task CallerCancellationStaysACancellation()
+    {
+        using var cancelled = new CancellationTokenSource();
+        await cancelled.CancelAsync();
+        using var http = new HttpClient(new FailingHandler(token => Task.Delay(System.Threading.Timeout.Infinite, token)));
+        await Assert.ThrowsAsync<OperationCanceledException>(() => new GitHubReleaseSource(http).GetLatestAsync(cancelled.Token));
+    }
+
+    private sealed class FailingHandler(Func<CancellationToken, Task> send) : HttpMessageHandler
+    {
+        protected override async Task<HttpResponseMessage> SendAsync(HttpRequestMessage request, CancellationToken cancellationToken)
+        {
+            await send(cancellationToken);
+            throw new InvalidOperationException("The handler should not complete.");
+        }
+    }
+
     private sealed class StubHandler(HttpStatusCode status, string body) : HttpMessageHandler
     {
         public Uri? RequestedUri { get; private set; }
