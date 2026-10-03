@@ -252,9 +252,14 @@
                             </HeaderedContentControl>
                         </StackPanel>
                     </Border>
-                    <TextBlock Text="Operation history, audit and diagnostics: %LOCALAPPDATA%\DoViFixer\Logs"
+                    <TextBlock TextWrapping="Wrap"
                                Foreground="{DynamicResource TextFillColorSecondaryBrush}"
-                               Margin="0,24" />
+                               Margin="0,24">
+                        <Run Text="Operation history, audit and diagnostics: " /><Hyperlink Command="{Binding OpenLogsCommand}"
+                                   AutomationProperties.Name="Open logs folder">
+                            <Run Text="%LOCALAPPDATA%\DoViFixer\Logs" />
+                        </Hyperlink>
+                    </TextBlock>
                     <ProgressBar Value="{Binding Percent, Mode=OneWay}"
                                  IsIndeterminate="{Binding IsIndeterminate}"
                                  Visibility="{Binding IsBusy, Converter={StaticResource WfBooleanToVisibilityConverter}}" />

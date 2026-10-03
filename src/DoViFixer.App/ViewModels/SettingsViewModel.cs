@@ -90,6 +90,7 @@ public sealed class SettingsViewModel : OperationViewModel, INavigationPage, IPa
         BrowseDestinationCommand = new(() => Destination = files.PickFolder() ?? Destination);
         BrowseToolCommand = new(() => ToolPath = files.PickFiles("Executables|*.exe", allowMultiple: false).FirstOrDefault() ?? ToolPath);
         OpenCacheFolderCommand = new(() => explorer.OpenFolder(CacheDirectory));
+        OpenLogsCommand = new(explorer.OpenLogs);
         SaveCommand = new(() => RunAsync(async (token, _) => await SaveAsync(token)), () => IsIdle);
         DiscardChangesCommand = new(DiscardChanges, () => IsIdle && !IsSaving && HasSaveError && lastSavedSettings is not null);
         ClearCacheCommand = new(() => RunAsync(async (token, _) =>
@@ -586,6 +587,10 @@ public sealed class SettingsViewModel : OperationViewModel, INavigationPage, IPa
         get;
     }
     public RelayCommand OpenCacheFolderCommand
+    {
+        get;
+    }
+    public RelayCommand OpenLogsCommand
     {
         get;
     }
