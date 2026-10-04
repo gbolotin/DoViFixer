@@ -877,12 +877,12 @@ public sealed class VisualTests
         await LayoutAsync(window);
         AssertStableActionSlots(list, slots, "converted file shown");
         Assert.AreEqual(row.Result!.Output, runtime.ShownFile);
-        var rowDot = ResultDot(container, "MediaRowResultDotStyle");
+        var rowDot = ResultDot(container, row);
         Assert.IsTrue(rowDot.IsVisible, "A converted row shows a result dot before its status.");
         Assert.AreEqual(window.FindResource("SystemFillColorSuccessBrush"), rowDot.Fill);
         media.Focused = row;
         await LayoutAsync(window);
-        var resultDot = ResultDot(mediaView, "MediaOperationResultDotStyle");
+        var resultDot = ResultDot(mediaView, row.Result);
         Assert.IsTrue(resultDot.IsVisible, "The last operation result shows a dot before its status.");
         Assert.AreEqual(window.FindResource("SystemFillColorSuccessBrush"), resultDot.Fill);
 
@@ -897,7 +897,7 @@ public sealed class VisualTests
         var missingContainer = (ListViewItem)list.ItemContainerGenerator.ContainerFromItem(missing);
         var missingStatus = Descendants<TextBlock>(missingContainer).Single(text => text.Text == MediaRow.MissingStatus);
         Assert.AreEqual(window.FindResource("SystemFillColorCautionBrush"), missingStatus.Foreground);
-        Assert.IsFalse(ResultDot(missingContainer, "MediaRowResultDotStyle").IsVisible, "A missing file shows no result dot.");
+        Assert.IsFalse(ResultDot(missingContainer, missing).IsVisible, "A missing file shows no result dot.");
         Assert.AreEqual(TextDecorationLocation.Strikethrough, Descendants<TextBlock>(missingContainer).Single(text => text.Text == missing.Name).TextDecorations.Single().Location);
         Assert.IsFalse(Descendants<CheckBox>(missingContainer).Single().IsEnabled);
         Assert.AreEqual(Visibility.Visible, removeMissing.Visibility);
@@ -1026,8 +1026,9 @@ public sealed class VisualTests
         .SelectMany(text => text.Inlines.OfType<System.Windows.Documents.Hyperlink>())
         .Single(link => System.Windows.Automation.AutomationProperties.GetName(link) == "Show converted file");
 
-    private static System.Windows.Shapes.Ellipse ResultDot(DependencyObject parent, string styleKey) => Descendants<System.Windows.Shapes.Ellipse>(parent)
-        .Single(dot => dot.Style is not null && dot.Style == dot.TryFindResource(styleKey));
+    /// <summary>The result dot placed by the page template, not an ellipse inside a control's own template.</summary>
+    private static System.Windows.Shapes.Ellipse ResultDot(DependencyObject parent, object? context) => Descendants<System.Windows.Shapes.Ellipse>(parent)
+        .Single(dot => dot.TemplatedParent is not Control && dot.DataContext == context);
 
     private static void Invoke(Button button)
     {
