@@ -14,7 +14,7 @@ internal sealed class MediaVerifier(MediaProbe probe, VideoProcessor processor, 
     {
         int completed = 0;
         // Checkpoints represent completed checks, not elapsed time. Reserve completion for the caller.
-        int total = source.Tracks.Count + 9;
+        const int total = 9;
         void ReportCheckpoint() => progress?.Report(new(operationId, "Verifying", source.Source.Path, 100.0 * completed++ / total));
         ReportCheckpoint();
         var target = await probe.ProbeAsync(output, cancellationToken);
@@ -32,38 +32,7 @@ internal sealed class MediaVerifier(MediaProbe probe, VideoProcessor processor, 
             return failures;
         }
 
-        // Verify all retained track payloads and packet timestamps, including subtitles.
-        for (int i = 0; i < source.Tracks.Count; i++)
-        {
-            ReportCheckpoint();
-            var original = source.Tracks[i];
-            var converted = target.Tracks[i];
-            string before = workspace.File("verify-before.bin");
-            string after = workspace.File("verify-after.bin");
-            if (original.Type != "video")
-            {
-                await ExtractAsync(source.Source.Path, "tracks", $"{original.Id}:{before}", cancellationToken);
-                await ExtractAsync(output, "tracks", $"{converted.Id}:{after}", cancellationToken);
-                if (await VideoProcessor.HashAsync(before, cancellationToken) != await VideoProcessor.HashAsync(after, cancellationToken))
-                {
-                    failures.Add($"Track {original.Id} payload changed.");
-                }
-
-                File.Delete(before);
-                File.Delete(after);
-            }
-
-            await ExtractAsync(source.Source.Path, "timestamps_v2", $"{original.Id}:{before}", cancellationToken);
-            await ExtractAsync(output, "timestamps_v2", $"{converted.Id}:{after}", cancellationToken);
-            if (!await TimestampsMatchAsync(before, after, cancellationToken))
-            {
-                failures.Add($"Track {original.Id} timestamps changed or verification is unavailable.");
-            }
-
-            File.Delete(before);
-            File.Delete(after);
-        }
-
+        await VerifyTracksAsync(source, target, workspace, failures, cancellationToken);
         ReportCheckpoint();
         bool compareSourceRpu = source.Profile == DolbyVisionProfile.Profile7 && expectedProfile == DolbyVisionProfile.Profile81;
         string sourceVideo = workspace.File("before.hevc");
@@ -91,6 +60,73 @@ internal sealed class MediaVerifier(MediaProbe probe, VideoProcessor processor, 
         await VerifyXmlAsync(source, target, "tags", workspace, failures, cancellationToken);
         return failures;
     }
+
+    // Verify all retained track payloads and packet timestamps, including subtitles.
+    // Each file is read once, instead of once per track and extraction mode.
+    internal async Task VerifyTracksAsync(MediaInfo source, MediaInfo target, ITemporaryWorkspace workspace, List<string> failures, CancellationToken cancellationToken)
+    {
+        try
+        {
+            var beforeHashes = await ExtractTracksAsync(source, "before", workspace, cancellationToken);
+            var afterHashes = await ExtractTracksAsync(target, "after", workspace, cancellationToken);
+            for (int i = 0; i < source.Tracks.Count; i++)
+            {
+                if (beforeHashes[i] != afterHashes[i])
+                {
+                    failures.Add($"Track {source.Tracks[i].Id} payload changed.");
+                }
+
+                if (!await TimestampsMatchAsync(TimestampsFile(workspace, "before", i), TimestampsFile(workspace, "after", i), cancellationToken))
+                {
+                    failures.Add($"Track {source.Tracks[i].Id} timestamps changed or verification is unavailable.");
+                }
+            }
+        }
+        finally
+        {
+            // A failed pass can leave files behind; a retry in the same workspace must not inherit them.
+            for (int i = 0; i < source.Tracks.Count; i++)
+            {
+                File.Delete(PayloadFile(workspace, "before", i));
+                File.Delete(PayloadFile(workspace, "after", i));
+                File.Delete(TimestampsFile(workspace, "before", i));
+                File.Delete(TimestampsFile(workspace, "after", i));
+            }
+        }
+    }
+
+    // One mkvextract pass writes every non-video payload and every track's timestamps. Payloads are hashed and
+    // deleted straight away, so scratch space holds one file's non-video tracks at most; timestamp files stay
+    // for comparison with the other file. Returns the payload hash per track position, null for video tracks.
+    private async Task<string?[]> ExtractTracksAsync(MediaInfo media, string prefix, ITemporaryWorkspace workspace, CancellationToken cancellationToken)
+    {
+        int[] payloads = Enumerable.Range(0, media.Tracks.Count).Where(i => media.Tracks[i].Type != "video").ToArray();
+        var arguments = new List<string>
+        {
+            media.Source.Path
+        };
+        if (payloads.Length > 0)
+        {
+            arguments.Add("tracks");
+            arguments.AddRange(payloads.Select(i => $"{media.Tracks[i].Id}:{PayloadFile(workspace, prefix, i)}"));
+        }
+
+        arguments.Add("timestamps_v2");
+        arguments.AddRange(media.Tracks.Select((track, i) => $"{track.Id}:{TimestampsFile(workspace, prefix, i)}"));
+        await processes.RunAsync(new(tools.GetPath(NativeTool.MkvExtract), arguments, AllowWarnings: true), cancellationToken);
+        var hashes = new string?[media.Tracks.Count];
+        foreach (int i in payloads)
+        {
+            string payload = PayloadFile(workspace, prefix, i);
+            hashes[i] = await VideoProcessor.HashAsync(payload, cancellationToken);
+            File.Delete(payload);
+        }
+
+        return hashes;
+    }
+
+    private static string PayloadFile(ITemporaryWorkspace workspace, string prefix, int position) => workspace.File($"verify-{prefix}-{position}.bin");
+    private static string TimestampsFile(ITemporaryWorkspace workspace, string prefix, int position) => workspace.File($"verify-{prefix}-{position}-timestamps.txt");
 
     private async Task VerifyRpuAsync(MediaInfo source, MediaInfo target, string raw, DolbyVisionProfile expectedProfile, long frames, ITemporaryWorkspace workspace, List<string> failures, CancellationToken cancellationToken)
     {
@@ -332,7 +368,9 @@ internal sealed class MediaVerifier(MediaProbe probe, VideoProcessor processor, 
                 try
                 {
                     // Only ignore a redundant primary-language annotation; retain regional variants.
-                    if (!ietf.Value.Contains('-') && CultureInfo.GetCultureInfo(ietf.Value).ThreeLetterISOLanguageName == (simple.Element("TagLanguage")?.Value ?? "und"))
+                    // "und" resolves to the invariant culture, whose code is "ivl", so it is matched literally.
+                    string language = ietf.Value == "und" ? "und" : CultureInfo.GetCultureInfo(ietf.Value).ThreeLetterISOLanguageName;
+                    if (!ietf.Value.Contains('-') && language == (simple.Element("TagLanguage")?.Value ?? "und"))
                     {
                         ietf.Remove();
                     }

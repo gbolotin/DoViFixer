@@ -38,6 +38,20 @@ public sealed class InfrastructureTests
     }
 
     [TestMethod]
+    public void TagComparisonIgnoresUndeterminedLanguageAddedByRemux()
+    {
+        // mkvmerge adds TagLanguageIETF "und" when it re-applies a tag stored without a language, such as a Blu-ray SOURCE_ID statistic.
+        var original = System.Xml.Linq.XDocument.Parse("<Tags><Tag><Targets><TrackUID>1</TrackUID></Targets><Simple><Name>SOURCE_ID</Name><String>001011</String></Simple></Tag></Tags>");
+        var remuxed = System.Xml.Linq.XDocument.Parse("<Tags><Tag><Targets><TrackUID>1</TrackUID></Targets><Simple><Name>SOURCE_ID</Name><String>001011</String><TagLanguageIETF>und</TagLanguageIETF></Simple></Tag></Tags>");
+        MediaVerifier.CanonicalizeTags(original);
+        MediaVerifier.CanonicalizeTags(remuxed);
+        Assert.AreEqual(original.ToString(), remuxed.ToString());
+        var english = System.Xml.Linq.XDocument.Parse("<Tags><Tag><Targets><TrackUID>1</TrackUID></Targets><Simple><Name>SOURCE_ID</Name><String>001011</String><TagLanguage>eng</TagLanguage><TagLanguageIETF>und</TagLanguageIETF></Simple></Tag></Tags>");
+        MediaVerifier.CanonicalizeTags(english);
+        Assert.AreEqual("und", english.Descendants("TagLanguageIETF").Single().Value, "An undetermined IETF language must not be dropped when the legacy language names one.");
+    }
+
+    [TestMethod]
     public async Task RestoreOriginalRevalidatesBackupAndRefusesCollisions()
     {
         string source = Path.Combine(directory, "Recovery.mkv");

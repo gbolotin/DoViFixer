@@ -1,3 +1,4 @@
+using DoViFixer.Application.Abstractions;
 using DoViFixer.Application.Dependencies;
 using DoViFixer.Domain.Media;
 using DoViFixer.Infrastructure.Dependencies;
@@ -9,13 +10,71 @@ using Microsoft.Extensions.Logging.Abstractions;
 using Microsoft.VisualStudio.TestTools.UnitTesting;
 
 namespace DoViFixer.Infrastructure.Tests;
+
 [TestClass]
 public sealed class MediaVerifierTests
 {
+    private const string SourcePath = @"C:\media\source.mkv";
+    private const string OutputPath = @"C:\media\output.partial";
     private const string SourceMediaInfo = """
         {"media":{"track":[{"@type":"Video","Format":"HEVC","Width":"256","Height":"144","FrameCount":"260",
          "FrameRate":"23.976","Duration":"10.803","HDR_Format":"Dolby Vision","HDR_Format_Profile":"dvhe.07.06","MaxCLL":"1000"}]}}
         """;
+    private static readonly MediaTrack[] tracks =
+    [
+        new(0, "video", "HEVC", "eng", "", true, false, "100"),
+        new(1, "audio", "TrueHD Atmos", "eng", "", true, false, "101"),
+        new(2, "audio", "AC-3", "fre", "", false, false, "102"),
+        new(3, "subtitles", "HDMV PGS", "eng", "", false, false, "103")
+    ];
+
+    [TestMethod]
+    public async Task TrackVerificationReadsEachFileInOnePassAndCleansUp()
+    {
+        await using var workspace = await CreateWorkspaceAsync();
+        var mkvExtract = new FakeMkvExtract(workspace.DirectoryPath);
+        var failures = new List<string>();
+        await CreateVerifier(mkvExtract).VerifyTracksAsync(Media(SourcePath), Media(OutputPath), workspace, failures, default);
+        Assert.AreEqual(0, failures.Count, string.Join("; ", failures));
+        CollectionAssert.AreEqual(new[]
+        {
+            SourcePath,
+            OutputPath
+        }, mkvExtract.Calls.Select(arguments => arguments[0]).ToArray(), "One mkvextract pass per file covers every track and mode.");
+        Assert.IsFalse(mkvExtract.FilesBeforeEachCall[1].Any(name => name.EndsWith(".bin", StringComparison.Ordinal)), "Source payloads are hashed and deleted before the output pass.");
+        Assert.AreEqual(0, Directory.GetFiles(workspace.DirectoryPath).Length);
+    }
+
+    [TestMethod]
+    public async Task TrackVerificationReportsChangedPayloadsAndTimestampsPerTrack()
+    {
+        await using var workspace = await CreateWorkspaceAsync();
+        var mkvExtract = new FakeMkvExtract(workspace.DirectoryPath);
+        mkvExtract.Payloads[(OutputPath, 2)] = "changed audio";
+        mkvExtract.Timestamps[(OutputPath, 0)] = "# timestamp format v2\n0\n45\n";
+        mkvExtract.Timestamps[(OutputPath, 3)] = "# timestamp format v2\n500\n2500\n";
+        var failures = new List<string>();
+        await CreateVerifier(mkvExtract).VerifyTracksAsync(Media(SourcePath), Media(OutputPath), workspace, failures, default);
+        CollectionAssert.AreEqual(new[]
+        {
+            "Track 0 timestamps changed or verification is unavailable.",
+            "Track 2 payload changed.",
+            "Track 3 timestamps changed or verification is unavailable."
+        }, failures);
+        Assert.AreEqual(0, Directory.GetFiles(workspace.DirectoryPath).Length);
+    }
+
+    [TestMethod]
+    public async Task FailedTrackExtractionLeavesNoScratchFilesForARetry()
+    {
+        await using var workspace = await CreateWorkspaceAsync();
+        var mkvExtract = new FakeMkvExtract(workspace.DirectoryPath)
+        {
+            FailingFile = OutputPath
+        };
+        await Assert.ThrowsExactlyAsync<IOException>(() => CreateVerifier(mkvExtract).VerifyTracksAsync(Media(SourcePath), Media(OutputPath), workspace, [], default));
+        Assert.AreEqual(0, Directory.GetFiles(workspace.DirectoryPath).Length);
+    }
 
     // The Profile 8.1 case has a metadata-free ending, so it also exercises the RpuCoverage comparison.
     [TestMethod]
@@ -24,8 +83,7 @@ public sealed class MediaVerifierTests
     public async Task VerificationExtractsEachVideoOnceAndHoldsAtMostTwoVideoStreams(DolbyVisionProfile expectedProfile)
     {
         var files = new FileOperations();
-        var factory = new TemporaryWorkspaceFactory(files, NullLogger<TemporaryWorkspaceFactory>.Instance);
-        await using var workspace = await factory.CreateAsync(1024 * 1024, null, default);
+        await using var workspace = await CreateWorkspaceAsync();
         string mkv = await File.ReadAllTextAsync(Path.Combine(AppContext.BaseDirectory, "Fixtures", "mkvmerge.json"));
         string output = workspace.File("output.mkv");
         await File.WriteAllTextAsync(output, "converted");
@@ -44,6 +102,78 @@ public sealed class MediaVerifierTests
         CollectionAssert.AreEqual(new[] { source.Source.Path, output }, runner.VideoExtractions);
         Assert.IsTrue(runner.MostVideoStreams <= 2, $"{runner.MostVideoStreams} video streams existed at once.");
         Assert.IsEmpty(Directory.GetFiles(workspace.DirectoryPath, "*.hevc"));
+    }
+
+    private static MediaInfo Media(string path) => new(new(path, 1000, DateTime.UnixEpoch), DolbyVisionProfile.Profile7, "HEVC", 0, 3840, 2160, null, null, null, 0, null, tracks, 0, 0, null, "{}");
+
+    private static ValueTask<ITemporaryWorkspace> CreateWorkspaceAsync() => new TemporaryWorkspaceFactory(new FileOperations(), NullLogger<TemporaryWorkspaceFactory>.Instance).CreateAsync(1024 * 1024, null, default);
+
+    private static MediaVerifier CreateVerifier(IProcessRunner processes)
+    {
+        var tools = new ToolCatalog();
+        tools.Refresh([new DependencyStatus(NativeTool.MkvExtract, DependencyState.Ready, "mkvextract", "test", "test")]);
+        var probe = new MediaProbe(tools, processes, new FileOperations(), NullLogger<MediaProbe>.Instance);
+        var processor = new VideoProcessor(tools, processes, TimeProvider.System, NullLogger<VideoProcessor>.Instance);
+        return new MediaVerifier(probe, processor, tools, processes);
+    }
+
+    // Writes each requested track or timestamp file as mkvextract would, from content keyed by file and track ID.
+    private sealed class FakeMkvExtract : IProcessRunner
+    {
+        private readonly string directory;
+
+        public FakeMkvExtract(string directory)
+        {
+            this.directory = directory;
+            foreach (string file in new[] { SourcePath, OutputPath })
+            {
+                foreach (var track in tracks.Where(t => t.Type != "video"))
+                {
+                    Payloads[(file, track.Id)] = $"{track.Codec} payload";
+                }
+
+                Timestamps[(file, 0)] = "# timestamp format v2\n0\n41.708333\n";
+                Timestamps[(file, 1)] = "# timestamp format v2\n0\n0.833333\n";
+                Timestamps[(file, 2)] = "# timestamp format v2\n0\n32\n";
+                Timestamps[(file, 3)] = "# timestamp format v2\n500\n2000\n";
+            }
+        }
+
+        public Dictionary<(string File, int Track), string> Payloads { get; } = [];
+        public Dictionary<(string File, int Track), string> Timestamps { get; } = [];
+        public List<IReadOnlyList<string>> Calls { get; } = [];
+        public List<string[]> FilesBeforeEachCall { get; } = [];
+        public string? FailingFile { get; init; }
+
+        public async Task<ProcessResult> RunAsync(ProcessRequest request, CancellationToken cancellationToken)
+        {
+            FilesBeforeEachCall.Add(Directory.GetFiles(directory).Select(path => Path.GetFileName(path)).ToArray());
+            Calls.Add(request.Arguments);
+            string file = request.Arguments[0];
+            string mode = "";
+            foreach (string argument in request.Arguments.Skip(1))
+            {
+                if (argument is "tracks" or "timestamps_v2")
+                {
+                    mode = argument;
+                    continue;
+                }
+
+                int separator = argument.IndexOf(':');
+                var content = mode == "tracks" ? Payloads : Timestamps;
+                await File.WriteAllTextAsync(argument[(separator + 1)..], content[(file, int.Parse(argument[..separator]))], cancellationToken);
+            }
+
+            // Like a real failure, the partial files written so far stay behind.
+            if (file == FailingFile)
+            {
+                throw new IOException("mkvextract exited 2");
+            }
+
+            return new(0, "", "");
+        }
+
+        public Task PipeAsync(ProcessRequest producer, ProcessRequest consumer, CancellationToken cancellationToken) => throw new NotSupportedException();
     }
 
     // Stands in for the native tools: every video stream holds 259 frames with RPU metadata followed by

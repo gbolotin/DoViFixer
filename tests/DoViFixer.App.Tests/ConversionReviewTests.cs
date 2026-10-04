@@ -65,6 +65,46 @@ public sealed class ConversionReviewTests
     }
 
     [TestMethod]
+    public async Task FailedConversionKeepsAnalysisAndReportsTheOperationFailure()
+    {
+        using var runtime = new TestRuntime
+        {
+            DuringConversion = _ => throw new InvalidDataException("Verification failed: tags metadata changed.")
+        };
+        var model = runtime.Container.GetRequiredService<MediaViewModel>();
+        await model.AddAsync([@"C:\Media\Mountain.mkv"]);
+        var row = model.Files.Single();
+        string classification = row.Classification;
+
+        await model.ConvertRowDv81Command.InvokeAsync(row);
+
+        Assert.AreEqual(MediaRowState.Failed, row.State);
+        Assert.AreEqual("Conversion failed", row.Status);
+        Assert.AreEqual(classification, row.Classification, "A failed conversion must not relabel the completed analysis.");
+        Assert.IsFalse(row.HasAnalysisError);
+        Assert.IsFalse(row.DetailNotes.Contains("Analysis failed"), row.DetailNotes);
+        StringAssert.Contains(row.Result!.Message, "tags metadata changed");
+        StringAssert.Contains(row.StatusToolTip, "tags metadata changed");
+    }
+
+    [TestMethod]
+    public async Task InspectionFailureWhilePreparingConversionIsReportedAsAnalysisFailure()
+    {
+        using var runtime = new TestRuntime();
+        var model = runtime.Container.GetRequiredService<MediaViewModel>();
+        await model.AddAsync([@"C:\Media\Mountain.mkv"]);
+        var row = model.Files.Single();
+        runtime.DuringAnalysis = _ => throw new IOException("Fixture inspection failure.");
+
+        await model.ConvertRowDv81Command.InvokeAsync(row);
+
+        Assert.AreEqual(0, runtime.Conversions);
+        Assert.AreEqual(MediaRowState.Failed, row.State);
+        Assert.AreEqual("Analysis failed", row.Classification);
+        StringAssert.Contains(row.AnalysisError, "Fixture inspection failure.");
+    }
+
+    [TestMethod]
     [DataRow(false)]
     [DataRow(true)]
     public async Task CancelConversionClearsPlanAndKeepsOriginalBatchTotal(bool cancelBatch)
