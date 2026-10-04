@@ -457,9 +457,9 @@ public sealed class MediaRow(string path) : ObservableObject
 
     private static string EvidenceName(AnalysisMethod method) => method switch
     {
-        AnalysisMethod.SampledRpu => "Sampled RPU metadata",
-        AnalysisMethod.FullRpu => "Full RPU inspection",
-        AnalysisMethod.DeepInspection => "Deep frame inspection",
+        AnalysisMethod.SampledRpu => "Scan (sampled RPU)",
+        AnalysisMethod.FullRpu => "Standard inspection (full RPU)",
+        AnalysisMethod.DeepInspection => "Deep inspection (frame analysis)",
         _ => "Metadata only"
     };
 }
