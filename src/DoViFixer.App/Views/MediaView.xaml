@@ -268,43 +268,40 @@
                                     <!-- One primary action per row, in priority order, right-aligned against the fixed hover
                                          actions so no action moves when another appears or disappears. -->
                                     <Grid Grid.Column="1" HorizontalAlignment="Right">
+                                        <Grid.Resources>
+                                            <!-- A shared minimum width keeps the actions of different rows lined up in one column. -->
+                                            <Style x:Key="RowPrimaryActionButtonStyle" TargetType="Button" BasedOn="{StaticResource {x:Type Button}}">
+                                                <Setter Property="ContentTemplate" Value="{StaticResource WfIconContentTemplate}" />
+                                                <Setter Property="Padding" Value="7,6" />
+                                                <Setter Property="Margin" Value="4" />
+                                                <Setter Property="MinWidth" Value="88" />
+                                                <Setter Property="HorizontalAlignment" Value="Right" />
+                                            </Style>
+                                        </Grid.Resources>
                                         <Button Content="Cancel"
                                                 Tag="&#xE711;"
-                                                ContentTemplate="{StaticResource WfIconContentTemplate}"
-                                                Padding="7,6"
-                                                Margin="4"
-                                                HorizontalAlignment="Right"
+                                                Style="{StaticResource RowPrimaryActionButtonStyle}"
                                                 Visibility="{Binding IsActive, Converter={StaticResource WfBooleanToVisibilityConverter}}"
                                                 Command="{Binding DataContext.CancelFileCommand, RelativeSource={RelativeSource AncestorType=ListView}}"
                                                 CommandParameter="{Binding}" />
                                         <Button Content="Skip"
                                                 Tag="&#xE893;"
-                                                ContentTemplate="{StaticResource WfIconContentTemplate}"
-                                                Padding="7,6"
-                                                Margin="4"
-                                                HorizontalAlignment="Right"
+                                                Style="{StaticResource RowPrimaryActionButtonStyle}"
                                                 Visibility="{Binding IsPending, Converter={StaticResource WfBooleanToVisibilityConverter}}"
                                                 Command="{Binding DataContext.SkipCommand, RelativeSource={RelativeSource AncestorType=ListView}}"
                                                 CommandParameter="{Binding}" />
                                         <Button Content="Retry"
                                                 Tag="&#xE72C;"
-                                                ContentTemplate="{StaticResource WfIconContentTemplate}"
-                                                Padding="7,6"
-                                                Margin="4"
-                                                HorizontalAlignment="Right"
+                                                Style="{StaticResource RowPrimaryActionButtonStyle}"
                                                 Visibility="{Binding CanRetryAnalysis, Converter={StaticResource WfBooleanToVisibilityConverter}}"
                                                 Command="{Binding DataContext.RetryAnalysisCommand, RelativeSource={RelativeSource AncestorType=ListView}}"
                                                 CommandParameter="{Binding}" />
                                         <Button Content="Inspect"
                                                 Tag="&#xE721;"
-                                                ContentTemplate="{StaticResource WfIconContentTemplate}"
-                                                Padding="7,6"
-                                                Margin="4"
-                                                HorizontalAlignment="Right"
                                                 Command="{Binding DataContext.InspectIncompleteCommand, RelativeSource={RelativeSource AncestorType=ListView}}"
                                                 CommandParameter="{Binding}">
                                             <Button.Style>
-                                                <Style TargetType="Button" BasedOn="{StaticResource {x:Type Button}}">
+                                                <Style TargetType="Button" BasedOn="{StaticResource RowPrimaryActionButtonStyle}">
                                                     <Setter Property="Visibility" Value="Collapsed" />
                                                     <Style.Triggers>
                                                         <MultiDataTrigger>
