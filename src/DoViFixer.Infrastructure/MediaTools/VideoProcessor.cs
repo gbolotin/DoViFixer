@@ -78,23 +78,40 @@ internal sealed class VideoProcessor(IToolCatalog tools, IProcessRunner processe
         progress?.Report(new(operationId, "Remuxing", media.Source.Path, 100));
     }
 
-    public async Task<ArchiveManifest> ExtractBackupAsync(MediaInfo media, ITemporaryWorkspace workspace, CancellationToken cancellationToken)
+    public async Task<ArchiveManifest> ExtractBackupAsync(MediaInfo media, ITemporaryWorkspace workspace, CancellationToken cancellationToken, IProgress<OperationProgress>? progress = null, Guid operationId = default, string stage = "Backing up enhancement layer")
     {
         string raw = workspace.File("backup-input.hevc");
         string bl = workspace.File("backup-bl.hevc");
         string clean = workspace.File("backup-clean.hevc");
         string el = workspace.File("el.hevc");
-        await ExtractVideoAsync(media, raw, cancellationToken);
-        await RunDoviAsync(new[]
+        // Extraction, demuxing and layer cleanup each rewrite about the whole video stream; hashing only reads it back.
+        var phases = new PhasedProgress(progress, operationId, stage, media.Source.Path, 30, 30, 30, 10);
+        phases.Report(0, 0);
+        await ExtractVideoAsync(media, raw, cancellationToken, line =>
+        {
+            if (MkvProgress.TryParse(line, out int percent))
+            {
+                phases.Report(0, percent / 100.0);
+            }
+        });
+        // dovi_tool prints no progress when redirected, so measure its output against the input it rewrites.
+        long rawLength = new FileInfo(raw).Length;
+        await WatchOutputAsync(RunDoviAsync(new[]
         {
             "demux", "-i", raw, "-b", bl, "-e", el
-        }, cancellationToken);
+        }, cancellationToken), () => CurrentLength(bl) + CurrentLength(el), rawLength, fraction => phases.Report(1, fraction));
         File.Delete(raw);
-        await RunDoviAsync(new[]
+        long blLength = new FileInfo(bl).Length;
+        await WatchOutputAsync(RunDoviAsync(new[]
         {
             "remove", bl, "-o", clean
-        }, cancellationToken);
-        var manifest = new ArchiveManifest(1, Path.GetFileName(media.Source.Path), await HashAsync(clean, cancellationToken), await HashAsync(el, cancellationToken), new FileInfo(el).Length, media.FrameCount, time.GetUtcNow());
+        }, cancellationToken), () => CurrentLength(clean), blLength, fraction => phases.Report(2, fraction));
+        long cleanLength = new FileInfo(clean).Length;
+        long elLength = new FileInfo(el).Length;
+        double hashTotal = Math.Max(1, cleanLength + elLength);
+        string cleanHash = await HashAsync(clean, cancellationToken, read => phases.Report(3, read / hashTotal));
+        string elHash = await HashAsync(el, cancellationToken, read => phases.Report(3, (cleanLength + read) / hashTotal));
+        var manifest = new ArchiveManifest(1, Path.GetFileName(media.Source.Path), cleanHash, elHash, elLength, media.FrameCount, time.GetUtcNow());
         File.Delete(bl);
         File.Delete(clean);
         return manifest;
@@ -213,9 +230,56 @@ internal sealed class VideoProcessor(IToolCatalog tools, IProcessRunner processe
         await processes.RunAsync(new(tools.GetPath(NativeTool.MkvMerge), arguments, AllowWarnings: true, OutputLine: outputLine), cancellationToken);
     }
 
-    internal static async Task<string> HashAsync(string path, CancellationToken cancellationToken)
+    internal static async Task<string> HashAsync(string path, CancellationToken cancellationToken, Action<long>? bytesRead = null)
     {
         await using var stream = new FileStream(path, FileMode.Open, FileAccess.Read, FileShare.Read, 1024 * 1024, true);
-        return Convert.ToHexString(await SHA256.HashDataAsync(stream, cancellationToken));
+        if (bytesRead is null)
+        {
+            return Convert.ToHexString(await SHA256.HashDataAsync(stream, cancellationToken));
+        }
+
+        using var hash = IncrementalHash.CreateHash(HashAlgorithmName.SHA256);
+        byte[] buffer = new byte[1024 * 1024];
+        long total = 0;
+        int count;
+        while ((count = await stream.ReadAsync(buffer, cancellationToken)) > 0)
+        {
+            hash.AppendData(buffer, 0, count);
+            bytesRead(total += count);
+        }
+
+        return Convert.ToHexString(hash.GetHashAndReset());
+    }
+
+    /// <summary>Reports how much of the expected output a running tool has written, until it exits.</summary>
+    private async Task WatchOutputAsync(Task work, Func<long> written, long expected, Action<double> report)
+    {
+        while (!work.IsCompleted)
+        {
+            // The poll delay is not cancelled: cancellation stops the tool, which completes the work.
+            await Task.WhenAny(work, Task.Delay(OutputPollInterval, time));
+            if (expected > 0)
+            {
+                report((double)written() / expected);
+            }
+        }
+
+        await work;
+    }
+
+    private static readonly TimeSpan OutputPollInterval = TimeSpan.FromMilliseconds(500);
+
+    /// <summary>Reads the size through a handle: on Windows the directory entry lags while another process is still writing.</summary>
+    internal static long CurrentLength(string path)
+    {
+        try
+        {
+            using var handle = File.OpenHandle(path, FileMode.Open, FileAccess.Read, FileShare.ReadWrite | FileShare.Delete);
+            return RandomAccess.GetLength(handle);
+        }
+        catch (Exception ex)when (ex is IOException or UnauthorizedAccessException)
+        {
+            return 0;
+        }
     }
 }
