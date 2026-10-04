@@ -1027,8 +1027,14 @@ public sealed class VisualTests
         .Single(link => System.Windows.Automation.AutomationProperties.GetName(link) == "Show converted file");
 
     /// <summary>The result dot placed by the page template, not an ellipse inside a control's own template.</summary>
-    private static System.Windows.Shapes.Ellipse ResultDot(DependencyObject parent, object? context) => Descendants<System.Windows.Shapes.Ellipse>(parent)
-        .Single(dot => dot.TemplatedParent is not Control && dot.DataContext == context);
+    private static System.Windows.Shapes.Ellipse ResultDot(DependencyObject parent, object? context)
+    {
+        var ellipses = Descendants<System.Windows.Shapes.Ellipse>(parent).ToArray();
+        var dots = ellipses.Where(dot => dot.TemplatedParent is not Control && dot.DataContext == context).ToArray();
+        Assert.AreEqual(1, dots.Length, "Result dots found: " + string.Join("; ", ellipses.Select(dot =>
+            $"{dot.DataContext?.GetType().Name ?? "null"} in {dot.TemplatedParent?.GetType().Name ?? "no template"}, {dot.Width}x{dot.Height}")));
+        return dots[0];
+    }
 
     private static void Invoke(Button button)
     {
