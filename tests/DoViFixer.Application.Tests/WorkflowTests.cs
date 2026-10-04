@@ -602,6 +602,116 @@ public sealed class WorkflowTests
     }
 
     [TestMethod]
+    public async Task ArchiveIsPublishedOnlyWithVerifiedOutput()
+    {
+        var runtime = new Runtime();
+        var plan = Plan("good.mkv")with
+        {
+            Archive = Path.GetFullPath("good.dovi")
+        };
+        var result = await runtime.Conversion().ExecuteAsync(plan, null, default);
+        Assert.AreEqual(OperationStatus.Completed, result.Status);
+        Assert.AreEqual(plan.Archive, result.Archive);
+        CollectionAssert.AreEqual(new[]
+        {
+            plan.Archive, plan.Output
+        }, runtime.PublishedPaths, "The archive is published just before its output.");
+        Assert.IsEmpty(runtime.DeletedArchives);
+        StringAssert.Contains(result.Message, "Verified archive retained.");
+    }
+
+    [TestMethod]
+    [DataRow(false)]
+    [DataRow(true)]
+    public async Task FailedConversionNeverPublishesArchive(bool safe)
+    {
+        var runtime = new Runtime();
+        var result = await runtime.Conversion().ExecuteAsync(Plan("bad.mkv")with
+        {
+            Archive = Path.GetFullPath("bad.dovi"), Safe = safe
+        }, null, default);
+        Assert.AreEqual(OperationStatus.Failed, result.Status);
+        Assert.AreEqual(safe ? 1 : 2, runtime.SafeModes.Count, "Only a standard attempt retries in safe mode.");
+        Assert.IsEmpty(runtime.PublishedPaths);
+        Assert.IsNull(result.Archive);
+        Assert.IsNull(result.Output);
+        Assert.IsFalse(result.Message.Contains("archive", StringComparison.OrdinalIgnoreCase));
+    }
+
+    [TestMethod]
+    public async Task CancelledConversionNeverPublishesArchive()
+    {
+        using var cts = new CancellationTokenSource();
+        var runtime = new Runtime
+        {
+            CancelDuringConversion = cts
+        };
+        var result = await runtime.Conversion().ExecuteAsync(Plan("good.mkv")with
+        {
+            Archive = Path.GetFullPath("good.dovi")
+        }, null, cts.Token);
+        Assert.AreEqual(OperationStatus.Cancelled, result.Status);
+        Assert.IsEmpty(runtime.PublishedPaths);
+        Assert.IsNull(result.Archive);
+    }
+
+    [TestMethod]
+    public async Task FailedOutputPublicationDeletesTheArchiveCreatedForIt()
+    {
+        var runtime = new Runtime
+        {
+            FailOutputPublication = true
+        };
+        var plan = Plan("good.mkv")with
+        {
+            Archive = Path.GetFullPath("good.dovi")
+        };
+        var result = await runtime.Conversion().ExecuteAsync(plan, null, default);
+        Assert.AreEqual(OperationStatus.Failed, result.Status);
+        CollectionAssert.AreEqual(new[]
+        {
+            plan.Archive
+        }, runtime.DeletedArchives);
+        Assert.IsNull(result.Archive);
+        Assert.IsNull(result.Output);
+        Assert.IsFalse(result.Message.Contains("archive", StringComparison.OrdinalIgnoreCase));
+    }
+
+    [TestMethod]
+    public async Task FailedOutputPublicationReportsAnArchiveThatCouldNotBeDeleted()
+    {
+        var runtime = new Runtime
+        {
+            FailOutputPublication = true, FailArchiveDeletion = true
+        };
+        var plan = Plan("good.mkv")with
+        {
+            Archive = Path.GetFullPath("good.dovi")
+        };
+        var result = await runtime.Conversion().ExecuteAsync(plan, null, default);
+        Assert.AreEqual(OperationStatus.Failed, result.Status);
+        Assert.AreEqual(plan.Archive, result.Archive);
+        StringAssert.Contains(result.Message, "Unused archive could not be deleted: Archive locked");
+    }
+
+    [TestMethod]
+    public async Task FailedOutputPublicationKeepsAReplacedArchive()
+    {
+        var runtime = new Runtime
+        {
+            FailOutputPublication = true
+        };
+        var plan = Plan("good.mkv")with
+        {
+            Archive = Path.GetFullPath("good.dovi"), ReplaceExistingOutput = true
+        };
+        var result = await runtime.Conversion().ExecuteAsync(plan, null, default);
+        Assert.AreEqual(OperationStatus.Failed, result.Status);
+        Assert.IsEmpty(runtime.DeletedArchives, "The replaced archive's predecessor is gone, so the new one stays with the existing output.");
+        Assert.AreEqual(plan.Archive, result.Archive);
+    }
+
+    [TestMethod]
     public async Task RecoveryFailureReportsBackupLocationAndPreservesOriginalError()
     {
         var runtime = new Runtime
@@ -780,6 +890,26 @@ public sealed class WorkflowTests
             get;
         }
         = new();
+        public List<string> PublishedPaths
+        {
+            get;
+        }
+        = [];
+        public List<string> DeletedArchives
+        {
+            get;
+        }
+        = [];
+        public bool FailOutputPublication
+        {
+            get;
+            init;
+        }
+        public bool FailArchiveDeletion
+        {
+            get;
+            init;
+        }
         public bool PlanningFixtures
         {
             get;
@@ -961,6 +1091,19 @@ public sealed class WorkflowTests
 
         public Task DeleteAsync(FileIdentity identity, CancellationToken cancellationToken)
         {
+            if (identity.Path.EndsWith(".dovi", StringComparison.Ordinal))
+            {
+                CollectionAssert.Contains(PublishedPaths, identity.Path, "Only a published archive can be deleted.");
+                CollectionAssert.DoesNotContain(PublishedPaths, Path.GetFullPath("good.mkv.dv81.mkv"), "An archive must not be deleted once its output is published.");
+                if (FailArchiveDeletion)
+                {
+                    throw new IOException("Archive locked");
+                }
+
+                DeletedArchives.Add(identity.Path);
+                return Task.CompletedTask;
+            }
+
             Assert.AreEqual(1, Published, "Deletion must follow successful publication.");
             Assert.IsTrue(identity.Path.EndsWith(".bak.dovi_convert", StringComparison.Ordinal));
             if (FailDeletion)
@@ -978,7 +1121,7 @@ public sealed class WorkflowTests
         }
 
         public ValueTask<ITemporaryWorkspace> CreateAsync(long requiredBytes, string? directory, CancellationToken cancellationToken) => ValueTask.FromResult<ITemporaryWorkspace>(new Owned(this));
-        public IStagedOutput Stage(string destination, bool replaceExisting = false) => new Owned(this);
+        public IStagedOutput Stage(string destination, bool replaceExisting = false) => new Owned(this, destination);
         public Task ConvertAsync(MediaInfo media, ConversionTarget target, ITemporaryWorkspace workspace, string stagedOutput, IProgress<OperationProgress>? progress, Guid operationId, CancellationToken cancellationToken, bool safe = false)
         {
             ConvertCalls++;
@@ -1004,7 +1147,7 @@ public sealed class WorkflowTests
         public Task RestoreAsync(MediaInfo media, ArchiveManifest? manifest, ITemporaryWorkspace workspace, string stagedOutput, CancellationToken cancellationToken) => throw new NotSupportedException();
         public Task WriteAsync(string stagedArchive, ArchiveManifest manifest, ITemporaryWorkspace workspace, CancellationToken cancellationToken) => Task.CompletedTask;
         public Task<ArchiveManifest?> ReadAsync(string archive, ITemporaryWorkspace workspace, bool allowLegacy, CancellationToken cancellationToken) => throw new NotSupportedException();
-        private sealed class Owned(Runtime owner) : ITemporaryWorkspace, IStagedOutput
+        private sealed class Owned(Runtime owner, string? destination = null) : ITemporaryWorkspace, IStagedOutput
         {
             public string DirectoryPath => "fixture";
             public string Path => "fixture";
@@ -1012,7 +1155,13 @@ public sealed class WorkflowTests
             public string File(string name) => name;
             public Task PublishAsync(CancellationToken cancellationToken)
             {
+                if (owner.FailOutputPublication && destination?.EndsWith(".mkv", StringComparison.Ordinal) == true)
+                {
+                    throw new IOException("Destination locked");
+                }
+
                 owner.Published++;
+                owner.PublishedPaths.Add(System.IO.Path.GetFullPath(destination ?? "fixture"));
                 return Task.CompletedTask;
             }
 

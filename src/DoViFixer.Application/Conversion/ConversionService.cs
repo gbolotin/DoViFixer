@@ -342,9 +342,10 @@ public sealed class ConversionService(DependencyService dependencies, IFileOpera
         {
             await using (var lease = await files.AcquireReadLeaseAsync(media.Source, cancellationToken))
             {
-                if (approvedPlan.Archive is not null)
+                // The archive stays staged until the output is verified, so a failed conversion leaves no archive behind.
+                await using var stagedArchive = approvedPlan.Archive is null ? null : publisher.Stage(approvedPlan.Archive, approvedPlan.ReplaceExistingOutput);
+                if (stagedArchive is not null)
                 {
-                    await using var stagedArchive = publisher.Stage(approvedPlan.Archive, approvedPlan.ReplaceExistingOutput);
                     const string backupStage = "Backing up enhancement layer";
                     progress?.Report(new(approvedPlan.Id, backupStage, media.Source.Path));
                     var manifest = await processor.ExtractBackupAsync(media, workspace, cancellationToken, progress, approvedPlan.Id, backupStage);
@@ -354,11 +355,7 @@ public sealed class ConversionService(DependencyService dependencies, IFileOpera
                         SourceName = Path.GetFileName(approvedPlan.Analysis.Media.Source.Path)
                     };
                     await archives.WriteAsync(stagedArchive.Path, manifest, workspace, cancellationToken);
-                    await stagedArchive.PublishAsync(cancellationToken);
-                    OperationLog.Audit(logger, "PublishBackup", approvedPlan.Archive, "Completed", approvedPlan.Id);
                     progress?.Report(new(approvedPlan.Id, backupStage, media.Source.Path, 100));
-                    archiveNote = " Verified archive retained.";
-                    archive = approvedPlan.Archive;
                 }
 
                 for (int attempt = 0;; attempt++)
@@ -388,6 +385,15 @@ public sealed class ConversionService(DependencyService dependencies, IFileOpera
 
                     progress?.Report(new(approvedPlan.Id, "Verifying", media.Source.Path, 100));
                     var outputIdentity = baseLayerHash is null ? null : files.Identify(staged.Path) with { Path = Path.GetFullPath(approvedPlan.Output) };
+                    if (stagedArchive is not null)
+                    {
+                        // Published before the output, so a published output always has its archive.
+                        await stagedArchive.PublishAsync(cancellationToken);
+                        OperationLog.Audit(logger, "PublishBackup", approvedPlan.Archive!, "Completed", approvedPlan.Id);
+                        archiveNote = " Verified archive retained.";
+                        archive = approvedPlan.Archive;
+                    }
+
                     await staged.PublishAsync(cancellationToken);
                     published = true;
                     OperationLog.Audit(logger, "PublishConversion", approvedPlan.Output, "Completed", approvedPlan.Id);
@@ -427,6 +433,24 @@ public sealed class ConversionService(DependencyService dependencies, IFileOpera
                 {
                     Original = backupIdentity.Path, Archive = archive
                 };
+            }
+
+            if (archive is not null && !approvedPlan.ReplaceExistingOutput)
+            {
+                // The output was not published, so the archive created for it is unused. A replaced archive is kept:
+                // the earlier one is already gone, and the new one comes from the same source.
+                try
+                {
+                    await files.DeleteAsync(files.Identify(archive), CancellationToken.None);
+                    OperationLog.Audit(logger, "DeleteUnusedBackup", archive, "Completed", approvedPlan.Id);
+                    archive = null;
+                    archiveNote = "";
+                }
+                catch (Exception cleanupException)
+                {
+                    archiveNote = $" Unused archive could not be deleted: {cleanupException.Message}";
+                    logger.LogWarning(cleanupException, "Could not delete unused archive {ArchivePath}", archive);
+                }
             }
 
             string recovery = " Original retained.";
