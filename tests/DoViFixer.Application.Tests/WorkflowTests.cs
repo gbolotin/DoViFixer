@@ -993,7 +993,7 @@ public sealed class WorkflowTests
             VerificationFailure
         }
         : []);
-        public Task<ArchiveManifest> ExtractBackupAsync(MediaInfo media, ITemporaryWorkspace workspace, CancellationToken cancellationToken) => Task.FromResult(new ArchiveManifest(1, "source.mkv", new string('A', 64), new string('B', 64), 1000, 1000, DateTimeOffset.UnixEpoch));
+        public Task<ArchiveManifest> ExtractBackupAsync(MediaInfo media, ITemporaryWorkspace workspace, CancellationToken cancellationToken, IProgress<OperationProgress>? progress = null, Guid operationId = default, string stage = "") => Task.FromResult(new ArchiveManifest(1, "source.mkv", new string('A', 64), new string('B', 64), 1000, 1000, DateTimeOffset.UnixEpoch));
         public Dictionary<string, ArchiveManifest?> Manifests { get; } = new(StringComparer.OrdinalIgnoreCase);
         public List<string> ManifestReads { get; } = [];
         public Task<ArchiveManifest?> ReadManifestAsync(string archive, CancellationToken cancellationToken)
