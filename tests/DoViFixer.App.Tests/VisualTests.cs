@@ -877,7 +877,7 @@ public sealed class VisualTests
         await LayoutAsync(window);
         AssertStableActionSlots(list, slots, "converted file shown");
         Assert.AreEqual(row.Result!.Output, runtime.ShownFile);
-        var rowDot = ResultDot(container, row);
+        var rowDot = ResultDot(list.ItemContainerGenerator.ContainerFromItem(row), row);
         Assert.IsTrue(rowDot.IsVisible, "A converted row shows a result dot before its status.");
         Assert.AreEqual(window.FindResource("SystemFillColorSuccessBrush"), rowDot.Fill);
         media.Focused = row;
