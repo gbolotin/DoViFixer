@@ -361,7 +361,7 @@ internal sealed class TestRuntime : IFileDiscovery, IFileOperations, IMediaProbe
         }
         return Task.FromResult<ArchiveManifest?>(new(1, "source.mkv", new string('A', 64), new string('B', 64), 1000, 1000, DateTimeOffset.UnixEpoch));
     }
-    public Task<IReadOnlyList<string>> VerifyAsync(MediaInfo source, string output, DolbyVisionProfile expectedProfile, ITemporaryWorkspace workspace, CancellationToken cancellationToken, IProgress<OperationProgress>? progress = null, Guid operationId = default) => Task.FromResult<IReadOnlyList<string>>([]);
+    public Task<IReadOnlyList<VerificationFinding>> VerifyAsync(MediaInfo source, string output, DolbyVisionProfile expectedProfile, ITemporaryWorkspace workspace, CancellationToken cancellationToken, IProgress<OperationProgress>? progress = null, Guid operationId = default) => Task.FromResult<IReadOnlyList<VerificationFinding>>([]);
     public IStagedOutput Stage(string destination, bool replaceExisting = false)
     {
         StagedOutputs.Add((destination, replaceExisting));

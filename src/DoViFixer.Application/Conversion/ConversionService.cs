@@ -363,6 +363,7 @@ public sealed class ConversionService(DependencyService dependencies, IFileOpera
                 {
                     await using var staged = publisher.Stage(approvedPlan.Output, approvedPlan.ReplaceExistingOutput);
                     bool safe = approvedPlan.Safe || attempt > 0;
+                    bool retryInSafeMode = !safe;
                     try
                     {
                         await processor.ConvertAsync(media, approvedPlan.Target, workspace, staged.Path, progress, approvedPlan.Id, cancellationToken, safe);
@@ -370,10 +371,12 @@ public sealed class ConversionService(DependencyService dependencies, IFileOpera
                         var findings = await verifier.VerifyAsync(media, staged.Path, approvedPlan.Target == ConversionTarget.Profile81 ? DolbyVisionProfile.Profile81 : DolbyVisionProfile.None, workspace, cancellationToken, progress, approvedPlan.Id);
                         if (findings.Count > 0)
                         {
-                            throw new InvalidDataException("Verification failed: " + string.Join("; ", findings));
+                            // Safe mode only changes how the video stream is extracted, so it cannot fix container findings.
+                            retryInSafeMode &= findings.Any(f => f.Area == VerificationArea.VideoStream);
+                            throw new InvalidDataException("Verification failed: " + string.Join("; ", findings.Select(f => f.Message)));
                         }
                     }
-                    catch (Exception ex)when (!safe && ex is (IOException or InvalidDataException))
+                    catch (Exception ex)when (retryInSafeMode && ex is (IOException or InvalidDataException))
                     {
                         cancellationToken.ThrowIfCancellationRequested();
                         logger.LogWarning(ex, "Standard conversion failed verification or processing; retrying in safe mode");

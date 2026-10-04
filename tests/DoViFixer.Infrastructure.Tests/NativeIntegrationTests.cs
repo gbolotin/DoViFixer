@@ -86,7 +86,7 @@ public sealed class NativeIntegrationTests
         {
             Source = files.Identify(input)
         };
-        var verifier = new MediaVerifier(probe, processor, tools, runner);
+        var verifier = new MediaVerifier(probe, processor, tools, runner, NullLogger<MediaVerifier>.Instance);
         var dependencies = new DependencyService(new ReadyDetector(tools), null!, null!, tools, NullLogger<DependencyService>.Instance);
         var cache = new AnalysisCache(new StorageOptions(workspace.DirectoryPath), NullLogger<AnalysisCache>.Instance);
         var service = new ConversionService(dependencies, files, factory, processor, verifier, new OutputPublisher(NullLogger<OutputPublisher>.Instance), new BackupArchiveStore(), NullLogger<ConversionService>.Instance, cache);
@@ -368,7 +368,7 @@ public sealed class NativeIntegrationTests
         };
         var metadataRunner = new FixtureMediaInfoRunner(runner, mediaInfoFixtures);
         var probe = new MediaProbe(tools, metadataRunner, files, NullLogger<MediaProbe>.Instance);
-        var verifier = new MediaVerifier(probe, processor, tools, metadataRunner);
+        var verifier = new MediaVerifier(probe, processor, tools, metadataRunner, NullLogger<MediaVerifier>.Instance);
         foreach (var(targetPath, targetProfile, sourceMedia)in new[]
         {
             (output, DolbyVisionProfile.Profile81, media),
@@ -380,7 +380,7 @@ public sealed class NativeIntegrationTests
         {
             await using var checkWorkspace = await factory.CreateAsync(16 * 1024 * 1024, null, default);
             var failures = await verifier.VerifyAsync(sourceMedia, targetPath, targetProfile, checkWorkspace, default);
-            Assert.AreEqual(0, failures.Count, string.Join("; ", failures));
+            Assert.AreEqual(0, failures.Count, string.Join("; ", failures.Select(f => f.Message)));
         }
 
         // Exercise the complete conversion workflow, including verification fallback,
@@ -399,7 +399,7 @@ public sealed class NativeIntegrationTests
             var serviceRunner = new FixtureMediaInfoRunner(runner, mediaInfoFixtures, targetJson);
             var serviceProbe = new MediaProbe(tools, serviceRunner, files, NullLogger<MediaProbe>.Instance);
             var serviceProcessor = new VideoProcessor(tools, failStreaming ? new FailingPipelineRunner(runner) : runner, TimeProvider.System, NullLogger<VideoProcessor>.Instance);
-            var serviceVerifier = new MediaVerifier(serviceProbe, serviceProcessor, tools, serviceRunner);
+            var serviceVerifier = new MediaVerifier(serviceProbe, serviceProcessor, tools, serviceRunner, NullLogger<MediaVerifier>.Instance);
             var dependencies = new DependencyService(new ReadyDetector(tools), null!, null!, tools, NullLogger<DependencyService>.Instance);
             var cache = new AnalysisCache(new StorageOptions(workspace.DirectoryPath), NullLogger<AnalysisCache>.Instance);
             var service = new ConversionService(dependencies, files, factory, serviceProcessor, serviceVerifier, new OutputPublisher(NullLogger<OutputPublisher>.Instance), archiveStore, NullLogger<ConversionService>.Instance, cache);

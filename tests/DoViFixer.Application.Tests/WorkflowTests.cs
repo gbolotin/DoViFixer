@@ -580,6 +580,28 @@ public sealed class WorkflowTests
     }
 
     [TestMethod]
+    public async Task ContainerOnlyVerificationFailureSkipsSafeRetry()
+    {
+        var runtime = new Runtime
+        {
+            VerificationFailure = new(VerificationArea.Container, "tags metadata changed.")
+        };
+        var result = await runtime.Conversion().ExecuteAsync(Plan("bad.mkv")with
+        {
+            Safe = false, DeleteBackup = true
+        }, null, default);
+        Assert.AreEqual(OperationStatus.Failed, result.Status);
+        StringAssert.Contains(result.Message, "Verification failed: tags metadata changed.");
+        CollectionAssert.AreEqual(new[]
+        {
+            false
+        }, runtime.SafeModes, "Safe mode only changes video extraction, so it cannot fix container metadata.");
+        Assert.AreEqual(0, runtime.Published);
+        Assert.AreEqual(0, runtime.Deleted);
+        Assert.AreEqual(1, runtime.Restored);
+    }
+
+    [TestMethod]
     public async Task RecoveryFailureReportsBackupLocationAndPreservesOriginalError()
     {
         var runtime = new Runtime
@@ -747,6 +769,12 @@ public sealed class WorkflowTests
             get;
             init;
         }
+        public VerificationFinding VerificationFailure
+        {
+            get;
+            init;
+        }
+        = new(VerificationArea.VideoStream, "invalid frame count");
         public List<bool> SafeModes
         {
             get;
@@ -960,9 +988,9 @@ public sealed class WorkflowTests
             return Task.CompletedTask;
         }
 
-        public Task<IReadOnlyList<string>> VerifyAsync(MediaInfo source, string output, DolbyVisionProfile expectedProfile, ITemporaryWorkspace workspace, CancellationToken cancellationToken, IProgress<OperationProgress>? progress = null, Guid operationId = default) => Task.FromResult<IReadOnlyList<string>>((source.Source.Path.Contains("bad", StringComparison.Ordinal) || (FailFirstVerification && ConvertCalls == 1)) ? new[]
+        public Task<IReadOnlyList<VerificationFinding>> VerifyAsync(MediaInfo source, string output, DolbyVisionProfile expectedProfile, ITemporaryWorkspace workspace, CancellationToken cancellationToken, IProgress<OperationProgress>? progress = null, Guid operationId = default) => Task.FromResult<IReadOnlyList<VerificationFinding>>((source.Source.Path.Contains("bad", StringComparison.Ordinal) || (FailFirstVerification && ConvertCalls == 1)) ? new[]
         {
-            "invalid frame count"
+            VerificationFailure
         }
         : []);
         public Task<ArchiveManifest> ExtractBackupAsync(MediaInfo media, ITemporaryWorkspace workspace, CancellationToken cancellationToken) => Task.FromResult(new ArchiveManifest(1, "source.mkv", new string('A', 64), new string('B', 64), 1000, 1000, DateTimeOffset.UnixEpoch));

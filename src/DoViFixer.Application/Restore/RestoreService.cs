@@ -118,7 +118,7 @@ public sealed class RestoreService(DependencyService dependencies, IMediaProbe p
         var findings = await verifier.VerifyAsync(approvedPlan.Media, staged.Path, DolbyVisionProfile.Profile7, workspace, cancellationToken);
         if (findings.Count > 0)
         {
-            throw new InvalidDataException("Restoration verification failed: " + string.Join("; ", findings));
+            throw new InvalidDataException("Restoration verification failed: " + string.Join("; ", findings.Select(f => f.Message)));
         }
 
         await staged.PublishAsync(cancellationToken);

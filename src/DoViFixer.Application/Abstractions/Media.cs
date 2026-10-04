@@ -24,9 +24,17 @@ public interface IVideoProcessor
     Task RestoreAsync(MediaInfo media, ArchiveManifest? manifest, ITemporaryWorkspace workspace, string stagedOutput, CancellationToken cancellationToken);
 }
 
+/// <summary>What a verification finding concerns. Safe mode changes only how the video stream is extracted; the remux, and so the container, is the same.</summary>
+public enum VerificationArea
+{
+    VideoStream,
+    Container
+}
+
+public sealed record VerificationFinding(VerificationArea Area, string Message);
 public interface IMediaVerifier
 {
-    Task<IReadOnlyList<string>> VerifyAsync(MediaInfo source, string output, DolbyVisionProfile expectedProfile, ITemporaryWorkspace workspace, CancellationToken cancellationToken, IProgress<OperationProgress>? progress = null, Guid operationId = default);
+    Task<IReadOnlyList<VerificationFinding>> VerifyAsync(MediaInfo source, string output, DolbyVisionProfile expectedProfile, ITemporaryWorkspace workspace, CancellationToken cancellationToken, IProgress<OperationProgress>? progress = null, Guid operationId = default);
 }
 
 // Thrown when an archive's base-layer SHA-256 does not match the input; carries the input's actual hash.
