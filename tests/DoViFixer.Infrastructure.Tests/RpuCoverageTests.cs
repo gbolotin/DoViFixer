@@ -58,7 +58,7 @@ public sealed class RpuCoverageTests
         Assert.IsTrue(MediaClassifier.HasVerifiedTail(evidence));
         Assert.IsTrue(ConversionPolicy.Evaluate(MediaClassifier.Classify(media, evidence), true, true).Allowed);
         string output = workspace.File("output.mkv");
-        var verifier = new MediaVerifier(probe, processor, tools, runner);
+        var verifier = new MediaVerifier(probe, processor, tools, runner, NullLogger<MediaVerifier>.Instance);
         var dependencies = new DependencyService(new ReadyDetector(tools), null!, null!, tools, NullLogger<DependencyService>.Instance);
         var cache = new AnalysisCache(new StorageOptions(workspace.DirectoryPath), NullLogger<AnalysisCache>.Instance);
         var service = new ConversionService(dependencies, files, factory, processor, verifier, new OutputPublisher(NullLogger<OutputPublisher>.Instance), new BackupArchiveStore(), NullLogger<ConversionService>.Instance, cache);

@@ -3,6 +3,7 @@ using System.Text;
 using System.Text.Json;
 using DoViFixer.Application.Abstractions;
 using DoViFixer.Application.Dependencies;
+using DoViFixer.Application.Operations;
 using DoViFixer.Application.Settings;
 using DoViFixer.Domain.Analysis;
 using DoViFixer.Domain.Media;
@@ -14,6 +15,7 @@ using DoViFixer.Infrastructure.MediaTools;
 using DoViFixer.Infrastructure.MediaTools.DoviTool;
 using DoViFixer.Infrastructure.MediaTools.Processes;
 using DoViFixer.Infrastructure.TemporaryStorage;
+using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Logging.Abstractions;
 using Microsoft.VisualStudio.TestTools.UnitTesting;
 
@@ -673,7 +675,7 @@ public sealed class InfrastructureTests
         Assert.AreEqual(equivalent ? 0 : source.Tracks.Count, failures.Count);
         if (!equivalent)
         {
-            Assert.IsTrue(failures.All(f => f.Contains($"'{original}' -> '{remuxed}'", StringComparison.Ordinal)));
+            Assert.IsTrue(failures.All(f => f.Area == VerificationArea.Container && f.Message.Contains($"'{original}' -> '{remuxed}'", StringComparison.Ordinal)));
         }
 
         var renamed = target with
@@ -683,7 +685,101 @@ public sealed class InfrastructureTests
                 Name = t.Name + " changed"
             }).ToArray()
         };
-        Assert.IsTrue(MediaVerifier.CompareMetadata(source, renamed, DolbyVisionProfile.Profile7).Any(f => f.Contains("metadata or order", StringComparison.Ordinal)));
+        Assert.IsTrue(MediaVerifier.CompareMetadata(source, renamed, DolbyVisionProfile.Profile7).Any(f => f.Message.Contains("metadata or order", StringComparison.Ordinal)));
+    }
+
+    [TestMethod]
+    [DataRow("chapters")]
+    [DataRow("tags")]
+    public async Task ContainerMetadataMismatchFailsVerificationBeforeFullFilePasses(string changedMode)
+    {
+        string mkv = await File.ReadAllTextAsync(Path.Combine(AppContext.BaseDirectory, "Fixtures", "mkvmerge.json"));
+        const string mi = """
+            {"media":{"track":[{"@type":"Video","Format":"HEVC","Width":"256","Height":"144",
+             "Duration":"1","HDR_Format":"Dolby Vision","HDR_Format_Profile":"dvhe.07"}]}}
+            """;
+        string sourcePath = Path.Combine(directory, "source.mkv");
+        string output = Path.Combine(directory, "output.mkv");
+        await File.WriteAllTextAsync(sourcePath, "source");
+        await File.WriteAllTextAsync(output, "output");
+        var source = MediaMetadataParser.Parse(files.Identify(sourcePath), mkv, mi);
+        var tools = new ToolCatalog();
+        tools.Refresh(Enum.GetValues<NativeTool>().Select(tool => new DependencyStatus(tool, DependencyState.Ready, tool.ToString(), "test", "fixture")));
+        var runner = new ContainerMetadataRunner(mkv, mi, changedMode);
+        var logger = new RecordingLogger<MediaVerifier>();
+        var verifier = new MediaVerifier(new MediaProbe(tools, runner, files, NullLogger<MediaProbe>.Instance), new VideoProcessor(tools, runner, TimeProvider.System, NullLogger<VideoProcessor>.Instance), tools, runner, logger);
+        await using var workspace = await new TemporaryWorkspaceFactory(files, NullLogger<TemporaryWorkspaceFactory>.Instance).CreateAsync(1024, directory, default);
+        var progress = new RecordingProgress();
+        var failures = await verifier.VerifyAsync(source, output, DolbyVisionProfile.Profile7, workspace, default, progress);
+        CollectionAssert.AreEqual(new[] { new VerificationFinding(VerificationArea.Container, $"{changedMode} metadata changed.") }, failures.ToArray());
+        CollectionAssert.AreEqual(new[] { "chapters", "chapters", "tags", "tags" }, runner.ExtractModes, "Only container metadata may be extracted.");
+        Assert.IsFalse(runner.Executables.Contains(nameof(NativeTool.FFprobe)), "Frame counting reads the whole file.");
+        Assert.IsFalse(runner.Executables.Contains(nameof(NativeTool.DoviTool)), "RPU verification reads the whole video stream.");
+        double?[] percents = progress.Values.Select(value => value.Percent).ToArray();
+        CollectionAssert.AreEqual(percents.Order().ToArray(), percents);
+        Assert.IsTrue(percents.All(percent => percent < 100), "Completion is reserved for the caller.");
+        var difference = logger.Entries.Single(entry => entry.Level == LogLevel.Warning);
+        Assert.AreEqual(changedMode, difference.Properties["Mode"]);
+        StringAssert.Contains(((string[])difference.Properties["SourceOnly"]!).Single(), "source.mkv");
+        StringAssert.Contains(((string[])difference.Properties["OutputOnly"]!).Single(), "output.mkv");
+    }
+
+    private sealed class ContainerMetadataRunner(string mkvJson, string mediaInfoJson, string changedMode) : IProcessRunner
+    {
+        public List<string> Executables { get; } = [];
+        public List<string> ExtractModes { get; } = [];
+
+        public Task PipeAsync(ProcessRequest producer, ProcessRequest consumer, CancellationToken cancellationToken) => throw new NotSupportedException();
+
+        public async Task<ProcessResult> RunAsync(ProcessRequest request, CancellationToken cancellationToken)
+        {
+            Executables.Add(request.Executable);
+            if (request.Executable == nameof(NativeTool.MkvMerge))
+            {
+                return new(0, mkvJson, "");
+            }
+
+            if (request.Executable == nameof(NativeTool.MediaInfo))
+            {
+                return new(0, mediaInfoJson, "");
+            }
+
+            if (request.Executable == nameof(NativeTool.MkvExtract))
+            {
+                string mode = request.Arguments[1];
+                ExtractModes.Add(mode);
+                // Absent metadata produces no file; the changed element differs between source and output.
+                string name = Path.GetFileName(request.Arguments[0]);
+                if (mode == changedMode && mode == "chapters")
+                {
+                    await File.WriteAllTextAsync(request.Arguments[2], $"<Chapters><EditionEntry><ChapterAtom><ChapterDisplay><ChapterString>{name}</ChapterString></ChapterDisplay></ChapterAtom></EditionEntry></Chapters>", cancellationToken);
+                }
+                else if (mode == changedMode && mode == "tags")
+                {
+                    await File.WriteAllTextAsync(request.Arguments[2], $"<Tags><Tag><Simple><Name>TITLE</Name><String>{name}</String></Simple></Tag></Tags>", cancellationToken);
+                }
+            }
+
+            return new(0, "", "");
+        }
+    }
+
+    private sealed class RecordingProgress : IProgress<OperationProgress>
+    {
+        public List<OperationProgress> Values { get; } = [];
+
+        public void Report(OperationProgress value) => Values.Add(value);
+    }
+
+    private sealed record LogEntry(LogLevel Level, IReadOnlyDictionary<string, object?> Properties);
+    private sealed class RecordingLogger<T> : ILogger<T>
+    {
+        public List<LogEntry> Entries { get; } = [];
+
+        public IDisposable? BeginScope<TState>(TState state)
+            where TState : notnull => null;
+        public bool IsEnabled(LogLevel logLevel) => true;
+        public void Log<TState>(LogLevel logLevel, EventId eventId, TState state, Exception? exception, Func<TState, Exception?, string> formatter) => Entries.Add(new(logLevel, state is IEnumerable<KeyValuePair<string, object?>> values ? values.ToDictionary() : new Dictionary<string, object?>()));
     }
 
     private sealed class FakeProcessRunner : IProcessRunner

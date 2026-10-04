@@ -33,9 +33,9 @@ public sealed class MediaVerifierTests
     {
         await using var workspace = await CreateWorkspaceAsync();
         var mkvExtract = new FakeMkvExtract(workspace.DirectoryPath);
-        var failures = new List<string>();
+        var failures = new List<VerificationFinding>();
         await CreateVerifier(mkvExtract).VerifyTracksAsync(Media(SourcePath), Media(OutputPath), workspace, failures, default);
-        Assert.AreEqual(0, failures.Count, string.Join("; ", failures));
+        Assert.AreEqual(0, failures.Count, string.Join("; ", failures.Select(f => f.Message)));
         CollectionAssert.AreEqual(new[]
         {
             SourcePath,
@@ -53,13 +53,14 @@ public sealed class MediaVerifierTests
         mkvExtract.Payloads[(OutputPath, 2)] = "changed audio";
         mkvExtract.Timestamps[(OutputPath, 0)] = "# timestamp format v2\n0\n45\n";
         mkvExtract.Timestamps[(OutputPath, 3)] = "# timestamp format v2\n500\n2500\n";
-        var failures = new List<string>();
+        var failures = new List<VerificationFinding>();
         await CreateVerifier(mkvExtract).VerifyTracksAsync(Media(SourcePath), Media(OutputPath), workspace, failures, default);
-        CollectionAssert.AreEqual(new[]
+        // Only the video track is re-extracted by a safe-mode retry; other tracks come from the same remux.
+        CollectionAssert.AreEqual(new VerificationFinding[]
         {
-            "Track 0 timestamps changed or verification is unavailable.",
-            "Track 2 payload changed.",
-            "Track 3 timestamps changed or verification is unavailable."
+            new(VerificationArea.VideoStream, "Track 0 timestamps changed or verification is unavailable."),
+            new(VerificationArea.Container, "Track 2 payload changed."),
+            new(VerificationArea.Container, "Track 3 timestamps changed or verification is unavailable.")
         }, failures);
         Assert.AreEqual(0, Directory.GetFiles(workspace.DirectoryPath).Length);
     }
@@ -94,7 +95,7 @@ public sealed class MediaVerifierTests
         var runner = new FakeVerificationTools(workspace.DirectoryPath, mkv, SourceMediaInfo, output, outputMediaInfo, rpuFound: expectedProfile != DolbyVisionProfile.None);
         var tools = new ToolCatalog();
         tools.Refresh(Enum.GetValues<NativeTool>().Select(t => new DependencyStatus(t, DependencyState.Ready, t.ToString(), "test", "fixture")));
-        var verifier = new MediaVerifier(new MediaProbe(tools, runner, files, NullLogger<MediaProbe>.Instance), new VideoProcessor(tools, runner, TimeProvider.System, NullLogger<VideoProcessor>.Instance), tools, runner);
+        var verifier = new MediaVerifier(new MediaProbe(tools, runner, files, NullLogger<MediaProbe>.Instance), new VideoProcessor(tools, runner, TimeProvider.System, NullLogger<VideoProcessor>.Instance), tools, runner, NullLogger<MediaVerifier>.Instance);
 
         var failures = await verifier.VerifyAsync(source, output, expectedProfile, workspace, default);
 
@@ -114,7 +115,7 @@ public sealed class MediaVerifierTests
         tools.Refresh([new DependencyStatus(NativeTool.MkvExtract, DependencyState.Ready, "mkvextract", "test", "test")]);
         var probe = new MediaProbe(tools, processes, new FileOperations(), NullLogger<MediaProbe>.Instance);
         var processor = new VideoProcessor(tools, processes, TimeProvider.System, NullLogger<VideoProcessor>.Instance);
-        return new MediaVerifier(probe, processor, tools, processes);
+        return new MediaVerifier(probe, processor, tools, processes, NullLogger<MediaVerifier>.Instance);
     }
 
     // Writes each requested track or timestamp file as mkvextract would, from content keyed by file and track ID.

@@ -6,11 +6,12 @@ using DoViFixer.Application.Abstractions;
 using DoViFixer.Application.Dependencies;
 using DoViFixer.Domain.Media;
 using DoViFixer.Infrastructure.MediaTools.Processes;
+using Microsoft.Extensions.Logging;
 
 namespace DoViFixer.Infrastructure.MediaTools;
-internal sealed class MediaVerifier(MediaProbe probe, VideoProcessor processor, IToolCatalog tools, IProcessRunner processes) : IMediaVerifier
+internal sealed class MediaVerifier(MediaProbe probe, VideoProcessor processor, IToolCatalog tools, IProcessRunner processes, ILogger<MediaVerifier> logger) : IMediaVerifier
 {
-    public async Task<IReadOnlyList<string>> VerifyAsync(MediaInfo source, string output, DolbyVisionProfile expectedProfile, ITemporaryWorkspace workspace, CancellationToken cancellationToken, IProgress<OperationProgress>? progress = null, Guid operationId = default)
+    public async Task<IReadOnlyList<VerificationFinding>> VerifyAsync(MediaInfo source, string output, DolbyVisionProfile expectedProfile, ITemporaryWorkspace workspace, CancellationToken cancellationToken, IProgress<OperationProgress>? progress = null, Guid operationId = default)
     {
         int completed = 0;
         // Checkpoints represent completed checks, not elapsed time. Reserve completion for the caller.
@@ -20,10 +21,27 @@ internal sealed class MediaVerifier(MediaProbe probe, VideoProcessor processor, 
         var target = await probe.ProbeAsync(output, cancellationToken);
         var failures = CompareMetadata(source, target, expectedProfile).ToList();
         ReportCheckpoint();
+        if (failures.Count != 0)
+        {
+            return failures;
+        }
+
+        // mkvextract reads only these metadata elements, so a mismatch fails in seconds instead of after the full-file passes below.
+        await VerifyAttachmentsAsync(source, target, workspace, failures, cancellationToken);
+        ReportCheckpoint();
+        await VerifyXmlAsync(source, target, "chapters", workspace, failures, cancellationToken);
+        ReportCheckpoint();
+        await VerifyXmlAsync(source, target, "tags", workspace, failures, cancellationToken);
+        ReportCheckpoint();
+        if (failures.Count != 0)
+        {
+            return failures;
+        }
+
         long outputFrames = await probe.CountFramesAsync(output, cancellationToken);
         if (await probe.CountFramesAsync(source.Source.Path, cancellationToken) != outputFrames)
         {
-            failures.Add("Video packet/frame count changed.");
+            failures.Add(new(VerificationArea.VideoStream, "Video packet/frame count changed."));
         }
 
         ReportCheckpoint();
@@ -49,21 +67,15 @@ internal sealed class MediaVerifier(MediaProbe probe, VideoProcessor processor, 
         ReportCheckpoint();
         if (beforeBaseHash != await HashBaseLayerAsync(outputVideo, workspace, cancellationToken))
         {
-            failures.Add("Base-layer video payload changed.");
+            failures.Add(new(VerificationArea.VideoStream, "Base-layer video payload changed."));
         }
 
-        ReportCheckpoint();
-        await VerifyAttachmentsAsync(source, target, workspace, failures, cancellationToken);
-        ReportCheckpoint();
-        await VerifyXmlAsync(source, target, "chapters", workspace, failures, cancellationToken);
-        ReportCheckpoint();
-        await VerifyXmlAsync(source, target, "tags", workspace, failures, cancellationToken);
         return failures;
     }
 
     // Verify all retained track payloads and packet timestamps, including subtitles.
     // Each file is read once, instead of once per track and extraction mode.
-    internal async Task VerifyTracksAsync(MediaInfo source, MediaInfo target, ITemporaryWorkspace workspace, List<string> failures, CancellationToken cancellationToken)
+    internal async Task VerifyTracksAsync(MediaInfo source, MediaInfo target, ITemporaryWorkspace workspace, List<VerificationFinding> failures, CancellationToken cancellationToken)
     {
         try
         {
@@ -73,12 +85,12 @@ internal sealed class MediaVerifier(MediaProbe probe, VideoProcessor processor, 
             {
                 if (beforeHashes[i] != afterHashes[i])
                 {
-                    failures.Add($"Track {source.Tracks[i].Id} payload changed.");
+                    failures.Add(new(VerificationArea.Container, $"Track {source.Tracks[i].Id} payload changed."));
                 }
 
                 if (!await TimestampsMatchAsync(TimestampsFile(workspace, "before", i), TimestampsFile(workspace, "after", i), cancellationToken))
                 {
-                    failures.Add($"Track {source.Tracks[i].Id} timestamps changed or verification is unavailable.");
+                    failures.Add(new(AreaOf(source.Tracks[i]), $"Track {source.Tracks[i].Id} timestamps changed or verification is unavailable."));
                 }
             }
         }
@@ -128,7 +140,7 @@ internal sealed class MediaVerifier(MediaProbe probe, VideoProcessor processor, 
     private static string PayloadFile(ITemporaryWorkspace workspace, string prefix, int position) => workspace.File($"verify-{prefix}-{position}.bin");
     private static string TimestampsFile(ITemporaryWorkspace workspace, string prefix, int position) => workspace.File($"verify-{prefix}-{position}-timestamps.txt");
 
-    private async Task VerifyRpuAsync(MediaInfo source, MediaInfo target, string raw, DolbyVisionProfile expectedProfile, long frames, ITemporaryWorkspace workspace, List<string> failures, CancellationToken cancellationToken)
+    private async Task VerifyRpuAsync(MediaInfo source, MediaInfo target, string raw, DolbyVisionProfile expectedProfile, long frames, ITemporaryWorkspace workspace, List<VerificationFinding> failures, CancellationToken cancellationToken)
     {
         string rpu = workspace.File("verify.rpu");
         var extraction = await processes.RunAsync(new(tools.GetPath(NativeTool.DoviTool), new[]
@@ -142,7 +154,7 @@ internal sealed class MediaVerifier(MediaProbe probe, VideoProcessor processor, 
         {
             if (extraction.ExitCode != 1 || extraction.Error.Trim() != "Error: No RPU was found in input file")
             {
-                failures.Add("HDR10 output still contains RPU data or its absence could not be verified.");
+                failures.Add(new(VerificationArea.VideoStream, "HDR10 output still contains RPU data or its absence could not be verified."));
             }
 
             return;
@@ -150,7 +162,7 @@ internal sealed class MediaVerifier(MediaProbe probe, VideoProcessor processor, 
 
         if (extraction.ExitCode != 0 || !File.Exists(rpu) || new FileInfo(rpu).Length == 0)
         {
-            failures.Add("Output RPU data is absent or unreadable.");
+            failures.Add(new(VerificationArea.VideoStream, "Output RPU data is absent or unreadable."));
             return;
         }
 
@@ -174,7 +186,7 @@ internal sealed class MediaVerifier(MediaProbe probe, VideoProcessor processor, 
             long originalCount = (await RpuCoverage.ReadAsync(originalStream, cancellationToken, countRpuOnly: true)).Count;
             if (originalCount != count)
             {
-                failures.Add("RPU metadata count changed during conversion; metadata must not be added or removed.");
+                failures.Add(new(VerificationArea.VideoStream, "RPU metadata count changed during conversion; metadata must not be added or removed."));
             }
         }
 
@@ -182,7 +194,7 @@ internal sealed class MediaVerifier(MediaProbe probe, VideoProcessor processor, 
         {
             if (wrongProfile || expectedProfile != DolbyVisionProfile.Profile81 || source.Profile != DolbyVisionProfile.Profile7 || count <= 0 || count >= frames)
             {
-                failures.Add($"Output RPU profile/count does not match Profile {expected} and {frames} video frames.");
+                failures.Add(new(VerificationArea.VideoStream, $"Output RPU profile/count does not match Profile {expected} and {frames} video frames."));
             }
             else
             {
@@ -193,12 +205,12 @@ internal sealed class MediaVerifier(MediaProbe probe, VideoProcessor processor, 
                     var before = await RpuCoverage.VerifyAsync(originalRaw, source.Source.Path, count, tools, processes, cancellationToken);
                     if (before != after || after.TotalFrames != frames)
                     {
-                        failures.Add("Metadata-free ending or per-frame RPU positions changed during conversion.");
+                        failures.Add(new(VerificationArea.VideoStream, "Metadata-free ending or per-frame RPU positions changed during conversion."));
                     }
                 }
                 catch (InvalidDataException ex)
                 {
-                    failures.Add($"Metadata-free ending verification failed: {ex.Message}");
+                    failures.Add(new(VerificationArea.VideoStream, $"Metadata-free ending verification failed: {ex.Message}"));
                 }
                 finally
                 {
@@ -208,27 +220,27 @@ internal sealed class MediaVerifier(MediaProbe probe, VideoProcessor processor, 
         }
     }
 
-    internal static IReadOnlyList<string> CompareMetadata(MediaInfo source, MediaInfo target, DolbyVisionProfile profile)
+    internal static IReadOnlyList<VerificationFinding> CompareMetadata(MediaInfo source, MediaInfo target, DolbyVisionProfile profile)
     {
-        var failures = new List<string>();
+        var failures = new List<VerificationFinding>();
         if (target.Profile != profile)
         {
-            failures.Add($"Expected {profile}; detected {target.Profile}.");
+            failures.Add(new(VerificationArea.VideoStream, $"Expected {profile}; detected {target.Profile}."));
         }
 
         if (target.Width <= 0 || target.Height <= 0 || source.Width != target.Width || source.Height != target.Height || source.VideoCodec != target.VideoCodec)
         {
-            failures.Add("Video codec/dimensions changed or are unavailable.");
+            failures.Add(new(VerificationArea.VideoStream, "Video codec/dimensions changed or are unavailable."));
         }
 
         if (source.DurationSeconds is null or <= 0 || target.DurationSeconds is null or <= 0 || Math.Abs(source.DurationSeconds.Value - target.DurationSeconds.Value) > 0.05)
         {
-            failures.Add("Video duration differs by more than 50 ms or is unavailable.");
+            failures.Add(new(VerificationArea.VideoStream, "Video duration differs by more than 50 ms or is unavailable."));
         }
 
         if (source.Tracks.Count != target.Tracks.Count || source.AttachmentCount != target.AttachmentCount || source.ChapterCount != target.ChapterCount || source.Title != target.Title)
         {
-            failures.Add("Tracks, attachments, chapters or title changed.");
+            failures.Add(new(VerificationArea.Container, "Tracks, attachments, chapters or title changed."));
         }
 
         foreach (var pair in source.Tracks.Zip(target.Tracks))
@@ -237,12 +249,12 @@ internal sealed class MediaVerifier(MediaProbe probe, VideoProcessor processor, 
             var b = pair.Second;
             if (a.Type != b.Type || a.Codec != b.Codec || a.Name != b.Name || a.Default != b.Default || a.Forced != b.Forced)
             {
-                failures.Add($"Track {a.Id} metadata or order changed.");
+                failures.Add(new(AreaOf(a), $"Track {a.Id} metadata or order changed."));
             }
 
             if (!TrackLanguage.Equivalent(a.Language, b.Language))
             {
-                failures.Add($"Track {a.Id} language changed: '{a.Language}' -> '{b.Language}'.");
+                failures.Add(new(VerificationArea.Container, $"Track {a.Id} language changed: '{a.Language}' -> '{b.Language}'."));
             }
         }
 
@@ -250,9 +262,13 @@ internal sealed class MediaVerifier(MediaProbe probe, VideoProcessor processor, 
         using var targetJson = JsonDocument.Parse(target.IdentificationJson);
         var sourceVideo = sourceJson.RootElement.GetProperty("tracks").EnumerateArray().Single(t => t.GetProperty("id").GetInt32() == source.VideoTrackId).GetProperty("properties");
         var targetVideo = targetJson.RootElement.GetProperty("tracks").EnumerateArray().Single(t => t.GetProperty("id").GetInt32() == target.VideoTrackId).GetProperty("properties");
-        failures.AddRange(MkvVideoMetadata.Differences(sourceVideo, targetVideo).Select(p => $"Video container metadata changed: {p}."));
+        // Codec private data and similar properties come from the video stream itself.
+        failures.AddRange(MkvVideoMetadata.Differences(sourceVideo, targetVideo).Select(p => new VerificationFinding(VerificationArea.VideoStream, $"Video container metadata changed: {p}.")));
         return failures;
     }
+
+    // Only the video track is re-extracted in safe mode; other tracks are copied by the same remux either way.
+    private static VerificationArea AreaOf(MediaTrack track) => track.Type == "video" ? VerificationArea.VideoStream : VerificationArea.Container;
 
     // Deletes the cleaned copy as soon as it is hashed so it never shares scratch space with a later extraction.
     private async Task<string> HashBaseLayerAsync(string raw, ITemporaryWorkspace workspace, CancellationToken cancellationToken, bool preserveRaw = false)
@@ -272,7 +288,7 @@ internal sealed class MediaVerifier(MediaProbe probe, VideoProcessor processor, 
         return hash;
     }
 
-    private async Task VerifyAttachmentsAsync(MediaInfo source, MediaInfo target, ITemporaryWorkspace workspace, List<string> failures, CancellationToken cancellationToken)
+    private async Task VerifyAttachmentsAsync(MediaInfo source, MediaInfo target, ITemporaryWorkspace workspace, List<VerificationFinding> failures, CancellationToken cancellationToken)
     {
         using var a = JsonDocument.Parse(source.IdentificationJson);
         using var b = JsonDocument.Parse(target.IdentificationJson);
@@ -294,7 +310,7 @@ internal sealed class MediaVerifier(MediaProbe probe, VideoProcessor processor, 
                 "description"
             }.Any(n => MediaMetadataParser.Text(pair.First, n) != MediaMetadataParser.Text(pair.Second, n)))
             {
-                failures.Add("Attachment data or metadata changed.");
+                failures.Add(new(VerificationArea.Container, "Attachment data or metadata changed."));
             }
 
             File.Delete(before);
@@ -302,24 +318,24 @@ internal sealed class MediaVerifier(MediaProbe probe, VideoProcessor processor, 
         }
     }
 
-    private async Task VerifyXmlAsync(MediaInfo source, MediaInfo target, string mode, ITemporaryWorkspace workspace, List<string> failures, CancellationToken cancellationToken)
+    private async Task VerifyXmlAsync(MediaInfo source, MediaInfo target, string mode, ITemporaryWorkspace workspace, List<VerificationFinding> failures, CancellationToken cancellationToken)
     {
         string before = workspace.File(mode + "-before.xml");
         string after = workspace.File(mode + "-after.xml");
         await ExtractAsync(source.Source.Path, mode, before, cancellationToken);
         await ExtractAsync(target.Source.Path, mode, after, cancellationToken);
-        string Normalize(string path, MediaInfo media)
+        string[] Normalize(string path, MediaInfo media)
         {
             // mkvextract succeeds without creating a file when this metadata is absent.
             if (!File.Exists(path))
             {
-                return "";
+                return [];
             }
 
             string text = File.ReadAllText(path);
             if (string.IsNullOrWhiteSpace(text))
             {
-                return "";
+                return [];
             }
 
             var document = XDocument.Parse(text);
@@ -342,15 +358,22 @@ internal sealed class MediaVerifier(MediaProbe probe, VideoProcessor processor, 
                 }
 
                 CanonicalizeTags(document);
-                return string.Join("\n", (document.Root?.Elements() ?? []).Select(e => e.ToString(SaveOptions.DisableFormatting)).Order(StringComparer.Ordinal));
+                return (document.Root?.Elements() ?? []).Select(e => e.ToString(SaveOptions.DisableFormatting)).Order(StringComparer.Ordinal).ToArray();
             }
 
-            return document.Root?.ToString(SaveOptions.DisableFormatting) ?? "";
+            return document.Root is null ? [] : [document.Root.ToString(SaveOptions.DisableFormatting)];
         }
 
-        if (Normalize(before, source) != Normalize(after, target))
+        string[] expected = Normalize(before, source);
+        string[] actual = Normalize(after, target);
+        if (!expected.SequenceEqual(actual, StringComparer.Ordinal))
         {
-            failures.Add($"{mode} metadata changed.");
+            failures.Add(new(VerificationArea.Container, $"{mode} metadata changed."));
+            if (logger.IsEnabled(LogLevel.Warning))
+            {
+                // Log the normalized elements that differ so a failure can be diagnosed without the files.
+                logger.LogWarning("Verification found {Mode} metadata differences after normalization. Only in source: {SourceOnly}; only in output: {OutputOnly}", mode, expected.Except(actual, StringComparer.Ordinal).ToArray(), actual.Except(expected, StringComparer.Ordinal).ToArray());
+            }
         }
     }
 
