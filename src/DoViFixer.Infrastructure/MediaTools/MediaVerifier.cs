@@ -332,7 +332,9 @@ internal sealed class MediaVerifier(MediaProbe probe, VideoProcessor processor, 
                 try
                 {
                     // Only ignore a redundant primary-language annotation; retain regional variants.
-                    if (!ietf.Value.Contains('-') && CultureInfo.GetCultureInfo(ietf.Value).ThreeLetterISOLanguageName == (simple.Element("TagLanguage")?.Value ?? "und"))
+                    // "und" resolves to the invariant culture, whose code is "ivl", so it is matched literally.
+                    string language = ietf.Value == "und" ? "und" : CultureInfo.GetCultureInfo(ietf.Value).ThreeLetterISOLanguageName;
+                    if (!ietf.Value.Contains('-') && language == (simple.Element("TagLanguage")?.Value ?? "und"))
                     {
                         ietf.Remove();
                     }

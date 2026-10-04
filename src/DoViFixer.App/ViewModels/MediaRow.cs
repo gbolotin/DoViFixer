@@ -417,11 +417,12 @@ public sealed class MediaRow(string path) : ObservableObject
         State = MediaRowState.Cancelled;
     }
 
-    public void SetFailed(string? error, string? statusText = null)
+    /// <summary>A conversion or restoration failed. Its message stays in <see cref="Result"/>; the file's analysis is unaffected.</summary>
+    public void SetFailed(OperationItemResult itemResult)
     {
         ClearPlan();
-        AnalysisError = error;
-        Status = statusText ?? $"{OperationName} failed";
+        Result = itemResult;
+        Status = $"{OperationName} failed";
         State = MediaRowState.Failed;
     }
 

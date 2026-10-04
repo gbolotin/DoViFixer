@@ -959,7 +959,7 @@ public sealed class MediaViewModel : OperationViewModel, INavigationPage, IPageA
                 }
                 else
                 {
-                    row.SetFailed(itemResult.Message);
+                    row.SetFailed(itemResult);
                 }
             }), token);
             SetStatus(ViewStatus.Result, $"Restoration: {Summary(result)}");
@@ -1095,6 +1095,8 @@ public sealed class MediaViewModel : OperationViewModel, INavigationPage, IPageA
 
                     if (prep is CandidatePreparationResult.Failed failed)
                     {
+                        // Preparation fails only when the file cannot be read or inspected.
+                        row.AnalysisError = failed.Error;
                         return new OperationItemResult(row.Path, OperationStatus.Failed, null, failed.Error);
                     }
 
@@ -1132,7 +1134,7 @@ public sealed class MediaViewModel : OperationViewModel, INavigationPage, IPageA
                     }
                     else if (itemResult.Status == OperationStatus.Failed)
                     {
-                        row.SetFailed(itemResult.Message);
+                        row.SetFailed(itemResult);
                     }
                     else
                     {
