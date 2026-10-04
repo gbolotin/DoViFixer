@@ -1,5 +1,7 @@
 using System.Buffers.Binary;
+using System.Globalization;
 using System.Text.Json;
+using DoViFixer.Domain.Media;
 
 namespace DoViFixer.Infrastructure.MediaTools;
 // Turns Matroska HEVC frames (NAL units with big-endian length prefixes, as ffmpeg's data muxer writes them)
@@ -23,13 +25,34 @@ internal static class HevcAnnexB
         return 1 + (Convert.ToByte(codecPrivate.Substring(42, 2), 16) & 3);
     }
 
-    internal static async Task CopyAsync(Stream input, Stream output, int lengthSize, CancellationToken cancellationToken)
+    // The NUMBER_OF_BYTES statistics tag counts exactly the frame bytes FFmpeg's data muxer writes. Files without
+    // statistics tags fall back to the file length, so progress then tops out at the video's share of the file.
+    internal static long StreamLength(MediaInfo media)
+    {
+        using var identification = JsonDocument.Parse(media.IdentificationJson);
+        if (identification.RootElement.TryGetProperty("tracks", out var tracks))
+        {
+            foreach (var track in tracks.EnumerateArray())
+            {
+                if (track.TryGetProperty("id", out var id) && id.GetInt32() == media.VideoTrackId && track.TryGetProperty("properties", out var properties) && properties.TryGetProperty("tag_number_of_bytes", out var bytes) && long.TryParse(bytes.GetString(), NumberStyles.None, CultureInfo.InvariantCulture, out long length) && length > 0)
+                {
+                    return length;
+                }
+            }
+        }
+
+        return media.Source.Length;
+    }
+
+    /// <summary>Reports the input bytes consumed so far through <paramref name="bytesRead"/> after each NAL unit.</summary>
+    internal static async Task CopyAsync(Stream input, Stream output, int lengthSize, CancellationToken cancellationToken, Action<long>? bytesRead = null)
     {
         // Not disposed: the caller owns both streams.
         var reader = new BufferedStream(input, 1024 * 1024);
         var writer = new BufferedStream(output, 1024 * 1024);
         var prefix = new byte[4];
         var buffer = new byte[1024 * 1024];
+        long consumed = 0;
         while (true)
         {
             int read = await reader.ReadAtLeastAsync(prefix.AsMemory(4 - lengthSize, lengthSize), lengthSize, throwOnEndOfStream: false, cancellationToken);
@@ -61,6 +84,8 @@ internal static class HevcAnnexB
                 await writer.WriteAsync(buffer.AsMemory(0, chunk), cancellationToken);
                 remaining -= chunk;
             }
+
+            bytesRead?.Invoke(consumed += lengthSize + size);
         }
 
         await writer.FlushAsync(cancellationToken);

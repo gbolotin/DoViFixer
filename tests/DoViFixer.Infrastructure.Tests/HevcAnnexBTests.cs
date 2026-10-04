@@ -1,5 +1,6 @@
 using DoViFixer.Application.Abstractions;
 using DoViFixer.Application.Dependencies;
+using DoViFixer.Application.Operations;
 using DoViFixer.Domain.Conversion;
 using DoViFixer.Domain.Media;
 using DoViFixer.Infrastructure.Dependencies;
@@ -73,6 +74,60 @@ public sealed class HevcAnnexBTests
         {
             Directory.Delete(directory, true);
         }
+    }
+
+    [TestMethod]
+    public void StreamLengthComesFromTheStatisticsTagOrFallsBackToTheFileLength()
+    {
+        string json = File.ReadAllText(Path.Combine(AppContext.BaseDirectory, "Fixtures", "mkvmerge.json"));
+        Assert.AreEqual(88164, HevcAnnexB.StreamLength(Media(json)));
+        Assert.AreEqual(1024, HevcAnnexB.StreamLength(Media("""{"tracks":[{"id":0,"properties":{}}]}""")));
+    }
+
+    [TestMethod]
+    public async Task StreamingConversionReportsTheShareOfFrameBytesRelayed()
+    {
+        string directory = Path.Combine(Path.GetTempPath(), "DoViFixer-tests-" + Guid.NewGuid().ToString("N"));
+        Directory.CreateDirectory(directory);
+        try
+        {
+            byte[] stream = LengthPrefixed(4, nalUnits);
+            string json = (await File.ReadAllTextAsync(Path.Combine(AppContext.BaseDirectory, "Fixtures", "mkvmerge.json"))).Replace("\"tag_number_of_bytes\": \"88164\"", $"\"tag_number_of_bytes\": \"{stream.Length}\"");
+            var processor = new VideoProcessor(Tools(), new StreamingRunner(stream), TimeProvider.System, NullLogger<VideoProcessor>.Instance);
+            var sink = new RecordingProgress();
+            await processor.ConvertAsync(Media(json), ConversionTarget.Profile81, new Workspace(directory), Path.Combine(directory, "output.mkv"), sink, Guid.NewGuid(), default);
+            double?[] streaming = sink.Values.Where(v => v.Stage == "Streaming conversion" && v.Percent is not null).Select(v => v.Percent).ToArray();
+            // Each NAL unit moves the bar by its share of the bytes: 7, 8, 10 and 9 of 34.
+            CollectionAssert.AreEqual(new double?[] { 0, 20, 44, 73, 99, 100 }, streaming, "Only a successful pipe completes the stage.");
+        }
+        finally
+        {
+            Directory.Delete(directory, true);
+        }
+    }
+
+    private static MediaInfo Media(string json) => new(new("movie.mkv", 1024, DateTime.UnixEpoch), DolbyVisionProfile.Profile7, "HEVC", 0, 1920, 1080, 24, 2400, 100, 0, 1000, [new(0, "video", "HEVC", "eng", "", true, false, null)], 0, 0, null, json);
+
+    private static ToolCatalog Tools()
+    {
+        var tools = new ToolCatalog();
+        foreach (var tool in new[] { NativeTool.FFmpeg, NativeTool.DoviTool, NativeTool.MkvExtract, NativeTool.MkvMerge })
+        {
+            tools.Refresh([new(tool, DependencyState.Ready, tool.ToString(), "test", "fixture")]);
+        }
+
+        return tools;
+    }
+
+    private sealed class RecordingProgress : IProgress<OperationProgress>
+    {
+        public List<OperationProgress> Values
+        {
+            get;
+        }
+        = [];
+
+        public void Report(OperationProgress value) => Values.Add(value);
     }
 
     private static byte[] LengthPrefixed(int lengthSize, IEnumerable<byte[]> units) => units.SelectMany(n => Enumerable.Range(0, lengthSize).Select(i => (byte)(n.Length >> (8 * (lengthSize - 1 - i)))).Concat(n)).ToArray();
