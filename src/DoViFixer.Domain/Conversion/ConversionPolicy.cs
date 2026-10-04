@@ -44,7 +44,9 @@ public static class ConversionPolicy
     /// <summary>
     /// Scratch space a conversion, backup or restore needs. At most three video-sized files exist at once:
     /// the enhancement-layer backup plus an extracted track and its processed copy, or during verification
-    /// an extracted track and its cleaned base layer. Each is bounded by the source size.
+    /// an extracted track and its cleaned base layer. Each is bounded by the source size. Track verification
+    /// stays below that peak: it holds one file's non-video tracks, together bounded by the source size,
+    /// and the per-frame timestamp lists of both files, which are far smaller than the tracks they describe.
     /// </summary>
     public static long RequiredScratchBytes(long sourceLength) => checked(sourceLength * 3 + (2L << 30));
 }
