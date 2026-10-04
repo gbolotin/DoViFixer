@@ -345,8 +345,9 @@ public sealed class ConversionService(DependencyService dependencies, IFileOpera
                 if (approvedPlan.Archive is not null)
                 {
                     await using var stagedArchive = publisher.Stage(approvedPlan.Archive, approvedPlan.ReplaceExistingOutput);
-                    progress?.Report(new(approvedPlan.Id, "Backing up enhancement layer", media.Source.Path));
-                    var manifest = await processor.ExtractBackupAsync(media, workspace, cancellationToken);
+                    const string backupStage = "Backing up enhancement layer";
+                    progress?.Report(new(approvedPlan.Id, backupStage, media.Source.Path));
+                    var manifest = await processor.ExtractBackupAsync(media, workspace, cancellationToken, progress, approvedPlan.Id, backupStage);
                     baseLayerHash = manifest.BaseLayerSha256;
                     manifest = manifest with
                     {
@@ -355,6 +356,7 @@ public sealed class ConversionService(DependencyService dependencies, IFileOpera
                     await archives.WriteAsync(stagedArchive.Path, manifest, workspace, cancellationToken);
                     await stagedArchive.PublishAsync(cancellationToken);
                     OperationLog.Audit(logger, "PublishBackup", approvedPlan.Archive, "Completed", approvedPlan.Id);
+                    progress?.Report(new(approvedPlan.Id, backupStage, media.Source.Path, 100));
                     archiveNote = " Verified archive retained.";
                     archive = approvedPlan.Archive;
                 }

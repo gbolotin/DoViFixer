@@ -36,11 +36,13 @@ public sealed class BackupService(DependencyService dependencies, IMediaProbe pr
         files.EnsureAvailableSpace(Path.GetDirectoryName(approvedPlan.Output)!, approvedPlan.Media.Source.Length + (1L << 30));
         await using var workspace = await workspaces.CreateAsync(approvedPlan.ScratchBytes, approvedPlan.TemporaryDirectory, cancellationToken);
         await using var staged = publisher.Stage(approvedPlan.Output);
-        progress?.Report(new(approvedPlan.Id, "Extracting enhancement layer", approvedPlan.Media.Source.Path));
-        var manifest = await processor.ExtractBackupAsync(approvedPlan.Media, workspace, cancellationToken);
+        const string stage = "Extracting enhancement layer";
+        progress?.Report(new(approvedPlan.Id, stage, approvedPlan.Media.Source.Path));
+        var manifest = await processor.ExtractBackupAsync(approvedPlan.Media, workspace, cancellationToken, progress, approvedPlan.Id, stage);
         await archives.WriteAsync(staged.Path, manifest, workspace, cancellationToken);
         await staged.PublishAsync(cancellationToken);
         OperationLog.Audit(logger, "PublishBackup", approvedPlan.Output, "Completed", approvedPlan.Id);
+        progress?.Report(new(approvedPlan.Id, stage, approvedPlan.Media.Source.Path, 100));
         return new(approvedPlan.Media.Source.Path, OperationStatus.Completed, approvedPlan.Output, "Archive payload verified; original retained.");
     }
 }

@@ -318,7 +318,7 @@ internal sealed class TestRuntime : IFileDiscovery, IFileOperations, IMediaProbe
         }
     }
 
-    public Task<ArchiveManifest> ExtractBackupAsync(MediaInfo media, ITemporaryWorkspace workspace, CancellationToken cancellationToken) => throw new NotSupportedException();
+    public Task<ArchiveManifest> ExtractBackupAsync(MediaInfo media, ITemporaryWorkspace workspace, CancellationToken cancellationToken, IProgress<OperationProgress>? progress = null, Guid operationId = default, string stage = "") => throw new NotSupportedException();
     public Dictionary<string, string?> ArchiveBaseLayerHashes { get; } = new(StringComparer.OrdinalIgnoreCase);
     public List<string> ManifestReads { get; } = [];
     public Task<ArchiveManifest?> ReadManifestAsync(string archive, CancellationToken cancellationToken)
