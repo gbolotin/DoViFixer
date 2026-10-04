@@ -220,6 +220,7 @@ public sealed class MediaRow(string path) : ObservableObject
         {
             SetProperty(ref analysisError, value);
             OnPropertyChanged(nameof(Classification));
+            OnPropertyChanged(nameof(FilterGroup));
             OnPropertyChanged(nameof(HasAnalysisError));
             OnPropertyChanged(nameof(DetailRows));
             OnPropertyChanged(nameof(DetailNotes));
@@ -267,10 +268,20 @@ public sealed class MediaRow(string path) : ObservableObject
             OnPropertyChanged(nameof(HasIncompleteScan));
             OnPropertyChanged(nameof(CanInspectIncomplete));
             OnPropertyChanged(nameof(Classification));
+            OnPropertyChanged(nameof(FilterGroup));
             OnPropertyChanged(nameof(DetailRows));
             OnPropertyChanged(nameof(DetailNotes));
         }
     }
+
+    /// <summary>The list filter that shows this file. Files not scanned yet and files whose analysis failed share one group.</summary>
+    public MediaFileFilter FilterGroup => AnalysisError is not null || Analysis is null ? MediaFileFilter.NotScanned : Analysis.Media.Profile switch
+    {
+        Domain.Media.DolbyVisionProfile.Profile7 => MediaFileFilter.Profile7,
+        Domain.Media.DolbyVisionProfile.Profile81 => MediaFileFilter.Profile81,
+        Domain.Media.DolbyVisionProfile.None => MediaFileFilter.NoDolbyVision,
+        _ => MediaFileFilter.OtherProfiles
+    };
 
     public string Classification => AnalysisError is not null ? "Analysis failed" : Analysis is null ? "" : Analysis.Verdict switch
     {
