@@ -35,21 +35,23 @@ internal sealed class MediaVerifier(MediaProbe probe, VideoProcessor processor, 
         await VerifyTracksAsync(source, target, workspace, failures, cancellationToken);
         ReportCheckpoint();
         bool compareSourceRpu = source.Profile == DolbyVisionProfile.Profile7 && expectedProfile == DolbyVisionProfile.Profile81;
-        string beforeBase = await CleanBaseAsync(source, workspace, "before", cancellationToken, compareSourceRpu);
-        // Hash now so the cleaned base layer does not occupy scratch space during RPU verification.
-        string beforeBaseHash = await VideoProcessor.HashAsync(beforeBase, cancellationToken);
-        File.Delete(beforeBase);
+        string sourceVideo = workspace.File("before.hevc");
+        await processor.ExtractVideoAsync(source, sourceVideo, cancellationToken);
+        string beforeBaseHash = await HashBaseLayerAsync(sourceVideo, workspace, cancellationToken, compareSourceRpu);
         ReportCheckpoint();
-        await VerifyRpuAsync(source, target, expectedProfile, outputFrames, workspace, failures, cancellationToken);
-        File.Delete(workspace.File("before.hevc"));
+        // Extract the output video once; the RPU check and the base-layer comparison both read it.
+        string outputVideo = workspace.File("after.hevc");
+        await processor.ExtractVideoAsync(target, outputVideo, cancellationToken);
+        await VerifyRpuAsync(source, target, outputVideo, expectedProfile, outputFrames, workspace, failures, cancellationToken);
+        // Delete the source stream before the output's base layer is cleaned, so verification never holds
+        // more than two video streams at once (see ConversionPolicy.RequiredScratchBytes).
+        File.Delete(sourceVideo);
         ReportCheckpoint();
-        string afterBase = await CleanBaseAsync(target, workspace, "after", cancellationToken);
-        if (beforeBaseHash != await VideoProcessor.HashAsync(afterBase, cancellationToken))
+        if (beforeBaseHash != await HashBaseLayerAsync(outputVideo, workspace, cancellationToken))
         {
             failures.Add("Base-layer video payload changed.");
         }
 
-        File.Delete(afterBase);
         ReportCheckpoint();
         await VerifyAttachmentsAsync(source, target, workspace, failures, cancellationToken);
         ReportCheckpoint();
@@ -126,11 +128,9 @@ internal sealed class MediaVerifier(MediaProbe probe, VideoProcessor processor, 
     private static string PayloadFile(ITemporaryWorkspace workspace, string prefix, int position) => workspace.File($"verify-{prefix}-{position}.bin");
     private static string TimestampsFile(ITemporaryWorkspace workspace, string prefix, int position) => workspace.File($"verify-{prefix}-{position}-timestamps.txt");
 
-    private async Task VerifyRpuAsync(MediaInfo source, MediaInfo target, DolbyVisionProfile expectedProfile, long frames, ITemporaryWorkspace workspace, List<string> failures, CancellationToken cancellationToken)
+    private async Task VerifyRpuAsync(MediaInfo source, MediaInfo target, string raw, DolbyVisionProfile expectedProfile, long frames, ITemporaryWorkspace workspace, List<string> failures, CancellationToken cancellationToken)
     {
-        string raw = workspace.File("verify-rpu.hevc");
         string rpu = workspace.File("verify.rpu");
-        await processor.ExtractVideoAsync(target, raw, cancellationToken);
         var extraction = await processes.RunAsync(new(tools.GetPath(NativeTool.DoviTool), new[]
         {
             "extract-rpu", raw, "-o", rpu
@@ -206,8 +206,6 @@ internal sealed class MediaVerifier(MediaProbe probe, VideoProcessor processor, 
                 }
             }
         }
-
-        File.Delete(raw);
     }
 
     internal static IReadOnlyList<string> CompareMetadata(MediaInfo source, MediaInfo target, DolbyVisionProfile profile)
@@ -256,11 +254,10 @@ internal sealed class MediaVerifier(MediaProbe probe, VideoProcessor processor, 
         return failures;
     }
 
-    private async Task<string> CleanBaseAsync(MediaInfo media, ITemporaryWorkspace workspace, string prefix, CancellationToken cancellationToken, bool preserveRaw = false)
+    // Deletes the cleaned copy as soon as it is hashed so it never shares scratch space with a later extraction.
+    private async Task<string> HashBaseLayerAsync(string raw, ITemporaryWorkspace workspace, CancellationToken cancellationToken, bool preserveRaw = false)
     {
-        string raw = workspace.File(prefix + ".hevc");
-        string clean = workspace.File(prefix + "-clean.hevc");
-        await processor.ExtractVideoAsync(media, raw, cancellationToken);
+        string clean = workspace.File(Path.GetFileNameWithoutExtension(raw) + "-clean.hevc");
         await processor.RunDoviAsync(new[]
         {
             "remove", raw, "-o", clean
@@ -269,7 +266,10 @@ internal sealed class MediaVerifier(MediaProbe probe, VideoProcessor processor, 
         {
             File.Delete(raw);
         }
-        return clean;
+
+        string hash = await VideoProcessor.HashAsync(clean, cancellationToken);
+        File.Delete(clean);
+        return hash;
     }
 
     private async Task VerifyAttachmentsAsync(MediaInfo source, MediaInfo target, ITemporaryWorkspace workspace, List<string> failures, CancellationToken cancellationToken)
