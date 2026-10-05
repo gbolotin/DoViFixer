@@ -89,64 +89,66 @@
     </Style>
 
     <DataTemplate x:Key="MediaToolBarTemplate" DataType="{x:Type viewModels:MediaViewModel}">
-        <WrapPanel>
-            <Button Content="Add files"
-                    Tag="&#xE8A5;"
-                    ContentTemplate="{StaticResource AddIconButtonContent}"
-                    Command="{Binding AddFilesCommand}"
-                    Margin="0,0,8,8" />
-            <Button Content="Add folder"
-                    Tag="&#xE8B7;"
-                    ContentTemplate="{StaticResource AddIconButtonContent}"
-                    Command="{Binding AddFolderCommand}"
-                    Margin="0,0,8,8" />
-            <Button Content="Clear all"
-                    Tag="&#xEA99;"
-                    ContentTemplate="{StaticResource WfIconContentTemplate}"
-                    Command="{Binding ClearAllCommand}"
-                    Margin="0,0,8,8" />
-            <Button Content="Remove missing"
-                    Tag="&#xE74D;"
-                    ContentTemplate="{StaticResource WfIconContentTemplate}"
-                    Command="{Binding RemoveMissingCommand}"
-                    Visibility="{Binding HasMissingFiles, Converter={StaticResource WfBooleanToVisibilityConverter}}"
-                    Margin="0,0,8,8">
-                <Button.ToolTip>
-                    <TextBlock Text="{Binding Source={x:Static updates:ApplicationTitle.Name}, StringFormat='Remove files that were deleted, moved or renamed outside {0} from the list.'}" />
-                </Button.ToolTip>
-            </Button>
-            <Border Width="1"
-                    Margin="4,6,12,14"
-                    Background="{DynamicResource DividerStrokeColorDefaultBrush}" />
-            <Button Content="Rescan"
-                    Tag="&#xE72C;"
-                    ContentTemplate="{StaticResource WfIconContentTemplate}"
-                    Command="{Binding ScanCommand}"
-                    ToolTip="Scan every file the filter shows and generate missing frame previews in the background. If automatic selection is enabled, selections are updated using the conversion policy in Settings."
-                    Margin="0,0,8,8" />
-            <Button Content="Inspect"
-                    Tag="&#xE721;"
-                    ContentTemplate="{StaticResource WfIconContentTemplate}"
-                    Command="{Binding InspectCommand}"
-                    Margin="0,0,8,8"/>
-            <Button Content="Deep Inspect"
-                    Tag="&#xE9D9;"
-                    ContentTemplate="{StaticResource WfIconContentTemplate}"
-                    Command="{Binding DeepInspectCommand}"
-                    Margin="0,0,8,8"/>
-            <Button Content="Convert to DV8.1"
-                    Tag="&#xE8AB;"
-                    ContentTemplate="{StaticResource WfIconContentTemplate}"
-                    Command="{Binding ConvertDv81Command}"
-                    ToolTip="{Binding OutputSummaryToolTip}"
-                    Margin="0,0,8,8" />
-            <Button Content="Convert to HDR10"
-                    Tag="&#xE8AB;"
-                    ContentTemplate="{StaticResource WfIconContentTemplate}"
-                    Command="{Binding ConvertHdrCommand}"
-                    ToolTip="{Binding OutputSummaryToolTip}"
-                    Margin="0,0,0,8" />
-        </WrapPanel>
+        <Border BorderBrush="{DynamicResource DividerStrokeColorDefaultBrush}" BorderThickness="0,0,0,1">
+            <WrapPanel>
+                <Button Content="Add files"
+                        Tag="&#xE8A5;"
+                        ContentTemplate="{StaticResource AddIconButtonContent}"
+                        Command="{Binding AddFilesCommand}"
+                        Margin="0,0,8,8" />
+                <Button Content="Add folder"
+                        Tag="&#xE8B7;"
+                        ContentTemplate="{StaticResource AddIconButtonContent}"
+                        Command="{Binding AddFolderCommand}"
+                        Margin="0,0,8,8" />
+                <Button Content="Clear all"
+                        Tag="&#xEA99;"
+                        ContentTemplate="{StaticResource WfIconContentTemplate}"
+                        Command="{Binding ClearAllCommand}"
+                        Margin="0,0,8,8" />
+                <Button Content="Remove missing"
+                        Tag="&#xE74D;"
+                        ContentTemplate="{StaticResource WfIconContentTemplate}"
+                        Command="{Binding RemoveMissingCommand}"
+                        Visibility="{Binding HasMissingFiles, Converter={StaticResource WfBooleanToVisibilityConverter}}"
+                        Margin="0,0,8,8">
+                    <Button.ToolTip>
+                        <TextBlock Text="{Binding Source={x:Static updates:ApplicationTitle.Name}, StringFormat='Remove files that were deleted, moved or renamed outside {0} from the list.'}" />
+                    </Button.ToolTip>
+                </Button>
+                <Border Width="1"
+                        Margin="4,6,12,14"
+                        Background="{DynamicResource DividerStrokeColorDefaultBrush}" />
+                <Button Content="Rescan"
+                        Tag="&#xE72C;"
+                        ContentTemplate="{StaticResource WfIconContentTemplate}"
+                        Command="{Binding ScanCommand}"
+                        ToolTip="Scan every file the filter shows and generate missing frame previews in the background. If automatic selection is enabled, selections are updated using the conversion policy in Settings."
+                        Margin="0,0,8,8" />
+                <Button Content="Inspect"
+                        Tag="&#xE721;"
+                        ContentTemplate="{StaticResource WfIconContentTemplate}"
+                        Command="{Binding InspectCommand}"
+                        Margin="0,0,8,8"/>
+                <Button Content="Deep Inspect"
+                        Tag="&#xE9D9;"
+                        ContentTemplate="{StaticResource WfIconContentTemplate}"
+                        Command="{Binding DeepInspectCommand}"
+                        Margin="0,0,8,8"/>
+                <Button Content="Convert to DV8.1"
+                        Tag="&#xE8AB;"
+                        ContentTemplate="{StaticResource WfIconContentTemplate}"
+                        Command="{Binding ConvertDv81Command}"
+                        ToolTip="{Binding OutputSummaryToolTip}"
+                        Margin="0,0,8,8" />
+                <Button Content="Convert to HDR10"
+                        Tag="&#xE8AB;"
+                        ContentTemplate="{StaticResource WfIconContentTemplate}"
+                        Command="{Binding ConvertHdrCommand}"
+                        ToolTip="{Binding OutputSummaryToolTip}"
+                        Margin="0,0,0,8" />
+            </WrapPanel>
+        </Border>
     </DataTemplate>
 
     <DataTemplate x:Key="MediaListTemplate" DataType="{x:Type viewModels:MediaViewModel}">
@@ -498,8 +500,8 @@
     </DataTemplate>
 
     <DataTemplate x:Key="MediaDetailsTemplate" DataType="{x:Type viewModels:MediaViewModel}">
-        <Border Style="{StaticResource WfCardStyle}">
-            <ScrollViewer VerticalScrollBarVisibility="Auto" Padding="0,0,12,0">
+        <Border Style="{StaticResource WfCardStyle}" Padding="0">
+            <ScrollViewer VerticalScrollBarVisibility="Auto" Padding="16">
                 <StackPanel>
                     <Border Margin="0,0,0,12"
                             Background="Black"
@@ -542,9 +544,6 @@
                                    Style="{StaticResource SubtitleTextBlockStyle}"
                                    TextWrapping="Wrap" />
                     </DockPanel>
-                    <TextBlock Text="Details"
-                               Style="{StaticResource BodyStrongTextBlockStyle}"
-                               Margin="0,0,0,12" />
                     <!-- Before an operation produces a file: one value per label. -->
                     <ItemsControl ItemsSource="{Binding Focused.DetailRows}"
                                   Grid.IsSharedSizeScope="True"
@@ -976,7 +975,8 @@
             <ContentControl Content="{Binding}"
                             Visibility="{Binding IsFileListEmpty, Converter={StaticResource WfInverseBooleanToVisibilityConverter}}"
                             ContentTemplate="{StaticResource MediaListWithDetailsTemplate}"
-                            Grid.Row="1" />
+                            Grid.Row="1"
+                            Margin="0,0,0,8"/>
             <ContentControl Content="{Binding}"
                             ContentTemplate="{StaticResource MediaProgressTemplate}"
                             Margin="0,8,0,8"
