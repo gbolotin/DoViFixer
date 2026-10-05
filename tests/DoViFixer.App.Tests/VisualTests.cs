@@ -130,6 +130,7 @@ public sealed class VisualTests
             await VerifyClassificationColorsAsync(runtime, list);
             await VerifyLastColumnSizingAsync(list, window);
             await VerifyHeaderSortingAsync(media, list, window);
+            await VerifyFileFilterAsync(media, list, window);
             var fileColumn = ((GridView)list.View).Columns[0];
             double originalWidth = fileColumn.Width;
             fileColumn.Width = 400;
@@ -415,6 +416,47 @@ public sealed class VisualTests
         fileHeader.RaiseEvent(new RoutedEventArgs(ButtonBase.ClickEvent, fileHeader));
         await LayoutAsync(window);
         CollectionAssert.AreEqual(original, list.Items.Cast<MediaRow>().ToArray());
+    }
+
+    private static async Task VerifyFileFilterAsync(MediaViewModel media, ListView list, Window window)
+    {
+        var chips = Descendants<RadioButton>(window).Where(button => button.DataContext is MediaFilterOption).ToArray();
+        RadioButton Chip(MediaFileFilter filter) => chips.Single(chip => ((MediaFilterOption)chip.DataContext).Filter == filter);
+        CollectionAssert.AreEqual(media.FilterOptions.Where(option => option.IsVisible).Select(option => option.Label).ToArray(),
+            chips.Where(chip => chip.IsVisible).Select(chip => chip.Content).ToArray(), "Each visible filter choice is shown with its count.");
+        Assert.IsTrue(Chip(MediaFileFilter.All).IsChecked);
+        var focused = media.Focused;
+        var sorted = list.Items.Cast<MediaRow>().ToArray();
+        void AssertShows(string message) => CollectionAssert.AreEqual(sorted.Where(row => media.ShownFilePredicate(row)).ToArray(), list.Items.Cast<MediaRow>().ToArray(), message);
+        TextBlock NoMatches() => Descendants<TextBlock>(window).Single(text => text.Text == "No files match this filter.");
+        Assert.IsFalse(NoMatches().IsVisible);
+
+        Chip(MediaFileFilter.Profile81).IsChecked = true;
+        await LayoutAsync(window);
+        Assert.AreEqual(MediaFileFilter.Profile81, media.FileFilter);
+        Assert.IsFalse(Chip(MediaFileFilter.All).IsChecked, "Filter choices are exclusive.");
+        Assert.IsEmpty(list.Items);
+        Assert.IsTrue(NoMatches().IsVisible);
+
+        Chip(MediaFileFilter.NotScanned).IsChecked = true;
+        await LayoutAsync(window);
+        AssertShows("The list shows only the chosen group, in the sorted order.");
+        var row = sorted[0];
+        string? error = row.AnalysisError;
+        row.AnalysisError = "Fixture analysis error.";
+        await LayoutAsync(window);
+        CollectionAssert.Contains(list.Items, row, "A file whose analysis fails joins the unscanned group without a refresh.");
+        AssertShows("Live filtering keeps the sorted order.");
+        row.AnalysisError = error;
+        await LayoutAsync(window);
+        AssertShows("Clearing the error moves the file back to its group.");
+
+        Chip(MediaFileFilter.All).IsChecked = true;
+        await LayoutAsync(window);
+        CollectionAssert.AreEqual(sorted, list.Items.Cast<MediaRow>().ToArray(), "Showing all files restores the full sorted list.");
+        Assert.IsFalse(NoMatches().IsVisible);
+        media.Focused = focused;
+        await LayoutAsync(window);
     }
 
     private static async Task VerifyLastColumnSizingAsync(ListView list, Window window)

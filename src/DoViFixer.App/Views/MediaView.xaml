@@ -122,7 +122,7 @@
                     Tag="&#xE72C;"
                     ContentTemplate="{StaticResource WfIconContentTemplate}"
                     Command="{Binding ScanCommand}"
-                    ToolTip="Scan every file in the list and generate missing frame previews in the background. If automatic selection is enabled, selections are updated using the conversion policy in Settings."
+                    ToolTip="Scan every file the filter shows and generate missing frame previews in the background. If automatic selection is enabled, selections are updated using the conversion policy in Settings."
                     Margin="0,0,8,8" />
             <Button Content="Inspect"
                     Tag="&#xE721;"
@@ -153,7 +153,9 @@
         <ListView ItemsSource="{Binding Files}"
                   SelectedItem="{Binding Focused}"
                   wf:GridViewSizing.LastColumnMinimumWidth="255"
-                  wf:GridViewSort.Sort="{Binding FileSort}">
+                  wf:GridViewSort.Sort="{Binding FileSort}"
+                  wf:ListFilter.Predicate="{Binding ShownFilePredicate}"
+                  wf:ListFilter.LiveProperty="FilterGroup">
             <ListView.View>
                 <GridView ColumnHeaderContainerStyle="{StaticResource WfSortableColumnHeaderContainerStyle}" ColumnHeaderTemplate="{StaticResource WfSortableColumnHeaderTemplate}">
                     <GridViewColumn Header="File"
@@ -708,7 +710,37 @@
                 <ColumnDefinition Width="Auto" />
                 <ColumnDefinition Width="*" MinWidth="280" />
             </Grid.ColumnDefinitions>
-            <ContentControl Content="{Binding}" ContentTemplate="{StaticResource MediaListTemplate}" />
+            <DockPanel>
+                <ItemsControl ItemsSource="{Binding FilterOptions}"
+                              DockPanel.Dock="Top"
+                              Focusable="False"
+                              AutomationProperties.Name="Show files">
+                    <ItemsControl.ItemsPanel>
+                        <ItemsPanelTemplate>
+                            <WrapPanel />
+                        </ItemsPanelTemplate>
+                    </ItemsControl.ItemsPanel>
+                    <ItemsControl.ItemTemplate>
+                        <DataTemplate DataType="{x:Type viewModels:MediaFilterOption}">
+                            <RadioButton Content="{Binding Label}"
+                                         GroupName="MediaFileFilter"
+                                         IsChecked="{Binding IsSelected}"
+                                         Style="{DynamicResource {x:Type ToggleButton}}"
+                                         Visibility="{Binding IsVisible, Converter={StaticResource WfBooleanToVisibilityConverter}}"
+                                         Margin="0,0,8,8" />
+                        </DataTemplate>
+                    </ItemsControl.ItemTemplate>
+                </ItemsControl>
+                <Grid>
+                    <ContentControl Content="{Binding}" ContentTemplate="{StaticResource MediaListTemplate}" />
+                    <TextBlock Text="No files match this filter."
+                               Foreground="{DynamicResource TextFillColorSecondaryBrush}"
+                               HorizontalAlignment="Center"
+                               VerticalAlignment="Center"
+                               IsHitTestVisible="False"
+                               Visibility="{Binding HasNoShownFiles, Converter={StaticResource WfBooleanToVisibilityConverter}}" />
+                </Grid>
+            </DockPanel>
             <GridSplitter Grid.Column="1"
                           VerticalAlignment="Stretch"
                           Background="Transparent"

@@ -75,12 +75,21 @@ public sealed class MediaViewModel : OperationViewModel, INavigationPage, IPageA
         AddDroppedPathsCommand = new(paths => AddAsync((paths ?? []).Where(discovery.IsSupportedInput)),
             paths => IsIdle && paths is not null && paths.Any(discovery.IsSupportedInput));
         ScanCommand = new(ScanAllAsync, CanScan);
+        FilterOptions =
+        [
+            new(MediaFileFilter.All, "All", filter => FileFilter = filter) { IsSelected = true },
+            new(MediaFileFilter.Profile7, "Profile 7", filter => FileFilter = filter),
+            new(MediaFileFilter.Profile81, "Profile 8.1", filter => FileFilter = filter),
+            new(MediaFileFilter.NoDolbyVision, "No Dolby Vision", filter => FileFilter = filter),
+            new(MediaFileFilter.OtherProfiles, "Other profiles", filter => FileFilter = filter),
+            new(MediaFileFilter.NotScanned, "Not scanned / failed", filter => FileFilter = filter)
+        ];
         Files.CollectionChanged += (_, _) =>
         {
             sourceFiles.Watch(Files.Select(row => row.Path));
             OnPropertyChanged(nameof(IsFileListEmpty));
             OnPropertyChanged(nameof(HasMissingFiles));
-            CommandsChanged();
+            ShownFilesChanged();
         };
         InspectCommand = new(() => AnalyzeAsync(AnalysisMethod.FullRpu), CanOperate);
         DeepInspectCommand = new(() => AnalyzeAsync(AnalysisMethod.DeepInspection), CanOperate);
@@ -122,7 +131,7 @@ public sealed class MediaViewModel : OperationViewModel, INavigationPage, IPageA
         ShowResultFileCommand = new(path => explorer.ShowInFolder(path!), path => !string.IsNullOrEmpty(path));
         RetryAnalysisCommand = new(row => RunAsync((token, _) => AnalyzeRowsAsync([row!], row!.LastAnalysisMethod!.Value, token)), row => row is not null && IsIdle && Files.Contains(row) && row.CanRetryAnalysis && row.LastAnalysisMethod is not null);
         InspectIncompleteCommand = new(row => RunAsync((token, _) => AnalyzeRowsAsync([row!], AnalysisMethod.FullRpu, token)), row => row is not null && IsIdle && Files.Contains(row) && row.CanInspectIncomplete);
-        ToggleSelectAllCommand = new(ToggleSelectAll, () => IsIdle && Files.Any(row => row.SelectionEnabled));
+        ToggleSelectAllCommand = new(ToggleSelectAll, () => IsIdle && ShownFiles.Any(row => row.SelectionEnabled));
         ClearAllCommand = new(ClearAll, () => IsIdle && Files.Count > 0);
         RemoveFileCommand = new(RemoveFile, row => row is not null && IsIdle && Files.Contains(row));
         RemoveMissingCommand = new(RemoveMissing, () => IsIdle && HasMissingFiles);
@@ -145,6 +154,66 @@ public sealed class MediaViewModel : OperationViewModel, INavigationPage, IPageA
     }
     public ObservableCollection<MediaRow> Files { get; } = [];
     public bool IsFileListEmpty => Files.Count == 0;
+
+    /// <summary>
+    /// Filter choices above the list. Select all, Rescan, Inspect and Convert act only on the files the filter shows,
+    /// so a hidden file is never processed.
+    /// </summary>
+    public IReadOnlyList<MediaFilterOption> FilterOptions { get; }
+
+    private MediaFileFilter fileFilter = MediaFileFilter.All;
+    public MediaFileFilter FileFilter
+    {
+        get => fileFilter;
+        set
+        {
+            if (!SetProperty(ref fileFilter, value))
+            {
+                return;
+            }
+
+            foreach (var option in FilterOptions)
+            {
+                option.IsSelected = option.Filter == value;
+            }
+
+            // Each filter gets its own predicate instance, so the list sees a new value and filters again.
+            ShownFilePredicate = item => item is MediaRow row && Shows(value, row);
+            OnPropertyChanged(nameof(ShownFilePredicate));
+            if (Focused is null || !IsShown(Focused))
+            {
+                Focused = ShownFiles.FirstOrDefault();
+            }
+
+            ShownFilesChanged();
+        }
+    }
+
+    /// <summary>The list's filter; rows are filtered again live as their <see cref="MediaRow.FilterGroup"/> changes.</summary>
+    public Predicate<object> ShownFilePredicate { get; private set; } = _ => true;
+
+    /// <summary>Files exist, but the chosen filter shows none of them.</summary>
+    public bool HasNoShownFiles => Files.Count > 0 && !Files.Any(IsShown);
+
+    private static bool Shows(MediaFileFilter filter, MediaRow row) => filter == MediaFileFilter.All || row.FilterGroup == filter;
+
+    private bool IsShown(MediaRow row) => Shows(fileFilter, row);
+
+    private IEnumerable<MediaRow> ShownFiles => Files.Where(IsShown);
+
+    private void ShownFilesChanged()
+    {
+        var groups = Files.CountBy(row => row.FilterGroup).ToDictionary();
+        foreach (var option in FilterOptions)
+        {
+            option.Count = option.Filter == MediaFileFilter.All ? Files.Count : groups.GetValueOrDefault(option.Filter);
+        }
+
+        OnPropertyChanged(nameof(HasNoShownFiles));
+        OnPropertyChanged(nameof(SelectionSummary));
+        OnPropertyChanged(nameof(AllFilesSelected));
+        CommandsChanged();
+    }
     public BatchProgressViewModel BatchProgress { get; } = new();
     public RelayCommand PauseBatchCommand { get; }
     public string PauseBatchText => control?.IsPaused == true ? "Resume" : "Pause";
@@ -413,8 +482,10 @@ public sealed class MediaViewModel : OperationViewModel, INavigationPage, IPageA
         get
         {
             var total = Files.Count;
-            var selected = Files.Count(f => f.IsSelected);
-            var totalText = $"{total} {(total == 1 ? "item" : "items")}";
+            var selected = ShownFiles.Count(f => f.IsSelected);
+            var totalText = fileFilter == MediaFileFilter.All
+                ? $"{total} {(total == 1 ? "item" : "items")}"
+                : $"{ShownFiles.Count()} of {total} {(total == 1 ? "item" : "items")} shown";
             if (selected == 0)
             {
                 return totalText;
@@ -424,7 +495,7 @@ public sealed class MediaViewModel : OperationViewModel, INavigationPage, IPageA
             return $"{totalText} | {selectedText}";
         }
     }
-    public bool? AllFilesSelected => Files.Count == 0 || Files.All(row => !row.IsSelected) ? false : Files.All(row => row.IsSelected) ? true : null;
+    public bool? AllFilesSelected => !ShownFiles.Any(row => row.IsSelected) ? false : ShownFiles.All(row => row.IsSelected) ? true : null;
 
     public RelayCommand ToggleSelectAllCommand { get; }
     public RelayCommand ClearAllCommand { get; }
@@ -558,8 +629,8 @@ public sealed class MediaViewModel : OperationViewModel, INavigationPage, IPageA
         }
     }
 
-    private bool CanScan() => IsIdle && Files.Any(row => !row.IsMissing);
-    private bool CanOperate() => IsIdle && Files.Any(f => f.IsSelected);
+    private bool CanScan() => IsIdle && ShownFiles.Any(row => !row.IsMissing);
+    private bool CanOperate() => IsIdle && ShownFiles.Any(f => f.IsSelected);
 
     protected override void CommandsChanged()
     {
@@ -649,6 +720,11 @@ public sealed class MediaViewModel : OperationViewModel, INavigationPage, IPageA
         if (e.PropertyName is nameof(MediaRow.IsActive) or nameof(MediaRow.IsCancellationRequested))
         {
             CancelFileCommand.NotifyCanExecuteChanged();
+        }
+
+        if (e.PropertyName == nameof(MediaRow.FilterGroup))
+        {
+            ShownFilesChanged();
         }
 
         if (e.PropertyName is nameof(MediaRow.CanRetryAnalysis) or nameof(MediaRow.CanOpenResult) or nameof(MediaRow.CanInspectIncomplete))
@@ -752,12 +828,12 @@ public sealed class MediaViewModel : OperationViewModel, INavigationPage, IPageA
     public Task ScanAllAsync() => RunAsync(async (token, _) =>
     {
         StartBackgroundPreviews(refreshFocused: true);
-        await AnalyzeRowsAsync(InDisplayOrder(Files.Where(row => !row.IsMissing)), AnalysisMethod.SampledRpu, token);
+        await AnalyzeRowsAsync(InDisplayOrder(ShownFiles.Where(row => !row.IsMissing)), AnalysisMethod.SampledRpu, token);
     });
 
     private Task AnalyzeAsync(AnalysisMethod method) => RunAsync(async (token, _) =>
     {
-        await AnalyzeRowsAsync(InDisplayOrder(Files.Where(r => r.IsSelected)), method, token);
+        await AnalyzeRowsAsync(InDisplayOrder(ShownFiles.Where(r => r.IsSelected)), method, token);
     });
 
     private async Task AnalyzeRowsAsync(MediaRow[] rows, AnalysisMethod method, CancellationToken token)
@@ -1022,7 +1098,7 @@ public sealed class MediaViewModel : OperationViewModel, INavigationPage, IPageA
             return;
         }
 
-        rows ??= InDisplayOrder(Files.Where(r => r.IsSelected));
+        rows ??= InDisplayOrder(ShownFiles.Where(r => r.IsSelected));
         if (rows.Length == 0)
         {
             return;
@@ -1223,7 +1299,7 @@ public sealed class MediaViewModel : OperationViewModel, INavigationPage, IPageA
         }
 
         bool selectAll = AllFilesSelected != true;
-        foreach (var row in Files.Where(row => row.SelectionEnabled))
+        foreach (var row in ShownFiles.Where(row => row.SelectionEnabled))
         {
             row.IsSelected = selectAll;
         }
