@@ -60,6 +60,26 @@ public sealed class ViewModelTests
     }
 
     [TestMethod]
+    public void SplitButtonMenusChooseWhatInspectAndConvertRun()
+    {
+        using var runtime = new TestRuntime();
+        var model = runtime.Container.GetRequiredService<MediaViewModel>();
+        Assert.IsFalse(model.IsDeepInspectionChosen, "Inspect runs a regular inspection by default.");
+        Assert.IsFalse(model.IsHdr10ConversionChosen, "Convert targets DV8.1 by default.");
+
+        model.ChooseDeepInspectCommand.Execute(null);
+        model.ChooseHdr10Command.Execute(null);
+        Assert.IsTrue(model.IsDeepInspectionChosen);
+        Assert.IsTrue(model.IsHdr10ConversionChosen);
+        Assert.IsTrue(model.IsIdle, "Choosing only changes what the buttons run.");
+
+        model.ChooseInspectCommand.Execute(null);
+        model.ChooseDv81Command.Execute(null);
+        Assert.IsFalse(model.IsDeepInspectionChosen);
+        Assert.IsFalse(model.IsHdr10ConversionChosen);
+    }
+
+    [TestMethod]
     public async Task DroppedPathsIgnoreUnsupportedFilesBeforeDiscovery()
     {
         using var runtime = new TestRuntime();

@@ -50,6 +50,8 @@ public sealed class MediaViewModel : OperationViewModel, INavigationPage, IPageA
     private readonly ISourceFileMonitor sourceFiles;
     private readonly SynchronizationContext? uiContext;
     private int availabilityCheckQueued;
+    private bool isDeepInspectionChosen;
+    private bool isHdr10ConversionChosen;
 
     private static string Summary(BatchResult result) => string.Join(" · ", result.Items.GroupBy(r => r.Status).Select(g => $"{g.Count()} {g.Key}"));
     public MediaViewModel(IFileDiscovery discovery, InspectionService inspection, ConversionService conversion, ControlledBatchService batch, SettingsService settings, DependencySetup dependencies, IDialogService dialogs, IFileDialogService files, IFileExplorer explorer, ILogger<MediaViewModel> logger, IMediaPreview mediaPreview, RestoreService restore, ISourceFileMonitor sourceFiles)
@@ -97,6 +99,10 @@ public sealed class MediaViewModel : OperationViewModel, INavigationPage, IPageA
         ConvertRowDv81Command = new(row => ConvertBatchAsync(ConversionTarget.Profile81, [row!]), row => row is not null && IsIdle && Files.Contains(row) && row.IsProfile7 && !row.IsMissing);
         RestoreRowCommand = new(row => RestoreRowAsync(row!), row => row is not null && IsIdle && Files.Contains(row) && row.CanRestore);
         ConvertHdrCommand = new(() => ConvertBatchAsync(ConversionTarget.Hdr10), CanOperate);
+        ChooseInspectCommand = new(() => IsDeepInspectionChosen = false);
+        ChooseDeepInspectCommand = new(() => IsDeepInspectionChosen = true);
+        ChooseDv81Command = new(() => IsHdr10ConversionChosen = false);
+        ChooseHdr10Command = new(() => IsHdr10ConversionChosen = true);
 
         SkipCommand = new RelayCommand<MediaRow>(Skip);
 
@@ -518,6 +524,28 @@ public sealed class MediaViewModel : OperationViewModel, INavigationPage, IPageA
     public AsyncRelayCommand<MediaRow> ConvertRowDv81Command { get; }
     public AsyncRelayCommand<MediaRow> RestoreRowCommand { get; }
     public AsyncRelayCommand ConvertHdrCommand { get; }
+
+    /// <summary>
+    /// Whether the Inspect split button runs a deep inspection. Like the Visual Studio Start button, picking an
+    /// entry in its menu only chooses what the button runs.
+    /// </summary>
+    public bool IsDeepInspectionChosen
+    {
+        get => isDeepInspectionChosen;
+        private set => SetProperty(ref isDeepInspectionChosen, value);
+    }
+
+    /// <summary>Whether the Convert split button converts to HDR10 rather than DV8.1.</summary>
+    public bool IsHdr10ConversionChosen
+    {
+        get => isHdr10ConversionChosen;
+        private set => SetProperty(ref isHdr10ConversionChosen, value);
+    }
+
+    public RelayCommand ChooseInspectCommand { get; }
+    public RelayCommand ChooseDeepInspectCommand { get; }
+    public RelayCommand ChooseDv81Command { get; }
+    public RelayCommand ChooseHdr10Command { get; }
     public RelayCommand<MediaRow> SkipCommand { get; }
     public RelayCommand<MediaRow> CancelFileCommand { get; }
     public RelayCommand OpenOutputCommand { get; }
