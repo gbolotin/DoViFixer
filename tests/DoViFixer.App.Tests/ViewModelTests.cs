@@ -60,18 +60,29 @@ public sealed class ViewModelTests
     }
 
     [TestMethod]
-    public void ConvertMenuChoosesWhatConvertRuns()
+    public async Task ConvertMenuRunsThePickedConversionAndRemembersIt()
     {
         using var runtime = new TestRuntime();
         var model = runtime.Container.GetRequiredService<MediaViewModel>();
+        await model.AddAsync([@"C:\Media\Mountain.mkv"]);
+        var row = model.Files[0];
         Assert.IsFalse(model.IsHdr10ConversionChosen, "Convert targets DV8.1 by default.");
+        model.IsHdr10ConversionChosen = true;
+        Assert.IsTrue(model.ChooseDv81Command.CanExecute(null));
 
-        model.ChooseHdr10Command.Execute(null);
+        await model.ChooseDv81Command.ExecuteAsync(null);
+        Assert.AreEqual(1, runtime.Conversions, "Picking DV8.1 converts right away.");
+        Assert.IsTrue(row.Result!.Output!.EndsWith(" - DV P8.1.mkv"));
+        Assert.IsFalse(model.IsHdr10ConversionChosen, "The button converts to DV8.1 next.");
+
+        row.IsSelected = true;
+        await model.ChooseHdr10Command.ExecuteAsync(null);
+        Assert.AreEqual(2, runtime.Conversions);
+        Assert.IsTrue(row.Result!.Output!.EndsWith(" - HDR10.mkv"));
         Assert.IsTrue(model.IsHdr10ConversionChosen);
-        Assert.IsTrue(model.IsIdle, "Choosing a conversion only changes what the button runs.");
 
-        model.ChooseDv81Command.Execute(null);
-        Assert.IsFalse(model.IsHdr10ConversionChosen);
+        row.IsSelected = false;
+        Assert.IsFalse(model.ChooseHdr10Command.CanExecute(null), "Nothing to convert without a selection.");
     }
 
     [TestMethod]

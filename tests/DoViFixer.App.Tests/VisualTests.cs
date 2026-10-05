@@ -286,16 +286,16 @@ public sealed class VisualTests
             {
                 AssertInside(Descendants<SplitButton>(mediaView).Single(button => Equals(button.Content, caption) && button.IsVisible), content);
             }
-            // The split button menus choose what the buttons run, and the wider captions still fit.
+            // The buttons show what their menus last ran, and the wider captions still fit.
             media.IsDeepInspectionChosen = true;
-            media.ChooseHdr10Command.Execute(null);
+            media.IsHdr10ConversionChosen = true;
             await LayoutAsync(window);
             foreach (string caption in new[] { "Deep Inspect", "Convert to HDR10" })
             {
                 AssertInside(Descendants<SplitButton>(mediaView).Single(button => Equals(button.Content, caption) && button.IsVisible), content);
             }
             media.IsDeepInspectionChosen = false;
-            media.ChooseDv81Command.Execute(null);
+            media.IsHdr10ConversionChosen = false;
             await LayoutAsync(window);
             SaveRender(content, "media-minimum");
             var focusedBeforeComparison = media.Focused;

@@ -101,8 +101,8 @@ public sealed class MediaViewModel : OperationViewModel, INavigationPage, IPageA
         ConvertHdrCommand = new(() => ConvertBatchAsync(ConversionTarget.Hdr10), CanOperate);
         ChooseInspectCommand = new(() => ChooseAndInspectAsync(deep: false), CanOperate);
         ChooseDeepInspectCommand = new(() => ChooseAndInspectAsync(deep: true), CanOperate);
-        ChooseDv81Command = new(() => IsHdr10ConversionChosen = false);
-        ChooseHdr10Command = new(() => IsHdr10ConversionChosen = true);
+        ChooseDv81Command = new(() => ChooseAndConvertAsync(hdr10: false), CanOperate);
+        ChooseHdr10Command = new(() => ChooseAndConvertAsync(hdr10: true), CanOperate);
 
         SkipCommand = new RelayCommand<MediaRow>(Skip);
 
@@ -535,17 +535,20 @@ public sealed class MediaViewModel : OperationViewModel, INavigationPage, IPageA
         set => SetProperty(ref isDeepInspectionChosen, value);
     }
 
-    /// <summary>Whether the Convert split button converts to HDR10 rather than DV8.1.</summary>
+    /// <summary>
+    /// Whether the Convert split button converts to HDR10 rather than DV8.1. Picking an entry in its menu runs that
+    /// conversion and makes it what the button runs next.
+    /// </summary>
     public bool IsHdr10ConversionChosen
     {
         get => isHdr10ConversionChosen;
-        private set => SetProperty(ref isHdr10ConversionChosen, value);
+        set => SetProperty(ref isHdr10ConversionChosen, value);
     }
 
     public AsyncRelayCommand ChooseInspectCommand { get; }
     public AsyncRelayCommand ChooseDeepInspectCommand { get; }
-    public RelayCommand ChooseDv81Command { get; }
-    public RelayCommand ChooseHdr10Command { get; }
+    public AsyncRelayCommand ChooseDv81Command { get; }
+    public AsyncRelayCommand ChooseHdr10Command { get; }
     public RelayCommand<MediaRow> SkipCommand { get; }
     public RelayCommand<MediaRow> CancelFileCommand { get; }
     public RelayCommand OpenOutputCommand { get; }
@@ -680,6 +683,8 @@ public sealed class MediaViewModel : OperationViewModel, INavigationPage, IPageA
         DeepInspectCommand?.NotifyCanExecuteChanged();
         ChooseInspectCommand?.NotifyCanExecuteChanged();
         ChooseDeepInspectCommand?.NotifyCanExecuteChanged();
+        ChooseDv81Command?.NotifyCanExecuteChanged();
+        ChooseHdr10Command?.NotifyCanExecuteChanged();
         ConvertDv81Command?.NotifyCanExecuteChanged();
         ConvertRowDv81Command?.NotifyCanExecuteChanged();
         RestoreRowCommand?.NotifyCanExecuteChanged();
@@ -1090,6 +1095,12 @@ public sealed class MediaViewModel : OperationViewModel, INavigationPage, IPageA
             await RefreshRestoreArchiveAsync(row, BeginArchivePairing(), token);
         }
     });
+
+    private Task ChooseAndConvertAsync(bool hdr10)
+    {
+        IsHdr10ConversionChosen = hdr10;
+        return ConvertBatchAsync(hdr10 ? ConversionTarget.Hdr10 : ConversionTarget.Profile81);
+    }
 
     private Task ConvertBatchAsync(ConversionTarget target, MediaRow[]? rows = null) => RunAsync(async (token, progress) =>
     {
