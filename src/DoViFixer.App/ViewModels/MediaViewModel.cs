@@ -903,10 +903,12 @@ public sealed class MediaViewModel : OperationViewModel, INavigationPage, IPageA
                 row.CanRetryAnalysis = result.Status is OperationStatus.Failed or OperationStatus.Cancelled;
                 if (result.Status == OperationStatus.Failed)
                 {
-                    row.AnalysisError = result.Message;
+                    row.SetAnalysisFailed(result.Message);
                 }
                 else if (result.Status == OperationStatus.Cancelled)
                 {
+                    // The row being scanned is still Active; end it as Cancelled so its result dot shows like the queued rows'.
+                    row.SetCancelled();
                     row.Notice = result.Message;
                 }
 
