@@ -60,23 +60,43 @@ public sealed class ViewModelTests
     }
 
     [TestMethod]
-    public void SplitButtonMenusChooseWhatInspectAndConvertRun()
+    public void ConvertMenuChoosesWhatConvertRuns()
     {
         using var runtime = new TestRuntime();
         var model = runtime.Container.GetRequiredService<MediaViewModel>();
-        Assert.IsFalse(model.IsDeepInspectionChosen, "Inspect runs a regular inspection by default.");
         Assert.IsFalse(model.IsHdr10ConversionChosen, "Convert targets DV8.1 by default.");
 
-        model.ChooseDeepInspectCommand.Execute(null);
         model.ChooseHdr10Command.Execute(null);
-        Assert.IsTrue(model.IsDeepInspectionChosen);
         Assert.IsTrue(model.IsHdr10ConversionChosen);
-        Assert.IsTrue(model.IsIdle, "Choosing only changes what the buttons run.");
+        Assert.IsTrue(model.IsIdle, "Choosing a conversion only changes what the button runs.");
 
-        model.ChooseInspectCommand.Execute(null);
         model.ChooseDv81Command.Execute(null);
-        Assert.IsFalse(model.IsDeepInspectionChosen);
         Assert.IsFalse(model.IsHdr10ConversionChosen);
+    }
+
+    [TestMethod]
+    public async Task InspectMenuRunsThePickedInspectionAndRemembersIt()
+    {
+        using var runtime = new TestRuntime();
+        var model = runtime.Container.GetRequiredService<MediaViewModel>();
+        await model.AddAsync([@"C:\Media\Mountain.mkv"]);
+        var row = model.Files[0];
+        Assert.IsFalse(model.IsDeepInspectionChosen, "Inspect runs a regular inspection by default.");
+        Assert.IsTrue(model.ChooseDeepInspectCommand.CanExecute(null));
+
+        int analyses = runtime.Analyses;
+        await model.ChooseDeepInspectCommand.ExecuteAsync(null);
+        Assert.AreEqual(analyses + 1, runtime.Analyses, "Picking Deep Inspect runs it right away.");
+        Assert.AreEqual(DoViFixer.Domain.Analysis.AnalysisMethod.DeepInspection, row.Analysis!.Evidence.Method);
+        Assert.IsTrue(model.IsDeepInspectionChosen, "The button runs Deep Inspect next.");
+
+        await model.ChooseInspectCommand.ExecuteAsync(null);
+        Assert.AreEqual(analyses + 2, runtime.Analyses);
+        Assert.AreEqual(DoViFixer.Domain.Analysis.AnalysisMethod.FullRpu, row.Analysis!.Evidence.Method);
+        Assert.IsFalse(model.IsDeepInspectionChosen);
+
+        row.IsSelected = false;
+        Assert.IsFalse(model.ChooseInspectCommand.CanExecute(null), "Nothing to inspect without a selection.");
     }
 
     [TestMethod]

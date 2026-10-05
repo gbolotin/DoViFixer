@@ -99,8 +99,8 @@ public sealed class MediaViewModel : OperationViewModel, INavigationPage, IPageA
         ConvertRowDv81Command = new(row => ConvertBatchAsync(ConversionTarget.Profile81, [row!]), row => row is not null && IsIdle && Files.Contains(row) && row.IsProfile7 && !row.IsMissing);
         RestoreRowCommand = new(row => RestoreRowAsync(row!), row => row is not null && IsIdle && Files.Contains(row) && row.CanRestore);
         ConvertHdrCommand = new(() => ConvertBatchAsync(ConversionTarget.Hdr10), CanOperate);
-        ChooseInspectCommand = new(() => IsDeepInspectionChosen = false);
-        ChooseDeepInspectCommand = new(() => IsDeepInspectionChosen = true);
+        ChooseInspectCommand = new(() => ChooseAndInspectAsync(deep: false), CanOperate);
+        ChooseDeepInspectCommand = new(() => ChooseAndInspectAsync(deep: true), CanOperate);
         ChooseDv81Command = new(() => IsHdr10ConversionChosen = false);
         ChooseHdr10Command = new(() => IsHdr10ConversionChosen = true);
 
@@ -526,13 +526,13 @@ public sealed class MediaViewModel : OperationViewModel, INavigationPage, IPageA
     public AsyncRelayCommand ConvertHdrCommand { get; }
 
     /// <summary>
-    /// Whether the Inspect split button runs a deep inspection. Like the Visual Studio Start button, picking an
-    /// entry in its menu only chooses what the button runs.
+    /// Whether the Inspect split button runs a deep inspection. Picking an entry in its menu runs that inspection
+    /// and makes it what the button runs next.
     /// </summary>
     public bool IsDeepInspectionChosen
     {
         get => isDeepInspectionChosen;
-        private set => SetProperty(ref isDeepInspectionChosen, value);
+        set => SetProperty(ref isDeepInspectionChosen, value);
     }
 
     /// <summary>Whether the Convert split button converts to HDR10 rather than DV8.1.</summary>
@@ -542,8 +542,8 @@ public sealed class MediaViewModel : OperationViewModel, INavigationPage, IPageA
         private set => SetProperty(ref isHdr10ConversionChosen, value);
     }
 
-    public RelayCommand ChooseInspectCommand { get; }
-    public RelayCommand ChooseDeepInspectCommand { get; }
+    public AsyncRelayCommand ChooseInspectCommand { get; }
+    public AsyncRelayCommand ChooseDeepInspectCommand { get; }
     public RelayCommand ChooseDv81Command { get; }
     public RelayCommand ChooseHdr10Command { get; }
     public RelayCommand<MediaRow> SkipCommand { get; }
@@ -678,6 +678,8 @@ public sealed class MediaViewModel : OperationViewModel, INavigationPage, IPageA
         ScanCommand?.NotifyCanExecuteChanged();
         InspectCommand?.NotifyCanExecuteChanged();
         DeepInspectCommand?.NotifyCanExecuteChanged();
+        ChooseInspectCommand?.NotifyCanExecuteChanged();
+        ChooseDeepInspectCommand?.NotifyCanExecuteChanged();
         ConvertDv81Command?.NotifyCanExecuteChanged();
         ConvertRowDv81Command?.NotifyCanExecuteChanged();
         RestoreRowCommand?.NotifyCanExecuteChanged();
@@ -859,6 +861,12 @@ public sealed class MediaViewModel : OperationViewModel, INavigationPage, IPageA
         StartBackgroundPreviews(refreshFocused: true);
         await AnalyzeRowsAsync(InDisplayOrder(ShownFiles.Where(row => !row.IsMissing)), AnalysisMethod.SampledRpu, token);
     });
+
+    private Task ChooseAndInspectAsync(bool deep)
+    {
+        IsDeepInspectionChosen = deep;
+        return AnalyzeAsync(deep ? AnalysisMethod.DeepInspection : AnalysisMethod.FullRpu);
+    }
 
     private Task AnalyzeAsync(AnalysisMethod method) => RunAsync(async (token, _) =>
     {
