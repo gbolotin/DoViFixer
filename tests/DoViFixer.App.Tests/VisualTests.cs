@@ -281,7 +281,8 @@ public sealed class VisualTests
             await LayoutAsync(window);
             var content = (FrameworkElement)window.Content;
             AssertInside(splitter, content);
-            foreach (string caption in new[] { "Rescan", "Inspect", "Deep Inspect", "Convert to DV8.1", "Convert to HDR10" })
+            AssertInside(Descendants<Button>(mediaView).Single(button => Equals(button.ToolTip, "Rescan") && button.IsVisible), content);
+            foreach (string caption in new[] { "Inspect", "Deep Inspect", "Convert to DV8.1", "Convert to HDR10" })
             {
                 AssertInside(Descendants<Button>(mediaView).Single(button => Equals(button.Content, caption) && button.IsVisible), content);
             }
