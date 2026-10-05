@@ -691,7 +691,9 @@ public sealed class ViewModelTests
         Assert.IsTrue(model.IsIdle);
         Assert.AreEqual("Scan cancelled", model.Files[0].Status);
         Assert.IsTrue(model.Files[0].IsSelected, "Cancelling a scan must preserve its checkbox selection.");
+        Assert.AreEqual(MediaRowState.Cancelled, model.Files[0].State, "The row cancelled mid-scan must show the cancelled result dot.");
         Assert.AreEqual(cancelAll ? "Scan cancelled" : "", model.Files[1].Status);
+        Assert.AreEqual(cancelAll ? MediaRowState.Cancelled : MediaRowState.Scanned, model.Files[1].State);
         Assert.IsTrue(model.Files[0].CanRetryAnalysis);
         Assert.AreEqual(cancelAll ? 1 : 2, runtime.Analyses);
         Assert.AreEqual(cancelAll ? 50 : 100, model.BatchProgress.Percent);
