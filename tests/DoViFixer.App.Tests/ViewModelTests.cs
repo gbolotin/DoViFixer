@@ -404,6 +404,7 @@ public sealed class ViewModelTests
         model.PauseBatchCommand.Invoke();
         Assert.AreEqual("Resume", model.PauseBatchText);
         Assert.AreEqual("\uE768", model.PauseBatchIcon);
+        Assert.AreEqual("Resume the batch", model.PauseBatchToolTip);
         StringAssert.Contains(model.ActiveProgressSummary, "Pausing after current job");
         release.SetResult();
         await paused.Task.WaitAsync(TimeSpan.FromSeconds(10));
@@ -423,6 +424,7 @@ public sealed class ViewModelTests
         Assert.AreEqual(cancelBatch ? 1 : 2, runtime.Analyses);
         Assert.AreEqual("Pause", model.PauseBatchText);
         Assert.AreEqual("\uE769", model.PauseBatchIcon);
+        Assert.AreEqual("Pause before the next job starts", model.PauseBatchToolTip);
         Assert.IsFalse(model.PauseBatchCommand.CanExecute(null));
         Assert.IsTrue(model.IsIdle);
     }
@@ -1588,6 +1590,23 @@ public sealed class ViewModelTests
 
         model.Files[0].IsSelected = false;
         Assert.AreEqual("5 items", model.SelectionSummary);
+    }
+
+    [TestMethod]
+    public void ActiveProgressTextRoundsBatchPercentToInteger()
+    {
+        using var runtime = new TestRuntime();
+        var model = runtime.Container.GetRequiredService<MediaViewModel>();
+
+        model.BatchProgress.Begin(3, "Convert");
+        model.BatchProgress.Complete(DoViFixer.Application.Operations.OperationStatus.Completed);
+
+        Assert.AreEqual("33%", model.ActiveProgressText);
+
+        model.BatchProgress.Complete(DoViFixer.Application.Operations.OperationStatus.Completed);
+
+        Assert.AreEqual("67%", model.ActiveProgressText);
+        model.BatchProgress.End();
     }
 
     [TestMethod]
