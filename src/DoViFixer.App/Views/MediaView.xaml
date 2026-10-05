@@ -724,88 +724,112 @@
         </Grid>
     </DataTemplate>
 
+    <!-- Shared by the batch and job cards: the percent column is a shared size group with a minimum width, so both bars start at the same x and do not shift as the digits change. -->
+    <Style x:Key="ProgressPercentTextStyle" TargetType="TextBlock">
+        <Setter Property="Grid.Row" Value="1" />
+        <Setter Property="FontSize" Value="16" />
+        <Setter Property="MinWidth" Value="48" />
+        <Setter Property="Margin" Value="0,0,12,0" />
+        <Setter Property="VerticalAlignment" Value="Center" />
+        <Setter Property="Foreground" Value="{DynamicResource AccentTextFillColorPrimaryBrush}" />
+    </Style>
+
+    <Style x:Key="ProgressIconButtonStyle" TargetType="Button" BasedOn="{StaticResource {x:Type Button}}">
+        <Setter Property="FontFamily" Value="{StaticResource SymbolThemeFontFamily}" />
+        <Setter Property="VerticalAlignment" Value="Center" />
+        <Setter Property="Margin" Value="8,0,0,0" />
+    </Style>
+
     <DataTemplate x:Key="MediaCurrentJobProgressTemplate" DataType="{x:Type viewModels:MediaViewModel}">
         <Grid>
+            <Grid.RowDefinitions>
+                <RowDefinition Height="Auto" />
+                <RowDefinition Height="Auto" />
+                <RowDefinition Height="Auto" />
+            </Grid.RowDefinitions>
             <Grid.ColumnDefinitions>
+                <ColumnDefinition Width="Auto" SharedSizeGroup="ProgressPercent" />
                 <ColumnDefinition Width="*" />
-                <ColumnDefinition Width="Auto" SharedSizeGroup="ProgressCancelAction" />
-                <ColumnDefinition Width="Auto" SharedSizeGroup="ProgressPauseAction" />
             </Grid.ColumnDefinitions>
-            <Button Grid.Column="1"
-                    VerticalAlignment="Center"
-                    HorizontalAlignment="Stretch"
-                    Content="Cancel job"
-                    Tag="&#xE711;"
-                    ContentTemplate="{StaticResource WfIconContentTemplate}"
-                    Command="{Binding CancelFileCommand}"
-                    CommandParameter="{Binding BatchProgress.CurrentJob}"
-                    Margin="8,0,0,0" />
-            <StackPanel>
-                <DockPanel Margin="0,8,0,8" TextBlock.FontSize="16">
-                    <TextBlock Text="{Binding BatchProgress.CurrentJob.Progress.ProgressText}"
-                               DockPanel.Dock="Right"
-                               Foreground="{DynamicResource AccentTextFillColorPrimaryBrush}"
-                               Margin="12,0,0,0" />
-                    <TextBlock Text="{Binding BatchProgress.CurrentJob.Name}"
-                               TextTrimming="CharacterEllipsis"
-                               ToolTip="{Binding BatchProgress.CurrentJob.Path}"
-                               TextBlock.Foreground="{DynamicResource TextFillColorSecondaryBrush}"/>
-                </DockPanel>
-                <ProgressBar Value="{Binding BatchProgress.CurrentJob.Progress.Percent, Mode=OneWay, FallbackValue=0}"
-                             IsIndeterminate="{Binding BatchProgress.CurrentJob.Progress.IsIndeterminate, FallbackValue=False}"
-                             Height="8"
-                             AutomationProperties.Name="Current job progress" />
-                <TextBlock Text="{Binding BatchProgress.CurrentJob.Progress.Stage}"
-                           Margin="0,8,0,0"
-                           Foreground="{DynamicResource TextFillColorSecondaryBrush}"
-                           TextTrimming="CharacterEllipsis" />
-            </StackPanel>
+            <DockPanel Grid.ColumnSpan="2" Margin="0,0,0,8">
+                <Button DockPanel.Dock="Right"
+                        Style="{StaticResource ProgressIconButtonStyle}"
+                        Content="&#xE711;"
+                        ToolTip="Cancel job"
+                        AutomationProperties.Name="Cancel job"
+                        Command="{Binding CancelFileCommand}"
+                        CommandParameter="{Binding BatchProgress.CurrentJob}" />
+                <TextBlock Text="{Binding BatchProgress.CurrentJob.Name}"
+                           FontSize="16"
+                           VerticalAlignment="Center"
+                           TextTrimming="CharacterEllipsis"
+                           ToolTip="{Binding BatchProgress.CurrentJob.Path}"
+                           Foreground="{DynamicResource TextFillColorSecondaryBrush}" />
+            </DockPanel>
+            <TextBlock Text="{Binding BatchProgress.CurrentJob.Progress.ProgressText}"
+                       Style="{StaticResource ProgressPercentTextStyle}" />
+            <ProgressBar Grid.Row="1"
+                         Grid.Column="1"
+                         VerticalAlignment="Center"
+                         Value="{Binding BatchProgress.CurrentJob.Progress.Percent, Mode=OneWay, FallbackValue=0}"
+                         IsIndeterminate="{Binding BatchProgress.CurrentJob.Progress.IsIndeterminate, FallbackValue=False}"
+                         Height="8"
+                         AutomationProperties.Name="Current job progress" />
+            <TextBlock Grid.Row="2"
+                       Grid.ColumnSpan="2"
+                       Text="{Binding BatchProgress.CurrentJob.Progress.Stage}"
+                       Margin="0,8,0,0"
+                       Foreground="{DynamicResource TextFillColorSecondaryBrush}"
+                       TextTrimming="CharacterEllipsis" />
         </Grid>
     </DataTemplate>
 
     <DataTemplate x:Key="MediaActiveProgressTemplate" DataType="{x:Type viewModels:MediaViewModel}">
         <Grid>
+            <Grid.RowDefinitions>
+                <RowDefinition Height="Auto" />
+                <RowDefinition Height="Auto" />
+                <RowDefinition Height="Auto" />
+            </Grid.RowDefinitions>
             <Grid.ColumnDefinitions>
+                <ColumnDefinition Width="Auto" SharedSizeGroup="ProgressPercent" />
                 <ColumnDefinition Width="*" />
-                <ColumnDefinition Width="Auto" SharedSizeGroup="ProgressCancelAction" />
-                <ColumnDefinition Width="Auto" SharedSizeGroup="ProgressPauseAction" />
             </Grid.ColumnDefinitions>
-            <Button Grid.Column="1"
-                    VerticalAlignment="Center"
-                    HorizontalAlignment="Stretch"
-                    Content="Cancel batch"
-                    Tag="&#xE711;"
-                    ContentTemplate="{StaticResource WfIconContentTemplate}"
-                    Command="{Binding CancelCommand}"
-                    Margin="8,0,0,0" />
-            <Button Grid.Column="2"
-                    VerticalAlignment="Center"
-                    Content="{Binding PauseBatchText}"
-                    Tag="{Binding PauseBatchIcon}"
-                    ContentTemplate="{StaticResource WfIconContentTemplate}"
-                    Command="{Binding PauseBatchCommand}"
-                    Visibility="{Binding BatchProgress.IsRunning, Converter={StaticResource WfBooleanToVisibilityConverter}}"
-                    ToolTip="Pause before the next job starts, or resume the batch."
-                    Margin="8,0,0,0" />
-            <StackPanel>
-                <DockPanel Margin="0,8,0,8" TextBlock.FontSize="16">
-                    <TextBlock Text="{Binding ActiveProgressText}"
-                               DockPanel.Dock="Right"
-                               Foreground="{DynamicResource AccentTextFillColorPrimaryBrush}"
-                               Margin="12,0,0,0" />
-                    <TextBlock Text="{Binding ActiveProgressTitle}"
-                               VerticalAlignment="Center"
-                               Foreground="{DynamicResource TextFillColorSecondaryBrush}"/>
-                </DockPanel>
-                <ProgressBar Value="{Binding ActiveProgressPercent, Mode=OneWay, FallbackValue=0}"
-                             IsIndeterminate="{Binding ActiveProgressIndeterminate}"
-                             Height="8"
-                             AutomationProperties.Name="Overall progress" />
-                <TextBlock Text="{Binding ActiveProgressSummary}"
-                           Margin="0,8,0,0"
-                           Foreground="{DynamicResource TextFillColorSecondaryBrush}"
-                           ToolTip="{Binding ActiveProgressToolTip}" />
-            </StackPanel>
+            <DockPanel Grid.ColumnSpan="2" Margin="0,0,0,8">
+                <StackPanel DockPanel.Dock="Right" Orientation="Horizontal">
+                    <Button Style="{StaticResource ProgressIconButtonStyle}"
+                            Content="&#xE711;"
+                            ToolTip="Cancel batch"
+                            AutomationProperties.Name="Cancel batch"
+                            Command="{Binding CancelCommand}" />
+                    <Button Style="{StaticResource ProgressIconButtonStyle}"
+                            Content="{Binding PauseBatchIcon}"
+                            ToolTip="{Binding PauseBatchToolTip}"
+                            AutomationProperties.Name="{Binding PauseBatchText}"
+                            Command="{Binding PauseBatchCommand}"
+                            Visibility="{Binding BatchProgress.IsRunning, Converter={StaticResource WfBooleanToVisibilityConverter}}" />
+                </StackPanel>
+                <TextBlock Text="{Binding ActiveProgressTitle}"
+                           FontSize="16"
+                           VerticalAlignment="Center"
+                           TextTrimming="CharacterEllipsis"
+                           Foreground="{DynamicResource TextFillColorSecondaryBrush}" />
+            </DockPanel>
+            <TextBlock Text="{Binding ActiveProgressText}"
+                       Style="{StaticResource ProgressPercentTextStyle}" />
+            <ProgressBar Grid.Row="1"
+                         Grid.Column="1"
+                         VerticalAlignment="Center"
+                         Value="{Binding ActiveProgressPercent, Mode=OneWay, FallbackValue=0}"
+                         IsIndeterminate="{Binding ActiveProgressIndeterminate}"
+                         Height="8"
+                         AutomationProperties.Name="Overall progress" />
+            <TextBlock Grid.Row="2"
+                       Grid.ColumnSpan="2"
+                       Text="{Binding ActiveProgressSummary}"
+                       Margin="0,8,0,0"
+                       Foreground="{DynamicResource TextFillColorSecondaryBrush}"
+                       ToolTip="{Binding ActiveProgressToolTip}" />
         </Grid>
     </DataTemplate>
 
