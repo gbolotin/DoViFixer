@@ -2,7 +2,6 @@
                     xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
                     xmlns:wf="clr-namespace:WpfFoundation.Behaviors;assembly=WpfFoundation"
                     xmlns:viewModels="clr-namespace:DoViFixer.App.ViewModels"
-                    xmlns:presentation="clr-namespace:DoViFixer.App.Presentation"
                     xmlns:analysis="clr-namespace:DoViFixer.Domain.Analysis;assembly=DoViFixer.Domain"
                     xmlns:updates="clr-namespace:DoViFixer.Application.Updates;assembly=DoViFixer.Application"
                     xmlns:operations="clr-namespace:DoViFixer.Application.Operations;assembly=DoViFixer.Application">
@@ -155,8 +154,8 @@
                   SelectedItem="{Binding Focused}"
                   wf:GridViewSizing.LastColumnMinimumWidth="255"
                   wf:GridViewSort.Sort="{Binding FileSort}"
-                  presentation:ListFilter.Predicate="{Binding ShownFilePredicate}"
-                  presentation:ListFilter.LiveProperty="FilterGroup">
+                  wf:ListFilter.Predicate="{Binding ShownFilePredicate}"
+                  wf:ListFilter.LiveProperty="FilterGroup">
             <ListView.View>
                 <GridView ColumnHeaderContainerStyle="{StaticResource WfSortableColumnHeaderContainerStyle}" ColumnHeaderTemplate="{StaticResource WfSortableColumnHeaderTemplate}">
                     <GridViewColumn Header="File"
