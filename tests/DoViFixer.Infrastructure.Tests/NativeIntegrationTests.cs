@@ -260,7 +260,7 @@ public sealed class NativeIntegrationTests
         await archiveStore.WriteAsync(archive, manifest, workspace, default);
         string output = workspace.File("converted.partial");
         var progress = new RecordingProgress();
-        await processor.ConvertAsync(media, ConversionTarget.Profile81, workspace, output, progress, Guid.NewGuid(), default, true);
+        await processor.ConvertAsync(media, ConversionTarget.Profile81, workspace, output, progress, Guid.NewGuid(), default, safe);
         foreach (string stage in safe || failStreaming ? new[]
         {
             "Extracting video",
@@ -336,7 +336,7 @@ public sealed class NativeIntegrationTests
         Assert.IsTrue(parsed.RootElement.EnumerateArray().All(r => r.GetProperty("dovi_profile").GetInt32() == 8));
         await using var hdrWorkspace = await factory.CreateAsync(16 * 1024 * 1024, null, default);
         string hdrOutput = hdrWorkspace.File("hdr10.partial");
-        await processor.ConvertAsync(media, ConversionTarget.Hdr10, hdrWorkspace, hdrOutput, null, Guid.NewGuid(), default, true);
+        await processor.ConvertAsync(media, ConversionTarget.Hdr10, hdrWorkspace, hdrOutput, null, Guid.NewGuid(), default, safe);
         string hdrRaw = hdrWorkspace.File("hdr10.hevc");
         string hdrClean = hdrWorkspace.File("hdr10-clean.hevc");
         await processor.ExtractVideoAsync(media with

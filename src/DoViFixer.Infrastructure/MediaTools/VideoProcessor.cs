@@ -23,12 +23,21 @@ internal sealed class VideoProcessor(IToolCatalog tools, IProcessRunner processe
             try
             {
                 progress?.Report(new(operationId, "Streaming conversion", media.Source.Path));
+                // FFmpeg writes the Matroska frames unchanged and HevcAnnexB adds the start codes, so the stream
+                // matches mkvextract's. FFmpeg's hevc_mp4toannexb filter would add parameter sets and SEI at
+                // keyframes, and verification would then report a changed base layer.
+                int lengthSize = HevcAnnexB.LengthSize(media.IdentificationJson, media.VideoTrackId);
+                // dovi_tool prints no progress when redirected, so measure the frame bytes relayed to it.
+                var streaming = new PhasedProgress(progress, operationId, "Streaming conversion", media.Source.Path, 1);
+                double streamLength = Math.Max(1, HevcAnnexB.StreamLength(media));
+                streaming.Report(0, 0);
                 await processes.PipeAsync(new(tools.GetPath(NativeTool.FFmpeg), new[]
                 {
-                    "-nostdin", "-v", "error", "-i", media.Source.Path, "-map", "0:v:0", "-c:v", "copy", "-an", "-sn", "-dn", "-bsf:v", "hevc_mp4toannexb", "-f", "hevc", "-"
-                }), new(tools.GetPath(NativeTool.DoviTool), ConversionArguments("-")), cancellationToken);
+                    "-nostdin", "-v", "error", "-i", media.Source.Path, "-map", "0:v:0", "-c:v", "copy", "-an", "-sn", "-dn", "-f", "data", "-"
+                }, OutputRelay: (input, output, token) => HevcAnnexB.CopyAsync(input, output, lengthSize, token, read => streaming.Report(0, read / streamLength))), new(tools.GetPath(NativeTool.DoviTool), ConversionArguments("-")), cancellationToken);
+                progress?.Report(new(operationId, "Streaming conversion", media.Source.Path, 100));
             }
-            catch (Exception ex)when (ex is IOException or TimeoutException)
+            catch (Exception ex)when (ex is IOException or TimeoutException or InvalidDataException)
             {
                 cancellationToken.ThrowIfCancellationRequested();
                 logger.LogWarning(ex, "Streaming failed; retrying with disk extraction");

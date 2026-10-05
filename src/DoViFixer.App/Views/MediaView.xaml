@@ -4,7 +4,8 @@
                     xmlns:viewModels="clr-namespace:DoViFixer.App.ViewModels"
                     xmlns:presentation="clr-namespace:DoViFixer.App.Presentation"
                     xmlns:analysis="clr-namespace:DoViFixer.Domain.Analysis;assembly=DoViFixer.Domain"
-                    xmlns:updates="clr-namespace:DoViFixer.Application.Updates;assembly=DoViFixer.Application">
+                    xmlns:updates="clr-namespace:DoViFixer.Application.Updates;assembly=DoViFixer.Application"
+                    xmlns:operations="clr-namespace:DoViFixer.Application.Operations;assembly=DoViFixer.Application">
 
     <!-- Detail values: plain text on every row except the file row, which shows a link instead. -->
     <Style x:Key="MediaDetailValueTextStyle" TargetType="TextBlock">
@@ -19,6 +20,71 @@
         <Style.Triggers>
             <DataTrigger Binding="{Binding Label}" Value="{x:Static viewModels:MediaRow.FileLocationLabel}">
                 <Setter Property="Visibility" Value="Visible" />
+            </DataTrigger>
+        </Style.Triggers>
+    </Style>
+
+    <!-- Result dots: a small circle before a result's text, colored by how the operation ended. -->
+    <Style x:Key="MediaResultDotStyle" TargetType="Ellipse">
+        <Setter Property="Width" Value="8" />
+        <Setter Property="Height" Value="8" />
+        <Setter Property="Margin" Value="0,0,8,0" />
+        <Setter Property="VerticalAlignment" Value="Center" />
+        <Setter Property="Fill" Value="{DynamicResource TextFillColorTertiaryBrush}" />
+    </Style>
+    <!-- Bound to an OperationItemResult. -->
+    <Style x:Key="MediaOperationResultDotStyle"
+           TargetType="Ellipse"
+           BasedOn="{StaticResource MediaResultDotStyle}">
+        <Style.Triggers>
+            <DataTrigger Binding="{Binding Status}" Value="{x:Static operations:OperationStatus.Completed}">
+                <Setter Property="Fill" Value="{DynamicResource SystemFillColorSuccessBrush}" />
+            </DataTrigger>
+            <DataTrigger Binding="{Binding Status}" Value="{x:Static operations:OperationStatus.Partial}">
+                <Setter Property="Fill" Value="{DynamicResource SystemFillColorCautionBrush}" />
+            </DataTrigger>
+            <DataTrigger Binding="{Binding Status}" Value="{x:Static operations:OperationStatus.Cancelled}">
+                <Setter Property="Fill" Value="{DynamicResource SystemFillColorCautionBrush}" />
+            </DataTrigger>
+            <DataTrigger Binding="{Binding Status}" Value="{x:Static operations:OperationStatus.Failed}">
+                <Setter Property="Fill" Value="{DynamicResource SystemFillColorCriticalBrush}" />
+            </DataTrigger>
+        </Style.Triggers>
+    </Style>
+    <!-- Bound to a MediaRow; shown only once an operation has ended. -->
+    <Style x:Key="MediaRowResultDotStyle"
+           TargetType="Ellipse"
+           BasedOn="{StaticResource MediaResultDotStyle}">
+        <Setter Property="Visibility" Value="Collapsed" />
+        <Style.Triggers>
+            <DataTrigger Binding="{Binding State}" Value="{x:Static viewModels:MediaRowState.Converted}">
+                <Setter Property="Visibility" Value="Visible" />
+                <Setter Property="Fill" Value="{DynamicResource SystemFillColorSuccessBrush}" />
+            </DataTrigger>
+            <DataTrigger Binding="{Binding State}" Value="{x:Static viewModels:MediaRowState.Restored}">
+                <Setter Property="Visibility" Value="Visible" />
+                <Setter Property="Fill" Value="{DynamicResource SystemFillColorSuccessBrush}" />
+            </DataTrigger>
+            <DataTrigger Binding="{Binding State}" Value="{x:Static viewModels:MediaRowState.Skipped}">
+                <Setter Property="Visibility" Value="Visible" />
+            </DataTrigger>
+            <DataTrigger Binding="{Binding State}" Value="{x:Static viewModels:MediaRowState.Cancelled}">
+                <Setter Property="Visibility" Value="Visible" />
+                <Setter Property="Fill" Value="{DynamicResource SystemFillColorCautionBrush}" />
+            </DataTrigger>
+            <DataTrigger Binding="{Binding State}" Value="{x:Static viewModels:MediaRowState.Failed}">
+                <Setter Property="Visibility" Value="Visible" />
+                <Setter Property="Fill" Value="{DynamicResource SystemFillColorCriticalBrush}" />
+            </DataTrigger>
+            <MultiDataTrigger>
+                <MultiDataTrigger.Conditions>
+                    <Condition Binding="{Binding State}" Value="{x:Static viewModels:MediaRowState.Converted}" />
+                    <Condition Binding="{Binding Result.Status}" Value="{x:Static operations:OperationStatus.Partial}" />
+                </MultiDataTrigger.Conditions>
+                <Setter Property="Fill" Value="{DynamicResource SystemFillColorCautionBrush}" />
+            </MultiDataTrigger>
+            <DataTrigger Binding="{Binding Status}" Value="{x:Static viewModels:MediaRow.MissingStatus}">
+                <Setter Property="Visibility" Value="Collapsed" />
             </DataTrigger>
         </Style.Triggers>
     </Style>
@@ -224,6 +290,7 @@
                                                     </Style.Triggers>
                                                 </Style>
                                             </StackPanel.Style>
+                                            <Ellipse Style="{StaticResource MediaRowResultDotStyle}" />
                                             <TextBlock Text="{Binding Status}"
                                                        TextWrapping="Wrap"
                                                        VerticalAlignment="Center"
@@ -596,10 +663,12 @@
                                 <TextBlock Text="Status"
                                            Foreground="{DynamicResource TextFillColorSecondaryBrush}"
                                            Margin="0,0,12,0" />
-                                <TextBlock Grid.Column="1"
-                                           Text="{Binding Focused.Result.Status}"
-                                           Foreground="{DynamicResource TextFillColorSecondaryBrush}"
-                                           TextAlignment="Right" />
+                                <StackPanel Grid.Column="1"
+                                            Orientation="Horizontal"
+                                            HorizontalAlignment="Right">
+                                    <Ellipse DataContext="{Binding Focused.Result}" Style="{StaticResource MediaOperationResultDotStyle}" />
+                                    <TextBlock Text="{Binding Focused.Result.Status}" Foreground="{DynamicResource TextFillColorSecondaryBrush}" />
+                                </StackPanel>
                             </Grid>
                             <ItemsControl ItemsSource="{Binding Focused.ResultFiles}"
                                           Foreground="{DynamicResource TextFillColorSecondaryBrush}">

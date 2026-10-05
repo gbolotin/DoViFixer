@@ -3,7 +3,8 @@ using System.Text;
 using Microsoft.Extensions.Logging;
 
 namespace DoViFixer.Infrastructure.MediaTools.Processes;
-internal sealed record ProcessRequest(string Executable, IReadOnlyList<string> Arguments, string? WorkingDirectory = null, TimeSpan? Timeout = null, bool AllowWarnings = false, IReadOnlyList<int>? AcceptedExitCodes = null, Action<string>? OutputLine = null);
+// OutputRelay applies to a PipeAsync producer: it copies the producer's output to the consumer and may transform it.
+internal sealed record ProcessRequest(string Executable, IReadOnlyList<string> Arguments, string? WorkingDirectory = null, TimeSpan? Timeout = null, bool AllowWarnings = false, IReadOnlyList<int>? AcceptedExitCodes = null, Action<string>? OutputLine = null, Func<Stream, Stream, CancellationToken, Task>? OutputRelay = null);
 internal sealed record ProcessResult(int ExitCode, string Output, string Error);
 internal interface IProcessRunner
 {
@@ -128,7 +129,8 @@ internal sealed class ProcessRunner(ILogger<ProcessRunner> logger) : IProcessRun
         {
             try
             {
-                await source.StandardOutput.BaseStream.CopyToAsync(target.StandardInput.BaseStream, linked.Token);
+                var relay = producer.OutputRelay ?? ((input, output, token) => input.CopyToAsync(output, token));
+                await relay(source.StandardOutput.BaseStream, target.StandardInput.BaseStream, linked.Token);
             }
             catch
             {
