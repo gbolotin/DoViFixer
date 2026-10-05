@@ -647,7 +647,7 @@ public sealed class VisualTests
             Assert.IsFalse(media.AddDroppedPathsCommand.CanExecute(new[] { @"C:\Media\Dropped.mkv" }));
             Assert.AreEqual(DragDropEffects.None, RaiseFileDrag(panel, new DataObject(DataFormats.FileDrop, new[] { @"C:\Media\Dropped.mkv" }), UIElement.PreviewDropEvent));
             Assert.IsTrue(Descendants<ProgressBar>(mediaView).Any(progress => progress.IsVisible));
-            var cancel = Button(mediaView, "Cancel batch");
+            var cancel = NamedButton(mediaView, "Cancel batch");
             Assert.IsTrue(cancel.IsVisible);
             Assert.AreSame(media.CancelCommand, cancel.Command);
             AssertInside(cancel, content);
@@ -857,7 +857,7 @@ public sealed class VisualTests
             AssertStableActionSlots(list, slots, "job cancelling");
             Assert.AreEqual("Cancelling…", row.Progress.Stage);
             Assert.IsFalse(cancel.IsEnabled);
-            Assert.IsFalse(Button(mediaView, "Cancel job").IsEnabled);
+            Assert.IsFalse(NamedButton(mediaView, "Cancel job").IsEnabled);
             SaveRender((FrameworkElement)window.Content, "cancelling-job");
         }
         finally
@@ -980,6 +980,8 @@ public sealed class VisualTests
     }
 
     private static Button Button(DependencyObject parent, string caption) => Descendants<Button>(parent).Single(button => Equals(button.Content, caption));
+
+    private static Button NamedButton(DependencyObject parent, string name) => Descendants<Button>(parent).Single(button => System.Windows.Automation.AutomationProperties.GetName(button) == name);
 
     private static string DisplayedText(TextBlock text) => new System.Windows.Documents.TextRange(text.ContentStart, text.ContentEnd).Text;
 
