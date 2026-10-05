@@ -65,6 +65,18 @@ public sealed class ProgressTests
     }
 
     [TestMethod]
+    [DataRow("frame=1234", true, 1234L)]
+    [DataRow("frame=0", true, 0L)]
+    [DataRow("frame=-1", false, 0L)]
+    [DataRow("fps=23.97", false, 0L)]
+    [DataRow("progress=end", false, 0L)]
+    public void ParsesFFmpegProgressFrameCount(string line, bool parsed, long frame)
+    {
+        Assert.AreEqual(parsed, FFmpegProgress.TryParseFrame(line, out long value));
+        Assert.AreEqual(frame, value);
+    }
+
+    [TestMethod]
     public void PhasedProgressWeighsPhasesAndLeavesCompletionToTheCaller()
     {
         var sink = new RecordingProgress();
