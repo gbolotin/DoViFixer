@@ -724,11 +724,11 @@
         </Grid>
     </DataTemplate>
 
-    <!-- Shared by the batch and job cards: the percent column is a shared size group with a minimum width, so both bars start at the same x and do not shift as the digits change. -->
+    <!-- Shared by the batch and job cards: the percent column has a fixed width wide enough for "100%", so both bars start at the same x and never shift. While a bar is indeterminate the percent is left empty. -->
     <Style x:Key="ProgressPercentTextStyle" TargetType="TextBlock">
         <Setter Property="Grid.Row" Value="1" />
         <Setter Property="FontSize" Value="16" />
-        <Setter Property="MinWidth" Value="48" />
+        <Setter Property="Width" Value="48" />
         <Setter Property="Margin" Value="0,0,12,0" />
         <Setter Property="VerticalAlignment" Value="Center" />
         <Setter Property="Foreground" Value="{DynamicResource AccentTextFillColorPrimaryBrush}" />
@@ -766,8 +766,18 @@
                            ToolTip="{Binding BatchProgress.CurrentJob.Path}"
                            Foreground="{DynamicResource TextFillColorSecondaryBrush}" />
             </DockPanel>
-            <TextBlock Text="{Binding BatchProgress.CurrentJob.Progress.ProgressText}"
-                       Style="{StaticResource ProgressPercentTextStyle}" />
+            <TextBlock>
+                <TextBlock.Style>
+                    <Style TargetType="TextBlock" BasedOn="{StaticResource ProgressPercentTextStyle}">
+                        <Setter Property="Text" Value="{Binding BatchProgress.CurrentJob.Progress.ProgressText}" />
+                        <Style.Triggers>
+                            <DataTrigger Binding="{Binding BatchProgress.CurrentJob.Progress.IsIndeterminate}" Value="True">
+                                <Setter Property="Text" Value="" />
+                            </DataTrigger>
+                        </Style.Triggers>
+                    </Style>
+                </TextBlock.Style>
+            </TextBlock>
             <ProgressBar Grid.Row="1"
                          Grid.Column="1"
                          VerticalAlignment="Center"
@@ -797,17 +807,18 @@
             </Grid.ColumnDefinitions>
             <DockPanel Grid.ColumnSpan="2" Margin="0,0,0,8">
                 <StackPanel DockPanel.Dock="Right" Orientation="Horizontal">
-                    <Button Style="{StaticResource ProgressIconButtonStyle}"
-                            Content="&#xE711;"
-                            ToolTip="Cancel batch"
-                            AutomationProperties.Name="Cancel batch"
-                            Command="{Binding CancelCommand}" />
+                    <!-- Cancel is last so it lines up with the job card's Cancel below. -->
                     <Button Style="{StaticResource ProgressIconButtonStyle}"
                             Content="{Binding PauseBatchIcon}"
                             ToolTip="{Binding PauseBatchToolTip}"
                             AutomationProperties.Name="{Binding PauseBatchText}"
                             Command="{Binding PauseBatchCommand}"
                             Visibility="{Binding BatchProgress.IsRunning, Converter={StaticResource WfBooleanToVisibilityConverter}}" />
+                    <Button Style="{StaticResource ProgressIconButtonStyle}"
+                            Content="&#xE711;"
+                            ToolTip="Cancel batch"
+                            AutomationProperties.Name="Cancel batch"
+                            Command="{Binding CancelCommand}" />
                 </StackPanel>
                 <TextBlock Text="{Binding ActiveProgressTitle}"
                            FontSize="16"
@@ -815,8 +826,18 @@
                            TextTrimming="CharacterEllipsis"
                            Foreground="{DynamicResource TextFillColorSecondaryBrush}" />
             </DockPanel>
-            <TextBlock Text="{Binding ActiveProgressText}"
-                       Style="{StaticResource ProgressPercentTextStyle}" />
+            <TextBlock>
+                <TextBlock.Style>
+                    <Style TargetType="TextBlock" BasedOn="{StaticResource ProgressPercentTextStyle}">
+                        <Setter Property="Text" Value="{Binding ActiveProgressText}" />
+                        <Style.Triggers>
+                            <DataTrigger Binding="{Binding ActiveProgressIndeterminate}" Value="True">
+                                <Setter Property="Text" Value="" />
+                            </DataTrigger>
+                        </Style.Triggers>
+                    </Style>
+                </TextBlock.Style>
+            </TextBlock>
             <ProgressBar Grid.Row="1"
                          Grid.Column="1"
                          VerticalAlignment="Center"
