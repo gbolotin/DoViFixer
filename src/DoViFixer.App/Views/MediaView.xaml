@@ -116,15 +116,15 @@
                         <TextBlock Text="{Binding Source={x:Static updates:ApplicationTitle.Name}, StringFormat='Remove files that were deleted, moved or renamed outside {0} from the list.'}" />
                     </Button.ToolTip>
                 </Button>
+                <Button Content="&#xE72C;"
+                        FontFamily="{StaticResource SymbolThemeFontFamily}"
+                        Padding="8"
+                        Command="{Binding ScanCommand}"
+                        ToolTip="Rescan"
+                        Margin="0,0,8,8" />
                 <Border Width="1"
                         Margin="4,6,12,14"
                         Background="{DynamicResource DividerStrokeColorDefaultBrush}" />
-                <Button Content="Rescan"
-                        Tag="&#xE72C;"
-                        ContentTemplate="{StaticResource WfIconContentTemplate}"
-                        Command="{Binding ScanCommand}"
-                        ToolTip="Scan every file the filter shows and generate missing frame previews in the background. If automatic selection is enabled, selections are updated using the conversion policy in Settings."
-                        Margin="0,0,8,8" />
                 <Button Content="Inspect"
                         Tag="&#xE721;"
                         ContentTemplate="{StaticResource WfIconContentTemplate}"
