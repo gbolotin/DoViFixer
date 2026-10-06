@@ -25,6 +25,22 @@ public sealed class BatchProgressTests
     }
 
     [TestMethod]
+    public void SingleFileJobTitleNamesTheOperationWhileBatchJobTitleIsJustTheFile()
+    {
+        var model = new BatchProgressViewModel();
+        model.Begin(1, "Deep inspection");
+        model.Start(new MediaRow(@"C:\Media\Mountain.mkv"), "Inspecting");
+        Assert.AreEqual("Deep inspection · Mountain.mkv", model.CurrentJobTitle);
+        model.Complete(OperationStatus.Completed);
+        Assert.AreEqual("", model.CurrentJobTitle);
+        model.End();
+
+        model.Begin(2, "Conversion to DV8.1");
+        model.Start(new MediaRow(@"C:\Media\Ocean.mkv"), "Converting");
+        Assert.AreEqual("Ocean.mkv", model.CurrentJobTitle);
+    }
+
+    [TestMethod]
     public void EachJobProgressIncrementUpdatesBatchPercentageAndNotifiesBindings()
     {
         var previous = SynchronizationContext.Current;

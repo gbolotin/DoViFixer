@@ -790,7 +790,7 @@
                         AutomationProperties.Name="Cancel job"
                         Command="{Binding CancelFileCommand}"
                         CommandParameter="{Binding BatchProgress.CurrentJob}" />
-                <TextBlock Text="{Binding BatchProgress.CurrentJob.Name}"
+                <TextBlock Text="{Binding BatchProgress.CurrentJobTitle}"
                            FontSize="16"
                            VerticalAlignment="Center"
                            TextTrimming="CharacterEllipsis"
