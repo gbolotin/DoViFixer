@@ -36,6 +36,10 @@ public static class AppComposition
         services.AddTransient<MediaViewModel>();
         services.AddTransient<ArchiveViewModel>();
         services.AddTransient<SettingsViewModel>();
+        // The sidebar shows the pages in registration order.
+        services.AddTransient<INavigationPage>(provider => provider.GetRequiredService<MediaViewModel>());
+        services.AddTransient<INavigationPage>(provider => provider.GetRequiredService<ArchiveViewModel>());
+        services.AddTransient<INavigationPage>(provider => provider.GetRequiredService<SettingsViewModel>());
         services.AddTransient<ShellViewModel>();
         services.AddTransient<Shell>();
     }

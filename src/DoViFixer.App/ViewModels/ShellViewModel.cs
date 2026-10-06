@@ -5,15 +5,19 @@ using DoViFixer.App.Presentation.Application;
 namespace DoViFixer.App.ViewModels;
 public sealed class ShellViewModel : ObservableObject, INavigationGuard, IDisposable
 {
-    public ShellViewModel(MediaViewModel media, ArchiveViewModel archive, SettingsViewModel settings, StartupDependencyCheckViewModel dependencyCheck, DependencyReportViewModel dependencyReport)
+    /// <param name="pages">The sidebar pages in display order. They must include the Media and Settings pages, which the shell wires together.</param>
+    public ShellViewModel(IEnumerable<INavigationPage> pages, StartupDependencyCheckViewModel dependencyCheck, DependencyReportViewModel dependencyReport)
     {
+        INavigationPage[] navigationPages = [.. pages];
+        var media = navigationPages.OfType<MediaViewModel>().Single();
+        var settings = navigationPages.OfType<SettingsViewModel>().Single();
         this.media = media;
         this.dependencyCheck = dependencyCheck;
         this.dependencyReport = dependencyReport;
         Settings = settings;
-        operations = [media, archive, settings];
+        operations = [.. navigationPages.OfType<OperationViewModel>()];
         // Media is shown from the start; InitializeAsync loads its summary as part of startup.
-        Navigation = new NavigationService([media, archive, settings], guard: this, initialPage: media);
+        Navigation = new NavigationService(navigationPages, guard: this, initialPage: media);
         Navigation.PropertyChanged += NavigationChanged;
         Navigation.NavigationFailed += (_, failure) => Settings.SetStatus(ViewStatus.Error, failure.Exception.Message);
         media.RequestNavigateToSettings += () => CurrentPage = settings;

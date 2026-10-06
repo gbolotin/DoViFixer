@@ -365,6 +365,16 @@ public sealed class ViewModelTests
     }
 
     [TestMethod]
+    public void ShellShowsRegisteredPagesInOrder()
+    {
+        using var runtime = new TestRuntime();
+        var shell = runtime.Container.GetRequiredService<ShellViewModel>();
+        CollectionAssert.AreEqual(new[] { typeof(MediaViewModel), typeof(ArchiveViewModel), typeof(SettingsViewModel) }, shell.Pages.Select(page => page.GetType()).ToArray());
+        Assert.AreSame(shell.Settings, shell.Pages[2]);
+        Assert.AreSame(shell.Pages[0], shell.CurrentPage);
+    }
+
+    [TestMethod]
     public async Task ShellNavigationLoadsSettingsAndRetainsPageState()
     {
         using var runtime = new TestRuntime();
@@ -1293,7 +1303,7 @@ public sealed class ViewModelTests
         var media = runtime.Container.GetRequiredService<MediaViewModel>();
         var settings = runtime.Container.GetRequiredService<SettingsViewModel>();
         var archive = runtime.Container.GetRequiredService<ArchiveViewModel>();
-        var shell = new ShellViewModel(media, archive, settings, runtime.Container.GetRequiredService<StartupDependencyCheckViewModel>(), runtime.Container.GetRequiredService<DependencyReportViewModel>());
+        var shell = new ShellViewModel([media, archive, settings], runtime.Container.GetRequiredService<StartupDependencyCheckViewModel>(), runtime.Container.GetRequiredService<DependencyReportViewModel>());
 
         await media.AddAsync([
             @"C:\Media\Mountain.mkv",
@@ -1764,7 +1774,7 @@ public sealed class ViewModelTests
         var media = runtime.Container.GetRequiredService<MediaViewModel>();
         var settings = runtime.Container.GetRequiredService<SettingsViewModel>();
         var archive = runtime.Container.GetRequiredService<ArchiveViewModel>();
-        var shell = new ShellViewModel(media, archive, settings, runtime.Container.GetRequiredService<StartupDependencyCheckViewModel>(), runtime.Container.GetRequiredService<DependencyReportViewModel>());
+        var shell = new ShellViewModel([media, archive, settings], runtime.Container.GetRequiredService<StartupDependencyCheckViewModel>(), runtime.Container.GetRequiredService<DependencyReportViewModel>());
 
         await media.RefreshSettingsSummaryAsync();
         Assert.AreEqual("Output: Same folder", media.OutputSummary);
