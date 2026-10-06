@@ -89,22 +89,25 @@ public sealed class ViewModelTests
     public async Task InspectMenuRunsThePickedInspectionAndRemembersIt()
     {
         using var runtime = new TestRuntime();
+        // Without the cache every pick runs the tools, so each run is counted.
+        await runtime.UpdateAsync(settings => settings with { UseCachedResults = false }, default);
         var model = runtime.Container.GetRequiredService<MediaViewModel>();
         await model.AddAsync([@"C:\Media\Mountain.mkv"]);
         var row = model.Files[0];
         Assert.IsFalse(model.IsDeepInspectionChosen, "Inspect runs a regular inspection by default.");
-        Assert.IsTrue(model.ChooseDeepInspectCommand.CanExecute(null));
+        model.IsDeepInspectionChosen = true;
+        Assert.IsTrue(model.ChooseInspectCommand.CanExecute(null));
 
         int analyses = runtime.Analyses;
-        await model.ChooseDeepInspectCommand.ExecuteAsync(null);
-        Assert.AreEqual(analyses + 1, runtime.Analyses, "Picking Deep Inspect runs it right away.");
-        Assert.AreEqual(DoViFixer.Domain.Analysis.AnalysisMethod.DeepInspection, row.Analysis!.Evidence.Method);
-        Assert.IsTrue(model.IsDeepInspectionChosen, "The button runs Deep Inspect next.");
-
         await model.ChooseInspectCommand.ExecuteAsync(null);
-        Assert.AreEqual(analyses + 2, runtime.Analyses);
+        Assert.AreEqual(analyses + 1, runtime.Analyses, "Picking Inspect runs it right away.");
         Assert.AreEqual(DoViFixer.Domain.Analysis.AnalysisMethod.FullRpu, row.Analysis!.Evidence.Method);
-        Assert.IsFalse(model.IsDeepInspectionChosen);
+        Assert.IsFalse(model.IsDeepInspectionChosen, "The button runs Inspect next.");
+
+        await model.ChooseDeepInspectCommand.ExecuteAsync(null);
+        Assert.AreEqual(analyses + 2, runtime.Analyses);
+        Assert.AreEqual(DoViFixer.Domain.Analysis.AnalysisMethod.DeepInspection, row.Analysis!.Evidence.Method);
+        Assert.IsTrue(model.IsDeepInspectionChosen);
 
         row.IsSelected = false;
         Assert.IsFalse(model.ChooseInspectCommand.CanExecute(null), "Nothing to inspect without a selection.");
