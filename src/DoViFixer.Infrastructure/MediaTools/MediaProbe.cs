@@ -65,8 +65,12 @@ internal sealed class MediaProbe(IToolCatalog tools, IProcessRunner processes, I
 
                 if (method == AnalysisMethod.DeepInspection)
                 {
-                    progress?.Report(new(Guid.Empty, "Measuring base-layer brightness", media.Source.Path));
-                    return await AnalyzeBrightnessAsync(raw, workspace, cancellationToken);
+                    // Demuxing rewrites the stream once; decoding and measuring every frame dominates the stage.
+                    var measuring = new PhasedProgress(progress, Guid.Empty, "Measuring base-layer brightness", media.Source.Path, 5, 95);
+                    measuring.Report(0, 0);
+                    var brightness = await AnalyzeBrightnessAsync(raw, frames, measuring, workspace, cancellationToken);
+                    progress?.Report(new(Guid.Empty, "Measuring base-layer brightness", media.Source.Path, 100));
+                    return brightness;
                 }
 
                 return evidence;
@@ -116,7 +120,7 @@ internal sealed class MediaProbe(IToolCatalog tools, IProcessRunner processes, I
         }
     }
 
-    private async Task<RpuEvidence> AnalyzeBrightnessAsync(string raw, ITemporaryWorkspace workspace, CancellationToken cancellationToken)
+    private async Task<RpuEvidence> AnalyzeBrightnessAsync(string raw, long frames, PhasedProgress measuring, ITemporaryWorkspace workspace, CancellationToken cancellationToken)
     {
         string baseLayer = workspace.File("inspection-bl.hevc");
         string enhancementLayer = workspace.File("inspection-el.hevc");
@@ -126,6 +130,7 @@ internal sealed class MediaProbe(IToolCatalog tools, IProcessRunner processes, I
             "demux", "-i", raw, "-b", baseLayer, "-e", enhancementLayer
         }), cancellationToken);
         File.Delete(enhancementLayer);
+        measuring.Report(1, 0);
         // Require explicit HDR10 signaling; never guess range or apply a PQ transform to SDR.
         var color = await processes.RunAsync(new(tools.GetPath(NativeTool.FFprobe), new[]
         {
@@ -135,8 +140,14 @@ internal sealed class MediaProbe(IToolCatalog tools, IProcessRunner processes, I
         logger.LogInformation("Deep inspection: decoding every base-layer frame for luminance measurement");
         await processes.RunAsync(new(tools.GetPath(NativeTool.FFmpeg), new[]
         {
-            "-nostdin", "-v", "error", "-xerror", "-err_detect", "explode", "-i", baseLayer, "-map", "0:v:0", "-an", "-sn", "-dn", "-vf", DeepInspectionParser.Filter(range), "-fps_mode", "passthrough", "-f", "null", "-"
-        }, workspace.DirectoryPath), cancellationToken);
+            "-nostdin", "-v", "error", "-xerror", "-err_detect", "explode", "-i", baseLayer, "-map", "0:v:0", "-an", "-sn", "-dn", "-vf", DeepInspectionParser.Filter(range), "-fps_mode", "passthrough", "-progress", "pipe:1", "-nostats", "-f", "null", "-"
+        }, workspace.DirectoryPath, OutputLine: line =>
+        {
+            if (FFmpegProgress.TryParseFrame(line, out long frame))
+            {
+                measuring.Report(1, (double)frame / frames);
+            }
+        }), cancellationToken);
         await using var rpu = File.OpenRead(workspace.File("rpu.json"));
         using var peaks = File.OpenText(workspace.File("brightness.txt"));
         return await DeepInspectionParser.CompareAsync(rpu, peaks, cancellationToken);
