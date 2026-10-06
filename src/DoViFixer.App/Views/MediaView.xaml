@@ -988,7 +988,8 @@
     <DataTemplate DataType="{x:Type viewModels:MediaViewModel}">
         <Grid Background="Transparent"
               AllowDrop="True"
-              wf:FileDrop.Command="{Binding AddDroppedPathsCommand}">
+              wf:FileDrop.Command="{Binding AddDroppedPathsCommand}"
+              Margin="0,0,0,8">
             <Grid.RowDefinitions>
                 <RowDefinition Height="Auto" />
                 <RowDefinition Height="*" />
@@ -1003,15 +1004,15 @@
             <ContentControl Content="{Binding}"
                             Visibility="{Binding IsFileListEmpty, Converter={StaticResource WfInverseBooleanToVisibilityConverter}}"
                             ContentTemplate="{StaticResource MediaToolBarTemplate}"
-                            Margin="0,0,0,16" />
+                            Margin="0,0,0,8" />
             <ContentControl Content="{Binding}"
                             Visibility="{Binding IsFileListEmpty, Converter={StaticResource WfInverseBooleanToVisibilityConverter}}"
                             ContentTemplate="{StaticResource MediaListWithDetailsTemplate}"
                             Grid.Row="1"
-                            Margin="0,0,0,8"/>
+                            Margin="0,0,0,0"/>
             <ContentControl Content="{Binding}"
                             ContentTemplate="{StaticResource MediaProgressTemplate}"
-                            Margin="0,8,0,8"
+                            Margin="0,8,0,0"
                             Grid.Row="2"
                             Visibility="{Binding IsBusy, Converter={StaticResource WfBooleanToVisibilityConverter}}"/>
         </Grid>
