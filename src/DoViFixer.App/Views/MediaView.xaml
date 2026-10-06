@@ -93,13 +93,13 @@
         <Border BorderBrush="{DynamicResource DividerStrokeColorDefaultBrush}" BorderThickness="0,0,0,1">
             <WrapPanel>
                 <Button Content="Add files"
-                        Tag="&#xE8A5;"
-                        ContentTemplate="{StaticResource AddIconButtonContent}"
+                        Tag="{StaticResource WfIconAddFiles}"
+                        ContentTemplate="{StaticResource WfIconContentTemplate}"
                         Command="{Binding AddFilesCommand}"
                         Margin="0,0,8,8" />
                 <Button Content="Add folder"
-                        Tag="&#xE8B7;"
-                        ContentTemplate="{StaticResource AddIconButtonContent}"
+                        Tag="{StaticResource WfIconAddFolder}"
+                        ContentTemplate="{StaticResource WfIconContentTemplate}"
                         Command="{Binding AddFolderCommand}"
                         Margin="0,0,8,8" />
                 <Button Content="Clear all"
@@ -952,14 +952,14 @@
                        TextWrapping="Wrap" />
             <WrapPanel HorizontalAlignment="Center" Margin="0,24,0,0">
                 <Button Content="Add files"
-                        Tag="&#xE8A5;"
-                        ContentTemplate="{StaticResource AddIconButtonContent}"
+                        Tag="{StaticResource WfIconAddFiles}"
+                        ContentTemplate="{StaticResource WfIconContentTemplate}"
                         Command="{Binding AddFilesCommand}"
                         Style="{StaticResource WfPrimaryButtonStyle}"
                         Margin="4" />
                 <Button Content="Add folder"
-                        Tag="&#xE8B7;"
-                        ContentTemplate="{StaticResource AddIconButtonContent}"
+                        Tag="{StaticResource WfIconAddFolder}"
+                        ContentTemplate="{StaticResource WfIconContentTemplate}"
                         Command="{Binding AddFolderCommand}"
                         Margin="4" />
             </WrapPanel>

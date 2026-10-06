@@ -6,9 +6,6 @@
 
 mockup/ | * | * | Design mockups with their own palettes; not shipped.
 
-src/DoViFixer.App/Resources/Common.xaml | corner-radius | CornerRadius="6" | The add-icon badge is a 12 px circle.
-src/DoViFixer.App/Resources/Common.xaml | typography | FontSize="8" | Plus glyph inside the 12 px add-icon badge.
-src/DoViFixer.App/Resources/Common.xaml | typography | FontWeight="SemiBold" | Plus glyph inside the add-icon badge is drawn bolder to stay legible at 8 px.
 src/DoViFixer.App/Views/MediaView.xaml | spacing | Margin="4,6,12,14" | Open audit finding: toolbar separator, 4,4,12,12 suggested.
 src/DoViFixer.App/Views/MediaView.xaml | spacing | Margin="1,0,0,0" | Same 1 px header nudge as WpfFoundation's sortable column header template.
 src/DoViFixer.App/Views/MediaView.xaml | typography | FontWeight="SemiBold" | Warning glyphs next to text are drawn SemiBold.

@@ -1116,24 +1116,31 @@ public sealed class VisualTests
 
     private static void VerifyCommandIcons(DependencyObject root)
     {
-        var buttons = Descendants<Button>(root).Where(button => button.IsVisible && button.Tag is string && button.ContentTemplate is not null).ToArray();
+        var buttons = Descendants<Button>(root).Where(button => button.IsVisible && button.Tag is string or Geometry && button.ContentTemplate is not null).ToArray();
         Assert.IsNotEmpty(buttons);
         foreach (var button in buttons)
         {
+            Assert.AreEqual(button.Content, new ButtonAutomationPeer(button).GetName());
+            if (button.Content is "Add files" or "Add folder")
+            {
+                // Library vector icons, so the "+" badge is part of the outline.
+                Assert.AreSame(button.FindResource(button.Content is "Add files" ? "WfIconAddFiles" : "WfIconAddFolder"), button.Tag);
+            }
+
+            if (button.Tag is Geometry geometry)
+            {
+                var vector = Descendants<PathIcon>(button).Single();
+                Assert.AreSame(geometry, vector.Data);
+                AssertInside(vector, button);
+                continue;
+            }
+
             var glyph = (string)button.Tag;
             var icon = Descendants<TextBlock>(button).Single(text => text.Text == glyph);
             Assert.AreEqual(button.FindResource("SymbolThemeFontFamily"), icon.FontFamily);
             Assert.IsTrue(new Typeface(icon.FontFamily, icon.FontStyle, icon.FontWeight, icon.FontStretch).TryGetGlyphTypeface(out var font));
             Assert.IsTrue(font.CharacterToGlyphMap.ContainsKey(glyph[0]), $"Missing icon for {button.Content}.");
-            Assert.AreEqual(button.Content, new ButtonAutomationPeer(button).GetName());
             AssertInside(icon, button);
-            if (button.Content is "Add files" or "Add folder")
-            {
-                Assert.AreEqual(button.Content is "Add files" ? "\uE8A5" : "\uE8B7", glyph);
-                var badge = Descendants<TextBlock>(button).Single(text => text.Text == "\uE710");
-                Assert.AreEqual(icon.FontFamily, badge.FontFamily);
-                AssertInside(badge, button);
-            }
         }
     }
 
