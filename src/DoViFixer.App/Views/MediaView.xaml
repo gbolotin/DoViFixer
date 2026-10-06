@@ -126,7 +126,7 @@
                 <Border Width="1"
                         Margin="4,6,12,14"
                         Background="{DynamicResource DividerStrokeColorDefaultBrush}" />
-                <!-- Like the Visual Studio Start button, the menu chooses what the button runs. -->
+                <!-- Like the Visual Studio Start button; picking from the menu runs that entry and makes it what the button runs. -->
                 <wfc:SplitButton Margin="0,0,8,8">
                     <wfc:SplitButton.Style>
                         <Style TargetType="wfc:SplitButton" BasedOn="{StaticResource WfSplitButtonStyle}">
@@ -822,7 +822,7 @@
                         AutomationProperties.Name="Cancel job"
                         Command="{Binding CancelFileCommand}"
                         CommandParameter="{Binding BatchProgress.CurrentJob}" />
-                <TextBlock Text="{Binding BatchProgress.CurrentJob.Name}"
+                <TextBlock Text="{Binding BatchProgress.CurrentJobTitle}"
                            FontSize="16"
                            VerticalAlignment="Center"
                            TextTrimming="CharacterEllipsis"

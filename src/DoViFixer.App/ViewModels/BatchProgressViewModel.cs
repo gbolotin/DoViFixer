@@ -19,7 +19,22 @@ public sealed class BatchProgressViewModel : ObservableObject
     public string Operation => operation;
     public double Percent => total == 0 ? 0 : (100.0 * processed + (CurrentJob?.Progress.Percent ?? 0)) / total;
     public string Summary => $"{processed} of {total} files processed" + (cancelled > 0 ? $" · {cancelled} cancelled" : "");
-    public MediaRow? CurrentJob { get => currentJob; private set => SetProperty(ref currentJob, value); }
+    public MediaRow? CurrentJob
+    {
+        get => currentJob;
+        private set
+        {
+            if (SetProperty(ref currentJob, value))
+            {
+                OnPropertyChanged(nameof(CurrentJobTitle));
+            }
+        }
+    }
+
+    // A single-file run hides the batch row, so the job title carries the operation name instead.
+    public string CurrentJobTitle => CurrentJob is null ? ""
+        : total == 1 && operation.Length > 0 ? $"{operation} · {CurrentJob.Name}"
+        : CurrentJob.Name;
 
     public void Begin(int fileCount, string operationName)
     {
@@ -37,6 +52,7 @@ public sealed class BatchProgressViewModel : ObservableObject
 
         OnPropertyChanged(nameof(Total));
         OnPropertyChanged(nameof(Operation));
+        OnPropertyChanged(nameof(CurrentJobTitle));
         NotifyBatchProgress();
     }
 
