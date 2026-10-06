@@ -1,6 +1,7 @@
 <ResourceDictionary xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
                     xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
                     xmlns:wf="clr-namespace:WpfFoundation.Behaviors;assembly=WpfFoundation"
+                    xmlns:wfc="clr-namespace:WpfFoundation.Controls;assembly=WpfFoundation"
                     xmlns:viewModels="clr-namespace:DoViFixer.App.ViewModels"
                     xmlns:analysis="clr-namespace:DoViFixer.Domain.Analysis;assembly=DoViFixer.Domain"
                     xmlns:updates="clr-namespace:DoViFixer.Application.Updates;assembly=DoViFixer.Application"
@@ -125,28 +126,59 @@
                 <Border Width="1"
                         Margin="4,6,12,14"
                         Background="{DynamicResource DividerStrokeColorDefaultBrush}" />
-                <Button Content="Inspect"
-                        Tag="&#xE721;"
-                        ContentTemplate="{StaticResource WfIconContentTemplate}"
-                        Command="{Binding InspectCommand}"
-                        Margin="0,0,8,8"/>
-                <Button Content="Deep Inspect"
-                        Tag="&#xE9D9;"
-                        ContentTemplate="{StaticResource WfIconContentTemplate}"
-                        Command="{Binding DeepInspectCommand}"
-                        Margin="0,0,8,8"/>
-                <Button Content="Convert to DV8.1"
-                        Tag="&#xE8AB;"
-                        ContentTemplate="{StaticResource WfIconContentTemplate}"
-                        Command="{Binding ConvertDv81Command}"
-                        ToolTip="{Binding OutputSummaryToolTip}"
-                        Margin="0,0,8,8" />
-                <Button Content="Convert to HDR10"
-                        Tag="&#xE8AB;"
-                        ContentTemplate="{StaticResource WfIconContentTemplate}"
-                        Command="{Binding ConvertHdrCommand}"
-                        ToolTip="{Binding OutputSummaryToolTip}"
-                        Margin="0,0,0,8" />
+                <!-- Like the Visual Studio Start button; picking from the menu runs that entry and makes it what the button runs. -->
+                <wfc:SplitButton Margin="0,0,8,8">
+                    <wfc:SplitButton.Style>
+                        <Style TargetType="wfc:SplitButton" BasedOn="{StaticResource WfSplitButtonStyle}">
+                            <Setter Property="Content" Value="Inspect" />
+                            <Setter Property="Icon" Value="&#xE721;" />
+                            <Setter Property="Command" Value="{Binding InspectCommand}" />
+                            <Style.Triggers>
+                                <DataTrigger Binding="{Binding IsDeepInspectionChosen}" Value="True">
+                                    <Setter Property="Content" Value="Deep Inspect" />
+                                    <Setter Property="Icon" Value="&#xE9D9;" />
+                                    <Setter Property="Command" Value="{Binding DeepInspectCommand}" />
+                                </DataTrigger>
+                            </Style.Triggers>
+                        </Style>
+                    </wfc:SplitButton.Style>
+                    <wfc:SplitButton.DropDownMenu>
+                        <ContextMenu>
+                            <MenuItem Header="Inspect"
+                                      Command="{Binding ChooseInspectCommand}"
+                                      IsChecked="{Binding IsDeepInspectionChosen, Mode=OneWay, Converter={StaticResource WfInverseBooleanConverter}}" />
+                            <MenuItem Header="Deep Inspect"
+                                      Command="{Binding ChooseDeepInspectCommand}"
+                                      IsChecked="{Binding IsDeepInspectionChosen, Mode=OneWay}" />
+                        </ContextMenu>
+                    </wfc:SplitButton.DropDownMenu>
+                </wfc:SplitButton>
+                <wfc:SplitButton ToolTip="{Binding OutputSummaryToolTip}"
+                                 Icon="&#xE8AB;"
+                                 Margin="0,0,0,8">
+                    <wfc:SplitButton.Style>
+                        <Style TargetType="wfc:SplitButton" BasedOn="{StaticResource WfSplitButtonStyle}">
+                            <Setter Property="Content" Value="Convert to DV8.1" />
+                            <Setter Property="Command" Value="{Binding ConvertDv81Command}" />
+                            <Style.Triggers>
+                                <DataTrigger Binding="{Binding IsHdr10ConversionChosen}" Value="True">
+                                    <Setter Property="Content" Value="Convert to HDR10" />
+                                    <Setter Property="Command" Value="{Binding ConvertHdrCommand}" />
+                                </DataTrigger>
+                            </Style.Triggers>
+                        </Style>
+                    </wfc:SplitButton.Style>
+                    <wfc:SplitButton.DropDownMenu>
+                        <ContextMenu>
+                            <MenuItem Header="Convert to DV8.1"
+                                      Command="{Binding ChooseDv81Command}"
+                                      IsChecked="{Binding IsHdr10ConversionChosen, Mode=OneWay, Converter={StaticResource WfInverseBooleanConverter}}" />
+                            <MenuItem Header="Convert to HDR10"
+                                      Command="{Binding ChooseHdr10Command}"
+                                      IsChecked="{Binding IsHdr10ConversionChosen, Mode=OneWay}" />
+                        </ContextMenu>
+                    </wfc:SplitButton.DropDownMenu>
+                </wfc:SplitButton>
             </WrapPanel>
         </Border>
     </DataTemplate>

@@ -60,6 +60,60 @@ public sealed class ViewModelTests
     }
 
     [TestMethod]
+    public async Task ConvertMenuRunsThePickedConversionAndRemembersIt()
+    {
+        using var runtime = new TestRuntime();
+        var model = runtime.Container.GetRequiredService<MediaViewModel>();
+        await model.AddAsync([@"C:\Media\Mountain.mkv"]);
+        var row = model.Files[0];
+        Assert.IsFalse(model.IsHdr10ConversionChosen, "Convert targets DV8.1 by default.");
+        model.IsHdr10ConversionChosen = true;
+        Assert.IsTrue(model.ChooseDv81Command.CanExecute(null));
+
+        await model.ChooseDv81Command.ExecuteAsync(null);
+        Assert.AreEqual(1, runtime.Conversions, "Picking DV8.1 converts right away.");
+        Assert.IsTrue(row.Result!.Output!.EndsWith(" - DV P8.1.mkv"));
+        Assert.IsFalse(model.IsHdr10ConversionChosen, "The button converts to DV8.1 next.");
+
+        row.IsSelected = true;
+        await model.ChooseHdr10Command.ExecuteAsync(null);
+        Assert.AreEqual(2, runtime.Conversions);
+        Assert.IsTrue(row.Result!.Output!.EndsWith(" - HDR10.mkv"));
+        Assert.IsTrue(model.IsHdr10ConversionChosen);
+
+        row.IsSelected = false;
+        Assert.IsFalse(model.ChooseHdr10Command.CanExecute(null), "Nothing to convert without a selection.");
+    }
+
+    [TestMethod]
+    public async Task InspectMenuRunsThePickedInspectionAndRemembersIt()
+    {
+        using var runtime = new TestRuntime();
+        // Without the cache every pick runs the tools, so each run is counted.
+        await runtime.UpdateAsync(settings => settings with { UseCachedResults = false }, default);
+        var model = runtime.Container.GetRequiredService<MediaViewModel>();
+        await model.AddAsync([@"C:\Media\Mountain.mkv"]);
+        var row = model.Files[0];
+        Assert.IsFalse(model.IsDeepInspectionChosen, "Inspect runs a regular inspection by default.");
+        model.IsDeepInspectionChosen = true;
+        Assert.IsTrue(model.ChooseInspectCommand.CanExecute(null));
+
+        int analyses = runtime.Analyses;
+        await model.ChooseInspectCommand.ExecuteAsync(null);
+        Assert.AreEqual(analyses + 1, runtime.Analyses, "Picking Inspect runs it right away.");
+        Assert.AreEqual(DoViFixer.Domain.Analysis.AnalysisMethod.FullRpu, row.Analysis!.Evidence.Method);
+        Assert.IsFalse(model.IsDeepInspectionChosen, "The button runs Inspect next.");
+
+        await model.ChooseDeepInspectCommand.ExecuteAsync(null);
+        Assert.AreEqual(analyses + 2, runtime.Analyses);
+        Assert.AreEqual(DoViFixer.Domain.Analysis.AnalysisMethod.DeepInspection, row.Analysis!.Evidence.Method);
+        Assert.IsTrue(model.IsDeepInspectionChosen);
+
+        row.IsSelected = false;
+        Assert.IsFalse(model.ChooseInspectCommand.CanExecute(null), "Nothing to inspect without a selection.");
+    }
+
+    [TestMethod]
     public async Task DroppedPathsIgnoreUnsupportedFilesBeforeDiscovery()
     {
         using var runtime = new TestRuntime();

@@ -282,10 +282,21 @@ public sealed class VisualTests
             var content = (FrameworkElement)window.Content;
             AssertInside(splitter, content);
             AssertInside(Descendants<Button>(mediaView).Single(button => Equals(button.ToolTip, "Rescan") && button.IsVisible), content);
-            foreach (string caption in new[] { "Inspect", "Deep Inspect", "Convert to DV8.1", "Convert to HDR10" })
+            foreach (string caption in new[] { "Inspect", "Convert to DV8.1" })
             {
-                AssertInside(Descendants<Button>(mediaView).Single(button => Equals(button.Content, caption) && button.IsVisible), content);
+                AssertInside(Descendants<SplitButton>(mediaView).Single(button => Equals(button.Content, caption) && button.IsVisible), content);
             }
+            // The buttons show what their menus last ran, and the wider captions still fit.
+            media.IsDeepInspectionChosen = true;
+            media.IsHdr10ConversionChosen = true;
+            await LayoutAsync(window);
+            foreach (string caption in new[] { "Deep Inspect", "Convert to HDR10" })
+            {
+                AssertInside(Descendants<SplitButton>(mediaView).Single(button => Equals(button.Content, caption) && button.IsVisible), content);
+            }
+            media.IsDeepInspectionChosen = false;
+            media.IsHdr10ConversionChosen = false;
+            await LayoutAsync(window);
             SaveRender(content, "media-minimum");
             var focusedBeforeComparison = media.Focused;
             var converted = media.Files.FirstOrDefault(row => row.ShowsResultComparison);
