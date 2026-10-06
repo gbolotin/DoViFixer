@@ -1812,7 +1812,7 @@ public sealed class ViewModelTests
     public void MediaRow_SetConverted_Completed_ClearsPreConversionWarningAndSetsConvertedStatus()
     {
         var row = new MediaRow(@"C:\Media\Movie.mkv");
-        row.SetPlan(@"C:\Media\Movie - DV P8.1.mkv", "Enhancement-layer picture data will be lost.");
+        row.SetPlan("Enhancement-layer picture data will be lost.");
         Assert.IsTrue(row.HasWarning);
         Assert.AreEqual("Enhancement-layer picture data will be lost.", row.Warning);
 

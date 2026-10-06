@@ -15,7 +15,6 @@ public sealed class MediaRow(string path) : ObservableObject
     private MediaRowState state = MediaRowState.NotScanned;
     private string status = "Not scanned";
     private bool canRetryAnalysis;
-    private string output = "";
     private MediaAnalysis? analysis;
     private MediaAnalysis? resultAnalysis;
     private OperationItemResult? result;
@@ -161,12 +160,6 @@ public sealed class MediaRow(string path) : ObservableObject
             OnPropertyChanged(nameof(StatusToolTip));
         }
     }
-    public string PlannedOutput
-    {
-        get => output;
-        set => SetProperty(ref output, value);
-    }
-
     public string Notice
     {
         get => notice;
@@ -353,9 +346,8 @@ public sealed class MediaRow(string path) : ObservableObject
 
     #endregion
 
-    public void SetPlan(string plannedOutput, string? warning)
+    public void SetPlan(string? warning)
     {
-        PlannedOutput = plannedOutput;
         Warning = warning;
         Status = "Ready to convert";
         State = MediaRowState.PlanReady;
@@ -363,7 +355,6 @@ public sealed class MediaRow(string path) : ObservableObject
 
     public void ClearPlan()
     {
-        PlannedOutput = "";
         Warning = null;
         if (State == MediaRowState.PlanReady)
         {

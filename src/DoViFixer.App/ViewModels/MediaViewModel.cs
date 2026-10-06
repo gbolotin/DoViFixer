@@ -1207,7 +1207,6 @@ public sealed class MediaViewModel : OperationViewModel, INavigationPage, IPageA
                 row.AnalysisError = null;
                 row.Notice = "";
                 row.Warning = null;
-                row.PlannedOutput = "";
                 using var cancellationRegistration = itemToken.Register(row.ClearPlan);
                 try
                 {
@@ -1229,7 +1228,7 @@ public sealed class MediaViewModel : OperationViewModel, INavigationPage, IPageA
                     if (prep is CandidatePreparationResult.Success success)
                     {
                         row.Analysis = success.Plan.Analysis;
-                        row.SetPlan(success.Plan.Output, success.Warning);
+                        row.SetPlan(success.Warning);
                         jobProgress.Report(new(success.Plan.Id, "Converting", row.Path));
                         var converted = await Task.Run(() => conversion.ExecuteAsync(success.Plan, jobProgress, itemToken), itemToken);
                         await ReadResultMetadataAsync(row, converted, itemToken);

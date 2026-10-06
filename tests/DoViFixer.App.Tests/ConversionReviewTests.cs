@@ -40,7 +40,7 @@ public sealed class ConversionReviewTests
         Assert.IsTrue(startingCalled, "Single-file conversion must use the existing settings flush hook.");
         Assert.AreEqual(1, runtime.Conversions);
         Assert.AreEqual(MediaRowState.Converted, row.State);
-        Assert.IsTrue(row.PlannedOutput.EndsWith(" - DV P8.1.mkv"));
+        Assert.IsTrue(row.Result!.Output!.EndsWith(" - DV P8.1.mkv"));
         Assert.IsNull(model.Files[1].Result);
         Assert.AreSame(model.Files[1], model.Focused);
         CollectionAssert.AreEqual(selections, model.Files.Select(file => file.IsSelected).ToArray());
@@ -147,7 +147,6 @@ public sealed class ConversionReviewTests
         {
             await started.Task.WaitAsync(TimeSpan.FromSeconds(10));
             Assert.IsTrue(first.HasWarning);
-            Assert.IsFalse(string.IsNullOrEmpty(first.PlannedOutput));
             if (cancelBatch)
             {
                 model.CancelCommand.Invoke();
@@ -159,7 +158,6 @@ public sealed class ConversionReviewTests
 
             await recovering.Task.WaitAsync(TimeSpan.FromSeconds(10));
             Assert.IsFalse(first.HasWarning, "Cancellation must clear the warning before cleanup finishes.");
-            Assert.AreEqual("", first.PlannedOutput);
             releaseCleanup.TrySetResult();
             if (!cancelBatch)
             {
@@ -171,7 +169,6 @@ public sealed class ConversionReviewTests
             await conversion.WaitAsync(TimeSpan.FromSeconds(10));
             Assert.AreEqual(MediaRowState.Cancelled, first.State);
             Assert.AreEqual("Conversion cancelled", first.Status);
-            Assert.AreEqual("", first.PlannedOutput);
             Assert.IsFalse(first.HasWarning);
             Assert.IsFalse(first.CanOpenResult);
             Assert.AreEqual(OperationStatus.Cancelled, first.Result!.Status);
@@ -300,7 +297,7 @@ public sealed class ConversionReviewTests
         Assert.AreEqual("Converted", model.Files.Single().Status);
         Assert.AreEqual(MediaRowState.Converted, model.Files.Single().State);
         Assert.IsTrue(model.Files.Single().CanOpenResult);
-        Assert.IsTrue(model.Files.Single().PlannedOutput.EndsWith(" - HDR10.mkv"));
+        Assert.IsTrue(model.Files.Single().Result!.Output!.EndsWith(" - HDR10.mkv"));
     }
 
     [TestMethod]
