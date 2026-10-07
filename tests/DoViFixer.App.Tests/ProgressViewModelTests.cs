@@ -1,4 +1,8 @@
 using DoViFixer.App.ViewModels;
+using DoViFixer.Application.Conversion;
+using DoViFixer.Domain.Analysis;
+using DoViFixer.Domain.Conversion;
+using DoViFixer.Domain.Media;
 using Microsoft.VisualStudio.TestTools.UnitTesting;
 
 namespace DoViFixer.App.Tests;
@@ -123,5 +127,63 @@ public sealed class ProgressViewModelTests
         Assert.AreEqual(0, model.Percent);
         Assert.IsFalse(model.IsIndeterminate);
         Assert.AreEqual("", model.ProgressText);
+    }
+
+    [TestMethod]
+    public void ConversionStepsFollowTheReportedStagesAndKeepTheirStateWhileCancelling()
+    {
+        var model = new ProgressViewModel();
+        model.Start("Preparing conversion");
+        model.Describe(ConversionJob.Details(Plan(archive: true)), ConversionJob.Steps(Plan(archive: true)));
+        CollectionAssert.AreEqual(new[] { "Back up EL", "Convert", "Remux", "Verify" }, model.Steps.Select(step => step.Name).ToArray());
+        Assert.IsTrue(model.Steps.Take(3).All(step => !step.IsLast));
+        Assert.IsTrue(model.Steps[^1].IsLast);
+        Assert.IsTrue(model.Steps.All(step => step.State == JobStepState.Pending), "Planning comes before the first step.");
+
+        model.Update("Backing up enhancement layer", 40);
+        AssertStates(model, JobStepState.Active, JobStepState.Pending, JobStepState.Pending, JobStepState.Pending);
+
+        model.Update("Streaming conversion", 10);
+        AssertStates(model, JobStepState.Completed, JobStepState.Active, JobStepState.Pending, JobStepState.Pending);
+
+        model.Update("Verifying", 72);
+        AssertStates(model, JobStepState.Completed, JobStepState.Completed, JobStepState.Completed, JobStepState.Active);
+        Assert.AreEqual("In progress", model.Steps[3].StateText);
+        Assert.AreEqual("Completed", model.Steps[0].StateText);
+
+        // Verification failure retries the conversion in safe mode.
+        model.Update("Retrying with safe disk extraction", null);
+        AssertStates(model, JobStepState.Completed, JobStepState.Active, JobStepState.Pending, JobStepState.Pending);
+        model.Update("Extracting video", 5);
+        AssertStates(model, JobStepState.Completed, JobStepState.Active, JobStepState.Pending, JobStepState.Pending);
+
+        model.Update("Cancelling…", null);
+        AssertStates(model, JobStepState.Completed, JobStepState.Active, JobStepState.Pending, JobStepState.Pending);
+
+        model.Start("Scanning");
+        Assert.IsFalse(model.HasSteps);
+        Assert.AreEqual(0, model.Details.Count);
+    }
+
+    [TestMethod]
+    public void ConversionDetailsNameTheTargetTheSourceLayerAndTheOriginal()
+    {
+        CollectionAssert.AreEqual(
+            new[] { "Converting to Profile 8.1 (Simple FEL)", "Original: Keep" },
+            ConversionJob.Details(Plan()).ToArray());
+        CollectionAssert.AreEqual(
+            new[] { "Converting to HDR10 (MEL)", "Original: Replace · EL archive" },
+            ConversionJob.Details(Plan(ConversionTarget.Hdr10, AnalysisVerdict.Mel, archive: true, replace: true)).ToArray());
+        CollectionAssert.AreEqual(new[] { "Convert", "Remux", "Verify" }, ConversionJob.Steps(Plan()).Select(step => step.Name).ToArray());
+    }
+
+    private static void AssertStates(ProgressViewModel model, params JobStepState[] expected) =>
+        CollectionAssert.AreEqual(expected, model.Steps.Select(step => step.State).ToArray());
+
+    private static ConversionPlan Plan(ConversionTarget target = ConversionTarget.Profile81, AnalysisVerdict verdict = AnalysisVerdict.SimpleFel, bool archive = false, bool replace = false)
+    {
+        var media = new MediaInfo(new FileIdentity(@"C:\Media\Ocean.mkv", 1, DateTime.UnixEpoch), DolbyVisionProfile.Profile7, "HEVC", 0, 3840, 2160, 1000, 23.976, 5772, 0, 1000, [], 0, 1, null, "{}");
+        var evidence = new RpuEvidence(AnalysisMethod.SampledRpu, EnhancementLayer.Fel, 1000, 1000, 10, 10);
+        return new ConversionPlan(Guid.NewGuid(), new MediaAnalysis(media, evidence, verdict, "Test"), target, @"C:\Media\Ocean - DV P8.1.mkv", archive ? @"C:\Media\Ocean.dovi" : null, null, 0, "Test", DeleteBackup: replace);
     }
 }

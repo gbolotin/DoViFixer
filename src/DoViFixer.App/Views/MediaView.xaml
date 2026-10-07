@@ -768,7 +768,7 @@
         </Grid>
     </DataTemplate>
 
-    <!-- Shared by the batch and job cards: the percent column has a fixed width wide enough for "100%", so both bars start at the same x and never shift. While a bar is indeterminate the percent is left empty. -->
+    <!-- The percent has a fixed width wide enough for "100%", so its bar never shifts. While a bar is indeterminate the percent is left empty. -->
     <Style x:Key="ProgressPercentTextStyle" TargetType="TextBlock">
         <Setter Property="Grid.Row" Value="1" />
         <Setter Property="FontSize" Value="16" />
@@ -784,57 +784,235 @@
         <Setter Property="Margin" Value="8,0,0,0" />
     </Style>
 
-    <DataTemplate x:Key="MediaCurrentJobProgressTemplate" DataType="{x:Type viewModels:MediaViewModel}">
+    <!-- One step of the current job's stepper: a check once completed, a spinning ring while active, an empty ring while pending. -->
+    <DataTemplate x:Key="JobStepTemplate" DataType="{x:Type viewModels:JobStep}">
         <Grid>
+            <Grid.ColumnDefinitions>
+                <ColumnDefinition Width="Auto" />
+                <ColumnDefinition Width="*" />
+            </Grid.ColumnDefinitions>
             <Grid.RowDefinitions>
                 <RowDefinition Height="Auto" />
                 <RowDefinition Height="Auto" />
                 <RowDefinition Height="Auto" />
             </Grid.RowDefinitions>
+            <Grid Width="20" Height="20">
+                <Ellipse x:Name="Ring"
+                         Stroke="{DynamicResource ControlStrongStrokeColorDefaultBrush}"
+                         StrokeThickness="1.5" />
+                <Ellipse x:Name="Done"
+                         Fill="{DynamicResource AccentFillColorDefaultBrush}"
+                         Visibility="Collapsed" />
+                <TextBlock x:Name="Check"
+                           Text="&#xE73E;"
+                           FontFamily="{StaticResource SymbolThemeFontFamily}"
+                           FontSize="{StaticResource CaptionTextBlockFontSize}"
+                           Foreground="{DynamicResource TextOnAccentFillColorPrimaryBrush}"
+                           HorizontalAlignment="Center"
+                           VerticalAlignment="Center"
+                           Visibility="Collapsed" />
+                <Path x:Name="Arc"
+                      Data="M 10,1 A 9,9 0 0 1 19,10"
+                      Stroke="{DynamicResource AccentFillColorDefaultBrush}"
+                      StrokeThickness="2"
+                      StrokeStartLineCap="Round"
+                      StrokeEndLineCap="Round"
+                      RenderTransformOrigin="0.5,0.5"
+                      Visibility="Collapsed">
+                    <Path.RenderTransform>
+                        <RotateTransform />
+                    </Path.RenderTransform>
+                </Path>
+            </Grid>
+            <Rectangle x:Name="Connector"
+                       Grid.Column="1"
+                       Height="1"
+                       Margin="8,0"
+                       VerticalAlignment="Center"
+                       Fill="{DynamicResource ControlStrongStrokeColorDefaultBrush}" />
+            <TextBlock Grid.Row="1"
+                       Grid.ColumnSpan="2"
+                       Text="{Binding Name}"
+                       Margin="0,4,8,0"
+                       TextTrimming="CharacterEllipsis" />
+            <TextBlock Grid.Row="2"
+                       Grid.ColumnSpan="2"
+                       Text="{Binding StateText}"
+                       Style="{StaticResource CaptionTextBlockStyle}"
+                       Foreground="{DynamicResource TextFillColorSecondaryBrush}"
+                       Margin="0,0,8,0"
+                       TextTrimming="CharacterEllipsis" />
+        </Grid>
+        <DataTemplate.Triggers>
+            <DataTrigger Binding="{Binding State}" Value="{x:Static viewModels:JobStepState.Completed}">
+                <Setter TargetName="Ring" Property="Visibility" Value="Collapsed" />
+                <Setter TargetName="Done" Property="Visibility" Value="Visible" />
+                <Setter TargetName="Check" Property="Visibility" Value="Visible" />
+                <Setter TargetName="Connector" Property="Fill" Value="{DynamicResource AccentFillColorDefaultBrush}" />
+            </DataTrigger>
+            <DataTrigger Binding="{Binding State}" Value="{x:Static viewModels:JobStepState.Active}">
+                <Setter TargetName="Arc" Property="Visibility" Value="Visible" />
+                <DataTrigger.EnterActions>
+                    <BeginStoryboard x:Name="Spin">
+                        <Storyboard>
+                            <DoubleAnimation Storyboard.TargetName="Arc"
+                                             Storyboard.TargetProperty="(UIElement.RenderTransform).(RotateTransform.Angle)"
+                                             From="0"
+                                             To="360"
+                                             Duration="0:0:1"
+                                             RepeatBehavior="Forever" />
+                        </Storyboard>
+                    </BeginStoryboard>
+                </DataTrigger.EnterActions>
+                <DataTrigger.ExitActions>
+                    <RemoveStoryboard BeginStoryboardName="Spin" />
+                </DataTrigger.ExitActions>
+            </DataTrigger>
+            <DataTrigger Binding="{Binding IsLast}" Value="True">
+                <Setter TargetName="Connector" Property="Visibility" Value="Hidden" />
+            </DataTrigger>
+        </DataTemplate.Triggers>
+    </DataTemplate>
+
+    <!-- Laid out like the job card mockup: preview and file, step progress and steps, then times and Cancel. -->
+    <DataTemplate x:Key="MediaCurrentJobProgressTemplate" DataType="{x:Type viewModels:MediaViewModel}">
+        <Grid>
             <Grid.ColumnDefinitions>
-                <ColumnDefinition Width="Auto" SharedSizeGroup="ProgressPercent" />
-                <ColumnDefinition Width="*" />
+                <ColumnDefinition Width="Auto" />
+                <ColumnDefinition Width="*"
+                                  MinWidth="160"
+                                  MaxWidth="320" />
+                <ColumnDefinition Width="2*" />
+                <ColumnDefinition Width="Auto" />
+                <ColumnDefinition Width="Auto" />
             </Grid.ColumnDefinitions>
-            <DockPanel Grid.ColumnSpan="2" Margin="0,0,0,8">
-                <Button DockPanel.Dock="Right"
-                        Style="{StaticResource ProgressIconButtonStyle}"
-                        Content="&#xE711;"
+            <Grid Width="160"
+                  Height="90"
+                  VerticalAlignment="Top">
+                <Border Background="{DynamicResource SubtleFillColorSecondaryBrush}" CornerRadius="{DynamicResource ControlCornerRadius}">
+                    <TextBlock Text="&#xE714;"
+                               FontFamily="{StaticResource SymbolThemeFontFamily}"
+                               Style="{StaticResource SubtitleTextBlockStyle}"
+                               Foreground="{DynamicResource TextFillColorTertiaryBrush}"
+                               HorizontalAlignment="Center"
+                               VerticalAlignment="Center" />
+                </Border>
+                <Border CornerRadius="{DynamicResource ControlCornerRadius}" AutomationProperties.Name="Current job frame preview">
+                    <Border.Background>
+                        <ImageBrush ImageSource="{Binding CurrentJobPreview}" Stretch="UniformToFill" />
+                    </Border.Background>
+                </Border>
+            </Grid>
+            <StackPanel Grid.Column="1"
+                        Margin="16,0,24,0"
+                        DataContext="{Binding BatchProgress.CurrentJob}">
+                <TextBlock Text="{Binding Name}"
+                           Style="{StaticResource SubtitleTextBlockStyle}"
+                           TextTrimming="CharacterEllipsis"
+                           ToolTip="{Binding Path}" />
+                <ItemsControl ItemsSource="{Binding Progress.Details}" Margin="0,4,0,0">
+                    <ItemsControl.ItemTemplate>
+                        <DataTemplate>
+                            <TextBlock Text="{Binding}"
+                                       Foreground="{DynamicResource TextFillColorSecondaryBrush}"
+                                       TextTrimming="CharacterEllipsis"
+                                       ToolTip="{Binding}" />
+                        </DataTemplate>
+                    </ItemsControl.ItemTemplate>
+                </ItemsControl>
+            </StackPanel>
+            <Grid Grid.Column="2"
+                  Margin="0,0,24,0"
+                  DataContext="{Binding BatchProgress.CurrentJob.Progress}">
+                <Grid.ColumnDefinitions>
+                    <ColumnDefinition Width="*" />
+                    <ColumnDefinition Width="Auto" />
+                </Grid.ColumnDefinitions>
+                <Grid.RowDefinitions>
+                    <RowDefinition Height="Auto" />
+                    <RowDefinition Height="Auto" />
+                    <RowDefinition Height="Auto" />
+                </Grid.RowDefinitions>
+                <TextBlock Grid.ColumnSpan="2"
+                           Text="{Binding Stage}"
+                           Foreground="{DynamicResource TextFillColorSecondaryBrush}"
+                           TextTrimming="CharacterEllipsis"
+                           ToolTip="{Binding Stage}" />
+                <ProgressBar Grid.Row="1"
+                             Margin="0,8,0,0"
+                             VerticalAlignment="Center"
+                             Value="{Binding Percent, Mode=OneWay, FallbackValue=0}"
+                             IsIndeterminate="{Binding IsIndeterminate, FallbackValue=False}"
+                             Height="8"
+                             AutomationProperties.Name="Current job progress" />
+                <!-- Fixed width for "100%", so the bar keeps its length; empty while the bar is indeterminate. -->
+                <TextBlock Grid.Row="1" Grid.Column="1">
+                    <TextBlock.Style>
+                        <Style TargetType="TextBlock" BasedOn="{StaticResource ProgressPercentTextStyle}">
+                            <Setter Property="Margin" Value="16,8,0,0" />
+                            <Setter Property="Text" Value="{Binding ProgressText}" />
+                            <Style.Triggers>
+                                <DataTrigger Binding="{Binding IsIndeterminate}" Value="True">
+                                    <Setter Property="Text" Value="" />
+                                </DataTrigger>
+                            </Style.Triggers>
+                        </Style>
+                    </TextBlock.Style>
+                </TextBlock>
+                <ItemsControl Grid.Row="2"
+                              Grid.ColumnSpan="2"
+                              Margin="0,16,0,0"
+                              ItemsSource="{Binding Steps}"
+                              ItemTemplate="{StaticResource JobStepTemplate}"
+                              Focusable="False"
+                              AutomationProperties.Name="Current job steps"
+                              Visibility="{Binding HasSteps, Converter={StaticResource WfBooleanToVisibilityConverter}}">
+                    <ItemsControl.ItemsPanel>
+                        <ItemsPanelTemplate>
+                            <UniformGrid Rows="1" />
+                        </ItemsPanelTemplate>
+                    </ItemsControl.ItemsPanel>
+                </ItemsControl>
+            </Grid>
+            <Rectangle Grid.Column="3"
+                       Width="1"
+                       Fill="{DynamicResource DividerStrokeColorDefaultBrush}" />
+            <StackPanel Grid.Column="4" Margin="24,0,0,0">
+                <Grid>
+                    <Grid.ColumnDefinitions>
+                        <ColumnDefinition Width="Auto" />
+                        <ColumnDefinition Width="*" MinWidth="88" />
+                    </Grid.ColumnDefinitions>
+                    <Grid.RowDefinitions>
+                        <RowDefinition Height="Auto" />
+                        <RowDefinition Height="Auto" />
+                    </Grid.RowDefinitions>
+                    <TextBlock Text="Elapsed time" Foreground="{DynamicResource TextFillColorSecondaryBrush}" />
+                    <TextBlock Grid.Column="1"
+                               Text="{Binding BatchProgress.CurrentJobElapsed}"
+                               Margin="24,0,0,0"
+                               TextAlignment="Right" />
+                    <TextBlock Grid.Row="1"
+                               Text="Step remaining"
+                               Margin="0,4,0,0"
+                               Foreground="{DynamicResource TextFillColorSecondaryBrush}"
+                               ToolTip="The current step's remaining time at its average rate so far" />
+                    <TextBlock Grid.Row="1"
+                               Grid.Column="1"
+                               Text="{Binding BatchProgress.CurrentStepRemaining}"
+                               Margin="24,4,0,0"
+                               TextAlignment="Right" />
+                </Grid>
+                <Button Content="Cancel"
+                        Tag="&#xE711;"
+                        ContentTemplate="{StaticResource WfIconContentTemplate}"
+                        HorizontalAlignment="Stretch"
+                        Margin="0,16,0,0"
                         ToolTip="Cancel job"
                         AutomationProperties.Name="Cancel job"
                         Command="{Binding CancelFileCommand}"
                         CommandParameter="{Binding BatchProgress.CurrentJob}" />
-                <TextBlock Text="{Binding BatchProgress.CurrentJobTitle}"
-                           FontSize="16"
-                           VerticalAlignment="Center"
-                           TextTrimming="CharacterEllipsis"
-                           ToolTip="{Binding BatchProgress.CurrentJob.Path}"
-                           Foreground="{DynamicResource TextFillColorSecondaryBrush}" />
-            </DockPanel>
-            <TextBlock>
-                <TextBlock.Style>
-                    <Style TargetType="TextBlock" BasedOn="{StaticResource ProgressPercentTextStyle}">
-                        <Setter Property="Text" Value="{Binding BatchProgress.CurrentJob.Progress.ProgressText}" />
-                        <Style.Triggers>
-                            <DataTrigger Binding="{Binding BatchProgress.CurrentJob.Progress.IsIndeterminate}" Value="True">
-                                <Setter Property="Text" Value="" />
-                            </DataTrigger>
-                        </Style.Triggers>
-                    </Style>
-                </TextBlock.Style>
-            </TextBlock>
-            <ProgressBar Grid.Row="1"
-                         Grid.Column="1"
-                         VerticalAlignment="Center"
-                         Value="{Binding BatchProgress.CurrentJob.Progress.Percent, Mode=OneWay, FallbackValue=0}"
-                         IsIndeterminate="{Binding BatchProgress.CurrentJob.Progress.IsIndeterminate, FallbackValue=False}"
-                         Height="8"
-                         AutomationProperties.Name="Current job progress" />
-            <TextBlock Grid.Row="2"
-                       Grid.ColumnSpan="2"
-                       Text="{Binding BatchProgress.CurrentJob.Progress.Stage}"
-                       Margin="0,8,0,0"
-                       Foreground="{DynamicResource TextFillColorSecondaryBrush}"
-                       TextTrimming="CharacterEllipsis" />
+            </StackPanel>
         </Grid>
     </DataTemplate>
 
