@@ -12,6 +12,9 @@ permissions:
 jobs:
   build:
     runs-on: windows-latest
+    outputs:
+      version: ${{ steps.version.outputs.version }}
+      release: ${{ steps.version.outputs.release }}
     env:
       DOTNET_NOLOGO: true
       DOTNET_CLI_TELEMETRY_OPTOUT: true
@@ -32,21 +35,35 @@ jobs:
         shell: pwsh
         run: Set-DisplayResolution -Width 1920 -Height 1080 -Force
 
-      # A vX.Y.Z tag builds version X.Y.Z; every other build is <VersionPrefix>-ci.<run number>.
+      # A vX.Y.Z tag builds version X.Y.Z. Every push to main releases <VersionPrefix> and tags that commit v<VersionPrefix>.
+      # Every other build is <VersionPrefix>-ci.<run number>.
       - name: Choose version
         id: version
         shell: pwsh
         run: |
+          $release = 'false'
           if ($env:GITHUB_REF_TYPE -eq 'tag') {
             $version = $env:GITHUB_REF_NAME.TrimStart('v')
             if ($version -notmatch '^\d+\.\d+\.\d+(-[0-9A-Za-z.]+)?$') { throw "Tag $env:GITHUB_REF_NAME is not vMAJOR.MINOR.PATCH[-prerelease]." }
             "property=-p:Version=$version" >> $env:GITHUB_OUTPUT
+            $release = 'true'
+          } elseif ($env:GITHUB_EVENT_NAME -eq 'push' -and $env:GITHUB_REF -eq 'refs/heads/main') {
+            $version = dotnet msbuild src/DoViFixer.Domain/DoViFixer.Domain.csproj -getProperty:VersionPrefix
+            if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+            git ls-remote --exit-code --tags origin "refs/tags/v$version" | Out-Null
+            if ($LASTEXITCODE -eq 0) {
+              throw "v$version is already tagged. Bump VersionPrefix in Directory.Build.props with every change to main."
+            }
+            $global:LASTEXITCODE = 0
+            "property=-p:Version=$version" >> $env:GITHUB_OUTPUT
+            $release = 'true'
           } else {
             $version = dotnet msbuild src/DoViFixer.Domain/DoViFixer.Domain.csproj -getProperty:Version -p:VersionSuffix=ci.$env:GITHUB_RUN_NUMBER
             if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
             "property=-p:VersionSuffix=ci.$env:GITHUB_RUN_NUMBER" >> $env:GITHUB_OUTPUT
           }
           "version=$version" >> $env:GITHUB_OUTPUT
+          "release=$release" >> $env:GITHUB_OUTPUT
 
       # Always build against the pinned WpfFoundation package, never a local checkout.
       - name: Build
@@ -72,7 +89,7 @@ jobs:
           path: out/*.zip
 
   release:
-    if: startsWith(github.ref, 'refs/tags/v')
+    if: needs.build.outputs.release == 'true'
     needs: build
     runs-on: windows-latest
     permissions:
@@ -87,9 +104,11 @@ jobs:
         shell: pwsh
         env:
           GH_TOKEN: ${{ github.token }}
+          TAG: v${{ needs.build.outputs.version }}
+        # On a push to main this also creates the tag on the pushed commit.
         run: |
-          $options = @('--repo', $env:GITHUB_REPOSITORY, '--title', $env:GITHUB_REF_NAME, '--generate-notes')
-          if ($env:GITHUB_REF_NAME.Contains('-')) {
+          $options = @('--repo', $env:GITHUB_REPOSITORY, '--title', $env:TAG, '--target', $env:GITHUB_SHA, '--generate-notes')
+          if ($env:TAG.Contains('-')) {
             $options += '--prerelease'
           }
-          gh release create $env:GITHUB_REF_NAME (Get-ChildItem out/*.zip).FullName @options
+          gh release create $env:TAG (Get-ChildItem out/*.zip).FullName @options
