@@ -3,6 +3,7 @@
                     xmlns:wf="clr-namespace:WpfFoundation.Behaviors;assembly=WpfFoundation"
                     xmlns:wfc="clr-namespace:WpfFoundation.Controls;assembly=WpfFoundation"
                     xmlns:viewModels="clr-namespace:DoViFixer.App.ViewModels"
+                    xmlns:views="clr-namespace:DoViFixer.App.Views"
                     xmlns:analysis="clr-namespace:DoViFixer.Domain.Analysis;assembly=DoViFixer.Domain"
                     xmlns:updates="clr-namespace:DoViFixer.Application.Updates;assembly=DoViFixer.Application"
                     xmlns:operations="clr-namespace:DoViFixer.Application.Operations;assembly=DoViFixer.Application">
@@ -869,7 +870,7 @@
                 </DataTrigger.ExitActions>
             </DataTrigger>
             <DataTrigger Binding="{Binding IsLast}" Value="True">
-                <Setter TargetName="Connector" Property="Visibility" Value="Hidden" />
+                <Setter TargetName="Connector" Property="Visibility" Value="Collapsed" />
             </DataTrigger>
         </DataTemplate.Triggers>
     </DataTemplate>
@@ -959,8 +960,8 @@
                         </Style>
                     </TextBlock.Style>
                 </TextBlock>
+                <!-- Only under the bar, with the last step at its right end, so the steps are as wide as the bar. -->
                 <ItemsControl Grid.Row="2"
-                              Grid.ColumnSpan="2"
                               Margin="0,16,0,0"
                               ItemsSource="{Binding Steps}"
                               ItemTemplate="{StaticResource JobStepTemplate}"
@@ -969,7 +970,7 @@
                               Visibility="{Binding HasSteps, Converter={StaticResource WfBooleanToVisibilityConverter}}">
                     <ItemsControl.ItemsPanel>
                         <ItemsPanelTemplate>
-                            <UniformGrid Rows="1" />
+                            <views:StepRowPanel />
                         </ItemsPanelTemplate>
                     </ItemsControl.ItemsPanel>
                 </ItemsControl>
