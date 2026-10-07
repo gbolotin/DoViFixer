@@ -34,6 +34,10 @@ Restart Claude Desktop. The DoViFixer tools appear under the tools menu in a new
 claude mcp add dovifixer -- C:\Tools\DoViFixer.Mcp\DoViFixer.Mcp.exe
 ```
 
+### Other clients
+
+Any MCP client that launches local stdio servers on this PC can use the same command, for example OpenAI Codex (`codex mcp add dovifixer -- C:\Tools\DoViFixer.Mcp\DoViFixer.Mcp.exe`), Hermes Agent and OpenClaw. Agents running under WSL can start the Windows executable through WSL interop; agents in a container or on another machine cannot, because the server works with this PC's Windows paths and native tools. ChatGPT connects only to remote MCP servers over HTTPS, which this server does not offer.
+
 ### Configuration
 
 The server reads the same Generic Host configuration as the console app, so environment variables such as `DoViFixer__DataDirectory` work. Pass them through the client's `env` setting, for example `"env": { "DoViFixer__DataDirectory": "D:\\DoViFixerTest" }` in Claude Desktop.
