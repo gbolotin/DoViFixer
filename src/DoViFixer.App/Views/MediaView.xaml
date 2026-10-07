@@ -982,7 +982,8 @@
                 <Grid>
                     <Grid.ColumnDefinitions>
                         <ColumnDefinition Width="Auto" />
-                        <ColumnDefinition Width="*" MinWidth="88" />
+                        <!-- Fixed, wide enough for "Estimating…", so the column never moves as the times tick. -->
+                        <ColumnDefinition Width="120" />
                     </Grid.ColumnDefinitions>
                     <Grid.RowDefinitions>
                         <RowDefinition Height="Auto" />
@@ -992,7 +993,8 @@
                     <TextBlock Grid.Column="1"
                                Text="{Binding BatchProgress.CurrentJobElapsed}"
                                Margin="24,0,0,0"
-                               TextAlignment="Right" />
+                               TextAlignment="Right"
+                               Typography.NumeralAlignment="Tabular" />
                     <TextBlock Grid.Row="1"
                                Text="Step remaining"
                                Margin="0,4,0,0"
@@ -1002,7 +1004,8 @@
                                Grid.Column="1"
                                Text="{Binding BatchProgress.CurrentStepRemaining}"
                                Margin="24,4,0,0"
-                               TextAlignment="Right" />
+                               TextAlignment="Right"
+                               Typography.NumeralAlignment="Tabular" />
                 </Grid>
                 <Button Content="Cancel"
                         Tag="&#xE711;"
