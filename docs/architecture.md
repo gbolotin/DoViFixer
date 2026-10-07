@@ -92,6 +92,7 @@ Folders are organizational boundaries, not additional projects. Do not create em
 | Application | Scan, inspect, plan, convert, verify, backup, restore, cleanup, settings and update use cases; requests, results, progress; required external interfaces | Domain |
 | Infrastructure | Native-tool adapters, parsing, files, temporary workspaces, archive serialization, settings persistence and HTTP | Application, Domain |
 | Console | Entry point, DI composition, command parsing, prompts, rendering and exit-code mapping | Application, Infrastructure; Domain when directly using its models |
+| Mcp | MCP server entry point and DI composition, tool definitions, plan and background-job tracking | Application, Infrastructure; Domain when directly using its models |
 | App | WPF entry point and DI composition, views, ViewModels, dialogs and WPF navigation | Application, Infrastructure; Domain when directly using its models; the WpfFoundation package (or its local project) |
 | WpfFoundation (external) | Reusable WPF styles, controls, behaviors, converters, navigation, dialogs and theme service, in its own repository | No DoViFixer projects |
 
@@ -103,6 +104,8 @@ flowchart TD
     App[DoViFixer.App] --> Application
     Console --> Infrastructure[DoViFixer.Infrastructure]
     App --> Infrastructure
+    Mcp[DoViFixer.Mcp] --> Application
+    Mcp --> Infrastructure
     Infrastructure --> Application
     Infrastructure --> Domain[DoViFixer.Domain]
     Application --> Domain

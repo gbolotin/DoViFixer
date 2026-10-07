@@ -2,7 +2,7 @@
 
 [GPL-3.0 license](LICENSE)
 
-Native Windows .NET 10 console and WPF applications for inspecting Dolby Vision MKVs, converting Profile 7 to Profile 8.1 or HDR10, and backing up/restoring enhancement layers. Both applications use the same Domain, Application and Infrastructure services.
+Native Windows .NET 10 console and WPF applications for inspecting Dolby Vision MKVs, converting Profile 7 to Profile 8.1 or HDR10, and backing up/restoring enhancement layers. Both applications use the same Domain, Application and Infrastructure services, as does an [MCP server](docs/mcp.md) that lets an AI assistant such as Claude Desktop run these operations for you.
 
 DoViFixer is a native Windows .NET implementation inspired by [dovi_convert](https://github.com/cryptochrome/dovi_convert), adapting its Dolby Vision workflows for a shared console and WPF architecture.
 
@@ -30,7 +30,7 @@ dotnet build DoViFixer.sln -c Release -p:UseLocalWpfFoundation=false
 
 Every DoViFixer assembly gets one [SemVer](https://semver.org) version from `VersionPrefix` in `Directory.Build.props`. Local builds are `0.1.0-dev`, CI builds are `0.1.0-ci.<run number>`, and pushing a `vX.Y.Z` tag makes CI build `X.Y.Z`. The SDK appends the commit hash, so the version also says which commit a build came from. `DoViFixer.Console --version`, the help header, the Settings page, and every log entry (`ApplicationVersion`) show it.
 
-To release, bump `VersionPrefix` if needed, merge, and tag that commit, for example `git tag v0.1.0 && git push origin v0.1.0`. CI then creates a GitHub release named after the tag, with `DoViFixer.App-X.Y.Z.zip` and `DoViFixer.Console-X.Y.Z.zip` attached (framework-dependent; they need the .NET 10 Desktop Runtime). A tag with a pre-release suffix, such as `v0.2.0-beta.1`, is marked as a pre-release. Every other CI run attaches the same zips to the run as an `apps` artifact. After the release, raise `VersionPrefix` to the next version so later builds sort after it.
+To release, bump `VersionPrefix` if needed, merge, and tag that commit, for example `git tag v0.1.0 && git push origin v0.1.0`. CI then creates a GitHub release named after the tag, with `DoViFixer.App-X.Y.Z.zip`, `DoViFixer.Console-X.Y.Z.zip` and `DoViFixer.Mcp-X.Y.Z.zip` attached (framework-dependent; they need the .NET 10 Desktop Runtime). A tag with a pre-release suffix, such as `v0.2.0-beta.1`, is marked as a pre-release. Every other CI run attaches the same zips to the run as an `apps` artifact. After the release, raise `VersionPrefix` to the next version so later builds sort after it.
 
 ## WPF desktop application
 
@@ -96,6 +96,10 @@ Conversion streams FFmpeg output directly to dovi_tool by default and retries wi
 Before publication, verification checks the target profile and full RPU count/profile (or absence for HDR10), video dimensions/codec and packet counts, per-track timestamps, audio/subtitle payload hashes, normalized base-layer hashes, attachments, chapters, tags and supported video container metadata. Failed or unavailable checks prevent publication. MKVToolNix may normalize `DefaultDuration`; actual timestamps are compared within 1 ms and video duration within 50 ms. Non-pixel Matroska display units are currently rejected. Full MKV byte identity is not promised.
 
 Batch failures are reported per file and do not stop subsequent files. Ctrl+C stops the batch, terminates owned native processes, and disposes temporary resources. A cancelled external installer can leave package-manager changes; run `dependencies check` before retrying. Successfully published enhancement archives remain available if a subsequent conversion fails.
+
+## AI assistants (MCP)
+
+`DoViFixer.Mcp` exposes scanning, inspection, conversion, backup, restore, cleanup, dependency and settings operations as Model Context Protocol tools. Anything that changes files is planned first and runs only after you approve the plan. See [MCP server](docs/mcp.md) to register it in Claude Desktop or Claude Code.
 
 ## Archives and settings
 
