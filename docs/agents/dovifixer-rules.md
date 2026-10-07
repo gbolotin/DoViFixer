@@ -43,6 +43,10 @@ Main projects:
 - Upgrade the library by changing the `WpfFoundation` version in `Directory.Packages.props`.
 - CI and release builds pass `-p:UseLocalWpfFoundation=false`, so a shipped build always uses the pinned package, never local, possibly uncommitted library code.
 
+## Versioning
+
+- Every pull request bumps `VersionPrefix` in Directory.Build.props: CI releases each push to main as that version and tags it, and fails if the tag already exists. Never push tags by hand from an agent session.
+
 ## Native dependencies
 
 - Detect FFmpeg (ffmpeg.exe and ffprobe.exe), MKVToolNix (mkvmerge.exe and mkvextract.exe), MediaInfo CLI (mediainfo.exe), and dovi_tool (dovi_tool.exe).

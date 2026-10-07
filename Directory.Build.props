@@ -8,8 +8,9 @@
     <!-- The app name in window titles, version text, help and the update-check user agent (read through ApplicationTitle). -->
     <AssemblyTitle>DoViFixer</AssemblyTitle>
   </PropertyGroup>
-  <!-- One version for every DoViFixer assembly. Local builds are 0.1.0-dev, CI builds 0.1.0-ci.<run>, and a vX.Y.Z tag builds X.Y.Z (see .github/workflows/ci.yml).
-       Bump VersionPrefix after each release. The SDK appends the commit hash to the informational version. -->
+  <!-- One version for every DoViFixer assembly. Local builds are <VersionPrefix>-dev and pull request builds <VersionPrefix>-ci.<run>.
+       Each push to main is released as VersionPrefix and tagged v<VersionPrefix> by CI (see .github/workflows/ci.yml), so bump it in every change.
+       The SDK appends the commit hash to the informational version. -->
   <PropertyGroup>
     <VersionPrefix>0.1.0</VersionPrefix>
     <VersionSuffix Condition="'$(VersionSuffix)' == ''">dev</VersionSuffix>
