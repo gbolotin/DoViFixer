@@ -2,9 +2,16 @@ using DoViFixer.Application.Operations;
 
 namespace DoViFixer.App.ViewModels;
 
-public sealed class BatchProgressViewModel : ObservableObject
+public sealed class BatchProgressViewModel(TimeProvider time) : ObservableObject
 {
+    /// <summary>A step's remaining time is estimated only after it has run this long, so early rates do not jump around.</summary>
+    private static readonly TimeSpan EstimateWarmUp = TimeSpan.FromSeconds(5);
     private readonly object gate = new();
+    private ITimer? clock;
+    private DateTimeOffset jobStarted;
+    private DateTimeOffset stageStarted;
+    private string stage = "";
+    private double stageStartPercent;
     private int revision;
     private bool isRunning;
     private int total;
@@ -22,19 +29,49 @@ public sealed class BatchProgressViewModel : ObservableObject
     public MediaRow? CurrentJob
     {
         get => currentJob;
-        private set
+        private set => SetProperty(ref currentJob, value);
+    }
+
+    public BatchProgressViewModel() : this(TimeProvider.System)
+    {
+    }
+
+    public string CurrentJobElapsed => CurrentJob is null ? "" : Format(time.GetUtcNow() - jobStarted);
+
+    /// <summary>
+    /// The current step's remaining time at its average rate so far. Steps rewrite or read the whole video at
+    /// different speeds, so no estimate covers the steps still to come.
+    /// </summary>
+    public string CurrentStepRemaining
+    {
+        get
         {
-            if (SetProperty(ref currentJob, value))
+            lock (gate)
             {
-                OnPropertyChanged(nameof(CurrentJobTitle));
+                if (CurrentJob is not { } job)
+                {
+                    return "";
+                }
+
+                // A cancelling job, or a step that reports no percentage, has nothing to estimate from.
+                if (job.IsCancellationRequested || job.Progress.IsIndeterminate)
+                {
+                    return "—";
+                }
+
+                var running = time.GetUtcNow() - stageStarted;
+                double done = job.Progress.Percent;
+                if (done <= stageStartPercent || running < EstimateWarmUp)
+                {
+                    return "Estimating…";
+                }
+
+                return Format(running * ((100 - done) / (done - stageStartPercent)));
             }
         }
     }
 
-    // A single-file run hides the batch row, so the job title carries the operation name instead.
-    public string CurrentJobTitle => CurrentJob is null ? ""
-        : total == 1 && operation.Length > 0 ? $"{operation} · {CurrentJob.Name}"
-        : CurrentJob.Name;
+    private static string Format(TimeSpan span) => span < TimeSpan.Zero ? "00:00:00" : $"{(int)span.TotalHours:00}:{span.Minutes:00}:{span.Seconds:00}";
 
     public void Begin(int fileCount, string operationName)
     {
@@ -52,7 +89,6 @@ public sealed class BatchProgressViewModel : ObservableObject
 
         OnPropertyChanged(nameof(Total));
         OnPropertyChanged(nameof(Operation));
-        OnPropertyChanged(nameof(CurrentJobTitle));
         NotifyBatchProgress();
     }
 
@@ -64,10 +100,16 @@ public sealed class BatchProgressViewModel : ObservableObject
             jobRevision = ++revision;
             CurrentJob?.Progress.End();
             CurrentJob = row;
+            jobStarted = stageStarted = time.GetUtcNow();
+            stage = initialStage;
+            stageStartPercent = 0;
         }
 
         row.Progress.Start(initialStage);
+        row.Progress.Describe([operation]);
+        StartClock();
         OnPropertyChanged(nameof(Percent));
+        NotifyTimes();
         // Each job owns its callback, so late reports cannot update another file or batch.
         return new Progress<OperationProgress>(progress =>
         {
@@ -76,6 +118,13 @@ public sealed class BatchProgressViewModel : ObservableObject
                 if (!IsRunning || revision != jobRevision || CurrentJob != row || row.IsCancellationRequested)
                 {
                     return;
+                }
+
+                if (progress.Stage != stage)
+                {
+                    stage = progress.Stage;
+                    stageStarted = time.GetUtcNow();
+                    stageStartPercent = progress.Percent is { } percent && double.IsFinite(percent) ? Math.Clamp(percent, 0, 100) : 0;
                 }
 
                 row.Progress.Update(progress);
@@ -102,7 +151,9 @@ public sealed class BatchProgressViewModel : ObservableObject
             CurrentJob = null;
         }
 
+        StopClock();
         NotifyBatchProgress();
+        NotifyTimes();
     }
 
     public void End()
@@ -115,7 +166,39 @@ public sealed class BatchProgressViewModel : ObservableObject
             CurrentJob = null;
         }
 
+        StopClock();
         OnPropertyChanged(nameof(Percent));
+        NotifyTimes();
+    }
+
+    // Elapsed and remaining times change without progress reports, so a clock refreshes them every second on the UI thread.
+    private void StartClock()
+    {
+        StopClock();
+        var context = SynchronizationContext.Current;
+        clock = time.CreateTimer(_ =>
+        {
+            if (context is null)
+            {
+                NotifyTimes();
+            }
+            else
+            {
+                context.Post(_ => NotifyTimes(), null);
+            }
+        }, null, TimeSpan.FromSeconds(1), TimeSpan.FromSeconds(1));
+    }
+
+    private void StopClock()
+    {
+        clock?.Dispose();
+        clock = null;
+    }
+
+    private void NotifyTimes()
+    {
+        OnPropertyChanged(nameof(CurrentJobElapsed));
+        OnPropertyChanged(nameof(CurrentStepRemaining));
     }
 
     private void NotifyBatchProgress()

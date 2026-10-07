@@ -25,19 +25,79 @@ public sealed class BatchProgressTests
     }
 
     [TestMethod]
-    public void SingleFileJobTitleNamesTheOperationWhileBatchJobTitleIsJustTheFile()
+    public void EachJobIsDescribedByItsOperationUntilTheOperationDescribesItInDetail()
     {
         var model = new BatchProgressViewModel();
         model.Begin(1, "Deep inspection");
-        model.Start(new MediaRow(@"C:\Media\Mountain.mkv"), "Inspecting");
-        Assert.AreEqual("Deep inspection · Mountain.mkv", model.CurrentJobTitle);
-        model.Complete(OperationStatus.Completed);
-        Assert.AreEqual("", model.CurrentJobTitle);
-        model.End();
+        var row = new MediaRow(@"C:\Media\Mountain.mkv");
+        model.Start(row, "Inspecting");
+        CollectionAssert.AreEqual(new[] { "Deep inspection" }, row.Progress.Details.ToArray());
+        Assert.IsFalse(row.Progress.HasSteps);
 
-        model.Begin(2, "Conversion to DV8.1");
-        model.Start(new MediaRow(@"C:\Media\Ocean.mkv"), "Converting");
-        Assert.AreEqual("Ocean.mkv", model.CurrentJobTitle);
+        row.Progress.Describe(["Converting to Profile 8.1", "Original: Keep"], [new JobStep("Convert", "Streaming conversion")]);
+        CollectionAssert.AreEqual(new[] { "Converting to Profile 8.1", "Original: Keep" }, row.Progress.Details.ToArray());
+        Assert.IsTrue(row.Progress.HasSteps);
+
+        model.Complete(OperationStatus.Completed);
+        Assert.IsNull(model.CurrentJob);
+        Assert.AreEqual("", model.CurrentJobElapsed);
+        Assert.AreEqual("", model.CurrentStepRemaining);
+    }
+
+    [TestMethod]
+    public void ElapsedTimeCountsFromJobStartAndStepRemainingFollowsTheStepRate()
+    {
+        var previous = SynchronizationContext.Current;
+        var context = new QueuedContext();
+        SynchronizationContext.SetSynchronizationContext(context);
+        try
+        {
+            var time = new ManualTime();
+            var model = new BatchProgressViewModel(time);
+            model.Begin(1, "Conversion to DV8.1");
+            var row = new MediaRow("Ocean.mkv");
+            var progress = model.Start(row, "Preparing conversion");
+            void Report(string stage, double percent)
+            {
+                progress.Report(new(Guid.Empty, stage, row.Path, percent));
+                context.Drain();
+            }
+
+            Assert.AreEqual("00:00:00", model.CurrentJobElapsed);
+            Assert.AreEqual("—", model.CurrentStepRemaining, "An indeterminate step has no rate to estimate from.");
+
+            time.Advance(TimeSpan.FromMinutes(1));
+            Report("Streaming conversion", 0);
+            Assert.AreEqual("Estimating…", model.CurrentStepRemaining);
+
+            time.Advance(TimeSpan.FromSeconds(3));
+            Report("Streaming conversion", 2);
+            Assert.AreEqual("Estimating…", model.CurrentStepRemaining, "The first seconds of a step give no estimate.");
+
+            time.Advance(TimeSpan.FromSeconds(97));
+            Report("Streaming conversion", 25);
+            Assert.AreEqual("00:02:40", model.CurrentJobElapsed);
+            Assert.AreEqual("00:05:00", model.CurrentStepRemaining);
+
+            // A new step starts its own estimate.
+            Report("Remuxing", 0);
+            Assert.AreEqual("Estimating…", model.CurrentStepRemaining);
+
+            row.IsCancellationRequested = true;
+            Assert.AreEqual("—", model.CurrentStepRemaining);
+            model.End();
+        }
+        finally
+        {
+            SynchronizationContext.SetSynchronizationContext(previous);
+        }
+    }
+
+    private sealed class ManualTime : TimeProvider
+    {
+        private DateTimeOffset now = new(2026, 10, 7, 12, 0, 0, TimeSpan.Zero);
+        public override DateTimeOffset GetUtcNow() => now;
+        public void Advance(TimeSpan span) => now += span;
     }
 
     [TestMethod]

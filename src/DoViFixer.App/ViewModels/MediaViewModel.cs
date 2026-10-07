@@ -46,6 +46,8 @@ public sealed class MediaViewModel : OperationViewModel, INavigationPage, IPageA
     private CancellationTokenSource? backgroundPreviewCancellation;
     private Task previewCompletion = Task.CompletedTask;
     private BitmapSource? framePreview;
+    private BitmapSource? currentJobPreview;
+    private CancellationTokenSource? currentJobPreviewCancellation;
     private string previewStatus = "";
     private readonly ISourceFileMonitor sourceFiles;
     private readonly SynchronizationContext? uiContext;
@@ -143,7 +145,14 @@ public sealed class MediaViewModel : OperationViewModel, INavigationPage, IPageA
         RemoveMissingCommand = new(RemoveMissing, () => IsIdle && HasMissingFiles);
         OpenSettingsCommand = new(() => RequestNavigateToSettings?.Invoke(), () => IsIdle);
         FileSort = new((column, direction) => new MediaRowComparer((MediaSortColumn)column, direction), () => IsIdle);
-        BatchProgress.PropertyChanged += (_, _) => NotifyActiveProgress();
+        BatchProgress.PropertyChanged += (_, e) =>
+        {
+            NotifyActiveProgress();
+            if (e.PropertyName == nameof(BatchProgress.CurrentJob))
+            {
+                previewCompletion = Task.WhenAll(previewCompletion, LoadCurrentJobPreviewAsync(BatchProgress.CurrentJob));
+            }
+        };
         Progress.PropertyChanged += (_, _) => NotifyActiveProgress();
         PropertyChanged += (_, e) =>
         {
@@ -269,6 +278,63 @@ public sealed class MediaViewModel : OperationViewModel, INavigationPage, IPageA
         private set => SetProperty(ref previewStatus, value);
     }
 
+    /// <summary>The current job's frame preview; null while it loads or when the file has none.</summary>
+    public BitmapSource? CurrentJobPreview
+    {
+        get => currentJobPreview;
+        private set => SetProperty(ref currentJobPreview, value);
+    }
+
+    private async Task LoadCurrentJobPreviewAsync(MediaRow? row)
+    {
+        currentJobPreviewCancellation?.Cancel();
+        currentJobPreviewCancellation = null;
+        CurrentJobPreview = null;
+        if (row is null || row.IsMissing)
+        {
+            return;
+        }
+
+        using var cancellation = new CancellationTokenSource();
+        currentJobPreviewCancellation = cancellation;
+        try
+        {
+            var image = await Task.Run(() => LoadBitmapAsync(row.Path, cancellation.Token), cancellation.Token);
+            if (!cancellation.IsCancellationRequested)
+            {
+                CurrentJobPreview = image;
+            }
+        }
+        catch (OperationCanceledException) when (cancellation.IsCancellationRequested)
+        {
+        }
+        catch (Exception ex)
+        {
+            // The card shows a placeholder instead.
+            logger.LogDebug(ex, "Current job preview unavailable for {Input}", row.Path);
+        }
+        finally
+        {
+            if (ReferenceEquals(currentJobPreviewCancellation, cancellation))
+            {
+                currentJobPreviewCancellation = null;
+            }
+        }
+    }
+
+    private async Task<BitmapSource> LoadBitmapAsync(string path, CancellationToken cancellationToken)
+    {
+        byte[] bytes = await mediaPreview.LoadAsync(path, cancellationToken);
+        using var stream = new MemoryStream(bytes);
+        var bitmap = new BitmapImage();
+        bitmap.BeginInit();
+        bitmap.CacheOption = BitmapCacheOption.OnLoad;
+        bitmap.StreamSource = stream;
+        bitmap.EndInit();
+        bitmap.Freeze();
+        return bitmap;
+    }
+
     private async Task LoadPreviewAsync(MediaRow? row)
     {
         previewCancellation?.Cancel();
@@ -291,18 +357,7 @@ public sealed class MediaViewModel : OperationViewModel, INavigationPage, IPageA
         PreviewStatus = "Loading frame preview…";
         try
         {
-            var image = await Task.Run(async () =>
-            {
-                byte[] bytes = await mediaPreview.LoadAsync(row.Path, cancellation.Token);
-                using var stream = new MemoryStream(bytes);
-                var bitmap = new BitmapImage();
-                bitmap.BeginInit();
-                bitmap.CacheOption = BitmapCacheOption.OnLoad;
-                bitmap.StreamSource = stream;
-                bitmap.EndInit();
-                bitmap.Freeze();
-                return bitmap;
-            }, cancellation.Token);
+            var image = await Task.Run(() => LoadBitmapAsync(row.Path, cancellation.Token), cancellation.Token);
             if (!cancellation.IsCancellationRequested)
             {
                 FramePreview = image;
@@ -387,6 +442,7 @@ public sealed class MediaViewModel : OperationViewModel, INavigationPage, IPageA
     private void CancelPreviews()
     {
         previewCancellation?.Cancel();
+        currentJobPreviewCancellation?.Cancel();
         backgroundPreviewCancellation?.Cancel();
     }
 
@@ -1229,6 +1285,7 @@ public sealed class MediaViewModel : OperationViewModel, INavigationPage, IPageA
                     {
                         row.Analysis = success.Plan.Analysis;
                         row.SetPlan(success.Warning);
+                        row.Progress.Describe(ConversionJob.Details(success.Plan), ConversionJob.Steps(success.Plan));
                         jobProgress.Report(new(success.Plan.Id, "Converting", row.Path));
                         var converted = await Task.Run(() => conversion.ExecuteAsync(success.Plan, jobProgress, itemToken), itemToken);
                         await ReadResultMetadataAsync(row, converted, itemToken);
