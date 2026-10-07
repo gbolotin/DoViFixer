@@ -119,7 +119,7 @@ public sealed class ShellViewModel : ObservableObject, INavigationGuard, IDispos
 
     async Task<bool> INavigationGuard.ConfirmNavigationAsync(INavigationPage from, INavigationPage to, CancellationToken cancellationToken)
     {
-        await Settings.FlushAsync();
+        await Settings.FlushAsync(cancellationToken);
         return !operations.Any(o => o.IsBusy);
     }
 
