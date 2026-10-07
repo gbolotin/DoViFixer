@@ -55,12 +55,12 @@ jobs:
       - name: Test
         run: dotnet test DoViFixer.sln -c Release --no-build -p:UseLocalWpfFoundation=false --filter "TestCategory!=NativeIntegration"
 
-      # Framework-dependent: both apps need the .NET 10 Desktop Runtime.
+      # Framework-dependent: the apps need the .NET 10 Desktop Runtime.
       - name: Publish apps
         shell: pwsh
         run: |
           $version = '${{ steps.version.outputs.version }}'
-          foreach ($app in 'DoViFixer.App', 'DoViFixer.Console') {
+          foreach ($app in 'DoViFixer.App', 'DoViFixer.Console', 'DoViFixer.Mcp') {
             dotnet publish src/$app/$app.csproj -c Release --no-self-contained -p:UseLocalWpfFoundation=false ${{ steps.version.outputs.property }} -o out/$app
             if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
             Compress-Archive -Path out/$app/* -DestinationPath "out/$app-$version.zip"

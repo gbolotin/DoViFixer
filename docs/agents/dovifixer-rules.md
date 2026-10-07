@@ -12,6 +12,7 @@ Main projects:
 - DoViFixer.Application: shared use cases, workflow coordination, requests, results, progress models, and interfaces for external capabilities.
 - DoViFixer.Infrastructure: repositories, persistence, configuration, file system, and other infrastructure.
 - DoViFixer.Console: console entry point, command parsing, interaction, rendering, and dependency injection composition.
+- DoViFixer.Mcp: Model Context Protocol server over stdio for AI assistants; tool definitions, plan and job tracking, and dependency injection composition.
 - DoViFixer.App: WPF entry point, views, ViewModels, commands, dialogs, WPF navigation, and dependency injection composition.
 - WpfFoundation (separate repository and NuGet package): shared WPF styles, controls, behaviors, converters, navigation, dialogs and theme service. DoViFixer.App references the package pinned in `Directory.Packages.props`, or `..\WpfFoundation` through a project reference when that checkout exists (see [WpfFoundation reference](#wpffoundation-reference)).
 
@@ -24,7 +25,8 @@ Main projects:
 - Use CommunityToolkit.Mvvm's `ObservableObject`, `RelayCommand` and `AsyncRelayCommand` directly. Their `Execute` and `ExecuteAsync` do not check `CanExecute`, so tests invoke commands through `CommandInvocation`, as a bound button would.
 - ViewModels and console commands call application services; they must not implement conversion rules or low-level tool/file operations.
 - Never hardcode the app name in text users see or services receive (window titles, version text, help, messages, user agents). Use `ApplicationTitle.Name` (DoViFixer.Application/Updates), which reads the `AssemblyTitle` set in Directory.Build.props; XAML binds it with `{x:Static}`. Namespaces, executable and solution names, data folders, configuration keys and repository URLs keep their literal names.
-- Neither DoViFixer.Console nor DoViFixer.App references the other. Shared functionality belongs in the shared libraries.
+- No executable project (DoViFixer.Console, DoViFixer.App, DoViFixer.Mcp) references another. Shared functionality belongs in the shared libraries.
+- MCP tools that change files take a plan id from a matching plan tool, so the assistant can show the exact plan and get the user's approval first. Never write to standard output in DoViFixer.Mcp; it carries the protocol.
 - Keep media analysis, conversion policy, workflow coordination, tool execution, and UI presentation separated.
 - Use interfaces at the media-specific boundaries: media probing and processing; file discovery, temporary storage, and output publication; archive storage and repositories where persistence is needed.
 
