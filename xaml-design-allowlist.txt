@@ -4,8 +4,6 @@
 # Every entry needs a reason. An entry that no longer matches anything fails the check, so remove it when you fix the XAML.
 # Entries marked "Open audit finding" are listed in the design guidance audit and wait on a decision.
 
-mockup/ | * | * | Design mockups with their own palettes; not shipped.
-
 src/DoViFixer.App/Views/MediaView.xaml | spacing | Margin="4,6,12,14" | Open audit finding: toolbar separator, 4,4,12,12 suggested.
 src/DoViFixer.App/Views/MediaView.xaml | spacing | Margin="1,0,0,0" | Same 1 px header nudge as WpfFoundation's sortable column header template.
 src/DoViFixer.App/Views/MediaView.xaml | typography | FontWeight="SemiBold" | Warning glyphs next to text are drawn SemiBold.
