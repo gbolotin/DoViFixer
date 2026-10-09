@@ -1,6 +1,6 @@
 # WPF phase 4
 
-Implemented 2026-09-11 against `docs/mockups/option-2-workflow-v3` for Media and `option-2-workflow-v2` for the other views. The older standalone `mockup/` project remains a prototype.
+Implemented 2026-09-11 against `docs/mockups/option-2-workflow-v3` for Media and `option-2-workflow-v2` for the other views. Those mockups and the older standalone `mockup/` prototype have since been removed from the repository.
 
 ## Composition and presentation
 
