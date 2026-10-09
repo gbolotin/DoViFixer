@@ -91,29 +91,33 @@
     </Style>
 
     <DataTemplate x:Key="MediaToolBarTemplate" DataType="{x:Type viewModels:MediaViewModel}">
-        <Border BorderBrush="{DynamicResource DividerStrokeColorDefaultBrush}" BorderThickness="0,0,0,1">
+        <Border BorderBrush="{DynamicResource DividerStrokeColorDefaultBrush}"
+                BorderThickness="0,0,0,0"
+                Margin="0,0,0,0"
+                Background="{DynamicResource LayerFillColorDefaultBrush}"
+                Padding="8,8">
             <WrapPanel>
                 <Button Content="Add files"
                         Tag="{StaticResource WfIconAddFiles}"
                         ContentTemplate="{StaticResource WfIconContentTemplate}"
                         Command="{Binding AddFilesCommand}"
-                        Margin="0,0,8,8" />
+                        Margin="0,0,8,0" />
                 <Button Content="Add folder"
                         Tag="{StaticResource WfIconAddFolder}"
                         ContentTemplate="{StaticResource WfIconContentTemplate}"
                         Command="{Binding AddFolderCommand}"
-                        Margin="0,0,8,8" />
+                        Margin="0,0,8,0" />
                 <Button Content="Clear all"
                         Tag="&#xEA99;"
                         ContentTemplate="{StaticResource WfIconContentTemplate}"
                         Command="{Binding ClearAllCommand}"
-                        Margin="0,0,8,8" />
+                        Margin="0,0,8,0" />
                 <Button Content="Remove missing"
                         Tag="&#xE74D;"
                         ContentTemplate="{StaticResource WfIconContentTemplate}"
                         Command="{Binding RemoveMissingCommand}"
                         Visibility="{Binding HasMissingFiles, Converter={StaticResource WfBooleanToVisibilityConverter}}"
-                        Margin="0,0,8,8">
+                        Margin="0,0,8,0">
                     <Button.ToolTip>
                         <TextBlock Text="{Binding Source={x:Static updates:ApplicationTitle.Name}, StringFormat='Remove files that were deleted, moved or renamed outside {0} from the list.'}" />
                     </Button.ToolTip>
@@ -123,12 +127,12 @@
                         Padding="8"
                         Command="{Binding ScanCommand}"
                         ToolTip="Rescan"
-                        Margin="0,0,8,8" />
+                        Margin="0,0,8,0" />
                 <Border Width="1"
-                        Margin="4,6,12,14"
+                        Margin="4,4,12,4"
                         Background="{DynamicResource DividerStrokeColorDefaultBrush}" />
                 <!-- Like the Visual Studio Start button; picking from the menu runs that entry and makes it what the button runs. -->
-                <wfc:SplitButton Margin="0,0,8,8">
+                <wfc:SplitButton Margin="0,0,8,0">
                     <wfc:SplitButton.Style>
                         <Style TargetType="wfc:SplitButton" BasedOn="{StaticResource WfSplitButtonStyle}">
                             <Setter Property="Content" Value="Inspect" />
@@ -156,7 +160,7 @@
                 </wfc:SplitButton>
                 <wfc:SplitButton ToolTip="{Binding OutputSummaryToolTip}"
                                  Icon="&#xE8AB;"
-                                 Margin="0,0,0,8">
+                                 Margin="0,0,0,0">
                     <wfc:SplitButton.Style>
                         <Style TargetType="wfc:SplitButton" BasedOn="{StaticResource WfSplitButtonStyle}">
                             <Setter Property="Content" Value="Convert to DV8.1" />
