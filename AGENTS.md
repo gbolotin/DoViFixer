@@ -1,6 +1,6 @@
 # DoViFixer-specific rules
 
-Apply these rules together with the common development rules in the parent folder's `AGENTS.md`. The solution architecture and implementation plan are documented in [docs/architecture.md](docs/architecture.md).
+Apply these rules together with the [common development rules](docs/agents/common-rules.md). The solution architecture and implementation plan are documented in [docs/architecture.md](docs/architecture.md).
 
 ## Project architecture
 
