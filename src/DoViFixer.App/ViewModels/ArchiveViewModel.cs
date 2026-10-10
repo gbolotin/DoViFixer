@@ -8,15 +8,11 @@ using Microsoft.Extensions.Logging;
 using WpfFoundation.Operations;
 
 namespace DoViFixer.App.ViewModels;
-public sealed class ArchiveViewModel : OperationViewModel, INavigationPage
+public sealed partial class ArchiveViewModel : OperationViewModel, INavigationPage
 {
     public string NavigationName => "Backup & Restore";
     public string? NavigationIcon => "\uE8B7";
 
-    private string input = "";
-    private string archive = "";
-    private string output = "";
-    private bool allowLegacy;
     public ArchiveViewModel(BackupService backup, RestoreService restore, CleanupService cleanup, DependencySetup dependencies, IDialogService dialogs, IFileDialogService files, ILogger<ArchiveViewModel> logger, IOperationFeedback? feedback = null)
         : base(feedback)
     {
@@ -106,36 +102,19 @@ public sealed class ArchiveViewModel : OperationViewModel, INavigationPage
     }
 
     private static string? Empty(string text) => string.IsNullOrWhiteSpace(text) ? null : text;
-    public string Input
-    {
-        get => input;
-        set
-        {
-            SetProperty(ref input, value);
-            CommandsChanged();
-        }
-    }
+    [ObservableProperty]
+    [NotifyCanExecuteChangedFor(nameof(BackupCommand), nameof(RestoreCommand))]
+    public partial string Input { get; set; } = "";
 
-    public string Archive
-    {
-        get => archive;
-        set
-        {
-            SetProperty(ref archive, value);
-            CommandsChanged();
-        }
-    }
+    [ObservableProperty]
+    [NotifyCanExecuteChangedFor(nameof(RestoreCommand))]
+    public partial string Archive { get; set; } = "";
 
-    public string Output
-    {
-        get => output;
-        set => SetProperty(ref output, value);
-    }
-    public bool AllowLegacy
-    {
-        get => allowLegacy;
-        set => SetProperty(ref allowLegacy, value);
-    }
+    [ObservableProperty]
+    public partial string Output { get; set; } = "";
+
+    [ObservableProperty]
+    public partial bool AllowLegacy { get; set; }
     public RelayCommand BrowseInputCommand
     {
         get;

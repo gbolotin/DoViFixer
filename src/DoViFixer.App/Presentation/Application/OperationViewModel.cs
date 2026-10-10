@@ -3,7 +3,7 @@ using DoViFixer.Application.Operations;
 using WpfFoundation.Operations;
 
 namespace DoViFixer.App.Presentation.Application;
-public abstract class OperationViewModel : ObservableObject
+public abstract partial class OperationViewModel : ObservableObject
 {
     private static readonly Dictionary<ViewStatus, string> statusTexts = new()
     {
@@ -30,7 +30,6 @@ public abstract class OperationViewModel : ObservableObject
     private IOperationActivity? activity;
     private bool itemsFailed;
     private CancellationTokenSource? cancellation;
-    private bool isBusy;
     private ViewStatus status = ViewStatus.Ready;
     private string statusMessage = "";
 
@@ -62,17 +61,12 @@ public abstract class OperationViewModel : ObservableObject
         };
     }
 
-    public bool IsBusy
-    {
-        get => isBusy;
-        private set
-        {
-            SetProperty(ref isBusy, value);
-            OnPropertyChanged(nameof(IsIdle));
-            CommandsChanged();
-            CancelCommand.NotifyCanExecuteChanged();
-        }
-    }
+    [ObservableProperty]
+    [NotifyPropertyChangedFor(nameof(IsIdle))]
+    [NotifyCanExecuteChangedFor(nameof(CancelCommand))]
+    public partial bool IsBusy { get; private set; }
+
+    partial void OnIsBusyChanged(bool value) => CommandsChanged();
 
     public bool IsIdle => !IsBusy;
     public ViewStatus Status => status;

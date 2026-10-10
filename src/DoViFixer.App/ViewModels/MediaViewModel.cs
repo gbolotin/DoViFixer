@@ -15,7 +15,7 @@ using Microsoft.Extensions.Logging;
 using WpfFoundation.Operations;
 
 namespace DoViFixer.App.ViewModels;
-public sealed class MediaViewModel : OperationViewModel, INavigationPage, IPageActivation, IDisposable
+public sealed partial class MediaViewModel : OperationViewModel, INavigationPage, IPageActivation, IDisposable
 {
     public string NavigationName => "Media";
     public string? NavigationIcon => "\uE714";
@@ -41,20 +41,14 @@ public sealed class MediaViewModel : OperationViewModel, INavigationPage, IPageA
     private readonly IFileExplorer explorer;
     private readonly ILogger<MediaViewModel> logger;
     private BatchControl? control;
-    private MediaRow? focused;
     private readonly IMediaPreview mediaPreview;
     private CancellationTokenSource? previewCancellation;
     private CancellationTokenSource? backgroundPreviewCancellation;
     private Task previewCompletion = Task.CompletedTask;
-    private BitmapSource? framePreview;
-    private BitmapSource? currentJobPreview;
     private CancellationTokenSource? currentJobPreviewCancellation;
-    private string previewStatus = "";
     private readonly ISourceFileMonitor sourceFiles;
     private readonly SynchronizationContext? uiContext;
     private int availabilityCheckQueued;
-    private bool isDeepInspectionChosen;
-    private bool isHdr10ConversionChosen;
 
     private static string Summary(BatchResult result) => string.Join(" · ", result.Items.GroupBy(r => r.Status).Select(g => $"{g.Count()} {g.Key}"));
     public MediaViewModel(IFileDiscovery discovery, InspectionService inspection, ConversionService conversion, ControlledBatchService batch, SettingsService settings, DependencySetup dependencies, IDialogService dialogs, IFileDialogService files, IFileExplorer explorer, ILogger<MediaViewModel> logger, IMediaPreview mediaPreview, RestoreService restore, ISourceFileMonitor sourceFiles, IOperationFeedback? feedback = null)
@@ -108,8 +102,6 @@ public sealed class MediaViewModel : OperationViewModel, INavigationPage, IPageA
         ChooseDv81Command = new(() => ChooseAndConvertAsync(hdr10: false), CanOperate);
         ChooseHdr10Command = new(() => ChooseAndConvertAsync(hdr10: true), CanOperate);
 
-        SkipCommand = new RelayCommand<MediaRow>(Skip);
-
         CancelFileCommand = new RelayCommand<MediaRow>(row =>
         {
             if (row is not null && row.IsActive && !row.IsCancellationRequested && control is not null)
@@ -142,10 +134,6 @@ public sealed class MediaViewModel : OperationViewModel, INavigationPage, IPageA
         ShowResultFileCommand = new(path => explorer.ShowInFolder(path!), path => !string.IsNullOrEmpty(path));
         RetryAnalysisCommand = new(row => RunAsync(AnalysisTitle(row!.LastAnalysisMethod!.Value), (token, _) => AnalyzeRowsAsync([row!], row!.LastAnalysisMethod!.Value, token)), row => row is not null && IsIdle && Files.Contains(row) && row.CanRetryAnalysis && row.LastAnalysisMethod is not null);
         InspectIncompleteCommand = new(row => RunAsync(AnalysisTitle(AnalysisMethod.FullRpu), (token, _) => AnalyzeRowsAsync([row!], AnalysisMethod.FullRpu, token)), row => row is not null && IsIdle && Files.Contains(row) && row.CanInspectIncomplete);
-        ToggleSelectAllCommand = new(ToggleSelectAll, () => IsIdle && ShownFiles.Any(row => row.SelectionEnabled));
-        ClearAllCommand = new(ClearAll, () => IsIdle && Files.Count > 0);
-        RemoveFileCommand = new(RemoveFile, row => row is not null && IsIdle && Files.Contains(row));
-        RemoveMissingCommand = new(RemoveMissing, () => IsIdle && HasMissingFiles);
         OpenSettingsCommand = new(() => RequestNavigateToSettings?.Invoke(), () => IsIdle);
         FileSort = new((column, direction) => new MediaRowComparer((MediaSortColumn)column, direction), () => IsIdle);
         BatchProgress.PropertyChanged += (_, e) =>
@@ -183,32 +171,25 @@ public sealed class MediaViewModel : OperationViewModel, INavigationPage, IPageA
     /// </summary>
     public IReadOnlyList<MediaFilterOption> FilterOptions { get; }
 
-    private MediaFileFilter fileFilter = MediaFileFilter.All;
-    public MediaFileFilter FileFilter
+    [ObservableProperty]
+    public partial MediaFileFilter FileFilter { get; set; } = MediaFileFilter.All;
+
+    partial void OnFileFilterChanged(MediaFileFilter value)
     {
-        get => fileFilter;
-        set
+        foreach (var option in FilterOptions)
         {
-            if (!SetProperty(ref fileFilter, value))
-            {
-                return;
-            }
-
-            foreach (var option in FilterOptions)
-            {
-                option.IsSelected = option.Filter == value;
-            }
-
-            // Each filter gets its own predicate instance, so the list sees a new value and filters again.
-            ShownFilePredicate = item => item is MediaRow row && Shows(value, row);
-            OnPropertyChanged(nameof(ShownFilePredicate));
-            if (Focused is null || !IsShown(Focused))
-            {
-                Focused = ShownFiles.FirstOrDefault();
-            }
-
-            ShownFilesChanged();
+            option.IsSelected = option.Filter == value;
         }
+
+        // Each filter gets its own predicate instance, so the list sees a new value and filters again.
+        ShownFilePredicate = item => item is MediaRow row && Shows(value, row);
+        OnPropertyChanged(nameof(ShownFilePredicate));
+        if (Focused is null || !IsShown(Focused))
+        {
+            Focused = ShownFiles.FirstOrDefault();
+        }
+
+        ShownFilesChanged();
     }
 
     /// <summary>The list's filter; rows are filtered again live as their <see cref="MediaRow.FilterGroup"/> changes.</summary>
@@ -219,7 +200,7 @@ public sealed class MediaViewModel : OperationViewModel, INavigationPage, IPageA
 
     private static bool Shows(MediaFileFilter filter, MediaRow row) => filter == MediaFileFilter.All || row.FilterGroup == filter;
 
-    private bool IsShown(MediaRow row) => Shows(fileFilter, row);
+    private bool IsShown(MediaRow row) => Shows(FileFilter, row);
 
     private IEnumerable<MediaRow> ShownFiles => Files.Where(IsShown);
 
@@ -259,38 +240,21 @@ public sealed class MediaViewModel : OperationViewModel, INavigationPage, IPageA
         ? "Processed includes completed, failed, cancelled and skipped files. Each file has equal weight in the batch."
         : null;
 
-    public MediaRow? Focused
-    {
-        get => focused;
-        set
-        {
-            if (SetProperty(ref focused, value))
-            {
-                OpenOutputCommand.NotifyCanExecuteChanged();
-                OpenFileLocationCommand.NotifyCanExecuteChanged();
-                previewCompletion = Task.WhenAll(previewCompletion, LoadPreviewAsync(value));
-            }
-        }
-    }
+    [ObservableProperty]
+    [NotifyCanExecuteChangedFor(nameof(OpenOutputCommand), nameof(OpenFileLocationCommand))]
+    public partial MediaRow? Focused { get; set; }
 
-    public BitmapSource? FramePreview
-    {
-        get => framePreview;
-        private set => SetProperty(ref framePreview, value);
-    }
+    partial void OnFocusedChanged(MediaRow? value) => previewCompletion = Task.WhenAll(previewCompletion, LoadPreviewAsync(value));
 
-    public string PreviewStatus
-    {
-        get => previewStatus;
-        private set => SetProperty(ref previewStatus, value);
-    }
+    [ObservableProperty]
+    public partial BitmapSource? FramePreview { get; private set; }
+
+    [ObservableProperty]
+    public partial string PreviewStatus { get; private set; } = "";
 
     /// <summary>The current job's frame preview; null while it loads or when the file has none.</summary>
-    public BitmapSource? CurrentJobPreview
-    {
-        get => currentJobPreview;
-        private set => SetProperty(ref currentJobPreview, value);
-    }
+    [ObservableProperty]
+    public partial BitmapSource? CurrentJobPreview { get; private set; }
 
     private async Task LoadCurrentJobPreviewAsync(MediaRow? row)
     {
@@ -553,7 +517,7 @@ public sealed class MediaViewModel : OperationViewModel, INavigationPage, IPageA
         {
             var total = Files.Count;
             var selected = ShownFiles.Count(f => f.IsSelected);
-            var totalText = fileFilter == MediaFileFilter.All
+            var totalText = FileFilter == MediaFileFilter.All
                 ? $"{total} {(total == 1 ? "item" : "items")}"
                 : $"{ShownFiles.Count()} of {total} {(total == 1 ? "item" : "items")} shown";
             if (selected == 0)
@@ -567,10 +531,6 @@ public sealed class MediaViewModel : OperationViewModel, INavigationPage, IPageA
     }
     public bool? AllFilesSelected => !ShownFiles.Any(row => row.IsSelected) ? false : ShownFiles.All(row => row.IsSelected) ? true : null;
 
-    public RelayCommand ToggleSelectAllCommand { get; }
-    public RelayCommand ClearAllCommand { get; }
-    public RelayCommand<MediaRow> RemoveFileCommand { get; }
-    public RelayCommand RemoveMissingCommand { get; }
     /// <summary>
     /// Display order applied by the list's collection view; <see cref="Files"/> keeps the order files were added.
     /// Sorting is blocked while busy because a running batch keeps the order it started with.
@@ -592,27 +552,20 @@ public sealed class MediaViewModel : OperationViewModel, INavigationPage, IPageA
     /// Whether the Inspect split button runs a deep inspection. Picking an entry in its menu runs that inspection
     /// and makes it what the button runs next.
     /// </summary>
-    public bool IsDeepInspectionChosen
-    {
-        get => isDeepInspectionChosen;
-        set => SetProperty(ref isDeepInspectionChosen, value);
-    }
+    [ObservableProperty]
+    public partial bool IsDeepInspectionChosen { get; set; }
 
     /// <summary>
     /// Whether the Convert split button converts to HDR10 rather than DV8.1. Picking an entry in its menu runs that
     /// conversion and makes it what the button runs next.
     /// </summary>
-    public bool IsHdr10ConversionChosen
-    {
-        get => isHdr10ConversionChosen;
-        set => SetProperty(ref isHdr10ConversionChosen, value);
-    }
+    [ObservableProperty]
+    public partial bool IsHdr10ConversionChosen { get; set; }
 
     public AsyncRelayCommand ChooseInspectCommand { get; }
     public AsyncRelayCommand ChooseDeepInspectCommand { get; }
     public AsyncRelayCommand ChooseDv81Command { get; }
     public AsyncRelayCommand ChooseHdr10Command { get; }
-    public RelayCommand<MediaRow> SkipCommand { get; }
     public RelayCommand<MediaRow> CancelFileCommand { get; }
     public RelayCommand OpenOutputCommand { get; }
     public RelayCommand OpenFileLocationCommand { get; }
@@ -624,47 +577,23 @@ public sealed class MediaViewModel : OperationViewModel, INavigationPage, IPageA
     public event Action? RequestNavigateToSettings;
     public event Func<CancellationToken, Task>? ConversionStarting;
 
-    private string outputSummary = "Output: Same folder";
-    public string OutputSummary
-    {
-        get => outputSummary;
-        private set => SetProperty(ref outputSummary, value);
-    }
+    [ObservableProperty]
+    public partial string OutputSummary { get; private set; } = "Output: Same folder";
 
-    private string outputSummaryToolTip = "";
-    public string OutputSummaryToolTip
-    {
-        get => outputSummaryToolTip;
-        private set => SetProperty(ref outputSummaryToolTip, value);
-    }
+    [ObservableProperty]
+    public partial string OutputSummaryToolTip { get; private set; } = "";
 
-    private bool isReplaceOriginalActive;
-    public bool IsReplaceOriginalActive
-    {
-        get => isReplaceOriginalActive;
-        private set => SetProperty(ref isReplaceOriginalActive, value);
-    }
+    [ObservableProperty]
+    public partial bool IsReplaceOriginalActive { get; private set; }
 
-    private string retentionSummary = "Keep originals";
-    public string RetentionSummary
-    {
-        get => retentionSummary;
-        private set => SetProperty(ref retentionSummary, value);
-    }
+    [ObservableProperty]
+    public partial string RetentionSummary { get; private set; } = "Keep originals";
 
-    private string felSummary = "FEL: Skip";
-    public string FelSummary
-    {
-        get => felSummary;
-        private set => SetProperty(ref felSummary, value);
-    }
+    [ObservableProperty]
+    public partial string FelSummary { get; private set; } = "FEL: Skip";
 
-    private string archiveSummary = "EL archive: Off";
-    public string ArchiveSummary
-    {
-        get => archiveSummary;
-        private set => SetProperty(ref archiveSummary, value);
-    }
+    [ObservableProperty]
+    public partial string ArchiveSummary { get; private set; } = "EL archive: Off";
 
     public void UpdateSettingsSummary(UserSettings s)
     {
@@ -860,6 +789,7 @@ public sealed class MediaViewModel : OperationViewModel, INavigationPage, IPageA
         }
     }
 
+    [RelayCommand]
     private void Skip(MediaRow? row)
     {
         if (row is null || !row.IsPending || control?.Skip(row.Path) != true)
@@ -1360,6 +1290,9 @@ public sealed class MediaViewModel : OperationViewModel, INavigationPage, IPageA
         }
     });
 
+    private bool CanRemoveFile(MediaRow? row) => row is not null && IsIdle && Files.Contains(row);
+
+    [RelayCommand(CanExecute = nameof(CanRemoveFile))]
     private void RemoveFile(MediaRow? row)
     {
         if (row is null || !RemoveFileCommand.CanExecute(row))
@@ -1385,6 +1318,9 @@ public sealed class MediaViewModel : OperationViewModel, INavigationPage, IPageA
         OnPropertyChanged(nameof(AllFilesSelected));
     }
 
+    private bool CanRemoveMissing() => IsIdle && HasMissingFiles;
+
+    [RelayCommand(CanExecute = nameof(CanRemoveMissing))]
     private void RemoveMissing()
     {
         foreach (var row in Files.Where(row => row.IsMissing).ToArray())
@@ -1393,6 +1329,9 @@ public sealed class MediaViewModel : OperationViewModel, INavigationPage, IPageA
         }
     }
 
+    private bool CanClearAll() => IsIdle && Files.Count > 0;
+
+    [RelayCommand(CanExecute = nameof(CanClearAll))]
     private void ClearAll()
     {
         if (!IsIdle)
@@ -1424,6 +1363,9 @@ public sealed class MediaViewModel : OperationViewModel, INavigationPage, IPageA
         return FileSort.Order(rows);
     }
 
+    private bool CanToggleSelectAll() => IsIdle && ShownFiles.Any(row => row.SelectionEnabled);
+
+    [RelayCommand(CanExecute = nameof(CanToggleSelectAll))]
     private void ToggleSelectAll()
     {
         if (!IsIdle)

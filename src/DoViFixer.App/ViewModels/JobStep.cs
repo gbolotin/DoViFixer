@@ -8,26 +8,16 @@ public enum JobStepState
 }
 
 /// <summary>One step of a job's stepper. A step is active while the job reports any of its stages.</summary>
-public sealed class JobStep(string name, params string[] stages) : ObservableObject
+public sealed partial class JobStep(string name, params string[] stages) : ObservableObject
 {
-    private JobStepState state;
-
     public string Name { get; } = name;
 
     /// <summary>The stepper draws no connector after the last step.</summary>
     public bool IsLast { get; set; }
 
-    public JobStepState State
-    {
-        get => state;
-        set
-        {
-            if (SetProperty(ref state, value))
-            {
-                OnPropertyChanged(nameof(StateText));
-            }
-        }
-    }
+    [ObservableProperty]
+    [NotifyPropertyChangedFor(nameof(StateText))]
+    public partial JobStepState State { get; set; }
 
     public string StateText => State switch
     {
