@@ -278,7 +278,7 @@ Use .NET 10 LTS. The machine had SDK `10.0.400` installed when reviewed; pin the
 
 - Domain and Application: `net10.0`.
 - Infrastructure and Console: `net10.0-windows` for the Windows implementation.
-- App: `net10.0-windows`, with WPF enabled.
+- App: `net10.0-windows10.0.19041.0`, with WPF enabled. The Windows SDK projection is needed by WpfFoundation.Notifications, which sends the notification when an operation finishes, and adds about 25 MB to the App publish.
 - Tests: target the framework required by the projects under test.
 
 Use `Directory.Build.props` for shared compiler settings and `Directory.Packages.props` for central package versions. App uses standard WPF and Microsoft DI packages; Console uses Microsoft hosting and DI packages.

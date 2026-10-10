@@ -4,6 +4,7 @@ using DoViFixer.Application.Dependencies;
 using DoViFixer.Application.Settings;
 using DoViFixer.Application.Abstractions;
 using DoViFixer.Application.Updates;
+using WpfFoundation.Operations;
 
 namespace DoViFixer.App.ViewModels;
 public sealed class SettingsViewModel : OperationViewModel, INavigationPage, IPageActivation
@@ -28,6 +29,7 @@ public sealed class SettingsViewModel : OperationViewModel, INavigationPage, IPa
     private bool automaticallyScanAddedFiles = true;
     private bool useCachedResults = true;
     private bool autoSelectAfterScan = true;
+    private bool showCompletionNotifications = true;
     private NativeTool selectedTool;
     private string toolPath = "";
     private AppTheme selectedTheme = AppTheme.System;
@@ -72,7 +74,8 @@ public sealed class SettingsViewModel : OperationViewModel, INavigationPage, IPa
 
     public DependencyReportViewModel Dependencies { get; }
 
-    public SettingsViewModel(SettingsService settings, DependencySetup setup, DependencyReportViewModel dependencies, IFileDialogService files, IFileExplorer explorer, IAnalysisCache cache, IThemeService themeService, IMediaPreview mediaPreview)
+    public SettingsViewModel(SettingsService settings, DependencySetup setup, DependencyReportViewModel dependencies, IFileDialogService files, IFileExplorer explorer, IAnalysisCache cache, IThemeService themeService, IMediaPreview mediaPreview, IOperationFeedback? feedback = null)
+        : base(feedback)
     {
         this.settings = settings;
         this.themeService = themeService;
@@ -111,7 +114,7 @@ public sealed class SettingsViewModel : OperationViewModel, INavigationPage, IPa
             var report = await setup.CheckAsync(token);
             SetStatus(report.Ready ? ViewStatus.ToolsReady : ViewStatus.ToolsNeedAttention);
         }), () => IsIdle);
-        InstallCommand = new(() => RunAsync(async (token, progress) =>
+        InstallCommand = new(() => RunAsync("Tool installation", async (token, progress) =>
         {
             SetStatus(ViewStatus.Progress, "Checking dependencies…");
             SetStatus(await setup.EnsureAsync(progress, token) ? ViewStatus.ToolsReady : ViewStatus.DependencySetupIncomplete);
@@ -177,6 +180,7 @@ public sealed class SettingsViewModel : OperationViewModel, INavigationPage, IPa
             AutomaticallyScanAddedFiles = value.AutomaticallyScanAddedFiles;
             UseCachedResults = value.UseCachedResults;
             AutoSelectAfterScan = value.AutoSelectAfterScan;
+            ShowCompletionNotifications = value.ShowCompletionNotifications;
             selectedTheme = value.Theme;
             OnPropertyChanged(nameof(SelectedTheme));
             OnPropertyChanged(nameof(IsSystemTheme));
@@ -286,6 +290,18 @@ public sealed class SettingsViewModel : OperationViewModel, INavigationPage, IPa
         set
         {
             if (SetProperty(ref autoSelectAfterScan, value))
+            {
+                TriggerAutoSave();
+            }
+        }
+    }
+    /// <summary>Whether a finished operation also shows a Windows notification while the window is not active.</summary>
+    public bool ShowCompletionNotifications
+    {
+        get => showCompletionNotifications;
+        set
+        {
+            if (SetProperty(ref showCompletionNotifications, value))
             {
                 TriggerAutoSave();
             }
@@ -506,6 +522,7 @@ public sealed class SettingsViewModel : OperationViewModel, INavigationPage, IPa
             AutomaticallyScanAddedFiles = AutomaticallyScanAddedFiles,
             UseCachedResults = UseCachedResults,
             AutoSelectAfterScan = AutoSelectAfterScan,
+            ShowCompletionNotifications = ShowCompletionNotifications,
             Theme = SelectedTheme,
             IncludeSimple = IncludeSimple,
             ForceComplex = ForceComplex
@@ -521,7 +538,8 @@ public sealed class SettingsViewModel : OperationViewModel, INavigationPage, IPa
             snapshot.AutoSelectAfterScan,
             snapshot.Theme,
             includeSimple: snapshot.IncludeSimple,
-            forceComplex: snapshot.ForceComplex), token);
+            forceComplex: snapshot.ForceComplex,
+            showCompletionNotifications: snapshot.ShowCompletionNotifications), token);
 
         lastSavedSettings = snapshot;
         SetStatus(ViewStatus.SettingsSaved);

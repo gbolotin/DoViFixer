@@ -14,7 +14,7 @@ Main projects:
 - DoViFixer.Console: console entry point, command parsing, interaction, rendering, and dependency injection composition.
 - DoViFixer.Mcp: Model Context Protocol server over stdio for AI assistants; tool definitions, plan and job tracking, and dependency injection composition.
 - DoViFixer.App: WPF entry point, views, ViewModels, commands, dialogs, WPF navigation, and dependency injection composition.
-- WpfFoundation (separate repository and NuGet package): shared WPF styles, controls, behaviors, converters, navigation, dialogs and theme service. DoViFixer.App references the package pinned in `Directory.Packages.props`, or `..\WpfFoundation` through a project reference when that checkout exists (see [WpfFoundation reference](#wpffoundation-reference)).
+- WpfFoundation (separate repository and NuGet packages): shared WPF styles, controls, behaviors, converters, navigation, dialogs, theme service and taskbar progress, plus WpfFoundation.Notifications for Windows notifications. Only DoViFixer.App references them, and it targets `net10.0-windows10.0.19041.0` for the notifications package. DoViFixer.App references the package pinned in `Directory.Packages.props`, or `..\WpfFoundation` through a project reference when that checkout exists (see [WpfFoundation reference](#wpffoundation-reference)).
 
 ## Layering and media workflows
 
@@ -40,9 +40,9 @@ Main projects:
 
 ## WpfFoundation reference
 
-- `Directory.Build.props` turns on `UseLocalWpfFoundation` only when building `DoViFixer.Local.sln` and `..\WpfFoundation\src\WpfFoundation\WpfFoundation.csproj` exists. DoViFixer.App then references that project instead of the `WpfFoundation` package, so library code can be debugged and edited in the same session. Keep the switch tied to that solution: Visual Studio restore fails with NU1105 when a project references one the open solution does not list.
-- `DoViFixer.sln` lists only DoViFixer's projects and always uses the pinned package, so it builds anywhere. `DoViFixer.Local.sln` also lists the WpfFoundation project for local work.
-- Upgrade the library by changing the `WpfFoundation` version in `Directory.Packages.props`.
+- `Directory.Build.props` turns on `UseLocalWpfFoundation` only when building `DoViFixer.Local.sln` and both `..\WpfFoundation\src\WpfFoundation\WpfFoundation.csproj` and `..\WpfFoundation\src\WpfFoundation.Notifications\WpfFoundation.Notifications.csproj` exist. DoViFixer.App then references that project instead of the `WpfFoundation` package, so library code can be debugged and edited in the same session. Keep the switch tied to that solution: Visual Studio restore fails with NU1105 when a project references one the open solution does not list.
+- `DoViFixer.sln` lists only DoViFixer's projects and always uses the pinned package, so it builds anywhere. `DoViFixer.Local.sln` also lists the WpfFoundation and WpfFoundation.Notifications projects for local work.
+- Upgrade the library by changing the `WpfFoundation` and `WpfFoundation.Notifications` versions in `Directory.Packages.props`; they always share one version.
 - CI and release builds pass `-p:UseLocalWpfFoundation=false`, so a shipped build always uses the pinned package, never local, possibly uncommitted library code.
 
 ## Versioning

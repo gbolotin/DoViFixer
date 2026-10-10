@@ -1,5 +1,6 @@
 using DoViFixer.App.ViewModels;
 using DoViFixer.Application.Operations;
+using WpfFoundation.Operations;
 
 namespace DoViFixer.App.Presentation.Application;
 public abstract class OperationViewModel : ObservableObject
@@ -25,6 +26,9 @@ public abstract class OperationViewModel : ObservableObject
         [ViewStatus.ToolOverrideReset] = "Tool override reset; tools checked again."
     };
 
+    private readonly IOperationFeedback? feedback;
+    private IOperationActivity? activity;
+    private bool itemsFailed;
     private CancellationTokenSource? cancellation;
     private bool isBusy;
     private ViewStatus status = ViewStatus.Ready;
@@ -32,19 +36,23 @@ public abstract class OperationViewModel : ObservableObject
 
     public ProgressViewModel Progress { get; } = new();
 
-    protected OperationViewModel()
+    /// <param name="feedback">Reports named operations on the taskbar and in notifications; <see langword="null"/> for none.</param>
+    protected OperationViewModel(IOperationFeedback? feedback = null)
     {
+        this.feedback = feedback;
         CancelCommand = new(() => cancellation?.Cancel(), () => IsBusy);
         Progress.PropertyChanged += (_, e) =>
         {
             if (e.PropertyName is nameof(ProgressViewModel.Percent) or nameof(ProgressViewModel.StagePercent))
             {
                 OnPropertyChanged(nameof(Percent));
+                ReportActivityProgress();
             }
 
             if (e.PropertyName is nameof(ProgressViewModel.IsIndeterminate))
             {
                 OnPropertyChanged(nameof(IsIndeterminate));
+                ReportActivityProgress();
             }
 
             if (e.PropertyName is nameof(ProgressViewModel.Stage))
@@ -116,22 +124,53 @@ public abstract class OperationViewModel : ObservableObject
     {
     }
 
-    protected Task RunAsync(Func<CancellationToken, IProgress<OperationProgress>, Task> action)
+    /// <summary>Runs a short operation, such as loading or saving settings, without taskbar progress or a notification.</summary>
+    protected Task RunAsync(Func<CancellationToken, IProgress<OperationProgress>, Task> action) => RunAsync(null, action);
+
+    /// <summary>
+    /// Runs a long operation and reports it outside the window under <paramref name="activityTitle"/>: progress on the
+    /// taskbar button and, when it ends while the window is not active, a notification with the final status text.
+    /// </summary>
+    protected Task RunAsync(string? activityTitle, Func<CancellationToken, IProgress<OperationProgress>, Task> action)
     {
         if (IsBusy)
         {
             return Task.CompletedTask;
         }
 
-        Completion = RunCoreAsync(action);
+        Completion = RunCoreAsync(activityTitle, action);
         return Completion;
     }
 
-    private async Task RunCoreAsync(Func<CancellationToken, IProgress<OperationProgress>, Task> action)
+    /// <summary>The fraction of the running operation done, from 0 to 1, or <see langword="null"/> while it is unknown.</summary>
+    protected virtual double? ActivityProgress => Progress.IsIndeterminate ? null : Progress.Percent / 100;
+
+    /// <summary>Sends <see cref="ActivityProgress"/> to the taskbar.</summary>
+    protected void ReportActivityProgress() =>
+        activity?.Report(ActivityProgress is { } fraction ? Math.Clamp(fraction, 0, 1) : null);
+
+    /// <summary>Shows the running operation as paused or running again on the taskbar.</summary>
+    protected void SetActivityPaused(bool paused) => activity?.SetPaused(paused);
+
+    /// <summary>Records that an item of the running batch failed, so the operation ends as finished with errors.</summary>
+    protected void ReportItemFailed() => itemsFailed = true;
+
+    // Statuses an operation ends with when it stopped before doing its work.
+    private static OperationOutcome OutcomeOf(ViewStatus status) => status switch
+    {
+        ViewStatus.ConversionNotStarted or ViewStatus.BackupNotApproved or ViewStatus.RestoreNotApproved or ViewStatus.CleanupNotApproved => OperationOutcome.Cancelled,
+        ViewStatus.Error or ViewStatus.ToolsUnavailable or ViewStatus.DependencySetupIncomplete => OperationOutcome.Failed,
+        _ => OperationOutcome.Succeeded
+    };
+
+    private async Task RunCoreAsync(string? activityTitle, Func<CancellationToken, IProgress<OperationProgress>, Task> action)
     {
         using var source = new CancellationTokenSource();
         cancellation = source;
         IsBusy = true;
+        itemsFailed = false;
+        activity = activityTitle is null ? null : feedback?.Start(activityTitle);
+        var outcome = OperationOutcome.Succeeded;
         Progress.Start("Starting…");
         // Callback lifetime is bounded; queued progress cannot overwrite a later operation.
         var progress = new Progress<OperationProgress>(p =>
@@ -148,18 +187,23 @@ public abstract class OperationViewModel : ObservableObject
         try
         {
             await action(source.Token, progress);
+            outcome = itemsFailed ? OperationOutcome.CompletedWithErrors : OutcomeOf(Status);
         }
         catch (OperationCanceledException)
         {
             SetStatus(ViewStatus.Cancelled);
+            outcome = OperationOutcome.Cancelled;
         }
         catch (Exception ex)
         {
             SetStatus(ViewStatus.Error, ex.Message);
+            outcome = OperationOutcome.Failed;
         }
         finally
         {
             cancellation = null;
+            activity?.Complete(outcome, StatusText);
+            activity = null;
             Progress.End();
             IsBusy = false;
         }

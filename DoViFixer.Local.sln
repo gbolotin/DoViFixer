@@ -35,6 +35,8 @@ Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "DoViFixer.Mcp", "src\DoViFi
 EndProject
 Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "DoViFixer.Mcp.Tests", "tests\DoViFixer.Mcp.Tests\DoViFixer.Mcp.Tests.csproj", "{2194E768-A3E8-4F09-B577-33CBA84BDEAE}"
 EndProject
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "WpfFoundation.Notifications", "..\WpfFoundation\src\WpfFoundation.Notifications\WpfFoundation.Notifications.csproj", "{A90B22C3-26E8-464E-A5CF-27386F3BD763}"
+EndProject
 Global
 	GlobalSection(SolutionConfigurationPlatforms) = preSolution
 		Debug|Any CPU = Debug|Any CPU
@@ -201,6 +203,18 @@ Global
 		{2194E768-A3E8-4F09-B577-33CBA84BDEAE}.Release|x64.Build.0 = Release|Any CPU
 		{2194E768-A3E8-4F09-B577-33CBA84BDEAE}.Release|x86.ActiveCfg = Release|Any CPU
 		{2194E768-A3E8-4F09-B577-33CBA84BDEAE}.Release|x86.Build.0 = Release|Any CPU
+		{A90B22C3-26E8-464E-A5CF-27386F3BD763}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{A90B22C3-26E8-464E-A5CF-27386F3BD763}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{A90B22C3-26E8-464E-A5CF-27386F3BD763}.Debug|x64.ActiveCfg = Debug|Any CPU
+		{A90B22C3-26E8-464E-A5CF-27386F3BD763}.Debug|x64.Build.0 = Debug|Any CPU
+		{A90B22C3-26E8-464E-A5CF-27386F3BD763}.Debug|x86.ActiveCfg = Debug|Any CPU
+		{A90B22C3-26E8-464E-A5CF-27386F3BD763}.Debug|x86.Build.0 = Debug|Any CPU
+		{A90B22C3-26E8-464E-A5CF-27386F3BD763}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{A90B22C3-26E8-464E-A5CF-27386F3BD763}.Release|Any CPU.Build.0 = Release|Any CPU
+		{A90B22C3-26E8-464E-A5CF-27386F3BD763}.Release|x64.ActiveCfg = Release|Any CPU
+		{A90B22C3-26E8-464E-A5CF-27386F3BD763}.Release|x64.Build.0 = Release|Any CPU
+		{A90B22C3-26E8-464E-A5CF-27386F3BD763}.Release|x86.ActiveCfg = Release|Any CPU
+		{A90B22C3-26E8-464E-A5CF-27386F3BD763}.Release|x86.Build.0 = Release|Any CPU
 	EndGlobalSection
 	GlobalSection(SolutionProperties) = preSolution
 		HideSolutionNode = FALSE
@@ -219,5 +233,6 @@ Global
 		{3EC004B7-EA7E-427F-B69B-69DB8A5368DA} = {F3998C56-E595-55D2-F434-D16BFD0285A3}
 		{4CB5951A-4CAC-4042-95BB-0224C11339FE} = {827E0CD3-B72D-47B6-A68D-7590B98EB39B}
 		{2194E768-A3E8-4F09-B577-33CBA84BDEAE} = {0AB3BF05-4346-4AA6-1389-037BE0695223}
+		{A90B22C3-26E8-464E-A5CF-27386F3BD763} = {F3998C56-E595-55D2-F434-D16BFD0285A3}
 	EndGlobalSection
 EndGlobal

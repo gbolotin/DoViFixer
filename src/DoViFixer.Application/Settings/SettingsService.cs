@@ -7,7 +7,7 @@ namespace DoViFixer.Application.Settings;
 public sealed class SettingsService(ISettingsStore store, IDependencyDetector detector, IToolCatalog catalog, IFileOperations files, ILogger<SettingsService> logger)
 {
     public Task<UserSettings> ReadAsync(CancellationToken cancellationToken) => store.ReadAsync(cancellationToken);
-    public async Task SetPreferencesAsync(string? temporaryDirectory, string? outputDirectory, bool replaceOriginal, bool createElArchive, CancellationToken cancellationToken, bool? automaticallyScanAddedFiles = null, bool? useCachedResults = null, bool? autoSelectAfterScan = null, AppTheme? theme = null, bool? allowFel = null, bool? includeSimple = null, bool? forceComplex = null)
+    public async Task SetPreferencesAsync(string? temporaryDirectory, string? outputDirectory, bool replaceOriginal, bool createElArchive, CancellationToken cancellationToken, bool? automaticallyScanAddedFiles = null, bool? useCachedResults = null, bool? autoSelectAfterScan = null, AppTheme? theme = null, bool? allowFel = null, bool? includeSimple = null, bool? forceComplex = null, bool? showCompletionNotifications = null)
     {
         cancellationToken.ThrowIfCancellationRequested();
         string? temporary = string.IsNullOrWhiteSpace(temporaryDirectory) ? null : Path.GetFullPath(temporaryDirectory);
@@ -34,7 +34,8 @@ public sealed class SettingsService(ISettingsStore store, IDependencyDetector de
             AutomaticallyScanAddedFiles = automaticallyScanAddedFiles ?? s.AutomaticallyScanAddedFiles,
             UseCachedResults = useCachedResults ?? s.UseCachedResults,
             AutoSelectAfterScan = autoSelectAfterScan ?? s.AutoSelectAfterScan,
-            Theme = theme ?? s.Theme
+            Theme = theme ?? s.Theme,
+            ShowCompletionNotifications = showCompletionNotifications ?? s.ShowCompletionNotifications
         }, cancellationToken);
         OperationLog.Audit(logger, "SetConversionDefaults", full ?? "Same folder as source", "Completed");
     }

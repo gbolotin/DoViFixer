@@ -34,7 +34,7 @@ Every push to main is a release: CI tags the commit `v<VersionPrefix>` and creat
 
 ## WPF desktop application
 
-Phase 4 follows the Studio v3 Media mockups and v2 Backup & Restore / Settings designs. Launch `src/DoViFixer.App/bin/Debug/net10.0-windows/DoViFixer.App.exe` after building. See [WPF implementation and verification](docs/wpf.md).
+Phase 4 follows the Studio v3 Media mockups and v2 Backup & Restore / Settings designs. Launch `src/DoViFixer.App/bin/Debug/net10.0-windows10.0.19041.0/DoViFixer.App.exe` after building. See [WPF implementation and verification](docs/wpf.md).
 
 - **Media:** add MKV files or folders (subfolders included, up to 100 levels), then independently Scan, Inspect (standard/deep), or Convert. Focus controls the right details panel; checkboxes control inclusion. Convert automatically performs full analysis and opens the bottom options/review panel.
 - **Approval:** changing selection, target, destination, or file handling invalidates the plan. Use **Review changes**, then **Approve and start** for the displayed paths and warnings. FEL picture loss and replacement of originals are included in that approval. Native-tool installation has its own separate plan and approval.
