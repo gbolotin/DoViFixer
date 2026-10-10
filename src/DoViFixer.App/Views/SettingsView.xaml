@@ -1,293 +1,295 @@
-<ResourceDictionary xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
-                    xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
-                    xmlns:viewModels="clr-namespace:DoViFixer.App.ViewModels"
-                    xmlns:updates="clr-namespace:DoViFixer.Application.Updates;assembly=DoViFixer.Application">
-    <DataTemplate DataType="{x:Type viewModels:SettingsViewModel}">
-        <DockPanel>
-            <StackPanel DockPanel.Dock="Bottom" Margin="0,8,0,0">
-                <TextBlock Text="Changes save automatically." Foreground="{DynamicResource TextFillColorSecondaryBrush}" />
-                <TextBlock Text="Saving settings…" Visibility="{Binding IsSaving, Converter={StaticResource WfBooleanToVisibilityConverter}}" />
-                <StackPanel Visibility="{Binding HasSaveError, Converter={StaticResource WfBooleanToVisibilityConverter}}">
-                    <TextBlock Text="Changes could not be saved. Correct the settings, retry, or discard unsaved changes to continue."
-                               TextWrapping="Wrap"
-                               FontWeight="SemiBold" />
-                    <TextBlock Text="{Binding SaveError}" TextWrapping="Wrap" />
-                    <WrapPanel Margin="0,8,0,0">
-                        <Button Content="Retry saving settings"
-                                Command="{Binding SaveCommand}"
-                                Margin="0,0,8,4" />
-                        <Button Content="Discard unsaved changes"
-                                Command="{Binding DiscardChangesCommand}"
-                                Margin="0,0,0,4" />
-                    </WrapPanel>
-                </StackPanel>
+<UserControl x:Class="DoViFixer.App.Views.SettingsView"
+             xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:viewModels="clr-namespace:DoViFixer.App.ViewModels"
+             xmlns:updates="clr-namespace:DoViFixer.Application.Updates;assembly=DoViFixer.Application"
+             xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
+             xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
+             mc:Ignorable="d"
+             d:DataContext="{d:DesignInstance Type=viewModels:SettingsViewModel}">
+    <DockPanel>
+        <StackPanel DockPanel.Dock="Bottom" Margin="0,8,0,0">
+            <TextBlock Text="Changes save automatically." Foreground="{DynamicResource TextFillColorSecondaryBrush}" />
+            <TextBlock Text="Saving settings…" Visibility="{Binding IsSaving, Converter={StaticResource WfBooleanToVisibilityConverter}}" />
+            <StackPanel Visibility="{Binding HasSaveError, Converter={StaticResource WfBooleanToVisibilityConverter}}">
+                <TextBlock Text="Changes could not be saved. Correct the settings, retry, or discard unsaved changes to continue."
+                           TextWrapping="Wrap"
+                           FontWeight="SemiBold" />
+                <TextBlock Text="{Binding SaveError}" TextWrapping="Wrap" />
+                <WrapPanel Margin="0,8,0,0">
+                    <Button Content="Retry saving settings"
+                            Command="{Binding SaveCommand}"
+                            Margin="0,0,8,4" />
+                    <Button Content="Discard unsaved changes"
+                            Command="{Binding DiscardChangesCommand}"
+                            Margin="0,0,0,4" />
+                </WrapPanel>
             </StackPanel>
-            <ScrollViewer VerticalScrollBarVisibility="Auto">
-                <StackPanel>
-                    <TextBlock Text="Settings" Style="{StaticResource WfHeadingTextStyle}" />
-                    <Border Style="{StaticResource WfCardStyle}">
-                        <StackPanel>
-                            <TextBlock Text="Appearance"
-                                       Style="{StaticResource SubtitleTextBlockStyle}" />
-                            <HeaderedContentControl Header="App theme"
-                                                    AutomationProperties.HelpText="{Binding Source={x:Static updates:ApplicationTitle.Name}, StringFormat='Select whether {0} follows your Windows system color theme, or uses Light or Dark theme.'}"
-                                                    Style="{StaticResource WfSettingRowStyle}">
-                                <ComboBox ItemsSource="{Binding Themes}"
-                                          SelectedItem="{Binding SelectedTheme}"
-                                          AutomationProperties.Name="App theme"
-                                          Width="220" />
-                            </HeaderedContentControl>
-                        </StackPanel>
-                    </Border>
-                    <Border Style="{StaticResource WfCardStyle}" Margin="0,24,0,0">
-                        <StackPanel>
-                            <TextBlock Text="Notifications"
-                                       Style="{StaticResource SubtitleTextBlockStyle}" />
-                            <CheckBox Content="Show a notification when an operation finishes"
-                                      AutomationProperties.HelpText="When a scan, conversion, backup or restore finishes while the window is minimized or behind another app, Windows shows a notification. The taskbar button shows progress either way. Do not disturb and the app's switch in Windows Settings still apply."
-                                      IsChecked="{Binding ShowCompletionNotifications}"
-                                      Style="{StaticResource WfToggleSwitchStyle}" />
-                        </StackPanel>
-                    </Border>
-                    <Border Style="{StaticResource WfCardStyle}" Margin="0,24,0,0">
-                        <StackPanel IsEnabled="{Binding IsIdle}">
-                            <TextBlock Text="Conversion options"
-                                       Style="{StaticResource SubtitleTextBlockStyle}" />
-                            <HeaderedContentControl Header="Temporary storage folder"
-                                                    AutomationProperties.HelpText="Working space for extracted video, Dolby Vision metadata and verification files during scans, inspections, conversions, backups and restores. Each operation uses its own subfolder and attempts to remove it when finished, including after failure or cancellation. Final output files use the output folder selected below. Leave blank to use the Windows temporary folder."
-                                                    Style="{StaticResource WfStackedSettingRowStyle}">
-                                <DockPanel>
-                                    <Button Content="Browse"
-                                            DockPanel.Dock="Right"
-                                            Command="{Binding BrowseTemporaryCommand}"
-                                            Margin="8,0,0,0" />
-                                    <TextBox Text="{Binding Temporary}" AutomationProperties.Name="Temporary storage folder" />
-                                </DockPanel>
-                            </HeaderedContentControl>
-                            <Separator />
-                            <HeaderedContentControl Header="Output folder"
-                                                    AutomationProperties.HelpText="Where converted files are written."
-                                                    Style="{StaticResource WfSettingRowStyle}">
-                                <ComboBox AutomationProperties.Name="Output folder" Width="220">
-                                    <ComboBoxItem Content="Same folder as source" IsSelected="{Binding OtherFolder, Converter={StaticResource WfInverseBooleanConverter}}" />
-                                    <ComboBoxItem Content="Other output folder" IsSelected="{Binding OtherFolder}" />
-                                </ComboBox>
-                            </HeaderedContentControl>
-                            <DockPanel Visibility="{Binding OtherFolder, Converter={StaticResource WfBooleanToVisibilityConverter}}" Margin="0,0,0,12">
+        </StackPanel>
+        <ScrollViewer VerticalScrollBarVisibility="Auto">
+            <StackPanel>
+                <TextBlock Text="Settings" Style="{StaticResource WfHeadingTextStyle}" />
+                <Border Style="{StaticResource WfCardStyle}">
+                    <StackPanel>
+                        <TextBlock Text="Appearance"
+                                   Style="{StaticResource SubtitleTextBlockStyle}" />
+                        <HeaderedContentControl Header="App theme"
+                                                AutomationProperties.HelpText="{Binding Source={x:Static updates:ApplicationTitle.Name}, StringFormat='Select whether {0} follows your Windows system color theme, or uses Light or Dark theme.'}"
+                                                Style="{StaticResource WfSettingRowStyle}">
+                            <ComboBox ItemsSource="{Binding Themes}"
+                                      SelectedItem="{Binding SelectedTheme}"
+                                      AutomationProperties.Name="App theme"
+                                      Width="220" />
+                        </HeaderedContentControl>
+                    </StackPanel>
+                </Border>
+                <Border Style="{StaticResource WfCardStyle}" Margin="0,24,0,0">
+                    <StackPanel>
+                        <TextBlock Text="Notifications"
+                                   Style="{StaticResource SubtitleTextBlockStyle}" />
+                        <CheckBox Content="Show a notification when an operation finishes"
+                                  AutomationProperties.HelpText="When a scan, conversion, backup or restore finishes while the window is minimized or behind another app, Windows shows a notification. The taskbar button shows progress either way. Do not disturb and the app's switch in Windows Settings still apply."
+                                  IsChecked="{Binding ShowCompletionNotifications}"
+                                  Style="{StaticResource WfToggleSwitchStyle}" />
+                    </StackPanel>
+                </Border>
+                <Border Style="{StaticResource WfCardStyle}" Margin="0,24,0,0">
+                    <StackPanel IsEnabled="{Binding IsIdle}">
+                        <TextBlock Text="Conversion options"
+                                   Style="{StaticResource SubtitleTextBlockStyle}" />
+                        <HeaderedContentControl Header="Temporary storage folder"
+                                                AutomationProperties.HelpText="Working space for extracted video, Dolby Vision metadata and verification files during scans, inspections, conversions, backups and restores. Each operation uses its own subfolder and attempts to remove it when finished, including after failure or cancellation. Final output files use the output folder selected below. Leave blank to use the Windows temporary folder."
+                                                Style="{StaticResource WfStackedSettingRowStyle}">
+                            <DockPanel>
                                 <Button Content="Browse"
                                         DockPanel.Dock="Right"
-                                        Command="{Binding BrowseDestinationCommand}"
+                                        Command="{Binding BrowseTemporaryCommand}"
                                         Margin="8,0,0,0" />
-                                <TextBox Text="{Binding Destination}" AutomationProperties.Name="Output folder path" />
+                                <TextBox Text="{Binding Temporary}" AutomationProperties.Name="Temporary storage folder" />
                             </DockPanel>
-                            <TextBlock Text="{Binding DestinationError}"
-                                       TextWrapping="Wrap"
-                                       AutomationProperties.LiveSetting="Polite" />
-                            <TextBlock Text="File handling and policy" Style="{StaticResource WfLabelTextStyle}" />
-                            <CheckBox Content="Replace original after verification"
-                                      AutomationProperties.HelpText="The converted file replaces the source file once verification succeeds. When off, the original is kept."
-                                      IsChecked="{Binding ReplaceOriginal}"
-                                      Style="{StaticResource WfToggleSwitchStyle}" />
-                            <Separator />
-                            <CheckBox Content="Create EL archive by default"
-                                      AutomationProperties.HelpText="Saves the enhancement layer in an archive so the original file can be restored from Backup &amp; Restore."
-                                      IsChecked="{Binding CreateArchive}"
-                                      Style="{StaticResource WfToggleSwitchStyle}" />
-                            <Separator />
-                            <CheckBox Content="Include Simple FEL conversion"
-                                      IsChecked="{Binding IncludeSimple}"
-                                      Style="{StaticResource WfToggleSwitchStyle}" />
-                            <TextBlock Style="{StaticResource WfSettingNoteTextStyle}">
-                                <Run Text="&#xE7BA;"
-                                     FontFamily="{StaticResource SymbolThemeFontFamily}"
-                                     Foreground="{DynamicResource SystemFillColorCautionBrush}" />
-                                <Run Text="Enhancement-layer picture data will be discarded. Simple FEL contains minimal picture data and does not expand dynamic range beyond the base layer, but the original enhancement-layer video track is not retained in the converted file." />
-                            </TextBlock>
-                            <Separator />
-                            <CheckBox Content="Force Complex FEL conversion"
-                                      IsChecked="{Binding ForceComplex}"
-                                      Style="{StaticResource WfToggleSwitchStyle}" />
-                            <TextBlock Style="{StaticResource WfSettingNoteTextStyle}">
-                                <Run Text="&#xE7BA;"
-                                     FontFamily="{StaticResource SymbolThemeFontFamily}"
-                                     Foreground="{DynamicResource SystemFillColorCautionBrush}" />
-                                <Run Text="Active enhancement-layer picture data will be permanently lost. Complex FEL contains video data that expands dynamic range and brightness beyond the base layer. Discarding it during conversion removes this visual detail." />
-                            </TextBlock>
-                        </StackPanel>
-                    </Border>
-                    <Border Style="{StaticResource WfCardStyle}" Margin="0,24,0,0">
-                        <StackPanel>
-                            <TextBlock Text="Scanning and cache"
-                                       Style="{StaticResource SubtitleTextBlockStyle}" />
-                            <CheckBox Content="Automatically scan added files"
-                                      AutomationProperties.HelpText="Starts a scan as soon as files are added to the Media list."
-                                      IsChecked="{Binding AutomaticallyScanAddedFiles}"
-                                      Style="{StaticResource WfToggleSwitchStyle}" />
-                            <Separator />
-                            <CheckBox Content="Use cached analysis results"
-                                      AutomationProperties.HelpText="When disabled, scans and inspections analyze files again. Successful results are still saved."
-                                      IsChecked="{Binding UseCachedResults}"
-                                      Style="{StaticResource WfToggleSwitchStyle}" />
-                            <Separator />
-                            <DockPanel Margin="0,12">
-                                <Button Content="Clear cache"
-                                        DockPanel.Dock="Right"
-                                        Command="{Binding ClearCacheCommand}"
-                                        ToolTip="Delete cached analysis results and movie frame previews."
-                                        VerticalAlignment="Center"
-                                        Margin="24,0,0,0" />
-                                <StackPanel>
-                                    <TextBlock Text="Analysis cache" />
-                                    <TextBlock Text="{Binding CacheSizeText}"
-                                               Style="{StaticResource CaptionTextBlockStyle}"
-                                               Foreground="{DynamicResource TextFillColorSecondaryBrush}"
-                                               ToolTip="Total disk space used by cached analysis results and movie frame previews."
-                                               Margin="0,2,0,0" />
-                                    <TextBlock TextWrapping="Wrap"
-                                               Style="{StaticResource CaptionTextBlockStyle}"
-                                               Foreground="{DynamicResource TextFillColorSecondaryBrush}"
-                                               ToolTip="{Binding CacheDirectory}">
-                                        <Run Text="Location: " /><Hyperlink Command="{Binding OpenCacheFolderCommand}"
-                                                   AutomationProperties.Name="Open cache folder">
-                                            <Run Text="{Binding CacheDirectory, Mode=OneWay}" />
-                                        </Hyperlink>
-                                    </TextBlock>
-                                </StackPanel>
-                            </DockPanel>
-                            <Separator />
-                            <CheckBox Content="Automatically select convertible files after scan"
-                                      AutomationProperties.HelpText="When a scan finishes, selects the files that can be converted with the current FEL settings."
-                                      IsChecked="{Binding AutoSelectAfterScan}"
-                                      Style="{StaticResource WfToggleSwitchStyle}" />
-                        </StackPanel>
-                    </Border>
-                    <Border Style="{StaticResource WfCardStyle}" Margin="0,24,0,0">
-                        <StackPanel>
-                            <TextBlock Text="Native tools"
-                                       Style="{StaticResource SubtitleTextBlockStyle}" />
-                            <HeaderedContentControl Header="Tool status"
-                                                    AutomationProperties.HelpText="{Binding Source={x:Static updates:ApplicationTitle.Name}, StringFormat='Command-line tools {0} uses to read, extract and rebuild media files.'}"
-                                                    Style="{StaticResource WfSettingRowStyle}">
-                                <StackPanel Orientation="Horizontal">
-                                    <Button Content="Check tools"
-                                            Command="{Binding CheckCommand}"
+                        </HeaderedContentControl>
+                        <Separator />
+                        <HeaderedContentControl Header="Output folder"
+                                                AutomationProperties.HelpText="Where converted files are written."
+                                                Style="{StaticResource WfSettingRowStyle}">
+                            <ComboBox AutomationProperties.Name="Output folder" Width="220">
+                                <ComboBoxItem Content="Same folder as source" IsSelected="{Binding OtherFolder, Converter={StaticResource WfInverseBooleanConverter}}" />
+                                <ComboBoxItem Content="Other output folder" IsSelected="{Binding OtherFolder}" />
+                            </ComboBox>
+                        </HeaderedContentControl>
+                        <DockPanel Visibility="{Binding OtherFolder, Converter={StaticResource WfBooleanToVisibilityConverter}}" Margin="0,0,0,12">
+                            <Button Content="Browse"
+                                    DockPanel.Dock="Right"
+                                    Command="{Binding BrowseDestinationCommand}"
+                                    Margin="8,0,0,0" />
+                            <TextBox Text="{Binding Destination}" AutomationProperties.Name="Output folder path" />
+                        </DockPanel>
+                        <TextBlock Text="{Binding DestinationError}"
+                                   TextWrapping="Wrap"
+                                   AutomationProperties.LiveSetting="Polite" />
+                        <TextBlock Text="File handling and policy" Style="{StaticResource WfLabelTextStyle}" />
+                        <CheckBox Content="Replace original after verification"
+                                  AutomationProperties.HelpText="The converted file replaces the source file once verification succeeds. When off, the original is kept."
+                                  IsChecked="{Binding ReplaceOriginal}"
+                                  Style="{StaticResource WfToggleSwitchStyle}" />
+                        <Separator />
+                        <CheckBox Content="Create EL archive by default"
+                                  AutomationProperties.HelpText="Saves the enhancement layer in an archive so the original file can be restored from Backup &amp; Restore."
+                                  IsChecked="{Binding CreateArchive}"
+                                  Style="{StaticResource WfToggleSwitchStyle}" />
+                        <Separator />
+                        <CheckBox Content="Include Simple FEL conversion"
+                                  IsChecked="{Binding IncludeSimple}"
+                                  Style="{StaticResource WfToggleSwitchStyle}" />
+                        <TextBlock Style="{StaticResource WfSettingNoteTextStyle}">
+                            <Run Text="&#xE7BA;"
+                                 FontFamily="{StaticResource SymbolThemeFontFamily}"
+                                 Foreground="{DynamicResource SystemFillColorCautionBrush}" />
+                            <Run Text="Enhancement-layer picture data will be discarded. Simple FEL contains minimal picture data and does not expand dynamic range beyond the base layer, but the original enhancement-layer video track is not retained in the converted file." />
+                        </TextBlock>
+                        <Separator />
+                        <CheckBox Content="Force Complex FEL conversion"
+                                  IsChecked="{Binding ForceComplex}"
+                                  Style="{StaticResource WfToggleSwitchStyle}" />
+                        <TextBlock Style="{StaticResource WfSettingNoteTextStyle}">
+                            <Run Text="&#xE7BA;"
+                                 FontFamily="{StaticResource SymbolThemeFontFamily}"
+                                 Foreground="{DynamicResource SystemFillColorCautionBrush}" />
+                            <Run Text="Active enhancement-layer picture data will be permanently lost. Complex FEL contains video data that expands dynamic range and brightness beyond the base layer. Discarding it during conversion removes this visual detail." />
+                        </TextBlock>
+                    </StackPanel>
+                </Border>
+                <Border Style="{StaticResource WfCardStyle}" Margin="0,24,0,0">
+                    <StackPanel>
+                        <TextBlock Text="Scanning and cache"
+                                   Style="{StaticResource SubtitleTextBlockStyle}" />
+                        <CheckBox Content="Automatically scan added files"
+                                  AutomationProperties.HelpText="Starts a scan as soon as files are added to the Media list."
+                                  IsChecked="{Binding AutomaticallyScanAddedFiles}"
+                                  Style="{StaticResource WfToggleSwitchStyle}" />
+                        <Separator />
+                        <CheckBox Content="Use cached analysis results"
+                                  AutomationProperties.HelpText="When disabled, scans and inspections analyze files again. Successful results are still saved."
+                                  IsChecked="{Binding UseCachedResults}"
+                                  Style="{StaticResource WfToggleSwitchStyle}" />
+                        <Separator />
+                        <DockPanel Margin="0,12">
+                            <Button Content="Clear cache"
+                                    DockPanel.Dock="Right"
+                                    Command="{Binding ClearCacheCommand}"
+                                    ToolTip="Delete cached analysis results and movie frame previews."
+                                    VerticalAlignment="Center"
+                                    Margin="24,0,0,0" />
+                            <StackPanel>
+                                <TextBlock Text="Analysis cache" />
+                                <TextBlock Text="{Binding CacheSizeText}"
+                                           Style="{StaticResource CaptionTextBlockStyle}"
+                                           Foreground="{DynamicResource TextFillColorSecondaryBrush}"
+                                           ToolTip="Total disk space used by cached analysis results and movie frame previews."
+                                           Margin="0,2,0,0" />
+                                <TextBlock TextWrapping="Wrap"
+                                           Style="{StaticResource CaptionTextBlockStyle}"
+                                           Foreground="{DynamicResource TextFillColorSecondaryBrush}"
+                                           ToolTip="{Binding CacheDirectory}">
+                                    <Run Text="Location: " /><Hyperlink Command="{Binding OpenCacheFolderCommand}"
+                                               AutomationProperties.Name="Open cache folder">
+                                        <Run Text="{Binding CacheDirectory, Mode=OneWay}" />
+                                    </Hyperlink>
+                                </TextBlock>
+                            </StackPanel>
+                        </DockPanel>
+                        <Separator />
+                        <CheckBox Content="Automatically select convertible files after scan"
+                                  AutomationProperties.HelpText="When a scan finishes, selects the files that can be converted with the current FEL settings."
+                                  IsChecked="{Binding AutoSelectAfterScan}"
+                                  Style="{StaticResource WfToggleSwitchStyle}" />
+                    </StackPanel>
+                </Border>
+                <Border Style="{StaticResource WfCardStyle}" Margin="0,24,0,0">
+                    <StackPanel>
+                        <TextBlock Text="Native tools"
+                                   Style="{StaticResource SubtitleTextBlockStyle}" />
+                        <HeaderedContentControl Header="Tool status"
+                                                AutomationProperties.HelpText="{Binding Source={x:Static updates:ApplicationTitle.Name}, StringFormat='Command-line tools {0} uses to read, extract and rebuild media files.'}"
+                                                Style="{StaticResource WfSettingRowStyle}">
+                            <StackPanel Orientation="Horizontal">
+                                <Button Content="Check tools"
+                                        Command="{Binding CheckCommand}"
+                                        Margin="0,0,8,0" />
+                                <Button Content="Dependency setup" Command="{Binding InstallCommand}" />
+                            </StackPanel>
+                        </HeaderedContentControl>
+                        <ItemsControl ItemsSource="{Binding Dependencies.ToolRows}" Focusable="False">
+                            <ItemsControl.ItemTemplate>
+                                <DataTemplate>
+                                    <Border BorderThickness="0,1,0,0"
+                                            BorderBrush="{DynamicResource DividerStrokeColorDefaultBrush}"
+                                            Padding="0,8">
+                                        <Grid>
+                                            <Grid.ColumnDefinitions>
+                                                <ColumnDefinition Width="200" />
+                                                <ColumnDefinition Width="*" />
+                                                <ColumnDefinition Width="Auto" />
+                                            </Grid.ColumnDefinitions>
+                                            <TextBlock Text="{Binding Name}" Margin="0,0,12,0" />
+                                            <StackPanel Grid.Column="1" Margin="0,0,24,0">
+                                                <TextBlock Text="{Binding Purpose}"
+                                                           TextWrapping="Wrap"
+                                                           Style="{StaticResource CaptionTextBlockStyle}"
+                                                           Foreground="{DynamicResource TextFillColorSecondaryBrush}" />
+                                                <TextBlock Text="{Binding Status.Path}"
+                                                           TextTrimming="CharacterEllipsis"
+                                                           ToolTip="{Binding Status.Path}"
+                                                           Style="{StaticResource CaptionTextBlockStyle}"
+                                                           Foreground="{DynamicResource TextFillColorTertiaryBrush}" />
+                                                <TextBlock Text="{Binding Status.Diagnostic}"
+                                                           TextWrapping="Wrap"
+                                                           Style="{StaticResource CaptionTextBlockStyle}"
+                                                           Foreground="{DynamicResource TextFillColorTertiaryBrush}" />
+                                            </StackPanel>
+                                            <StackPanel Grid.Column="2"
+                                                        Orientation="Horizontal"
+                                                        VerticalAlignment="Top">
+                                                <TextBlock x:Name="StateIcon"
+                                                           Text="&#xE7BA;"
+                                                           FontFamily="{StaticResource SymbolThemeFontFamily}"
+                                                           FontSize="12"
+                                                           Foreground="{DynamicResource SystemFillColorCautionBrush}"
+                                                           VerticalAlignment="Center"
+                                                           Margin="0,0,8,0" />
+                                                <TextBlock Text="{Binding StateText}"
+                                                           MaxWidth="200"
+                                                           TextTrimming="CharacterEllipsis"
+                                                           ToolTip="{Binding StateText}"
+                                                           Foreground="{DynamicResource TextFillColorSecondaryBrush}"
+                                                           VerticalAlignment="Center" />
+                                            </StackPanel>
+                                        </Grid>
+                                    </Border>
+                                    <DataTemplate.Triggers>
+                                        <DataTrigger Binding="{Binding IsReady}" Value="True">
+                                            <Setter TargetName="StateIcon" Property="Text" Value="&#xE73E;" />
+                                            <Setter TargetName="StateIcon" Property="Foreground" Value="{DynamicResource SystemFillColorSuccessBrush}" />
+                                        </DataTrigger>
+                                    </DataTemplate.Triggers>
+                                </DataTemplate>
+                            </ItemsControl.ItemTemplate>
+                        </ItemsControl>
+                        <Separator />
+                        <HeaderedContentControl Header="Custom tool path"
+                                                AutomationProperties.HelpText="Use a specific executable instead of the one found by dependency setup."
+                                                IsEnabled="{Binding IsIdle}"
+                                                Style="{StaticResource WfStackedSettingRowStyle}">
+                            <StackPanel>
+                                <DockPanel>
+                                    <ComboBox ItemsSource="{Binding ToolNames}"
+                                              SelectedItem="{Binding SelectedTool}"
+                                              AutomationProperties.Name="Tool"
+                                              Width="150" />
+                                    <Button Content="Browse"
+                                            DockPanel.Dock="Right"
+                                            Command="{Binding BrowseToolCommand}" />
+                                    <TextBox Text="{Binding ToolPath, UpdateSourceTrigger=PropertyChanged}"
+                                             AutomationProperties.Name="Tool path"
+                                             Margin="8,0" />
+                                </DockPanel>
+                                <StackPanel Orientation="Horizontal"
+                                            HorizontalAlignment="Right"
+                                            Margin="0,8,0,0">
+                                    <Button Content="Validate and save path"
+                                            Command="{Binding SetToolCommand}"
                                             Margin="0,0,8,0" />
-                                    <Button Content="Dependency setup" Command="{Binding InstallCommand}" />
+                                    <Button Content="Reset selected tool path" Command="{Binding ResetToolCommand}" />
                                 </StackPanel>
-                            </HeaderedContentControl>
-                            <ItemsControl ItemsSource="{Binding Dependencies.ToolRows}" Focusable="False">
-                                <ItemsControl.ItemTemplate>
-                                    <DataTemplate>
-                                        <Border BorderThickness="0,1,0,0"
-                                                BorderBrush="{DynamicResource DividerStrokeColorDefaultBrush}"
-                                                Padding="0,8">
-                                            <Grid>
-                                                <Grid.ColumnDefinitions>
-                                                    <ColumnDefinition Width="200" />
-                                                    <ColumnDefinition Width="*" />
-                                                    <ColumnDefinition Width="Auto" />
-                                                </Grid.ColumnDefinitions>
-                                                <TextBlock Text="{Binding Name}" Margin="0,0,12,0" />
-                                                <StackPanel Grid.Column="1" Margin="0,0,24,0">
-                                                    <TextBlock Text="{Binding Purpose}"
-                                                               TextWrapping="Wrap"
-                                                               Style="{StaticResource CaptionTextBlockStyle}"
-                                                               Foreground="{DynamicResource TextFillColorSecondaryBrush}" />
-                                                    <TextBlock Text="{Binding Status.Path}"
-                                                               TextTrimming="CharacterEllipsis"
-                                                               ToolTip="{Binding Status.Path}"
-                                                               Style="{StaticResource CaptionTextBlockStyle}"
-                                                               Foreground="{DynamicResource TextFillColorTertiaryBrush}" />
-                                                    <TextBlock Text="{Binding Status.Diagnostic}"
-                                                               TextWrapping="Wrap"
-                                                               Style="{StaticResource CaptionTextBlockStyle}"
-                                                               Foreground="{DynamicResource TextFillColorTertiaryBrush}" />
-                                                </StackPanel>
-                                                <StackPanel Grid.Column="2"
-                                                            Orientation="Horizontal"
-                                                            VerticalAlignment="Top">
-                                                    <TextBlock x:Name="StateIcon"
-                                                               Text="&#xE7BA;"
-                                                               FontFamily="{StaticResource SymbolThemeFontFamily}"
-                                                               FontSize="12"
-                                                               Foreground="{DynamicResource SystemFillColorCautionBrush}"
-                                                               VerticalAlignment="Center"
-                                                               Margin="0,0,8,0" />
-                                                    <TextBlock Text="{Binding StateText}"
-                                                               MaxWidth="200"
-                                                               TextTrimming="CharacterEllipsis"
-                                                               ToolTip="{Binding StateText}"
-                                                               Foreground="{DynamicResource TextFillColorSecondaryBrush}"
-                                                               VerticalAlignment="Center" />
-                                                </StackPanel>
-                                            </Grid>
-                                        </Border>
-                                        <DataTemplate.Triggers>
-                                            <DataTrigger Binding="{Binding IsReady}" Value="True">
-                                                <Setter TargetName="StateIcon" Property="Text" Value="&#xE73E;" />
-                                                <Setter TargetName="StateIcon" Property="Foreground" Value="{DynamicResource SystemFillColorSuccessBrush}" />
-                                            </DataTrigger>
-                                        </DataTemplate.Triggers>
-                                    </DataTemplate>
-                                </ItemsControl.ItemTemplate>
-                            </ItemsControl>
-                            <Separator />
-                            <HeaderedContentControl Header="Custom tool path"
-                                                    AutomationProperties.HelpText="Use a specific executable instead of the one found by dependency setup."
-                                                    IsEnabled="{Binding IsIdle}"
-                                                    Style="{StaticResource WfStackedSettingRowStyle}">
-                                <StackPanel>
-                                    <DockPanel>
-                                        <ComboBox ItemsSource="{Binding ToolNames}"
-                                                  SelectedItem="{Binding SelectedTool}"
-                                                  AutomationProperties.Name="Tool"
-                                                  Width="150" />
-                                        <Button Content="Browse"
-                                                DockPanel.Dock="Right"
-                                                Command="{Binding BrowseToolCommand}" />
-                                        <TextBox Text="{Binding ToolPath, UpdateSourceTrigger=PropertyChanged}"
-                                                 AutomationProperties.Name="Tool path"
-                                                 Margin="8,0" />
-                                    </DockPanel>
-                                    <StackPanel Orientation="Horizontal"
-                                                HorizontalAlignment="Right"
-                                                Margin="0,8,0,0">
-                                        <Button Content="Validate and save path"
-                                                Command="{Binding SetToolCommand}"
-                                                Margin="0,0,8,0" />
-                                        <Button Content="Reset selected tool path" Command="{Binding ResetToolCommand}" />
-                                    </StackPanel>
-                                </StackPanel>
-                            </HeaderedContentControl>
-                        </StackPanel>
-                    </Border>
-                    <TextBlock Foreground="{DynamicResource TextFillColorSecondaryBrush}"
-                               Margin="0,24,0,0">
-                        <TextBlock.Text>
-                            <MultiBinding StringFormat="{}{0} {1}">
-                                <Binding Source="{x:Static updates:ApplicationTitle.Name}" />
-                                <Binding Path="Version" />
-                            </MultiBinding>
-                        </TextBlock.Text>
-                    </TextBlock>
-                    <TextBlock TextWrapping="Wrap"
-                               Foreground="{DynamicResource TextFillColorSecondaryBrush}"
-                               Margin="0,4,0,24">
-                        <Run Text="Operation history, audit and diagnostics: " /><Hyperlink Command="{Binding OpenLogsCommand}"
-                                   AutomationProperties.Name="Open logs folder">
-                            <Run Text="%LOCALAPPDATA%\DoViFixer\Logs" />
-                        </Hyperlink>
-                    </TextBlock>
-                    <ProgressBar Value="{Binding Percent, Mode=OneWay}"
-                                 IsIndeterminate="{Binding IsIndeterminate}"
-                                 Visibility="{Binding IsBusy, Converter={StaticResource WfBooleanToVisibilityConverter}}" />
-                    <Button Content="Cancel operation"
-                            Command="{Binding CancelCommand}"
-                            Visibility="{Binding IsBusy, Converter={StaticResource WfBooleanToVisibilityConverter}}"
-                            HorizontalAlignment="Right" />
-                </StackPanel>
-            </ScrollViewer>
-        </DockPanel>
-    </DataTemplate>
-
-</ResourceDictionary>
+                            </StackPanel>
+                        </HeaderedContentControl>
+                    </StackPanel>
+                </Border>
+                <TextBlock Foreground="{DynamicResource TextFillColorSecondaryBrush}"
+                           Margin="0,24,0,0">
+                    <TextBlock.Text>
+                        <MultiBinding StringFormat="{}{0} {1}">
+                            <Binding Source="{x:Static updates:ApplicationTitle.Name}" />
+                            <Binding Path="Version" />
+                        </MultiBinding>
+                    </TextBlock.Text>
+                </TextBlock>
+                <TextBlock TextWrapping="Wrap"
+                           Foreground="{DynamicResource TextFillColorSecondaryBrush}"
+                           Margin="0,4,0,24">
+                    <Run Text="Operation history, audit and diagnostics: " /><Hyperlink Command="{Binding OpenLogsCommand}"
+                               AutomationProperties.Name="Open logs folder">
+                        <Run Text="%LOCALAPPDATA%\DoViFixer\Logs" />
+                    </Hyperlink>
+                </TextBlock>
+                <ProgressBar Value="{Binding Percent, Mode=OneWay}"
+                             IsIndeterminate="{Binding IsIndeterminate}"
+                             Visibility="{Binding IsBusy, Converter={StaticResource WfBooleanToVisibilityConverter}}" />
+                <Button Content="Cancel operation"
+                        Command="{Binding CancelCommand}"
+                        Visibility="{Binding IsBusy, Converter={StaticResource WfBooleanToVisibilityConverter}}"
+                        HorizontalAlignment="Right" />
+            </StackPanel>
+        </ScrollViewer>
+    </DockPanel>
+</UserControl>

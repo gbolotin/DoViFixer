@@ -87,6 +87,13 @@
 </StackPanel>
 ```
 
+## WPF views
+
+- Make each page or substantial view a UserControl in its own XAML file, mapped from its ViewModel by a one-line implicit DataTemplate: `<DataTemplate DataType="{x:Type vm:SettingsViewModel}"><views:SettingsPage /></DataTemplate>`. Set `d:DataContext` so the designer can preview it.
+- Keep resources only one view uses in its `UserControl.Resources`; share only resources several views use.
+- Use inline DataTemplates only for small item, cell and dialog-body templates.
+- Keep code-behind empty unless it holds purely visual logic, such as moving focus or scrolling.
+
 ## UI design
 
 - Follow Microsoft's Windows app design guidance (https://learn.microsoft.com/windows/apps/design/) for layout, typography, color, icons, controls, and wording.
@@ -130,3 +137,39 @@ When reviewing or refactoring code, look especially for:
 
 - Explain tradeoffs briefly.
 - When unsure, ask before making broad architectural changes.
+
+## Clear explanations and useful visuals
+
+Help me understand the answer, verify the work, and make decisions. Apply these rules when explaining code, plans, errors, concepts, or changes.
+
+### Writing
+
+Use a relaxed ASD-STE100-inspired style, approximately "80% of ASD-STE100":
+
+- Give the answer or outcome first, followed by the necessary details.
+- Express one main idea or action per sentence.
+- Aim for no more than 20 words in instructional sentences and 25 in descriptive sentences. Prefer clarity and accuracy over strict word counts.
+- Use active voice. State who does what.
+- Use the same term for the same thing. Explain unfamiliar terms in plain language at first use.
+- Preserve exact identifiers, units, conditions, and error messages when they matter.
+- Present procedures as numbered steps and comparisons as tables when useful.
+- Keep each paragraph focused on one topic, normally with no more than 6 sentences.
+- Remove filler and repetition. Do not omit necessary words just to shorten the text.
+- Distinguish verified facts, assumptions, proposals, and uncertainty.
+- Follow my language and requested level of detail.
+
+### Visual explanations
+
+Choose the simplest format that makes the subject clear.
+
+- For processes with more than 3 steps or systems with more than 3 parts, normally include a compact diagram. Skip it when it would only repeat an already clear list.
+- Use ASCII diagrams by default. Use Mermaid when rendering is supported and it improves readability.
+- Label important relationships, branches, and state transitions.
+- When I say "explain in HTML," create one interactive HTML page in a single self-contained file. Use built-in browser features where practical.
+- Clearly label illustrative data, assumptions, and simulations. Check generated artifacts when tools permit.
+- Create explainer videos when requested.
+- Keep simple answers simple. Do not generate additional formats automatically.
+
+### Reporting changes
+
+Briefly explain what changed, why it matters, what was verified, and any remaining limitations. Claim a check passed only when it actually ran and its result supports that claim.
