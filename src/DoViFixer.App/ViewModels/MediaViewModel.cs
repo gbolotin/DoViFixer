@@ -70,11 +70,6 @@ public sealed partial class MediaViewModel : OperationViewModel, INavigationPage
         this.logger = logger;
         this.mediaPreview = mediaPreview;
 
-        AddFilesCommand = new(() => AddAsync(files.PickFiles("Matroska media|*.mkv")), () => IsIdle);
-        AddFolderCommand = new(() => AddAsync(files.PickFolder() is { } folder ? [folder] : []), () => IsIdle);
-        AddDroppedPathsCommand = new(paths => AddAsync((paths ?? []).Where(discovery.IsSupportedInput)),
-            paths => IsIdle && paths is not null && paths.Any(discovery.IsSupportedInput));
-        ScanCommand = new(ScanAllAsync, CanScan);
         FilterOptions =
         [
             new(MediaFileFilter.All, "All", filter => FileFilter = filter) { IsSelected = true },
@@ -91,50 +86,6 @@ public sealed partial class MediaViewModel : OperationViewModel, INavigationPage
             OnPropertyChanged(nameof(HasMissingFiles));
             ShownFilesChanged();
         };
-        InspectCommand = new(() => AnalyzeAsync(AnalysisMethod.FullRpu), CanOperate);
-        DeepInspectCommand = new(() => AnalyzeAsync(AnalysisMethod.DeepInspection), CanOperate);
-        ConvertDv81Command = new(() => ConvertBatchAsync(ConversionTarget.Profile81), CanOperate);
-        ConvertRowDv81Command = new(row => ConvertBatchAsync(ConversionTarget.Profile81, [row!]), row => row is not null && IsIdle && Files.Contains(row) && row.IsProfile7 && !row.IsMissing);
-        RestoreRowCommand = new(row => RestoreRowAsync(row!), row => row is not null && IsIdle && Files.Contains(row) && row.CanRestore);
-        ConvertHdrCommand = new(() => ConvertBatchAsync(ConversionTarget.Hdr10), CanOperate);
-        ChooseInspectCommand = new(() => ChooseAndInspectAsync(deep: false), CanOperate);
-        ChooseDeepInspectCommand = new(() => ChooseAndInspectAsync(deep: true), CanOperate);
-        ChooseDv81Command = new(() => ChooseAndConvertAsync(hdr10: false), CanOperate);
-        ChooseHdr10Command = new(() => ChooseAndConvertAsync(hdr10: true), CanOperate);
-
-        CancelFileCommand = new RelayCommand<MediaRow>(row =>
-        {
-            if (row is not null && row.IsActive && !row.IsCancellationRequested && control is not null)
-            {
-                row.IsCancellationRequested = true;
-                row.Status = "Cancelling…";
-                row.Progress.Update("Cancelling…", null);
-                control.Cancel(row.Path);
-            }
-        }, row => row is not null && row.IsActive && !row.IsCancellationRequested);
-
-        PauseBatchCommand = new(() =>
-        {
-            if (control?.IsPaused == true)
-            {
-                control.Resume();
-            }
-            else
-            {
-                control?.Pause();
-            }
-
-            SetActivityPaused(control?.IsPaused == true);
-            NotifyActiveProgress();
-        }, () => BatchProgress.IsRunning);
-
-        OpenOutputCommand = new(() => explorer.ShowInFolder(Focused!.Result!.Output!), () => Focused?.CanOpenResult == true);
-        OpenRowOutputCommand = new(row => explorer.ShowInFolder(row!.Result!.Output!), row => row is not null && row.CanOpenResult);
-        OpenFileLocationCommand = new(() => explorer.ShowInFolder(Focused!.Path), () => Focused is not null);
-        ShowResultFileCommand = new(path => explorer.ShowInFolder(path!), path => !string.IsNullOrEmpty(path));
-        RetryAnalysisCommand = new(row => RunAsync(AnalysisTitle(row!.LastAnalysisMethod!.Value), (token, _) => AnalyzeRowsAsync([row!], row!.LastAnalysisMethod!.Value, token)), row => row is not null && IsIdle && Files.Contains(row) && row.CanRetryAnalysis && row.LastAnalysisMethod is not null);
-        InspectIncompleteCommand = new(row => RunAsync(AnalysisTitle(AnalysisMethod.FullRpu), (token, _) => AnalyzeRowsAsync([row!], AnalysisMethod.FullRpu, token)), row => row is not null && IsIdle && Files.Contains(row) && row.CanInspectIncomplete);
-        OpenSettingsCommand = new(() => RequestNavigateToSettings?.Invoke(), () => IsIdle);
         FileSort = new((column, direction) => new MediaRowComparer((MediaSortColumn)column, direction), () => IsIdle);
         BatchProgress.PropertyChanged += (_, e) =>
         {
@@ -218,7 +169,23 @@ public sealed partial class MediaViewModel : OperationViewModel, INavigationPage
         CommandsChanged();
     }
     public BatchProgressViewModel BatchProgress { get; } = new();
-    public RelayCommand PauseBatchCommand { get; }
+    private bool CanPauseBatch() => BatchProgress.IsRunning;
+
+    [RelayCommand(CanExecute = nameof(CanPauseBatch))]
+    private void PauseBatch()
+    {
+        if (control?.IsPaused == true)
+        {
+            control.Resume();
+        }
+        else
+        {
+            control?.Pause();
+        }
+
+        SetActivityPaused(control?.IsPaused == true);
+        NotifyActiveProgress();
+    }
     public string PauseBatchText => control?.IsPaused == true ? "Resume" : "Pause";
     public string PauseBatchIcon => control?.IsPaused == true ? "\uE768" : "\uE769";
     public string PauseBatchToolTip => control?.IsPaused == true ? "Resume the batch" : "Pause before the next job starts";
@@ -537,16 +504,42 @@ public sealed partial class MediaViewModel : OperationViewModel, INavigationPage
     /// </summary>
     public ColumnSort<MediaRow> FileSort { get; }
     public bool CanInspect => CanOperate();
-    public AsyncRelayCommand AddFilesCommand { get; }
-    public AsyncRelayCommand AddFolderCommand { get; }
-    public AsyncRelayCommand<string[]> AddDroppedPathsCommand { get; }
-    public AsyncRelayCommand ScanCommand { get; }
-    public AsyncRelayCommand InspectCommand { get; }
-    public AsyncRelayCommand DeepInspectCommand { get; }
-    public AsyncRelayCommand ConvertDv81Command { get; }
-    public AsyncRelayCommand<MediaRow> ConvertRowDv81Command { get; }
-    public AsyncRelayCommand<MediaRow> RestoreRowCommand { get; }
-    public AsyncRelayCommand ConvertHdrCommand { get; }
+
+    [RelayCommand(CanExecute = nameof(IsIdle))]
+    private Task AddFiles() => AddAsync(files.PickFiles("Matroska media|*.mkv"));
+
+    [RelayCommand(CanExecute = nameof(IsIdle))]
+    private Task AddFolder() => AddAsync(files.PickFolder() is { } folder ? [folder] : []);
+
+    private bool CanAddDroppedPaths(string[]? paths) => IsIdle && paths is not null && paths.Any(discovery.IsSupportedInput);
+
+    [RelayCommand(CanExecute = nameof(CanAddDroppedPaths))]
+    private Task AddDroppedPaths(string[]? paths) => AddAsync((paths ?? []).Where(discovery.IsSupportedInput));
+
+    [RelayCommand(CanExecute = nameof(CanScan))]
+    private Task Scan() => ScanAllAsync();
+
+    [RelayCommand(CanExecute = nameof(CanOperate))]
+    private Task Inspect() => AnalyzeAsync(AnalysisMethod.FullRpu);
+
+    [RelayCommand(CanExecute = nameof(CanOperate))]
+    private Task DeepInspect() => AnalyzeAsync(AnalysisMethod.DeepInspection);
+
+    [RelayCommand(CanExecute = nameof(CanOperate))]
+    private Task ConvertDv81() => ConvertBatchAsync(ConversionTarget.Profile81);
+
+    private bool CanConvertRowDv81(MediaRow? row) => row is not null && IsIdle && Files.Contains(row) && row.IsProfile7 && !row.IsMissing;
+
+    [RelayCommand(CanExecute = nameof(CanConvertRowDv81))]
+    private Task ConvertRowDv81(MediaRow? row) => ConvertBatchAsync(ConversionTarget.Profile81, [row!]);
+
+    private bool CanRestoreRow(MediaRow? row) => row is not null && IsIdle && Files.Contains(row) && row.CanRestore;
+
+    [RelayCommand(CanExecute = nameof(CanRestoreRow))]
+    private Task RestoreRow(MediaRow? row) => RestoreRowAsync(row!);
+
+    [RelayCommand(CanExecute = nameof(CanOperate))]
+    private Task ConvertHdr() => ConvertBatchAsync(ConversionTarget.Hdr10);
 
     /// <summary>
     /// Whether the Inspect split button runs a deep inspection. Picking an entry in its menu runs that inspection
@@ -562,18 +555,65 @@ public sealed partial class MediaViewModel : OperationViewModel, INavigationPage
     [ObservableProperty]
     public partial bool IsHdr10ConversionChosen { get; set; }
 
-    public AsyncRelayCommand ChooseInspectCommand { get; }
-    public AsyncRelayCommand ChooseDeepInspectCommand { get; }
-    public AsyncRelayCommand ChooseDv81Command { get; }
-    public AsyncRelayCommand ChooseHdr10Command { get; }
-    public RelayCommand<MediaRow> CancelFileCommand { get; }
-    public RelayCommand OpenOutputCommand { get; }
-    public RelayCommand OpenFileLocationCommand { get; }
-    public RelayCommand<string> ShowResultFileCommand { get; }
-    public AsyncRelayCommand<MediaRow> RetryAnalysisCommand { get; }
-    public AsyncRelayCommand<MediaRow> InspectIncompleteCommand { get; }
-    public RelayCommand<MediaRow> OpenRowOutputCommand { get; }
-    public RelayCommand OpenSettingsCommand { get; }
+    [RelayCommand(CanExecute = nameof(CanOperate))]
+    private Task ChooseInspect() => ChooseAndInspectAsync(deep: false);
+
+    [RelayCommand(CanExecute = nameof(CanOperate))]
+    private Task ChooseDeepInspect() => ChooseAndInspectAsync(deep: true);
+
+    [RelayCommand(CanExecute = nameof(CanOperate))]
+    private Task ChooseDv81() => ChooseAndConvertAsync(hdr10: false);
+
+    [RelayCommand(CanExecute = nameof(CanOperate))]
+    private Task ChooseHdr10() => ChooseAndConvertAsync(hdr10: true);
+
+    private static bool CanCancelFile(MediaRow? row) => row is not null && row.IsActive && !row.IsCancellationRequested;
+
+    [RelayCommand(CanExecute = nameof(CanCancelFile))]
+    private void CancelFile(MediaRow? row)
+    {
+        if (row is not null && row.IsActive && !row.IsCancellationRequested && control is not null)
+        {
+            row.IsCancellationRequested = true;
+            row.Status = "Cancelling…";
+            row.Progress.Update("Cancelling…", null);
+            control.Cancel(row.Path);
+        }
+    }
+
+    private bool CanOpenOutput() => Focused?.CanOpenResult == true;
+
+    [RelayCommand(CanExecute = nameof(CanOpenOutput))]
+    private void OpenOutput() => explorer.ShowInFolder(Focused!.Result!.Output!);
+
+    private bool CanOpenFileLocation() => Focused is not null;
+
+    [RelayCommand(CanExecute = nameof(CanOpenFileLocation))]
+    private void OpenFileLocation() => explorer.ShowInFolder(Focused!.Path);
+
+    private static bool CanShowResultFile(string? path) => !string.IsNullOrEmpty(path);
+
+    [RelayCommand(CanExecute = nameof(CanShowResultFile))]
+    private void ShowResultFile(string? path) => explorer.ShowInFolder(path!);
+
+    private bool CanRetryAnalysis(MediaRow? row) => row is not null && IsIdle && Files.Contains(row) && row.CanRetryAnalysis && row.LastAnalysisMethod is not null;
+
+    [RelayCommand(CanExecute = nameof(CanRetryAnalysis))]
+    private Task RetryAnalysis(MediaRow? row) => RunAsync(AnalysisTitle(row!.LastAnalysisMethod!.Value), (token, _) => AnalyzeRowsAsync([row!], row!.LastAnalysisMethod!.Value, token));
+
+    private bool CanInspectIncomplete(MediaRow? row) => row is not null && IsIdle && Files.Contains(row) && row.CanInspectIncomplete;
+
+    [RelayCommand(CanExecute = nameof(CanInspectIncomplete))]
+    private Task InspectIncomplete(MediaRow? row) => RunAsync(AnalysisTitle(AnalysisMethod.FullRpu), (token, _) => AnalyzeRowsAsync([row!], AnalysisMethod.FullRpu, token));
+
+    private static bool CanOpenRowOutput(MediaRow? row) => row is not null && row.CanOpenResult;
+
+    [RelayCommand(CanExecute = nameof(CanOpenRowOutput))]
+    private void OpenRowOutput(MediaRow? row) => explorer.ShowInFolder(row!.Result!.Output!);
+
+    [RelayCommand(CanExecute = nameof(IsIdle))]
+    private void OpenSettings() => RequestNavigateToSettings?.Invoke();
+
     public event Action? RequestNavigateToSettings;
     public event Func<CancellationToken, Task>? ConversionStarting;
 

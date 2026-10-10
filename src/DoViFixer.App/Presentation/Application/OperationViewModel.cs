@@ -39,7 +39,6 @@ public abstract partial class OperationViewModel : ObservableObject
     protected OperationViewModel(IOperationFeedback? feedback = null)
     {
         this.feedback = feedback;
-        CancelCommand = new(() => cancellation?.Cancel(), () => IsBusy);
         Progress.PropertyChanged += (_, e) =>
         {
             if (e.PropertyName is nameof(ProgressViewModel.Percent) or nameof(ProgressViewModel.StagePercent))
@@ -99,10 +98,9 @@ public abstract partial class OperationViewModel : ObservableObject
     public double Percent => Progress.Percent;
     public bool IsIndeterminate => Progress.IsIndeterminate;
 
-    public RelayCommand CancelCommand
-    {
-        get;
-    }
+    [RelayCommand(CanExecute = nameof(IsBusy))]
+    private void Cancel() => cancellation?.Cancel();
+
     public Task Completion
     {
         get;

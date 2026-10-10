@@ -18,6 +18,8 @@ public sealed partial class SettingsViewModel : OperationViewModel, INavigationP
     private readonly IAnalysisCache cache;
     private readonly IMediaPreview mediaPreview;
     private readonly DependencySetup setup;
+    private readonly IFileDialogService files;
+    private readonly IFileExplorer explorer;
     private bool includeSimple;
     private bool forceComplex;
     private AppTheme selectedTheme = AppTheme.System;
@@ -53,54 +55,9 @@ public sealed partial class SettingsViewModel : OperationViewModel, INavigationP
         this.cache = cache;
         this.mediaPreview = mediaPreview;
         this.setup = setup;
+        this.files = files;
+        this.explorer = explorer;
         Dependencies = dependencies;
-        LoadCommand = new(() => RunAsync(async (token, _) =>
-        {
-            await FlushAsync(token);
-            lastSavedSettings = await settings.ReadAsync(token);
-            ApplyPreferences(lastSavedSettings);
-            await RefreshCacheSizeAsync(token);
-            SetStatus(ViewStatus.SettingsLoaded);
-        }), () => IsIdle);
-        BrowseTemporaryCommand = new(() => Temporary = files.PickFolder() ?? Temporary);
-        BrowseDestinationCommand = new(() => Destination = files.PickFolder() ?? Destination);
-        BrowseToolCommand = new(() => ToolPath = files.PickFiles("Executables|*.exe", allowMultiple: false).FirstOrDefault() ?? ToolPath);
-        OpenCacheFolderCommand = new(() => explorer.OpenFolder(CacheDirectory));
-        OpenLogsCommand = new(explorer.OpenLogs);
-        SaveCommand = new(() => RunAsync(async (token, _) => await SaveAsync(token)), () => IsIdle);
-        ClearCacheCommand = new(() => RunAsync(async (token, _) =>
-        {
-            if (CacheClearing is not null)
-            {
-                await CacheClearing();
-            }
-            int removed = await Task.Run(() => cache.ClearAsync(token), token);
-            int frames = await Task.Run(() => mediaPreview.ClearCacheAsync(token), token);
-            await RefreshCacheSizeAsync(token);
-            SetStatus(ViewStatus.Result, $"Cleared {removed} cached analysis results and {frames} frame previews. They will be recreated when needed.");
-        }), () => IsIdle);
-        CheckCommand = new(() => RunAsync(async (token, _) =>
-        {
-            var report = await setup.CheckAsync(token);
-            SetStatus(report.Ready ? ViewStatus.ToolsReady : ViewStatus.ToolsNeedAttention);
-        }), () => IsIdle);
-        InstallCommand = new(() => RunAsync("Tool installation", async (token, progress) =>
-        {
-            SetStatus(ViewStatus.Progress, "Checking dependencies…");
-            SetStatus(await setup.EnsureAsync(progress, token) ? ViewStatus.ToolsReady : ViewStatus.DependencySetupIncomplete);
-        }), () => IsIdle);
-        SetToolCommand = new(() => RunAsync(async (token, _) =>
-        {
-            await settings.SetToolAsync(SelectedTool, ToolPath, token);
-            await RecheckToolsAsync(token);
-            SetStatus(ViewStatus.ToolPathSaved);
-        }), () => IsIdle && !string.IsNullOrWhiteSpace(ToolPath));
-        ResetToolCommand = new(() => RunAsync(async (token, _) =>
-        {
-            await settings.ResetToolAsync(SelectedTool, token);
-            await RecheckToolsAsync(token);
-            SetStatus(ViewStatus.ToolOverrideReset);
-        }), () => IsIdle);
     }
 
     private async Task RecheckToolsAsync(CancellationToken token)
@@ -256,10 +213,6 @@ public sealed partial class SettingsViewModel : OperationViewModel, INavigationP
 
     partial void OnShowCompletionNotificationsChanged(bool value) => TriggerAutoSave();
 
-    public AsyncRelayCommand ClearCacheCommand
-    {
-        get;
-    }
     [ObservableProperty]
     public partial string Temporary { get; set; } = "";
 
@@ -479,50 +432,78 @@ public sealed partial class SettingsViewModel : OperationViewModel, INavigationP
     /// <summary>Settings reload every time the page is shown.</summary>
     public Task OnActivatedAsync(CancellationToken cancellationToken) => LoadCommand.ExecuteAsync(null);
 
-    public AsyncRelayCommand LoadCommand
+    [RelayCommand(CanExecute = nameof(IsIdle))]
+    private Task Load() => RunAsync(async (token, _) =>
     {
-        get;
-    }
-    public AsyncRelayCommand SaveCommand
+        await FlushAsync(token);
+        lastSavedSettings = await settings.ReadAsync(token);
+        ApplyPreferences(lastSavedSettings);
+        await RefreshCacheSizeAsync(token);
+        SetStatus(ViewStatus.SettingsLoaded);
+    });
+
+    [RelayCommand(CanExecute = nameof(IsIdle))]
+    private Task Save() => RunAsync(async (token, _) => await SaveAsync(token));
+
+    [RelayCommand(CanExecute = nameof(IsIdle))]
+    private Task ClearCache() => RunAsync(async (token, _) =>
     {
-        get;
-    }
-    public AsyncRelayCommand CheckCommand
+        if (CacheClearing is not null)
+        {
+            await CacheClearing();
+        }
+        int removed = await Task.Run(() => cache.ClearAsync(token), token);
+        int frames = await Task.Run(() => mediaPreview.ClearCacheAsync(token), token);
+        await RefreshCacheSizeAsync(token);
+        SetStatus(ViewStatus.Result, $"Cleared {removed} cached analysis results and {frames} frame previews. They will be recreated when needed.");
+    });
+
+    [RelayCommand(CanExecute = nameof(IsIdle))]
+    private Task Check() => RunAsync(async (token, _) =>
     {
-        get;
-    }
-    public AsyncRelayCommand InstallCommand
+        var report = await setup.CheckAsync(token);
+        SetStatus(report.Ready ? ViewStatus.ToolsReady : ViewStatus.ToolsNeedAttention);
+    });
+
+    [RelayCommand(CanExecute = nameof(IsIdle))]
+    private Task Install() => RunAsync("Tool installation", async (token, progress) =>
     {
-        get;
-    }
-    public AsyncRelayCommand SetToolCommand
+        SetStatus(ViewStatus.Progress, "Checking dependencies…");
+        SetStatus(await setup.EnsureAsync(progress, token) ? ViewStatus.ToolsReady : ViewStatus.DependencySetupIncomplete);
+    });
+
+    private bool CanSetTool() => IsIdle && !string.IsNullOrWhiteSpace(ToolPath);
+
+    [RelayCommand(CanExecute = nameof(CanSetTool))]
+    private Task SetTool() => RunAsync(async (token, _) =>
     {
-        get;
-    }
-    public AsyncRelayCommand ResetToolCommand
+        await settings.SetToolAsync(SelectedTool, ToolPath, token);
+        await RecheckToolsAsync(token);
+        SetStatus(ViewStatus.ToolPathSaved);
+    });
+
+    [RelayCommand(CanExecute = nameof(IsIdle))]
+    private Task ResetTool() => RunAsync(async (token, _) =>
     {
-        get;
-    }
-    public RelayCommand BrowseTemporaryCommand
-    {
-        get;
-    }
-    public RelayCommand BrowseDestinationCommand
-    {
-        get;
-    }
-    public RelayCommand BrowseToolCommand
-    {
-        get;
-    }
-    public RelayCommand OpenCacheFolderCommand
-    {
-        get;
-    }
-    public RelayCommand OpenLogsCommand
-    {
-        get;
-    }
+        await settings.ResetToolAsync(SelectedTool, token);
+        await RecheckToolsAsync(token);
+        SetStatus(ViewStatus.ToolOverrideReset);
+    });
+
+    [RelayCommand]
+    private void BrowseTemporary() => Temporary = files.PickFolder() ?? Temporary;
+
+    [RelayCommand]
+    private void BrowseDestination() => Destination = files.PickFolder() ?? Destination;
+
+    [RelayCommand]
+    private void BrowseTool() => ToolPath = files.PickFiles("Executables|*.exe", allowMultiple: false).FirstOrDefault() ?? ToolPath;
+
+    [RelayCommand]
+    private void OpenCacheFolder() => explorer.OpenFolder(CacheDirectory);
+
+    [RelayCommand]
+    private void OpenLogs() => explorer.OpenLogs();
 
     protected override void CommandsChanged()
     {
