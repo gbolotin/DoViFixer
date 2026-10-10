@@ -5,6 +5,7 @@ using DoViFixer.Application.Cleanup;
 using DoViFixer.Application.Restore;
 using DoViFixer.Application.Operations;
 using Microsoft.Extensions.Logging;
+using WpfFoundation.Operations;
 
 namespace DoViFixer.App.ViewModels;
 public sealed class ArchiveViewModel : OperationViewModel, INavigationPage
@@ -16,7 +17,8 @@ public sealed class ArchiveViewModel : OperationViewModel, INavigationPage
     private string archive = "";
     private string output = "";
     private bool allowLegacy;
-    public ArchiveViewModel(BackupService backup, RestoreService restore, CleanupService cleanup, DependencySetup dependencies, IDialogService dialogs, IFileDialogService files, ILogger<ArchiveViewModel> logger)
+    public ArchiveViewModel(BackupService backup, RestoreService restore, CleanupService cleanup, DependencySetup dependencies, IDialogService dialogs, IFileDialogService files, ILogger<ArchiveViewModel> logger, IOperationFeedback? feedback = null)
+        : base(feedback)
     {
         BrowseInputCommand = new(() =>
         {
@@ -30,7 +32,7 @@ public sealed class ArchiveViewModel : OperationViewModel, INavigationPage
         {
             Output = files.PickFolder() ?? Output;
         });
-        BackupCommand = new(() => RunAsync(async (token, progress) =>
+        BackupCommand = new(() => RunAsync("Backup", async (token, progress) =>
         {
             if (!await dependencies.EnsureAsync(progress, token))
             {
@@ -48,9 +50,9 @@ public sealed class ArchiveViewModel : OperationViewModel, INavigationPage
 
             OperationLog.Audit(logger, "ApproveBackup", review, "ApprovedByDialog", plan.Id);
             var result = await Task.Run(() => backup.ExecuteAsync(plan, progress, token), token);
-            SetStatus(ViewStatus.Result, $"{result.Status}\n{result.Output}\n{result.Message}");
+            SetStatus(result.Status == OperationStatus.Failed ? ViewStatus.Error : ViewStatus.Result, $"{result.Status}\n{result.Output}\n{result.Message}");
         }), () => IsIdle && !string.IsNullOrWhiteSpace(Input));
-        RestoreCommand = new(() => RunAsync(async (token, progress) =>
+        RestoreCommand = new(() => RunAsync("Restoration", async (token, progress) =>
         {
             if (!await dependencies.EnsureAsync(progress, token))
             {
@@ -68,9 +70,9 @@ public sealed class ArchiveViewModel : OperationViewModel, INavigationPage
 
             OperationLog.Audit(logger, "ApproveRestore", review, "ApprovedByDialog", plan.Id);
             var result = await Task.Run(() => restore.ExecuteAsync(plan, progress, token), token);
-            SetStatus(ViewStatus.Result, $"{result.Status}\n{result.Output}\n{result.Message}");
+            SetStatus(result.Status == OperationStatus.Failed ? ViewStatus.Error : ViewStatus.Result, $"{result.Status}\n{result.Output}\n{result.Message}");
         }), () => IsIdle && !string.IsNullOrWhiteSpace(Input) && !string.IsNullOrWhiteSpace(Archive));
-        CleanupCommand = new(() => RunAsync(async (token, _) =>
+        CleanupCommand = new(() => RunAsync("Cleanup", async (token, _) =>
         {
             string? folder = files.PickFolder();
             if (folder is null)
@@ -94,6 +96,11 @@ public sealed class ArchiveViewModel : OperationViewModel, INavigationPage
 
             OperationLog.Audit(logger, "ApproveCleanup", review, "ApprovedByConfirmation", plan.Id);
             var result = await Task.Run(() => cleanup.ExecuteAsync(plan, token), token);
+            if (result.Items.Any(item => item.Status == OperationStatus.Failed))
+            {
+                ReportItemFailed();
+            }
+
             SetStatus(ViewStatus.Result, string.Join("\n", result.Items.Select(f => $"{f.Item}: {f.Status} — {f.Message}")));
         }), () => IsIdle);
     }

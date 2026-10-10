@@ -12,6 +12,7 @@ using DoViFixer.Application.Restore;
 using DoViFixer.Domain.Analysis;
 using DoViFixer.Domain.Conversion;
 using Microsoft.Extensions.Logging;
+using WpfFoundation.Operations;
 
 namespace DoViFixer.App.ViewModels;
 public sealed class MediaViewModel : OperationViewModel, INavigationPage, IPageActivation, IDisposable
@@ -56,7 +57,8 @@ public sealed class MediaViewModel : OperationViewModel, INavigationPage, IPageA
     private bool isHdr10ConversionChosen;
 
     private static string Summary(BatchResult result) => string.Join(" · ", result.Items.GroupBy(r => r.Status).Select(g => $"{g.Count()} {g.Key}"));
-    public MediaViewModel(IFileDiscovery discovery, InspectionService inspection, ConversionService conversion, ControlledBatchService batch, SettingsService settings, DependencySetup dependencies, IDialogService dialogs, IFileDialogService files, IFileExplorer explorer, ILogger<MediaViewModel> logger, IMediaPreview mediaPreview, RestoreService restore, ISourceFileMonitor sourceFiles)
+    public MediaViewModel(IFileDiscovery discovery, InspectionService inspection, ConversionService conversion, ControlledBatchService batch, SettingsService settings, DependencySetup dependencies, IDialogService dialogs, IFileDialogService files, IFileExplorer explorer, ILogger<MediaViewModel> logger, IMediaPreview mediaPreview, RestoreService restore, ISourceFileMonitor sourceFiles, IOperationFeedback? feedback = null)
+        : base(feedback)
     {
         this.discovery = discovery;
         this.sourceFiles = sourceFiles;
@@ -130,6 +132,7 @@ public sealed class MediaViewModel : OperationViewModel, INavigationPage, IPageA
                 control?.Pause();
             }
 
+            SetActivityPaused(control?.IsPaused == true);
             NotifyActiveProgress();
         }, () => BatchProgress.IsRunning);
 
@@ -137,8 +140,8 @@ public sealed class MediaViewModel : OperationViewModel, INavigationPage, IPageA
         OpenRowOutputCommand = new(row => explorer.ShowInFolder(row!.Result!.Output!), row => row is not null && row.CanOpenResult);
         OpenFileLocationCommand = new(() => explorer.ShowInFolder(Focused!.Path), () => Focused is not null);
         ShowResultFileCommand = new(path => explorer.ShowInFolder(path!), path => !string.IsNullOrEmpty(path));
-        RetryAnalysisCommand = new(row => RunAsync((token, _) => AnalyzeRowsAsync([row!], row!.LastAnalysisMethod!.Value, token)), row => row is not null && IsIdle && Files.Contains(row) && row.CanRetryAnalysis && row.LastAnalysisMethod is not null);
-        InspectIncompleteCommand = new(row => RunAsync((token, _) => AnalyzeRowsAsync([row!], AnalysisMethod.FullRpu, token)), row => row is not null && IsIdle && Files.Contains(row) && row.CanInspectIncomplete);
+        RetryAnalysisCommand = new(row => RunAsync(AnalysisTitle(row!.LastAnalysisMethod!.Value), (token, _) => AnalyzeRowsAsync([row!], row!.LastAnalysisMethod!.Value, token)), row => row is not null && IsIdle && Files.Contains(row) && row.CanRetryAnalysis && row.LastAnalysisMethod is not null);
+        InspectIncompleteCommand = new(row => RunAsync(AnalysisTitle(AnalysisMethod.FullRpu), (token, _) => AnalyzeRowsAsync([row!], AnalysisMethod.FullRpu, token)), row => row is not null && IsIdle && Files.Contains(row) && row.CanInspectIncomplete);
         ToggleSelectAllCommand = new(ToggleSelectAll, () => IsIdle && ShownFiles.Any(row => row.SelectionEnabled));
         ClearAllCommand = new(ClearAll, () => IsIdle && Files.Count > 0);
         RemoveFileCommand = new(RemoveFile, row => row is not null && IsIdle && Files.Contains(row));
@@ -148,6 +151,10 @@ public sealed class MediaViewModel : OperationViewModel, INavigationPage, IPageA
         BatchProgress.PropertyChanged += (_, e) =>
         {
             NotifyActiveProgress();
+            if (e.PropertyName is nameof(BatchProgress.Percent) or nameof(BatchProgress.IsRunning))
+            {
+                ReportActivityProgress();
+            }
             if (e.PropertyName == nameof(BatchProgress.CurrentJob))
             {
                 previewCompletion = Task.WhenAll(previewCompletion, LoadCurrentJobPreviewAsync(BatchProgress.CurrentJob));
@@ -747,7 +754,7 @@ public sealed class MediaViewModel : OperationViewModel, INavigationPage, IPageA
         ConvertHdrCommand?.NotifyCanExecuteChanged();
     }
 
-    public Task AddAsync(IEnumerable<string> inputs) => RunAsync(async (token, _) =>
+    public Task AddAsync(IEnumerable<string> inputs) => RunAsync("Adding files", async (token, _) =>
     {
         var added = new List<MediaRow>();
         foreach (string input in inputs)
@@ -863,6 +870,26 @@ public sealed class MediaViewModel : OperationViewModel, INavigationPage, IPageA
         row.SetSkipped("Deselected before starting.");
     }
 
+    /// <summary>The batch's share done for the taskbar; before a batch starts, the operation's own progress.</summary>
+    protected override double? ActivityProgress => BatchProgress.IsRunning ? BatchProgress.Percent / 100 : base.ActivityProgress;
+
+    private static string AnalysisTitle(AnalysisMethod method) => method switch
+    {
+        AnalysisMethod.SampledRpu => "Scan",
+        AnalysisMethod.DeepInspection => "Deep inspection",
+        _ => "Inspection"
+    };
+
+    // A failed file makes the whole batch finish with errors on the taskbar and in the notification.
+    private void CompleteBatchItem(OperationStatus status)
+    {
+        BatchProgress.Complete(status);
+        if (status == OperationStatus.Failed)
+        {
+            ReportItemFailed();
+        }
+    }
+
     private void BeginBatch(MediaRow[] rows, string operationName)
     {
         control = new(rows.Select(r => r.Path));
@@ -917,7 +944,7 @@ public sealed class MediaViewModel : OperationViewModel, INavigationPage, IPageA
         return BatchProgress.Start(row, stage);
     }
 
-    public Task ScanAllAsync() => RunAsync(async (token, _) =>
+    public Task ScanAllAsync() => RunAsync(AnalysisTitle(AnalysisMethod.SampledRpu), async (token, _) =>
     {
         StartBackgroundPreviews(refreshFocused: true);
         await AnalyzeRowsAsync(InDisplayOrder(ShownFiles.Where(row => !row.IsMissing)), AnalysisMethod.SampledRpu, token);
@@ -929,7 +956,7 @@ public sealed class MediaViewModel : OperationViewModel, INavigationPage, IPageA
         return AnalyzeAsync(deep ? AnalysisMethod.DeepInspection : AnalysisMethod.FullRpu);
     }
 
-    private Task AnalyzeAsync(AnalysisMethod method) => RunAsync(async (token, _) =>
+    private Task AnalyzeAsync(AnalysisMethod method) => RunAsync(AnalysisTitle(method), async (token, _) =>
     {
         await AnalyzeRowsAsync(InDisplayOrder(ShownFiles.Where(r => r.IsSelected)), method, token);
     });
@@ -994,7 +1021,7 @@ public sealed class MediaViewModel : OperationViewModel, INavigationPage, IPageA
                 }
             }, control!, new InlineProgress<OperationItemResult>(result =>
             {
-                BatchProgress.Complete(result.Status);
+                CompleteBatchItem(result.Status);
                 var row = rows.First(r => r.Path == result.Item);
                 row.Status = result.Status == OperationStatus.Completed ? "" : $"{row.OperationName} {result.Status.ToString().ToLowerInvariant()}";
                 row.CanRetryAnalysis = result.Status is OperationStatus.Failed or OperationStatus.Cancelled;
@@ -1075,7 +1102,7 @@ public sealed class MediaViewModel : OperationViewModel, INavigationPage, IPageA
         }
     }
 
-    private Task RestoreRowAsync(MediaRow row) => RunAsync(async (token, progress) =>
+    private Task RestoreRowAsync(MediaRow row) => RunAsync("Restoration", async (token, progress) =>
     {
         if (row.RestoreArchive is not { } archive)
         {
@@ -1123,7 +1150,7 @@ public sealed class MediaViewModel : OperationViewModel, INavigationPage, IPageA
                 return restored;
             }, control!, new InlineProgress<OperationItemResult>(itemResult =>
             {
-                BatchProgress.Complete(itemResult.Status);
+                CompleteBatchItem(itemResult.Status);
                 row.Result = itemResult;
                 if (itemResult.Status == OperationStatus.Completed)
                 {
@@ -1158,7 +1185,7 @@ public sealed class MediaViewModel : OperationViewModel, INavigationPage, IPageA
         return ConvertBatchAsync(hdr10 ? ConversionTarget.Hdr10 : ConversionTarget.Profile81);
     }
 
-    private Task ConvertBatchAsync(ConversionTarget target, MediaRow[]? rows = null) => RunAsync(async (token, progress) =>
+    private Task ConvertBatchAsync(ConversionTarget target, MediaRow[]? rows = null) => RunAsync("Conversion", async (token, progress) =>
     {
         if (ConversionStarting is not null)
         {
@@ -1300,7 +1327,7 @@ public sealed class MediaViewModel : OperationViewModel, INavigationPage, IPageA
                 }
             }, control!, new InlineProgress<OperationItemResult>(itemResult =>
             {
-                BatchProgress.Complete(itemResult.Status);
+                CompleteBatchItem(itemResult.Status);
                 var row = rows.First(r => r.Path == itemResult.Item);
                 row.CanRetryAnalysis = false;
                 if (itemResult.Status is OperationStatus.Completed or OperationStatus.Partial)

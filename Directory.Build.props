@@ -12,7 +12,7 @@
        Each push to main is released as VersionPrefix and tagged v<VersionPrefix> by CI (see .github/workflows/ci.yml), so bump it in every change.
        The SDK appends the commit hash to the informational version. -->
   <PropertyGroup>
-    <VersionPrefix>0.1.7</VersionPrefix>
+    <VersionPrefix>0.1.8</VersionPrefix>
     <VersionSuffix Condition="'$(VersionSuffix)' == ''">dev</VersionSuffix>
   </PropertyGroup>
   <!-- DoViFixer.Local.sln builds against the WpfFoundation source next to this repository; every other build uses the pinned package.
@@ -20,6 +20,7 @@
        -p:UseLocalWpfFoundation=true|false overrides. -->
   <PropertyGroup>
     <WpfFoundationProject>$(MSBuildThisFileDirectory)..\WpfFoundation\src\WpfFoundation\WpfFoundation.csproj</WpfFoundationProject>
-    <UseLocalWpfFoundation Condition="'$(UseLocalWpfFoundation)' == '' and '$(SolutionFileName)' == 'DoViFixer.Local.sln' and Exists('$(WpfFoundationProject)')">true</UseLocalWpfFoundation>
+    <WpfFoundationNotificationsProject>$(MSBuildThisFileDirectory)..\WpfFoundation\src\WpfFoundation.Notifications\WpfFoundation.Notifications.csproj</WpfFoundationNotificationsProject>
+    <UseLocalWpfFoundation Condition="'$(UseLocalWpfFoundation)' == '' and '$(SolutionFileName)' == 'DoViFixer.Local.sln' and Exists('$(WpfFoundationProject)') and Exists('$(WpfFoundationNotificationsProject)')">true</UseLocalWpfFoundation>
   </PropertyGroup>
 </Project>

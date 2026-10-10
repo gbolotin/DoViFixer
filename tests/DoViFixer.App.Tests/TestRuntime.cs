@@ -86,7 +86,12 @@ internal sealed class TestRuntime : IFileDiscovery, IFileOperations, IMediaProbe
         {
             Services.AddSingleton(contract, this);
         }
+
+        // No WPF application runs here, so operations report to a recording fake instead of the taskbar.
+        Services.AddSingleton<WpfFoundation.Operations.IOperationFeedback>(Feedback);
     }
+
+    public RecordingFeedback Feedback { get; } = new();
 
     public void Dispose() => container?.Dispose();
     public Func<string, CancellationToken, Task<byte[]>> Preview { get; set; } = (_, _) => Task.FromException<byte[]>(new IOException("Fixture preview unavailable."));

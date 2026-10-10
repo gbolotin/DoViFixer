@@ -3,13 +3,18 @@ using DoViFixer.App.Presentation.Application;
 using DoViFixer.App.ViewModels;
 using DoViFixer.App.Views;
 using DoViFixer.Application;
+using DoViFixer.Application.Settings;
 using DoViFixer.Application.Updates;
 using DoViFixer.Infrastructure;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Extensions.Logging;
 using Serilog;
 using Serilog.Events;
 using Serilog.Formatting.Json;
+using WpfFoundation.Notifications;
+using WpfFoundation.Operations;
+using WpfFoundation.Taskbar;
 
 namespace DoViFixer.App.Composition;
 public static class AppComposition
@@ -29,6 +34,15 @@ public static class AppComposition
         services.AddSingleton<IThemeService>(_ => new ThemeService(System.Windows.Application.Current));
         services.AddSingleton<IDialogService>(_ => new DialogService(System.Windows.Application.Current));
         services.AddSingleton<IFileDialogService>(_ => new FileDialogService(System.Windows.Application.Current));
+        // Long operations report on the taskbar and, while the user's setting allows it, in Windows notifications.
+        // Startup registers the notification service before the main window exists; it is created only then.
+        services.AddSingleton(_ => new WindowsNotificationService(System.Windows.Application.Current));
+        services.AddSingleton(provider => new CompletionNotifications(
+            new Lazy<INotificationService>(provider.GetRequiredService<WindowsNotificationService>),
+            provider.GetRequiredService<SettingsService>(),
+            provider.GetRequiredService<ILogger<CompletionNotifications>>()));
+        services.AddSingleton<ITaskbarService>(_ => new TaskbarService(System.Windows.Application.Current));
+        services.AddSingleton<IOperationFeedback>(provider => new OperationFeedback(provider.GetRequiredService<ITaskbarService>(), provider.GetRequiredService<CompletionNotifications>()));
         services.AddSingleton<IFileExplorer>(provider => new FileExplorer(Path.Combine(root, "Logs"), provider.GetRequiredService<IDialogService>()));
         services.AddSingleton<DependencyReportViewModel>();
         services.AddSingleton<DependencySetup>();

@@ -40,6 +40,16 @@
                         </StackPanel>
                     </Border>
                     <Border Style="{StaticResource WfCardStyle}" Margin="0,24,0,0">
+                        <StackPanel>
+                            <TextBlock Text="Notifications"
+                                       Style="{StaticResource SubtitleTextBlockStyle}" />
+                            <CheckBox Content="Show a notification when an operation finishes"
+                                      AutomationProperties.HelpText="When a scan, conversion, backup or restore finishes while the window is minimized or behind another app, Windows shows a notification. The taskbar button shows progress either way. Do not disturb and the app's switch in Windows Settings still apply."
+                                      IsChecked="{Binding ShowCompletionNotifications}"
+                                      Style="{StaticResource WfToggleSwitchStyle}" />
+                        </StackPanel>
+                    </Border>
+                    <Border Style="{StaticResource WfCardStyle}" Margin="0,24,0,0">
                         <StackPanel IsEnabled="{Binding IsIdle}">
                             <TextBlock Text="Conversion options"
                                        Style="{StaticResource SubtitleTextBlockStyle}" />

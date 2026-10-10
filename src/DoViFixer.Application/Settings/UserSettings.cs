@@ -69,6 +69,13 @@ public sealed record UserSettings
             ForceComplex = value;
         }
     }
+    /// <summary>Whether a Windows notification reports an operation that finishes while the window is not active.</summary>
+    public bool ShowCompletionNotifications
+    {
+        get;
+        init;
+    }
+    = true;
     public AppTheme Theme
     {
         get;
