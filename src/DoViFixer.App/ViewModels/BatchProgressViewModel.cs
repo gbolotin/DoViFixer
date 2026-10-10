@@ -2,7 +2,7 @@ using DoViFixer.Application.Operations;
 
 namespace DoViFixer.App.ViewModels;
 
-public sealed class BatchProgressViewModel(TimeProvider time) : ObservableObject
+public sealed partial class BatchProgressViewModel(TimeProvider time) : ObservableObject
 {
     /// <summary>A step's remaining time is estimated only after it has run this long, so early rates do not jump around.</summary>
     private static readonly TimeSpan EstimateWarmUp = TimeSpan.FromSeconds(5);
@@ -13,24 +13,21 @@ public sealed class BatchProgressViewModel(TimeProvider time) : ObservableObject
     private string stage = "";
     private double stageStartPercent;
     private int revision;
-    private bool isRunning;
     private int total;
     private int processed;
     private int cancelled;
     private string operation = "";
-    private MediaRow? currentJob;
 
-    public bool IsRunning { get => isRunning; private set => SetProperty(ref isRunning, value); }
+    [ObservableProperty]
+    public partial bool IsRunning { get; private set; }
+
     public int Total => total;
     public int Processed => processed;
     public string Operation => operation;
     public double Percent => total == 0 ? 0 : (100.0 * processed + (CurrentJob?.Progress.Percent ?? 0)) / total;
     public string Summary => $"{processed} of {total} files processed" + (cancelled > 0 ? $" · {cancelled} cancelled" : "");
-    public MediaRow? CurrentJob
-    {
-        get => currentJob;
-        private set => SetProperty(ref currentJob, value);
-    }
+    [ObservableProperty]
+    public partial MediaRow? CurrentJob { get; private set; }
 
     public BatchProgressViewModel() : this(TimeProvider.System)
     {

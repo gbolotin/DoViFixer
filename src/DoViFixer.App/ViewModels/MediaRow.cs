@@ -3,26 +3,14 @@ using DoViFixer.Application.Updates;
 using DoViFixer.Domain.Analysis;
 
 namespace DoViFixer.App.ViewModels;
-public sealed class MediaRow(string path) : ObservableObject
+public sealed partial class MediaRow(string path) : ObservableObject
 {
     #region Private fields
 
-    private bool selected = true;
     private bool selectionEnabled = true;
-    private bool pending;
-    private bool active;
-    private bool cancellationRequested;
-    private MediaRowState state = MediaRowState.NotScanned;
     private string status = "Not scanned";
     private bool canRetryAnalysis;
-    private MediaAnalysis? analysis;
-    private MediaAnalysis? resultAnalysis;
-    private OperationItemResult? result;
-    private string? analysisError;
     private string? warning;
-    private string notice = "";
-    private string? restoreArchive;
-    private bool missing;
 
     #endregion
 
@@ -36,20 +24,11 @@ public sealed class MediaRow(string path) : ObservableObject
     public ProgressViewModel Progress { get; } = new();
     public bool IsProfile7 => Analysis?.Media.Profile == Domain.Media.DolbyVisionProfile.Profile7;
     public bool CanRestore => Analysis?.Media.Profile == Domain.Media.DolbyVisionProfile.Profile81 && RestoreArchive is not null && State != MediaRowState.Restored && !IsMissing;
-    public string? RestoreArchive
-    {
-        get => restoreArchive;
-        set
-        {
-            SetProperty(ref restoreArchive, value);
-            OnPropertyChanged(nameof(CanRestore));
-        }
-    }
-    public bool IsCancellationRequested
-    {
-        get => cancellationRequested;
-        set => SetProperty(ref cancellationRequested, value);
-    }
+    [ObservableProperty]
+    [NotifyPropertyChangedFor(nameof(CanRestore))]
+    public partial string? RestoreArchive { get; set; }
+    [ObservableProperty]
+    public partial bool IsCancellationRequested { get; set; }
     public bool HasIncompleteScan => Analysis is not null
         && Analysis.Media.Profile == Domain.Media.DolbyVisionProfile.Profile7
         && Analysis.Verdict == AnalysisVerdict.Unknown
@@ -60,49 +39,18 @@ public sealed class MediaRow(string path) : ObservableObject
     /// <summary>
     /// The source file no longer exists at <see cref="Path"/>. The row keeps its last results so the file can be restored or removed.
     /// </summary>
-    public bool IsMissing
-    {
-        get => missing;
-        set
-        {
-            if (SetProperty(ref missing, value))
-            {
-                OnPropertyChanged(nameof(Status));
-                OnPropertyChanged(nameof(StatusToolTip));
-                OnPropertyChanged(nameof(SelectionEnabled));
-                OnPropertyChanged(nameof(CanRestore));
-                OnPropertyChanged(nameof(CanRetryAnalysis));
-                OnPropertyChanged(nameof(CanInspectIncomplete));
-                OnPropertyChanged(nameof(DetailNotes));
-            }
-        }
-    }
+    [ObservableProperty]
+    [NotifyPropertyChangedFor(nameof(Status), nameof(StatusToolTip), nameof(SelectionEnabled), nameof(CanRestore), nameof(CanRetryAnalysis), nameof(CanInspectIncomplete), nameof(DetailNotes))]
+    public partial bool IsMissing { get; set; }
 
     /// <summary>A converted row keeps its result when Replace original moved the source away on purpose.</summary>
     private bool ShowsMissing => IsMissing && State != MediaRowState.Converted;
     public AnalysisMethod? LastAnalysisMethod { get; set;} = AnalysisMethod.SampledRpu;
     public string? CurrentOperation { get; set; }
     public string OperationName => CurrentOperation ?? (LastAnalysisMethod is null ? "Conversion" : LastAnalysisMethod == AnalysisMethod.SampledRpu ? "Scan" : "Inspection");
-    public MediaRowState State
-    {
-        get => state;
-        private set
-        {
-            if (SetProperty(ref state, value))
-            {
-                OnPropertyChanged(nameof(CanOpenResult));
-                OnPropertyChanged(nameof(ShowsResultComparison));
-                OnPropertyChanged(nameof(DetailRows));
-                OnPropertyChanged(nameof(ResultFiles));
-                OnPropertyChanged(nameof(CanRestore));
-                OnPropertyChanged(nameof(Warning));
-                OnPropertyChanged(nameof(HasWarning));
-                OnPropertyChanged(nameof(Status));
-                OnPropertyChanged(nameof(StatusToolTip));
-                OnPropertyChanged(nameof(DetailNotes));
-            }
-        }
-    }
+    [ObservableProperty]
+    [NotifyPropertyChangedFor(nameof(CanOpenResult), nameof(ShowsResultComparison), nameof(DetailRows), nameof(ResultFiles), nameof(CanRestore), nameof(Warning), nameof(HasWarning), nameof(Status), nameof(StatusToolTip), nameof(DetailNotes))]
+    public partial MediaRowState State { get; private set; } = MediaRowState.NotScanned;
     public bool CanRetryAnalysis
     {
         get => canRetryAnalysis && !IsMissing;
@@ -121,34 +69,19 @@ public sealed class MediaRow(string path) : ObservableObject
         }
     }
     public bool HasWarning => !string.IsNullOrWhiteSpace(Warning);
-    public bool IsSelected
-    {
-        get => selected;
-        set => SetProperty(ref selected, value);
-    }
+    [ObservableProperty]
+    public partial bool IsSelected { get; set; } = true;
     public bool SelectionEnabled
     {
         get => selectionEnabled && !IsMissing;
         set => SetProperty(ref selectionEnabled, value);
     }
-    public bool IsPending
-    {
-        get => pending;
-        set
-        {
-            SetProperty(ref pending, value);
-            OnPropertyChanged(nameof(CanInspectIncomplete));
-        }
-    }
-    public bool IsActive
-    {
-        get => active;
-        set
-        {
-            SetProperty(ref active, value);
-            OnPropertyChanged(nameof(CanInspectIncomplete));
-        }
-    }
+    [ObservableProperty]
+    [NotifyPropertyChangedFor(nameof(CanInspectIncomplete))]
+    public partial bool IsPending { get; set; }
+    [ObservableProperty]
+    [NotifyPropertyChangedFor(nameof(CanInspectIncomplete))]
+    public partial bool IsActive { get; set; }
     public string Status
     {
         get => ShowsMissing ? MissingStatus : status;
@@ -160,18 +93,9 @@ public sealed class MediaRow(string path) : ObservableObject
             OnPropertyChanged(nameof(StatusToolTip));
         }
     }
-    public string Notice
-    {
-        get => notice;
-        set
-        {
-            SetProperty(ref notice, value);
-            OnPropertyChanged(nameof(Warning));
-            OnPropertyChanged(nameof(HasWarning));
-            OnPropertyChanged(nameof(DetailNotes));
-            OnPropertyChanged(nameof(StatusToolTip));
-        }
-    }
+    [ObservableProperty]
+    [NotifyPropertyChangedFor(nameof(Warning), nameof(HasWarning), nameof(DetailNotes), nameof(StatusToolTip))]
+    public partial string Notice { get; set; } = "";
 
     public string? StatusToolTip
     {
@@ -206,66 +130,25 @@ public sealed class MediaRow(string path) : ObservableObject
         }
     }
 
-    public string? AnalysisError
-    {
-        get => analysisError;
-        set
-        {
-            SetProperty(ref analysisError, value);
-            OnPropertyChanged(nameof(Classification));
-            OnPropertyChanged(nameof(FilterGroup));
-            OnPropertyChanged(nameof(HasAnalysisError));
-            OnPropertyChanged(nameof(DetailRows));
-            OnPropertyChanged(nameof(DetailNotes));
-            OnPropertyChanged(nameof(StatusToolTip));
-        }
-    }
+    [ObservableProperty]
+    [NotifyPropertyChangedFor(nameof(Classification), nameof(FilterGroup), nameof(HasAnalysisError), nameof(DetailRows), nameof(DetailNotes), nameof(StatusToolTip))]
+    public partial string? AnalysisError { get; set; }
 
-    public OperationItemResult? Result
-    {
-        get => result;
-        set
-        {
-            SetProperty(ref result, value);
-            OnPropertyChanged(nameof(HasResult));
-            OnPropertyChanged(nameof(ResultFiles));
-            OnPropertyChanged(nameof(CanOpenResult));
-            OnPropertyChanged(nameof(ShowsResultComparison));
-            OnPropertyChanged(nameof(DetailRows));
-            OnPropertyChanged(nameof(StatusToolTip));
-        }
-    }
+    [ObservableProperty]
+    [NotifyPropertyChangedFor(nameof(HasResult), nameof(ResultFiles), nameof(CanOpenResult), nameof(ShowsResultComparison), nameof(DetailRows), nameof(StatusToolTip))]
+    public partial OperationItemResult? Result { get; set; }
 
     /// <summary>Container metadata of the file the last conversion or restoration produced, when it could be read.</summary>
-    public MediaAnalysis? ResultAnalysis
-    {
-        get => resultAnalysis;
-        set
-        {
-            SetProperty(ref resultAnalysis, value);
-            OnPropertyChanged(nameof(DetailRows));
-        }
-    }
+    [ObservableProperty]
+    [NotifyPropertyChangedFor(nameof(DetailRows))]
+    public partial MediaAnalysis? ResultAnalysis { get; set; }
 
     /// <summary>Details compare the original with the produced file side by side.</summary>
     public bool ShowsResultComparison => CanOpenResult;
 
-    public MediaAnalysis? Analysis
-    {
-        get => analysis;
-        set
-        {
-            SetProperty(ref analysis, value);
-            OnPropertyChanged(nameof(IsProfile7));
-            OnPropertyChanged(nameof(CanRestore));
-            OnPropertyChanged(nameof(HasIncompleteScan));
-            OnPropertyChanged(nameof(CanInspectIncomplete));
-            OnPropertyChanged(nameof(Classification));
-            OnPropertyChanged(nameof(FilterGroup));
-            OnPropertyChanged(nameof(DetailRows));
-            OnPropertyChanged(nameof(DetailNotes));
-        }
-    }
+    [ObservableProperty]
+    [NotifyPropertyChangedFor(nameof(IsProfile7), nameof(CanRestore), nameof(HasIncompleteScan), nameof(CanInspectIncomplete), nameof(Classification), nameof(FilterGroup), nameof(DetailRows), nameof(DetailNotes))]
+    public partial MediaAnalysis? Analysis { get; set; }
 
     /// <summary>The list filter that shows this file. Files not scanned yet and files whose analysis failed share one group.</summary>
     public MediaFileFilter FilterGroup => AnalysisError is not null || Analysis is null ? MediaFileFilter.NotScanned : Analysis.Media.Profile switch

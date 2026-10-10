@@ -7,7 +7,7 @@ using DoViFixer.Application.Updates;
 using WpfFoundation.Operations;
 
 namespace DoViFixer.App.ViewModels;
-public sealed class SettingsViewModel : OperationViewModel, INavigationPage, IPageActivation
+public sealed partial class SettingsViewModel : OperationViewModel, INavigationPage, IPageActivation
 {
     public string NavigationName => "Settings";
     public string? NavigationIcon => "\uE713";
@@ -18,59 +18,32 @@ public sealed class SettingsViewModel : OperationViewModel, INavigationPage, IPa
     private readonly IAnalysisCache cache;
     private readonly IMediaPreview mediaPreview;
     private readonly DependencySetup setup;
-    private string cacheSizeText = "Cache: …";
-    private string temporary = "";
-    private string destination = "";
-    private bool otherFolder;
-    private bool replaceOriginal;
-    private bool createArchive;
+    private readonly IFileDialogService files;
+    private readonly IFileExplorer explorer;
     private bool includeSimple;
     private bool forceComplex;
-    private bool automaticallyScanAddedFiles = true;
-    private bool useCachedResults = true;
-    private bool autoSelectAfterScan = true;
-    private bool showCompletionNotifications = true;
-    private NativeTool selectedTool;
-    private string toolPath = "";
     private AppTheme selectedTheme = AppTheme.System;
     private readonly object lockObject = new();
     private TaskCompletionSource? pendingTcs;
-    private bool isSaving;
     private bool isLoading;
-    private string? saveError;
     private UserSettings? lastSavedSettings;
 
     public Task SaveTask { get; private set; } = Task.CompletedTask;
-    public bool IsSaving
-    {
-        get => isSaving;
-        private set
-        {
-            SetProperty(ref isSaving, value);
-            DiscardChangesCommand?.NotifyCanExecuteChanged();
-        }
-    }
-    public string? SaveError
-    {
-        get => saveError;
-        private set
-        {
-            SetProperty(ref saveError, value);
-            OnPropertyChanged(nameof(HasSaveError));
-            DiscardChangesCommand?.NotifyCanExecuteChanged();
-        }
-    }
+    [ObservableProperty]
+    [NotifyCanExecuteChangedFor(nameof(DiscardChangesCommand))]
+    public partial bool IsSaving { get; private set; }
+    [ObservableProperty]
+    [NotifyPropertyChangedFor(nameof(HasSaveError))]
+    [NotifyCanExecuteChangedFor(nameof(DiscardChangesCommand))]
+    public partial string? SaveError { get; private set; }
     public bool HasSaveError => SaveError is not null;
     public string? DestinationError => OtherFolder && string.IsNullOrWhiteSpace(Destination) ? "Choose an output folder." : null;
 
     public event Action<UserSettings>? Saved;
     public event Func<Task>? CacheClearing;
     public string CacheDirectory => cache.RootDirectory;
-    public string CacheSizeText
-    {
-        get => cacheSizeText;
-        private set => SetProperty(ref cacheSizeText, value);
-    }
+    [ObservableProperty]
+    public partial string CacheSizeText { get; private set; } = "Cache: …";
 
     public DependencyReportViewModel Dependencies { get; }
 
@@ -82,55 +55,9 @@ public sealed class SettingsViewModel : OperationViewModel, INavigationPage, IPa
         this.cache = cache;
         this.mediaPreview = mediaPreview;
         this.setup = setup;
+        this.files = files;
+        this.explorer = explorer;
         Dependencies = dependencies;
-        LoadCommand = new(() => RunAsync(async (token, _) =>
-        {
-            await FlushAsync(token);
-            lastSavedSettings = await settings.ReadAsync(token);
-            ApplyPreferences(lastSavedSettings);
-            await RefreshCacheSizeAsync(token);
-            SetStatus(ViewStatus.SettingsLoaded);
-        }), () => IsIdle);
-        BrowseTemporaryCommand = new(() => Temporary = files.PickFolder() ?? Temporary);
-        BrowseDestinationCommand = new(() => Destination = files.PickFolder() ?? Destination);
-        BrowseToolCommand = new(() => ToolPath = files.PickFiles("Executables|*.exe", allowMultiple: false).FirstOrDefault() ?? ToolPath);
-        OpenCacheFolderCommand = new(() => explorer.OpenFolder(CacheDirectory));
-        OpenLogsCommand = new(explorer.OpenLogs);
-        SaveCommand = new(() => RunAsync(async (token, _) => await SaveAsync(token)), () => IsIdle);
-        DiscardChangesCommand = new(DiscardChanges, () => IsIdle && !IsSaving && HasSaveError && lastSavedSettings is not null);
-        ClearCacheCommand = new(() => RunAsync(async (token, _) =>
-        {
-            if (CacheClearing is not null)
-            {
-                await CacheClearing();
-            }
-            int removed = await Task.Run(() => cache.ClearAsync(token), token);
-            int frames = await Task.Run(() => mediaPreview.ClearCacheAsync(token), token);
-            await RefreshCacheSizeAsync(token);
-            SetStatus(ViewStatus.Result, $"Cleared {removed} cached analysis results and {frames} frame previews. They will be recreated when needed.");
-        }), () => IsIdle);
-        CheckCommand = new(() => RunAsync(async (token, _) =>
-        {
-            var report = await setup.CheckAsync(token);
-            SetStatus(report.Ready ? ViewStatus.ToolsReady : ViewStatus.ToolsNeedAttention);
-        }), () => IsIdle);
-        InstallCommand = new(() => RunAsync("Tool installation", async (token, progress) =>
-        {
-            SetStatus(ViewStatus.Progress, "Checking dependencies…");
-            SetStatus(await setup.EnsureAsync(progress, token) ? ViewStatus.ToolsReady : ViewStatus.DependencySetupIncomplete);
-        }), () => IsIdle);
-        SetToolCommand = new(() => RunAsync(async (token, _) =>
-        {
-            await settings.SetToolAsync(SelectedTool, ToolPath, token);
-            await RecheckToolsAsync(token);
-            SetStatus(ViewStatus.ToolPathSaved);
-        }), () => IsIdle && !string.IsNullOrWhiteSpace(ToolPath));
-        ResetToolCommand = new(() => RunAsync(async (token, _) =>
-        {
-            await settings.ResetToolAsync(SelectedTool, token);
-            await RecheckToolsAsync(token);
-            SetStatus(ViewStatus.ToolOverrideReset);
-        }), () => IsIdle);
     }
 
     private async Task RecheckToolsAsync(CancellationToken token)
@@ -194,6 +121,9 @@ public sealed class SettingsViewModel : OperationViewModel, INavigationPage, IPa
         }
     }
 
+    private bool CanDiscardChanges() => IsIdle && !IsSaving && HasSaveError && lastSavedSettings is not null;
+
+    [RelayCommand(CanExecute = nameof(CanDiscardChanges))]
     private void DiscardChanges()
     {
         if (lastSavedSettings is null)
@@ -262,112 +192,54 @@ public sealed class SettingsViewModel : OperationViewModel, INavigationPage, IPa
 
     public AppTheme[] Themes { get; } = [AppTheme.System, AppTheme.Light, AppTheme.Dark];
 
-    public bool AutomaticallyScanAddedFiles
-    {
-        get => automaticallyScanAddedFiles;
-        set
-        {
-            if (SetProperty(ref automaticallyScanAddedFiles, value))
-            {
-                TriggerAutoSave();
-            }
-        }
-    }
-    public bool UseCachedResults
-    {
-        get => useCachedResults;
-        set
-        {
-            if (SetProperty(ref useCachedResults, value))
-            {
-                TriggerAutoSave();
-            }
-        }
-    }
-    public bool AutoSelectAfterScan
-    {
-        get => autoSelectAfterScan;
-        set
-        {
-            if (SetProperty(ref autoSelectAfterScan, value))
-            {
-                TriggerAutoSave();
-            }
-        }
-    }
+    [ObservableProperty]
+    public partial bool AutomaticallyScanAddedFiles { get; set; } = true;
+
+    partial void OnAutomaticallyScanAddedFilesChanged(bool value) => TriggerAutoSave();
+
+    [ObservableProperty]
+    public partial bool UseCachedResults { get; set; } = true;
+
+    partial void OnUseCachedResultsChanged(bool value) => TriggerAutoSave();
+
+    [ObservableProperty]
+    public partial bool AutoSelectAfterScan { get; set; } = true;
+
+    partial void OnAutoSelectAfterScanChanged(bool value) => TriggerAutoSave();
+
     /// <summary>Whether a finished operation also shows a Windows notification while the window is not active.</summary>
-    public bool ShowCompletionNotifications
-    {
-        get => showCompletionNotifications;
-        set
-        {
-            if (SetProperty(ref showCompletionNotifications, value))
-            {
-                TriggerAutoSave();
-            }
-        }
-    }
-    public AsyncRelayCommand ClearCacheCommand
-    {
-        get;
-    }
-    public string Temporary
-    {
-        get => temporary;
-        set
-        {
-            if (SetProperty(ref temporary, value))
-            {
-                TriggerAutoSave();
-            }
-        }
-    }
-    public string Destination
-    {
-        get => destination;
-        set
-        {
-            if (SetProperty(ref destination, value))
-            {
-                OnPropertyChanged(nameof(DestinationError));
-                TriggerAutoSave();
-            }
-        }
-    }
-    public bool OtherFolder
-    {
-        get => otherFolder;
-        set
-        {
-            if (SetProperty(ref otherFolder, value))
-            {
-                OnPropertyChanged(nameof(DestinationError));
-                TriggerAutoSave();
-            }
-        }
-    }
-    public bool ReplaceOriginal
-    {
-        get => replaceOriginal;
-        set
-        {
-            if (SetProperty(ref replaceOriginal, value))
-            {
-                TriggerAutoSave();
-            }
-        }
-    }
-    public bool CreateArchive
-    {
-        get => createArchive;
-        set
-        {
-            if (SetProperty(ref createArchive, value))
-            {
-                TriggerAutoSave();
-            }
-        }
-    }
+    [ObservableProperty]
+    public partial bool ShowCompletionNotifications { get; set; } = true;
+
+    partial void OnShowCompletionNotificationsChanged(bool value) => TriggerAutoSave();
+
+    [ObservableProperty]
+    public partial string Temporary { get; set; } = "";
+
+    partial void OnTemporaryChanged(string value) => TriggerAutoSave();
+
+    [ObservableProperty]
+    [NotifyPropertyChangedFor(nameof(DestinationError))]
+    public partial string Destination { get; set; } = "";
+
+    partial void OnDestinationChanged(string value) => TriggerAutoSave();
+
+    [ObservableProperty]
+    [NotifyPropertyChangedFor(nameof(DestinationError))]
+    public partial bool OtherFolder { get; set; }
+
+    partial void OnOtherFolderChanged(bool value) => TriggerAutoSave();
+
+    [ObservableProperty]
+    public partial bool ReplaceOriginal { get; set; }
+
+    partial void OnReplaceOriginalChanged(bool value) => TriggerAutoSave();
+
+    [ObservableProperty]
+    public partial bool CreateArchive { get; set; }
+
+    partial void OnCreateArchiveChanged(bool value) => TriggerAutoSave();
+
     public bool IncludeSimple
     {
         get => includeSimple;
@@ -420,7 +292,7 @@ public sealed class SettingsViewModel : OperationViewModel, INavigationPage, IPa
         {
             pendingTcs ??= new(TaskCreationOptions.RunContinuationsAsynchronously);
             SaveTask = pendingTcs.Task;
-            if (!isSaving)
+            if (!IsSaving)
             {
                 IsSaving = true;
                 _ = ProcessSaveQueueAsync();
@@ -477,7 +349,7 @@ public sealed class SettingsViewModel : OperationViewModel, INavigationPage, IPa
             pendingTcs ??= new(TaskCreationOptions.RunContinuationsAsynchronously);
             task = pendingTcs.Task;
             SaveTask = task;
-            if (!isSaving)
+            if (!IsSaving)
             {
                 IsSaving = true;
                 _ = ProcessSaveQueueAsync();
@@ -545,21 +417,12 @@ public sealed class SettingsViewModel : OperationViewModel, INavigationPage, IPa
         SetStatus(ViewStatus.SettingsSaved);
         Saved?.Invoke(snapshot);
     }
-    public NativeTool SelectedTool
-    {
-        get => selectedTool;
-        set => SetProperty(ref selectedTool, value);
-    }
+    [ObservableProperty]
+    public partial NativeTool SelectedTool { get; set; }
 
-    public string ToolPath
-    {
-        get => toolPath;
-        set
-        {
-            SetProperty(ref toolPath, value);
-            SetToolCommand.NotifyCanExecuteChanged();
-        }
-    }
+    [ObservableProperty]
+    [NotifyCanExecuteChangedFor(nameof(SetToolCommand))]
+    public partial string ToolPath { get; set; } = "";
 
     public NativeTool[] ToolNames
     {
@@ -569,51 +432,78 @@ public sealed class SettingsViewModel : OperationViewModel, INavigationPage, IPa
     /// <summary>Settings reload every time the page is shown.</summary>
     public Task OnActivatedAsync(CancellationToken cancellationToken) => LoadCommand.ExecuteAsync(null);
 
-    public AsyncRelayCommand LoadCommand
+    [RelayCommand(CanExecute = nameof(IsIdle))]
+    private Task Load() => RunAsync(async (token, _) =>
     {
-        get;
-    }
-    public AsyncRelayCommand SaveCommand
+        await FlushAsync(token);
+        lastSavedSettings = await settings.ReadAsync(token);
+        ApplyPreferences(lastSavedSettings);
+        await RefreshCacheSizeAsync(token);
+        SetStatus(ViewStatus.SettingsLoaded);
+    });
+
+    [RelayCommand(CanExecute = nameof(IsIdle))]
+    private Task Save() => RunAsync(async (token, _) => await SaveAsync(token));
+
+    [RelayCommand(CanExecute = nameof(IsIdle))]
+    private Task ClearCache() => RunAsync(async (token, _) =>
     {
-        get;
-    }
-    public RelayCommand DiscardChangesCommand { get; }
-    public AsyncRelayCommand CheckCommand
+        if (CacheClearing is not null)
+        {
+            await CacheClearing();
+        }
+        int removed = await Task.Run(() => cache.ClearAsync(token), token);
+        int frames = await Task.Run(() => mediaPreview.ClearCacheAsync(token), token);
+        await RefreshCacheSizeAsync(token);
+        SetStatus(ViewStatus.Result, $"Cleared {removed} cached analysis results and {frames} frame previews. They will be recreated when needed.");
+    });
+
+    [RelayCommand(CanExecute = nameof(IsIdle))]
+    private Task Check() => RunAsync(async (token, _) =>
     {
-        get;
-    }
-    public AsyncRelayCommand InstallCommand
+        var report = await setup.CheckAsync(token);
+        SetStatus(report.Ready ? ViewStatus.ToolsReady : ViewStatus.ToolsNeedAttention);
+    });
+
+    [RelayCommand(CanExecute = nameof(IsIdle))]
+    private Task Install() => RunAsync("Tool installation", async (token, progress) =>
     {
-        get;
-    }
-    public AsyncRelayCommand SetToolCommand
+        SetStatus(ViewStatus.Progress, "Checking dependencies…");
+        SetStatus(await setup.EnsureAsync(progress, token) ? ViewStatus.ToolsReady : ViewStatus.DependencySetupIncomplete);
+    });
+
+    private bool CanSetTool() => IsIdle && !string.IsNullOrWhiteSpace(ToolPath);
+
+    [RelayCommand(CanExecute = nameof(CanSetTool))]
+    private Task SetTool() => RunAsync(async (token, _) =>
     {
-        get;
-    }
-    public AsyncRelayCommand ResetToolCommand
+        await settings.SetToolAsync(SelectedTool, ToolPath, token);
+        await RecheckToolsAsync(token);
+        SetStatus(ViewStatus.ToolPathSaved);
+    });
+
+    [RelayCommand(CanExecute = nameof(IsIdle))]
+    private Task ResetTool() => RunAsync(async (token, _) =>
     {
-        get;
-    }
-    public RelayCommand BrowseTemporaryCommand
-    {
-        get;
-    }
-    public RelayCommand BrowseDestinationCommand
-    {
-        get;
-    }
-    public RelayCommand BrowseToolCommand
-    {
-        get;
-    }
-    public RelayCommand OpenCacheFolderCommand
-    {
-        get;
-    }
-    public RelayCommand OpenLogsCommand
-    {
-        get;
-    }
+        await settings.ResetToolAsync(SelectedTool, token);
+        await RecheckToolsAsync(token);
+        SetStatus(ViewStatus.ToolOverrideReset);
+    });
+
+    [RelayCommand]
+    private void BrowseTemporary() => Temporary = files.PickFolder() ?? Temporary;
+
+    [RelayCommand]
+    private void BrowseDestination() => Destination = files.PickFolder() ?? Destination;
+
+    [RelayCommand]
+    private void BrowseTool() => ToolPath = files.PickFiles("Executables|*.exe", allowMultiple: false).FirstOrDefault() ?? ToolPath;
+
+    [RelayCommand]
+    private void OpenCacheFolder() => explorer.OpenFolder(CacheDirectory);
+
+    [RelayCommand]
+    private void OpenLogs() => explorer.OpenLogs();
 
     protected override void CommandsChanged()
     {

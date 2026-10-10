@@ -3,37 +3,25 @@ using DoViFixer.Application.Operations;
 
 namespace DoViFixer.App.ViewModels;
 
-public sealed class ProgressViewModel : ObservableObject
+public sealed partial class ProgressViewModel : ObservableObject
 {
-    private bool isRunning;
-    private string stage = "";
     private double? stagePercent;
-    private IReadOnlyList<string> details = [];
 
-    public bool IsRunning
-    {
-        get => isRunning;
-        private set => SetProperty(ref isRunning, value);
-    }
+    [ObservableProperty]
+    public partial bool IsRunning { get; private set; }
 
-    public string Stage
-    {
-        get => stage;
-        private set => SetProperty(ref stage, value);
-    }
+    [ObservableProperty]
+    public partial string Stage { get; private set; } = "";
 
     public double Percent => stagePercent ?? 0;
     public double StagePercent => Percent;
-    public bool IsIndeterminate => isRunning && stagePercent is null;
-    public string ProgressText => stagePercent is { } value ? $"{value:0}%" : isRunning ? "Working…" : "";
+    public bool IsIndeterminate => IsRunning && stagePercent is null;
+    public string ProgressText => stagePercent is { } value ? $"{value:0}%" : IsRunning ? "Working…" : "";
     public string StageProgressText => ProgressText;
 
     /// <summary>Lines under the job's file name, such as the conversion target and what happens to the original.</summary>
-    public IReadOnlyList<string> Details
-    {
-        get => details;
-        private set => SetProperty(ref details, value);
-    }
+    [ObservableProperty]
+    public partial IReadOnlyList<string> Details { get; private set; } = [];
 
     /// <summary>The job's steps, in order; empty when the operation has no fixed steps.</summary>
     public ObservableCollection<JobStep> Steps { get; } = [];

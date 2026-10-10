@@ -1,43 +1,27 @@
 namespace DoViFixer.App.ViewModels;
 
 /// <summary>One filter choice above the media list, labeled with how many listed files it shows.</summary>
-public sealed class MediaFilterOption(MediaFileFilter filter, string name, Action<MediaFileFilter> select) : ObservableObject
+public sealed partial class MediaFilterOption(MediaFileFilter filter, string name, Action<MediaFileFilter> select) : ObservableObject
 {
-    private int count;
-    private bool selected;
-
     public MediaFileFilter Filter { get; } = filter;
-    public string Label => $"{name} ({count})";
+    public string Label => $"{name} ({Count})";
 
     /// <summary>Other profiles are rare, so their choice appears only while it shows files or is chosen.</summary>
-    public bool IsVisible => Filter != MediaFileFilter.OtherProfiles || count > 0 || selected;
+    public bool IsVisible => Filter != MediaFileFilter.OtherProfiles || Count > 0 || IsSelected;
 
-    public int Count
-    {
-        get => count;
-        set
-        {
-            if (SetProperty(ref count, value))
-            {
-                OnPropertyChanged(nameof(Label));
-                OnPropertyChanged(nameof(IsVisible));
-            }
-        }
-    }
+    [ObservableProperty]
+    [NotifyPropertyChangedFor(nameof(Label), nameof(IsVisible))]
+    public partial int Count { get; set; }
 
-    public bool IsSelected
+    [ObservableProperty]
+    [NotifyPropertyChangedFor(nameof(IsVisible))]
+    public partial bool IsSelected { get; set; }
+
+    partial void OnIsSelectedChanged(bool value)
     {
-        get => selected;
-        set
+        if (value)
         {
-            if (SetProperty(ref selected, value))
-            {
-                OnPropertyChanged(nameof(IsVisible));
-                if (value)
-                {
-                    select(Filter);
-                }
-            }
+            select(Filter);
         }
     }
 }
