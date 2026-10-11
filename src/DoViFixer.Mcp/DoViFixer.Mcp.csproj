@@ -7,6 +7,7 @@
     <PackageReference Include="Microsoft.Extensions.Hosting" />
     <PackageReference Include="ModelContextProtocol" />
     <PackageReference Include="Serilog.Extensions.Hosting" />
+    <PackageReference Include="Serilog.Formatting.Compact" />
     <PackageReference Include="Serilog.Sinks.File" />
   </ItemGroup>
   <ItemGroup><InternalsVisibleTo Include="DoViFixer.Mcp.Tests" /></ItemGroup>

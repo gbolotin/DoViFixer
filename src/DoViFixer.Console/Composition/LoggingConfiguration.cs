@@ -3,7 +3,7 @@ using Microsoft.Extensions.Configuration;
 using DoViFixer.Console.Rendering;
 using Serilog;
 using Serilog.Events;
-using Serilog.Formatting.Json;
+using Serilog.Formatting.Compact;
 
 namespace DoViFixer.Console.Composition;
 public static class LoggingConfiguration
@@ -24,7 +24,8 @@ public static class LoggingConfiguration
         {
         }
 
-        var json = new JsonFormatter(renderMessage: true);
+        // Compact JSON (CLEF) opens in Seq and Compact Log Viewer; @m keeps the rendered message for plain readers.
+        var json = new RenderedCompactJsonFormatter();
         return logging.MinimumLevel.Verbose().MinimumLevel.Override("Microsoft", LogEventLevel.Warning).MinimumLevel.Override("System", LogEventLevel.Warning).Enrich.FromLogContext().Enrich.WithProperty("SessionId", Guid.NewGuid()).Enrich.WithProperty("ProcessId", Environment.ProcessId).Enrich.WithProperty("UserName", Environment.UserName).Enrich.WithProperty("MachineName", Environment.MachineName).Enrich.WithProperty("ApplicationVersion", ApplicationVersion.Of(typeof(LoggingConfiguration).Assembly)).WriteTo.File(json, Path.Combine(directory, "diagnostic-.jsonl"), restrictedToMinimumLevel: level, rollingInterval: RollingInterval.Day, fileSizeLimitBytes: fileSize, rollOnFileSizeLimit: true, retainedFileCountLimit: diagnosticFiles, shared: true).WriteTo.Logger(history => history.Filter.ByIncludingOnly(e => IsKind(e, "History")).WriteTo.File(json, Path.Combine(directory, "history-.jsonl"), rollingInterval: RollingInterval.Day, fileSizeLimitBytes: fileSize, rollOnFileSizeLimit: true, retainedFileCountLimit: historyFiles, shared: true)).WriteTo.Logger(audit => audit.Filter.ByIncludingOnly(e => IsKind(e, "Audit")).WriteTo.File(json, Path.Combine(directory, "audit-.jsonl"), rollingInterval: RollingInterval.Day, fileSizeLimitBytes: fileSize, rollOnFileSizeLimit: true, retainedFileCountLimit: auditFiles, shared: true)).WriteTo.Console(new ConsoleLogFormatter(), restrictedToMinimumLevel: LogEventLevel.Warning, standardErrorFromLevel: LogEventLevel.Verbose);
     }
 

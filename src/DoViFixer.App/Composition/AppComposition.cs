@@ -11,7 +11,7 @@ using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging;
 using Serilog;
 using Serilog.Events;
-using Serilog.Formatting.Json;
+using Serilog.Formatting.Compact;
 using WpfFoundation.Notifications;
 using WpfFoundation.Operations;
 using WpfFoundation.Taskbar;
@@ -63,7 +63,8 @@ public static class AppComposition
         string root = configuration["DoViFixer:DataDirectory"] ?? Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData), "DoViFixer");
         string directory = Path.Combine(root, "Logs");
         Directory.CreateDirectory(directory);
-        var json = new JsonFormatter(renderMessage: true);
+        // Compact JSON (CLEF) opens in Seq and Compact Log Viewer; @m keeps the rendered message for plain readers.
+        var json = new RenderedCompactJsonFormatter();
         logging.MinimumLevel.Debug().Enrich.FromLogContext().Enrich.WithProperty("SessionId", Guid.NewGuid()).Enrich.WithProperty("ProcessId", Environment.ProcessId).Enrich.WithProperty("Application", "DoViFixer.App").Enrich.WithProperty("ApplicationVersion", ApplicationVersion.Of(typeof(AppComposition).Assembly)).WriteTo.File(json, Path.Combine(directory, "app-diagnostic-.jsonl"), rollingInterval: RollingInterval.Day, retainedFileCountLimit: 14, fileSizeLimitBytes: 10485760, rollOnFileSizeLimit: true, shared: true).WriteTo.Logger(s => s.Filter.ByIncludingOnly(e => IsKind(e, "History")).WriteTo.File(json, Path.Combine(directory, "app-history-.jsonl"), rollingInterval: RollingInterval.Day, retainedFileCountLimit: 90, fileSizeLimitBytes: 10485760, rollOnFileSizeLimit: true, shared: true)).WriteTo.Logger(s => s.Filter.ByIncludingOnly(e => IsKind(e, "Audit")).WriteTo.File(json, Path.Combine(directory, "app-audit-.jsonl"), rollingInterval: RollingInterval.Day, retainedFileCountLimit: 90, fileSizeLimitBytes: 10485760, rollOnFileSizeLimit: true, shared: true));
     }
 

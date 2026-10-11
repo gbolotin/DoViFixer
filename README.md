@@ -115,7 +115,7 @@ Exit codes: `0` success, `1` failure/partial batch, `2` invalid arguments, `3` u
 
 ## Logging and operation history
 
-Serilog writes local, structured JSON Lines logs to `%LOCALAPPDATA%\DoViFixer\Logs` (or `Logs` under `DoViFixer__DataDirectory`). Each line is a complete JSON event with its timestamp, level, rendered message, structured properties, and full exception when present.
+Serilog writes local, structured JSON Lines logs to `%LOCALAPPDATA%\DoViFixer\Logs` (or `Logs` under `DoViFixer__DataDirectory`). Each line is one event in Serilog's compact JSON format (CLEF): `@t` timestamp, `@m` rendered message, `@l` level (left out for Information), `@x` full exception when present, and the structured properties as top-level fields. [Seq](https://datalust.co/seq) and [Compact Log Viewer](https://github.com/warrenbuckley/Compact-Log-Format-Viewer) open these files directly.
 
 | File | Contents | Default retention |
 | --- | --- | --- |
@@ -146,8 +146,9 @@ To inspect failed operations in PowerShell:
 $logs = Join-Path $env:LOCALAPPDATA 'DoViFixer\Logs'
 Get-Content (Join-Path $logs 'history-*.jsonl') |
     ConvertFrom-Json |
-    Where-Object { $_.Properties.Outcome -in 'Failed', 'Partial' } |
-    Select-Object Timestamp, RenderedMessage, Properties
+    Where-Object { $_.Outcome -in 'Failed', 'Partial' } |
+    Select-Object '@t', '@m', OperationId, Outcome |
+    Out-GridView
 ```
 
 For a bug report, find the failed event's `SessionId`, then collect matching events from the diagnostic files along with the command, expected behavior, and actual result. Logs can include local paths, user/machine names, and native-tool arguments; review them before sharing. Logging makes no automatic uploads. Audit records are ordinary local files subject to retention, not a tamper-proof ledger or a substitute for media verification.
