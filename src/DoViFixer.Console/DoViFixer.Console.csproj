@@ -9,6 +9,7 @@
     <ProjectReference Include="../DoViFixer.Domain/DoViFixer.Domain.csproj" />
     <PackageReference Include="Microsoft.Extensions.Hosting" />
     <PackageReference Include="Serilog.Extensions.Hosting" />
+    <PackageReference Include="Serilog.Formatting.Compact" />
     <PackageReference Include="Serilog.Sinks.File" />
     <PackageReference Include="Serilog.Sinks.Console" />
   </ItemGroup>

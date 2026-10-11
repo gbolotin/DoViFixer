@@ -65,10 +65,10 @@ public sealed class LoggingTests
         )
         {
             var entry = Read(kind)[0];
-            Assert.AreEqual(192349.0141, entry.GetProperty("Properties").GetProperty("ElapsedMilliseconds").GetDouble());
-            Assert.AreEqual("Operation {Outcome} after {ElapsedMilliseconds} ms", entry.GetProperty("MessageTemplate").GetString());
-            StringAssert.Contains(entry.GetProperty("RenderedMessage").GetString()!, "192349.0141 ms");
-            Assert.IsFalse(entry.GetProperty("Properties").TryGetProperty("ConsoleElapsed", out _));
+            Assert.AreEqual(192349.0141, entry.GetProperty("ElapsedMilliseconds").GetDouble());
+            StringAssert.Contains(entry.GetProperty("@m").GetString()!, "192349.0141 ms");
+            Assert.AreEqual("Error", entry.GetProperty("@l").GetString());
+            Assert.IsFalse(entry.TryGetProperty("ConsoleElapsed", out _));
         }
     }
 
@@ -96,7 +96,7 @@ public sealed class LoggingTests
         using var document = JsonDocument.Parse(line);
         return document.RootElement.Clone();
     }).ToArray();
-    private static string? Property(JsonElement entry, string name) => entry.GetProperty("Properties").TryGetProperty(name, out var property) ? property.ToString() : null;
+    private static string? Property(JsonElement entry, string name) => entry.TryGetProperty(name, out var property) ? property.ToString() : null;
     [TestMethod]
     public async Task HistoryAndAuditPersistEvenWhenDiagnosticsAreFiltered()
     {
@@ -130,7 +130,7 @@ public sealed class LoggingTests
         var audit = Read("audit");
         Assert.AreEqual(3, audit.Length);
         Assert.IsTrue(audit.All(e => Property(e, "PlanId") == planId.ToString() && Property(e, "LogKind") == "Audit"));
-        Assert.AreEqual("movie.dovi", audit[0].GetProperty("Properties").GetProperty("Plan").GetProperty("Output").GetString());
+        Assert.AreEqual("movie.dovi", audit[0].GetProperty("Plan").GetProperty("Output").GetString());
         Assert.AreEqual(0, Read("diagnostic").Length);
     }
 
@@ -164,9 +164,9 @@ public sealed class LoggingTests
         Assert.IsTrue(history.Where(e => Property(e, "OperationId") == first.ToString()).All(e => Property(e, "Operation") == "First"));
         var failure = history.Single(e => Property(e, "Outcome") == "Failed");
         Assert.AreEqual(second.ToString(), Property(failure, "OperationId"));
-        StringAssert.Contains(failure.GetProperty("Exception").GetString()!, "Fixture inner cause");
-        StringAssert.Contains(failure.GetProperty("Exception").GetString()!, "OperationLog.RunAsync");
-        var outside = Read("diagnostic").Single(e => e.GetProperty("RenderedMessage").GetString() == "Outside operation");
+        StringAssert.Contains(failure.GetProperty("@x").GetString()!, "Fixture inner cause");
+        StringAssert.Contains(failure.GetProperty("@x").GetString()!, "OperationLog.RunAsync");
+        var outside = Read("diagnostic").Single(e => e.GetProperty("@m").GetString() == "Outside operation");
         Assert.IsNull(Property(outside, "OperationId"));
     }
 
@@ -224,10 +224,10 @@ public sealed class LoggingTests
             Assert.IsTrue(Read("audit").Any(e => Property(e, "Action") == "SetTemporaryDirectory" && Property(e, "Outcome") == "Completed"));
             var change = Read("audit").Single(e => Property(e, "Setting") == "TemporaryDirectory");
             Assert.AreEqual(Path.GetFullPath(Path.GetTempPath()), Property(change, "NewValue"));
-            Assert.IsTrue(change.GetProperty("Properties").GetProperty("PreviousValue").ValueKind == JsonValueKind.Null);
+            Assert.IsTrue(change.GetProperty("PreviousValue").ValueKind == JsonValueKind.Null);
             Assert.AreEqual(4, Read("history").Length);
             Assert.AreEqual(2, Read("history").Select(e => Property(e, "SessionId")).Distinct().Count());
-            Assert.IsTrue(Read("diagnostic").Any(e => e.GetProperty("RenderedMessage").GetString() == "Host stopped; flushing log files"));
+            Assert.IsTrue(Read("diagnostic").Any(e => e.GetProperty("@m").GetString() == "Host stopped; flushing log files"));
         }
         finally
         {
