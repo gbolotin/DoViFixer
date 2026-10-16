@@ -97,6 +97,10 @@ Before publication, verification checks the target profile and full RPU count/pr
 
 Batch failures are reported per file and do not stop subsequent files. Ctrl+C stops the batch, terminates owned native processes, and disposes temporary resources. A cancelled external installer can leave package-manager changes; run `dependencies check` before retrying. Successfully published enhancement archives remain available if a subsequent conversion fails.
 
+Each native-tool invocation owns a Windows Job Object; both processes in a streaming pipeline share one job. Closing that job terminates its assigned processes and descendants, including when the application crashes or is forcibly closed. Separate invocations have separate jobs. Job creation or assignment failure stops the invocation rather than silently running without protection. This applies to processes launched through the shared runner; services or installers launched independently by another system process are outside its ownership.
+
+Protection starts when the process is assigned to the job immediately after `.NET Process.Start`. A crash, process exit, or child launch in the brief start-to-assignment interval can escape this protection. Eliminating that interval requires a native launcher with atomic job assignment. An abnormal application exit also cannot run managed workspace cleanup, so temporary files may remain. See [Windows Job Objects](https://learn.microsoft.com/windows/win32/procthread/job-objects) for the operating-system behavior.
+
 ## AI assistants (MCP)
 
 `DoViFixer.Mcp` exposes scanning, inspection, conversion, backup, restore, cleanup, dependency and settings operations as Model Context Protocol tools. Anything that changes files is planned first and runs only after you approve the plan. See [MCP server](docs/mcp.md) to register it in Claude Desktop or Claude Code.
@@ -160,6 +164,12 @@ dotnet test DoViFixer.sln --no-restore --filter 'TestCategory!=NativeIntegration
 ```
 
 Fast tests use small fixtures and fake external boundaries. They cover domain eligibility, missing evidence, dependency coordination, changed inputs, partial batches, cancellation/disposal, settings concurrency, TAR integrity, publication collisions and CLI composition/arguments.
+
+Windows process-lifetime tests are labelled `ProcessIntegration`. They launch disposable test hosts, not media tools. They cover abrupt host termination, nested jobs, child/grandchild cleanup, concurrent invocation isolation, cancellation, timeout, startup failure, and assignment failure. The test assembly's executable entry point is only a process fixture; use `dotnet test` to run the tests.
+
+```powershell
+dotnet test tests/DoViFixer.Infrastructure.Tests -c Release --filter TestCategory=ProcessIntegration
+```
 
 Native integration is opt-in and uses tiny public dovi_tool fixtures plus generated audio/subtitles; it never scans a media library or installs software:
 

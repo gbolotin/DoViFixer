@@ -38,6 +38,8 @@ internal sealed class ProcessRunner(ILogger<ProcessRunner> logger) : IProcessRun
 
     public async Task PipeAsync(ProcessRequest producer, ProcessRequest consumer, CancellationToken cancellationToken)
     {
+        cancellationToken.ThrowIfCancellationRequested();
+        using var job = new ProcessJob();
         using var timeout = new CancellationTokenSource(TimeSpan.FromHours(24));
         using var linked = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken, timeout.Token);
         using var source = CreatePipelineProcess(producer);
@@ -49,24 +51,22 @@ internal sealed class ProcessRunner(ILogger<ProcessRunner> logger) : IProcessRun
         {
             linked.Token.ThrowIfCancellationRequested();
             logger.LogDebug("Starting pipeline {Producer} {ProducerArguments} -> {Consumer} {ConsumerArguments}", producer.Executable, producer.Arguments, consumer.Executable, consumer.Arguments);
-            targetStarted = target.Start();
-            if (!targetStarted)
-            {
-                throw new IOException("Could not start pipeline consumer.");
-            }
+            await job.StartAsync(target);
+            targetStarted = true;
+            logger.LogDebug("Started protected pipeline consumer {NativeProcessId}", target.Id);
 
             targetError = DrainAsync(target.StandardError);
             targetOutput = DrainAsync(target.StandardOutput, consumer.OutputLine);
-            sourceStarted = source.Start();
-            if (!sourceStarted)
-            {
-                throw new IOException("Could not start pipeline producer.");
-            }
+            await job.StartAsync(source);
+            sourceStarted = true;
+            logger.LogDebug("Started protected pipeline producer {NativeProcessId}", source.Id);
 
             source.StandardInput.Close();
             sourceError = DrainAsync(source.StandardError);
             copy = CopyAsync();
             await Task.WhenAll(copy, source.WaitForExitAsync(linked.Token), target.WaitForExitAsync(linked.Token));
+            // Descendants may retain redirected handles after the direct processes exit.
+            job.Dispose();
             string error = await sourceError + await targetError;
             await targetOutput;
             if (source.ExitCode != 0 || target.ExitCode != 0)
@@ -81,24 +81,16 @@ internal sealed class ProcessRunner(ILogger<ProcessRunner> logger) : IProcessRun
         finally
         {
             linked.Cancel();
-            if (sourceStarted && !source.HasExited)
-            {
-                source.Kill(entireProcessTree: true);
-            }
-
-            if (targetStarted && !target.HasExited)
-            {
-                target.Kill(entireProcessTree: true);
-            }
+            job.Dispose();
 
             if (sourceStarted)
             {
-                await source.WaitForExitAsync(CancellationToken.None);
+                await ProcessJob.StopAsync(source);
             }
 
             if (targetStarted)
             {
-                await target.WaitForExitAsync(CancellationToken.None);
+                await ProcessJob.StopAsync(target);
             }
 
             foreach (Task? task in new Task? []
@@ -170,6 +162,7 @@ internal sealed class ProcessRunner(ILogger<ProcessRunner> logger) : IProcessRun
     private async Task<ProcessResult> RunCoreAsync(ProcessRequest request, CancellationToken cancellationToken)
     {
         cancellationToken.ThrowIfCancellationRequested();
+        using var job = new ProcessJob();
         var start = new ProcessStartInfo(request.Executable)
         {
             UseShellExecute = false,
@@ -192,30 +185,43 @@ internal sealed class ProcessRunner(ILogger<ProcessRunner> logger) : IProcessRun
         };
         using var timeout = new CancellationTokenSource(request.Timeout ?? TimeSpan.FromHours(24));
         using var linked = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken, timeout.Token);
-        if (!process.Start())
-        {
-            throw new IOException($"Could not start {request.Executable}.");
-        }
-
-        process.StandardInput.Close();
-        var stdout = DrainAsync(process.StandardOutput, request.OutputLine);
-        var stderr = DrainAsync(process.StandardError);
+        await job.StartAsync(process);
+        Task<string>? stdout = null, stderr = null;
         try
         {
+            logger.LogDebug("Started protected native process {NativeProcessId}", process.Id);
+            process.StandardInput.Close();
+            stdout = DrainAsync(process.StandardOutput, request.OutputLine);
+            stderr = DrainAsync(process.StandardError);
             await process.WaitForExitAsync(linked.Token);
         }
-        catch (OperationCanceledException)
+        catch (OperationCanceledException) when (!cancellationToken.IsCancellationRequested && timeout.IsCancellationRequested)
         {
-            if (!process.HasExited)
-            {
-                process.Kill(entireProcessTree: true);
-            }
-
-            await process.WaitForExitAsync(CancellationToken.None);
-            await Task.WhenAll(stdout, stderr);
-            logger.LogDebug("Native tool interrupted; stdout tail {OutputTail}; stderr tail {ErrorTail}", Tail(await stdout), Tail(await stderr));
-            cancellationToken.ThrowIfCancellationRequested();
             throw new TimeoutException($"{Path.GetFileName(request.Executable)} exceeded its {request.Timeout ?? TimeSpan.FromHours(24)} time limit.");
+        }
+        finally
+        {
+            // Close the job before draining: descendants can otherwise keep stdout/stderr open forever.
+            job.Dispose();
+            await ProcessJob.StopAsync(process);
+            foreach (var drain in new[] { stdout, stderr })
+            {
+                if (drain is not null)
+                {
+                    try
+                    {
+                        string output = await drain;
+                        if (linked.IsCancellationRequested)
+                        {
+                            logger.LogDebug("Native tool interrupted; output tail {OutputTail}", Tail(output));
+                        }
+                    }
+                    catch (Exception ex)
+                    {
+                        logger.LogDebug(ex, "Native tool stream ended during cleanup");
+                    }
+                }
+            }
         }
 
         var result = new ProcessResult(process.ExitCode, await stdout, await stderr);
