@@ -66,12 +66,16 @@ Full RPU inspection results can serve later scans and conversion planning. A sam
 
 `scan --inspect-simple` finishes scanning, then deep-inspects every Simple FEL candidate automatically. It uses the same decoded-frame analysis as `inspect --deep`, updates final verdicts, and retains the initial analysis in JSON. Inspection failures are reported while remaining candidates continue. This optional second pass can take a long time and requires scratch disk space; it performs no conversion. Ordinary scans remain unchanged.
 
+Use **Export selected results** or **Export visible results** on the WPF Media page to save the results already in the list. Visible means the active file filter; selected means checked files within that filter. Both include failed and unscanned rows. The console's optional `--report <path.csv|path.json|path.txt>` saves results from the scan or inspection it just ran. Report files use UTF-8; JSON includes a schema version, CSV quotes cells and guards against spreadsheet formulas, and text labels unavailable measurements. A report does not rescan WPF rows or change conversion rules. Existing destinations are rejected. The report contains source paths and may contain tool errors or other personal information.
+
 ```powershell
 # Read-only metadata/RPU analysis (temporary extraction is cleaned up).
 dotnet run --project src/DoViFixer.Console -- scan 'E:\Movies' -r 3
 dotnet run --project src/DoViFixer.Console -- scan 'E:\Movies' -r 3 --inspect-simple
 dotnet run --project src/DoViFixer.Console -- inspect 'E:\Movies\Movie.mkv' --json
 dotnet run --project src/DoViFixer.Console -- inspect 'E:\Movies\Movie.mkv' --deep --json
+dotnet run --project src/DoViFixer.Console -- scan 'E:\Movies' --report 'E:\Reports\scan.csv'
+dotnet run --project src/DoViFixer.Console -- inspect 'E:\Movies\Movie.mkv' --deep --report 'E:\Reports\inspection.json'
 
 # Plan exact inputs/outputs first; output directories are created when needed.
 dotnet run --project src/DoViFixer.Console -- convert 'E:\Movies' -r --plan

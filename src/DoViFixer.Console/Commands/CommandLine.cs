@@ -22,8 +22,8 @@ public sealed record CommandLine(string Command, IReadOnlyList<string> Arguments
         string command = args[0].ToLowerInvariant();
         string[] allowed = command switch
         {
-            "scan" => ["recursive", "temp", "candidates-only", "json", "install-dependencies", "inspect-simple"],
-            "inspect" => ["temp", "json", "install-dependencies", "safe", "deep"],
+            "scan" => ["recursive", "temp", "candidates-only", "json", "install-dependencies", "inspect-simple", "report"],
+            "inspect" => ["temp", "json", "install-dependencies", "safe", "deep", "report"],
             "convert" => ["recursive", "temp", "output", "hdr10", "include-simple", "force", "backup", "delete", "yes", "plan", "safe", "install-dependencies"],
             "backup" => ["temp", "output", "yes", "plan", "install-dependencies"],
             "restore" => ["temp", "output", "yes", "plan", "allow-legacy-archive", "source", "install-dependencies"],
@@ -69,7 +69,7 @@ public sealed record CommandLine(string Command, IReadOnlyList<string> Arguments
             }
 
             string? value = null;
-            if (name is "temp" or "output" or "source")
+            if (name is "temp" or "output" or "source" or "report")
             {
                 if (++i >= args.Length || args[i].StartsWith('-'))
                 {
@@ -124,6 +124,11 @@ public sealed record CommandLine(string Command, IReadOnlyList<string> Arguments
         if (!countValid)
         {
             throw new ArgumentException($"Invalid arguments for {Command}. Run --help for command syntax.");
+        }
+
+        if (Has("report") && System.IO.Path.GetExtension(Value("report") ?? "").ToLowerInvariant() is not (".csv" or ".json" or ".txt"))
+        {
+            throw new ArgumentException("Report format must be .csv, .json, or .txt.");
         }
 
         if (Command == "dependencies" && ((Arguments[0] == "check" && (Has("yes") || Has("repair"))) || (Arguments[0] == "install" && Has("json"))))

@@ -39,6 +39,16 @@ public sealed class ConsoleTests
     }
 
     [TestMethod]
+    public void ReportOptionAcceptsSupportedFormatsAndRejectsUnknownFormatBeforeScanning()
+    {
+        Assert.AreEqual("scan.csv", CommandLine.Parse(["scan", "--report", "scan.csv", "--json"]).Value("report"));
+        Assert.AreEqual("inspection.json", CommandLine.Parse(["inspect", "movie.mkv", "--report", "inspection.json"]).Value("report"));
+        Assert.AreEqual("inspection.txt", CommandLine.Parse(["inspect", "movie.mkv", "--report", "inspection.txt"]).Value("report"));
+        Assert.ThrowsExactly<ArgumentException>(() => CommandLine.Parse(["scan", "--report", "unknown.bin"]));
+        Assert.ThrowsExactly<ArgumentException>(() => CommandLine.Parse(["inspect", "movie.mkv", "--report"]));
+    }
+
+    [TestMethod]
     public void AutoInspectionRenderingShowsMeasuredEvidenceAndReclassification()
     {
         var initial = CreatePlan(DoViFixer.Domain.Analysis.AnalysisVerdict.SimpleFel).Analysis;

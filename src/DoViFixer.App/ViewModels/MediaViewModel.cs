@@ -9,6 +9,7 @@ using DoViFixer.Application.Inspection;
 using DoViFixer.Application.Operations;
 using DoViFixer.Application.Settings;
 using DoViFixer.Application.Restore;
+using DoViFixer.Application.Reports;
 using DoViFixer.Domain.Analysis;
 using DoViFixer.Domain.Conversion;
 using Microsoft.Extensions.Logging;
@@ -47,15 +48,17 @@ public sealed partial class MediaViewModel : OperationViewModel, INavigationPage
     private Task previewCompletion = Task.CompletedTask;
     private CancellationTokenSource? currentJobPreviewCancellation;
     private readonly ISourceFileMonitor sourceFiles;
+    private readonly ReportService reports;
     private readonly SynchronizationContext? uiContext;
     private int availabilityCheckQueued;
 
     private static string Summary(BatchResult result) => string.Join(" · ", result.Items.GroupBy(r => r.Status).Select(g => $"{g.Count()} {g.Key}"));
-    public MediaViewModel(IFileDiscovery discovery, InspectionService inspection, ConversionService conversion, ControlledBatchService batch, SettingsService settings, DependencySetup dependencies, IDialogService dialogs, IFileDialogService files, IFileExplorer explorer, ILogger<MediaViewModel> logger, IMediaPreview mediaPreview, RestoreService restore, ISourceFileMonitor sourceFiles, IOperationFeedback? feedback = null)
+    public MediaViewModel(IFileDiscovery discovery, InspectionService inspection, ConversionService conversion, ControlledBatchService batch, SettingsService settings, DependencySetup dependencies, IDialogService dialogs, IFileDialogService files, IFileExplorer explorer, ILogger<MediaViewModel> logger, IMediaPreview mediaPreview, RestoreService restore, ISourceFileMonitor sourceFiles, ReportService reports, IOperationFeedback? feedback = null)
         : base(feedback)
     {
         this.discovery = discovery;
         this.sourceFiles = sourceFiles;
+        this.reports = reports;
         uiContext = SynchronizationContext.Current;
         sourceFiles.Changed += OnSourceFilesChanged;
         this.inspection = inspection;
@@ -511,6 +514,32 @@ public sealed partial class MediaViewModel : OperationViewModel, INavigationPage
     [RelayCommand(CanExecute = nameof(IsIdle))]
     private Task AddFolder() => AddAsync(files.PickFolder() is { } folder ? [folder] : []);
 
+    private bool CanExportSelectedResults() => IsIdle && ShownFiles.Any(row => row.IsSelected);
+    private bool CanExportVisibleResults() => IsIdle && ShownFiles.Any();
+
+    [RelayCommand(CanExecute = nameof(CanExportSelectedResults))]
+    private Task ExportSelectedResults() => ExportResults(ShownFiles.Where(row => row.IsSelected));
+
+    [RelayCommand(CanExecute = nameof(CanExportVisibleResults))]
+    private Task ExportVisibleResults() => ExportResults(ShownFiles);
+
+    private Task ExportResults(IEnumerable<MediaRow> rows)
+    {
+        string? destination = files.PickSaveFile("CSV report|*.csv|JSON report|*.json|Text report|*.txt", "media-report.csv");
+        if (destination is null)
+        {
+            return Task.CompletedTask;
+        }
+
+        var snapshot = reports.CreateSnapshot(InDisplayOrder(rows).Select(row => new ReportInput(row.Path,
+            row.IsMissing ? MediaRow.MissingStatus : row.State.ToString(), row.Analysis, row.AnalysisError, row.Result)));
+        return RunAsync("Report export", async (token, _) =>
+        {
+            await reports.ExportAsync(destination, snapshot, token);
+            SetStatus(ViewStatus.Result, $"Exported {snapshot.Entries.Count} results to {destination}.");
+        });
+    }
+
     private bool CanAddDroppedPaths(string[]? paths) => IsIdle && paths is not null && paths.Any(discovery.IsSupportedInput);
 
     [RelayCommand(CanExecute = nameof(CanAddDroppedPaths))]
@@ -709,6 +738,8 @@ public sealed partial class MediaViewModel : OperationViewModel, INavigationPage
         OpenSettingsCommand?.NotifyCanExecuteChanged();
         AddFilesCommand?.NotifyCanExecuteChanged();
         AddFolderCommand?.NotifyCanExecuteChanged();
+        ExportSelectedResultsCommand?.NotifyCanExecuteChanged();
+        ExportVisibleResultsCommand?.NotifyCanExecuteChanged();
         AddDroppedPathsCommand?.NotifyCanExecuteChanged();
         ScanCommand?.NotifyCanExecuteChanged();
         InspectCommand?.NotifyCanExecuteChanged();

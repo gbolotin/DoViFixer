@@ -27,6 +27,7 @@ public static class DependencyInjection
         services.AddTransient<UpdateService>();
         services.AddTransient<SettingsService>();
         services.AddTransient<Diagnostics.DiagnosticsService>();
+        services.AddTransient<Reports.ReportService>();
         return services;
     }
 }

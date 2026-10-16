@@ -45,6 +45,7 @@ public static class DependencyInjection
         services.AddTransient<IOutputPublisher, OutputPublisher>();
         services.AddTransient<IFileLockInspector, WindowsFileLockInspector>();
         services.AddTransient<IDiagnosticBundleWriter, DiagnosticBundleWriter>();
+        services.AddTransient<IReportWriter, Reports.ReportWriter>();
         services.AddTransient<MediaProbe>();
         services.AddTransient<IMediaProbe, MediaProbe>();
         services.AddSingleton<IMediaPreview, MediaPreview>();
