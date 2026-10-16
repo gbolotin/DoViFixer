@@ -6,13 +6,15 @@
         xmlns:p="clr-namespace:DoViFixer.App.Presentation.Application"
         xmlns:updates="clr-namespace:DoViFixer.Application.Updates;assembly=DoViFixer.Application"
         xmlns:navigation="clr-namespace:WpfFoundation.Navigation;assembly=WpfFoundation"
+        xmlns:wf="clr-namespace:WpfFoundation.Controls;assembly=WpfFoundation"
         Title="{x:Static updates:ApplicationTitle.Name}"
         MinWidth="800"
         MinHeight="600"
         WindowStartupLocation="CenterScreen">
     <Window.Resources>
         <ResourceDictionary>
-            <!-- Each page ViewModel shows its own UserControl; the navigation host creates it on the first visit and keeps it. -->
+            <!-- Each page ViewModel shows its own UserControl; the navigation host creates it on the first visit and keeps it.
+                 Settings shows in the frame over the pages. -->
             <DataTemplate DataType="{x:Type viewModels:MediaViewModel}">
                 <views:MediaView />
             </DataTemplate>
@@ -24,50 +26,72 @@
             </DataTemplate>
 
             <DataTemplate DataType="{x:Type viewModels:ShellViewModel}">
-                <DockPanel Background="{DynamicResource ApplicationBackgroundBrush}"
-                           TextElement.Foreground="{DynamicResource TextFillColorPrimaryBrush}">
-                    <StatusBar ItemsSource="{Binding StatusItems}"
-                               DockPanel.Dock="Bottom"
-                               Style="{StaticResource WfStatusBarStyle}"
-                               AutomationProperties.Name="Page status">
-                        <StatusBar.Resources>
-                            <DataTemplate DataType="{x:Type p:DependencyReportViewModel}">
-                                <StackPanel Orientation="Horizontal"
-                                            ToolTip="{Binding WarningDetails}"
-                                            AutomationProperties.Name="Dependency warning"
-                                            AutomationProperties.LiveSetting="Polite">
-                                    <TextBlock Text="&#xE7BA;"
-                                               FontFamily="{StaticResource SymbolThemeFontFamily}"
-                                               FontWeight="SemiBold"
-                                               Foreground="{DynamicResource SystemFillColorCautionBrush}"
-                                               VerticalAlignment="Center"
-                                               Margin="0,0,8,0" />
-                                    <TextBlock Text="{Binding WarningText}" VerticalAlignment="Center" />
-                                </StackPanel>
-                            </DataTemplate>
-                            <DataTemplate DataType="{x:Type viewModels:StartupDependencyCheckViewModel}">
-                                <StackPanel Orientation="Horizontal" AutomationProperties.Name="Dependency operation">
-                                    <TextBlock Text="{Binding StatusText}"
-                                               MaxWidth="320"
-                                               TextTrimming="CharacterEllipsis"
-                                               ToolTip="{Binding StatusText}"
-                                               VerticalAlignment="Center" />
-                                    <Button Content="Cancel"
-                                            Command="{Binding CancelCommand}"
-                                            AutomationProperties.Name="Cancel dependency operation"
-                                            Padding="8,0"
-                                            Margin="8,0,0,0" />
-                                </StackPanel>
-                            </DataTemplate>
-                        </StatusBar.Resources>
-                    </StatusBar>
-                    <ListBox ItemsSource="{Binding Pages}"
-                             SelectedItem="{Binding CurrentPage}"
-                             IsEnabled="{Binding CanNavigate}"
-                             DockPanel.Dock="Left"
-                             Style="{StaticResource WfNavigationSidebarStyle}" />
-                    <navigation:RetainedPageHost Navigation="{Binding Navigation}" Margin="8,0,8,0" />
-                </DockPanel>
+                <Grid Background="{DynamicResource ApplicationBackgroundBrush}"
+                      TextElement.Foreground="{DynamicResource TextFillColorPrimaryBrush}">
+                    <!-- While the settings frame is open, the pages behind it take no keyboard, access key or screen reader focus. -->
+                    <DockPanel IsEnabled="{Binding IsSettingsOpen, Converter={StaticResource WfInverseBooleanConverter}}">
+                        <StatusBar ItemsSource="{Binding StatusItems}"
+                                   DockPanel.Dock="Bottom"
+                                   Style="{StaticResource WfStatusBarStyle}"
+                                   AutomationProperties.Name="Page status">
+                            <StatusBar.Resources>
+                                <DataTemplate DataType="{x:Type p:DependencyReportViewModel}">
+                                    <StackPanel Orientation="Horizontal"
+                                                ToolTip="{Binding WarningDetails}"
+                                                AutomationProperties.Name="Dependency warning"
+                                                AutomationProperties.LiveSetting="Polite">
+                                        <TextBlock Text="&#xE7BA;"
+                                                   FontFamily="{StaticResource SymbolThemeFontFamily}"
+                                                   FontWeight="SemiBold"
+                                                   Foreground="{DynamicResource SystemFillColorCautionBrush}"
+                                                   VerticalAlignment="Center"
+                                                   Margin="0,0,8,0" />
+                                        <TextBlock Text="{Binding WarningText}" VerticalAlignment="Center" />
+                                    </StackPanel>
+                                </DataTemplate>
+                                <DataTemplate DataType="{x:Type viewModels:StartupDependencyCheckViewModel}">
+                                    <StackPanel Orientation="Horizontal" AutomationProperties.Name="Dependency operation">
+                                        <TextBlock Text="{Binding StatusText}"
+                                                   MaxWidth="320"
+                                                   TextTrimming="CharacterEllipsis"
+                                                   ToolTip="{Binding StatusText}"
+                                                   VerticalAlignment="Center" />
+                                        <Button Content="Cancel"
+                                                Command="{Binding CancelCommand}"
+                                                AutomationProperties.Name="Cancel dependency operation"
+                                                Padding="8,0"
+                                                Margin="8,0,0,0" />
+                                    </StackPanel>
+                                </DataTemplate>
+                            </StatusBar.Resources>
+                        </StatusBar>
+                        <Border DockPanel.Dock="Left"
+                                BorderBrush="{DynamicResource DividerStrokeColorDefaultBrush}"
+                                BorderThickness="0,0,1,0">
+                            <DockPanel>
+                                <Button Content="Settings"
+                                        Tag="&#xE713;"
+                                        Command="{Binding OpenSettingsCommand}"
+                                        DockPanel.Dock="Bottom"
+                                        Margin="8"
+                                        Style="{StaticResource WfNavigationButtonStyle}" />
+                                <ListBox ItemsSource="{Binding Pages}"
+                                         SelectedItem="{Binding CurrentPage}"
+                                         IsEnabled="{Binding CanNavigate}"
+                                         BorderThickness="0"
+                                         Style="{StaticResource WfNavigationSidebarStyle}" />
+                            </DockPanel>
+                        </Border>
+                        <navigation:RetainedPageHost Navigation="{Binding Navigation}" Margin="8,0,8,0" />
+                    </DockPanel>
+                    <wf:ContentOverlay Header="Settings"
+                                       Content="{Binding Settings}"
+                                       IsOpen="{Binding IsSettingsOpen, Mode=OneWay}"
+                                       CloseCommand="{Binding CloseSettingsCommand}"
+                                       CardMaxWidth="1040"
+                                       CardMaxHeight="760"
+                                       Padding="32" />
+                </Grid>
             </DataTemplate>
 
         </ResourceDictionary>

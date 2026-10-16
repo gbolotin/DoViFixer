@@ -365,13 +365,22 @@ public sealed class ViewModelTests
     }
 
     [TestMethod]
-    public void ShellShowsRegisteredPagesInOrder()
+    public void ShellShowsRegisteredPagesInOrderAndSettingsSectionsInTheFrame()
     {
         using var runtime = new TestRuntime();
         var shell = runtime.Container.GetRequiredService<ShellViewModel>();
-        CollectionAssert.AreEqual(new[] { typeof(MediaViewModel), typeof(ArchiveViewModel), typeof(SettingsViewModel) }, shell.Pages.Select(page => page.GetType()).ToArray());
-        Assert.AreSame(shell.Settings, shell.Pages[2]);
+        CollectionAssert.AreEqual(new[] { typeof(MediaViewModel), typeof(ArchiveViewModel) }, shell.Pages.Select(page => page.GetType()).ToArray());
         Assert.AreSame(shell.Pages[0], shell.CurrentPage);
+        Assert.IsFalse(shell.IsSettingsOpen);
+
+        var sections = shell.Settings.Sections;
+        CollectionAssert.AreEqual(
+            new[] { typeof(GeneralSettingsSection), typeof(ConversionSettingsSection), typeof(ScanningSettingsSection), typeof(NativeToolsSettingsSection), typeof(AboutSettingsSection) },
+            sections.Pages.Select(page => page.GetType()).ToArray());
+        CollectionAssert.AreEqual(new[] { "General", "Conversion", "Scanning & cache", "Native tools", "About" }, sections.Pages.Select(page => page.NavigationName).ToArray());
+        Assert.IsTrue(sections.Pages.All(page => page.NavigationIcon is { Length: 1 }), "Each section has a Segoe Fluent Icons glyph.");
+        Assert.IsTrue(sections.Pages.Cast<SettingsSection>().All(section => ReferenceEquals(section.Settings, shell.Settings)), "Every section shows the same settings.");
+        Assert.AreSame(sections.Pages[0], sections.CurrentPage);
     }
 
     [TestMethod]
@@ -389,9 +398,13 @@ public sealed class ViewModelTests
         archive.Input = row.Path;
 
         media.OpenSettingsCommand.Invoke();
-        await shell.Settings.Completion;
-        Assert.AreSame(shell.Settings, shell.CurrentPage);
+        await (shell.OpenSettingsCommand.ExecutionTask ?? Task.CompletedTask);
+        Assert.IsTrue(shell.IsSettingsOpen);
+        Assert.AreSame(media, shell.CurrentPage, "Settings opens over the current page.");
+        Assert.IsInstanceOfType<ConversionSettingsSection>(shell.Settings.Sections.CurrentPage, "The output summary opens the page that sets it.");
         Assert.IsTrue(shell.Settings.IncludeSimple);
+        await shell.CloseSettingsCommand.InvokeAsync();
+        Assert.IsFalse(shell.IsSettingsOpen);
         shell.CurrentPage = archive;
         Assert.AreEqual(row.Path, archive.Input);
         shell.CurrentPage = media;
@@ -402,7 +415,7 @@ public sealed class ViewModelTests
     }
 
     [TestMethod]
-    public async Task ShellRejectsNavigationDuringOperationsAndUntilSaveErrorIsDiscarded()
+    public async Task SettingsOpenOnlyWhenIdleAndCloseOnlyWithoutABusyOperationOrSaveError()
     {
         using var runtime = new TestRuntime();
         var shell = runtime.Container.GetRequiredService<ShellViewModel>();
@@ -415,6 +428,7 @@ public sealed class ViewModelTests
             Assert.IsFalse(shell.CanNavigate);
             shell.CurrentPage = archive;
             Assert.AreSame(media, shell.CurrentPage);
+            Assert.IsFalse(shell.OpenSettingsCommand.CanExecute(null), "Settings must not open while an operation runs.");
         }
         finally
         {
@@ -422,15 +436,35 @@ public sealed class ViewModelTests
             await checking.WaitAsync(TimeSpan.FromSeconds(10));
         }
 
-        shell.CurrentPage = shell.Settings;
-        await shell.NavigationTask;
-        await shell.Settings.Completion;
+        await shell.OpenSettingsCommand.InvokeAsync();
+        Assert.IsTrue(shell.IsSettingsOpen);
+        Assert.IsFalse(shell.OpenSettingsCommand.CanExecute(null), "An open frame does not open again.");
+        checking = shell.Settings.CheckCommand.InvokeAsync();
+        try
+        {
+            Assert.IsFalse(shell.CloseSettingsCommand.CanExecute(null), "The frame stays open while a settings operation runs.");
+        }
+        finally
+        {
+            shell.Settings.CancelCommand.Invoke();
+            await checking.WaitAsync(TimeSpan.FromSeconds(10));
+        }
+
+        Assert.IsTrue(shell.CloseSettingsCommand.CanExecute(null));
         shell.Settings.OtherFolder = true;
         await shell.Settings.SaveTask;
+        Assert.IsFalse(shell.CloseSettingsCommand.CanExecute(null), "A save error keeps the frame open for recovery.");
+        await shell.CloseSettingsCommand.InvokeAsync();
+        Assert.IsTrue(shell.IsSettingsOpen);
         shell.CurrentPage = archive;
-        Assert.AreSame(shell.Settings, shell.CurrentPage);
+        Assert.AreSame(media, shell.CurrentPage);
         Assert.IsFalse(shell.CanNavigate);
+
         shell.Settings.DiscardChangesCommand.Invoke();
+        Assert.IsTrue(shell.CloseSettingsCommand.CanExecute(null));
+        await shell.CloseSettingsCommand.InvokeAsync();
+        Assert.IsFalse(shell.IsSettingsOpen);
+        Assert.IsTrue(shell.OpenSettingsCommand.CanExecute(null));
         shell.CurrentPage = archive;
         await shell.NavigationTask;
         Assert.AreSame(archive, shell.CurrentPage);
@@ -935,7 +969,7 @@ public sealed class ViewModelTests
         await shell.InitializeAsync();
         StringAssert.Contains(runtime.Reviews.Single(), "FFprobe: Installed and ready");
         StringAssert.Contains(runtime.Reviews.Single(), "FFmpeg: Missing");
-        shell.CurrentPage = shell.Settings;
+        shell.CurrentPage = shell.Pages.OfType<ArchiveViewModel>().Single();
         await shell.NavigationTask;
         Assert.IsTrue(shell.StatusItems.Contains(shell.Settings.Dependencies));
         shell.CurrentPage = shell.Pages.OfType<MediaViewModel>().Single();
@@ -1001,9 +1035,8 @@ public sealed class ViewModelTests
         await started.Task.WaitAsync(TimeSpan.FromSeconds(10));
 
         Assert.IsTrue(shell.CanNavigate);
-        shell.CurrentPage = shell.Settings;
-        await shell.NavigationTask.WaitAsync(TimeSpan.FromSeconds(10));
-        Assert.AreSame(shell.Settings, shell.CurrentPage);
+        await shell.OpenSettingsCommand.InvokeAsync().WaitAsync(TimeSpan.FromSeconds(10));
+        Assert.IsTrue(shell.IsSettingsOpen);
         Assert.AreEqual(ViewStatus.SettingsLoaded, shell.Settings.Status);
 
         runtime.DuringDependencyCheck = null;
@@ -1303,7 +1336,7 @@ public sealed class ViewModelTests
         var media = runtime.Container.GetRequiredService<MediaViewModel>();
         var settings = runtime.Container.GetRequiredService<SettingsViewModel>();
         var archive = runtime.Container.GetRequiredService<ArchiveViewModel>();
-        var shell = new ShellViewModel([media, archive, settings], runtime.Container.GetRequiredService<StartupDependencyCheckViewModel>(), runtime.Container.GetRequiredService<DependencyReportViewModel>());
+        var shell = new ShellViewModel([media, archive], settings, runtime.Container.GetRequiredService<StartupDependencyCheckViewModel>(), runtime.Container.GetRequiredService<DependencyReportViewModel>());
 
         await media.AddAsync([
             @"C:\Media\Mountain.mkv",
@@ -1775,7 +1808,7 @@ public sealed class ViewModelTests
         var media = runtime.Container.GetRequiredService<MediaViewModel>();
         var settings = runtime.Container.GetRequiredService<SettingsViewModel>();
         var archive = runtime.Container.GetRequiredService<ArchiveViewModel>();
-        var shell = new ShellViewModel([media, archive, settings], runtime.Container.GetRequiredService<StartupDependencyCheckViewModel>(), runtime.Container.GetRequiredService<DependencyReportViewModel>());
+        var shell = new ShellViewModel([media, archive], settings, runtime.Container.GetRequiredService<StartupDependencyCheckViewModel>(), runtime.Container.GetRequiredService<DependencyReportViewModel>());
 
         await media.RefreshSettingsSummaryAsync();
         Assert.AreEqual("Output: Same folder", media.OutputSummary);
@@ -1807,12 +1840,12 @@ public sealed class ViewModelTests
     }
 
     [TestMethod]
-    public void MediaViewModel_OpenSettingsCommand_RaisesRequestNavigateToSettings()
+    public void MediaViewModel_OpenSettingsCommand_RaisesRequestOpenSettings()
     {
         using var runtime = new TestRuntime();
         var media = runtime.Container.GetRequiredService<MediaViewModel>();
         bool requested = false;
-        media.RequestNavigateToSettings += () => requested = true;
+        media.RequestOpenSettings += () => requested = true;
 
         Assert.IsTrue(media.OpenSettingsCommand.CanExecute(null));
         media.OpenSettingsCommand.Invoke();

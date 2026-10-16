@@ -28,7 +28,7 @@ dotnet build DoViFixer.sln -c Release -p:UseLocalWpfFoundation=false
 
 ## Versioning
 
-Every DoViFixer assembly gets one [SemVer](https://semver.org) version from `VersionPrefix` in `Directory.Build.props`. Local builds are `<VersionPrefix>-dev`, pull request builds are `<VersionPrefix>-ci.<run number>`, and each push to main builds `<VersionPrefix>` itself. The SDK appends the commit hash, so the version also says which commit a build came from. `DoViFixer.Console --version`, the help header, the Settings page, and every log entry (`ApplicationVersion`) show it.
+Every DoViFixer assembly gets one [SemVer](https://semver.org) version from `VersionPrefix` in `Directory.Build.props`. Local builds are `<VersionPrefix>-dev`, pull request builds are `<VersionPrefix>-ci.<run number>`, and each push to main builds `<VersionPrefix>` itself. The SDK appends the commit hash, so the version also says which commit a build came from. `DoViFixer.Console --version`, the help header, Settings › About, and every log entry (`ApplicationVersion`) show it.
 
 Every push to main is a release: CI tags the commit `v<VersionPrefix>` and creates a GitHub release named after the tag, with `DoViFixer.App-X.Y.Z.zip`, `DoViFixer.Console-X.Y.Z.zip` and `DoViFixer.Mcp-X.Y.Z.zip` attached (framework-dependent; they need the .NET 10 Desktop Runtime). So bump `VersionPrefix` in every pull request; CI fails on main when that version is already tagged. A version with a pre-release suffix, such as `0.2.0-beta.1`, is marked as a pre-release. Pushing a `vX.Y.Z` tag by hand still builds and releases `X.Y.Z`. Every CI run also attaches the zips to the run as an `apps` artifact.
 

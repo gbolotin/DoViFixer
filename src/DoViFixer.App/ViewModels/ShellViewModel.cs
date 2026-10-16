@@ -3,27 +3,36 @@ using System.ComponentModel;
 using DoViFixer.App.Presentation.Application;
 
 namespace DoViFixer.App.ViewModels;
-public sealed class ShellViewModel : ObservableObject, INavigationGuard, IDisposable
+public sealed partial class ShellViewModel : ObservableObject, INavigationGuard, IDisposable
 {
-    /// <param name="pages">The sidebar pages in display order. They must include the Media and Settings pages, which the shell wires together.</param>
-    public ShellViewModel(IEnumerable<INavigationPage> pages, StartupDependencyCheckViewModel dependencyCheck, DependencyReportViewModel dependencyReport)
+    /// <param name="pages">The sidebar pages in display order. They must include the Media page, which the shell wires to Settings.</param>
+    /// <param name="settings">Settings, shown in a frame over the pages rather than as a page.</param>
+    public ShellViewModel(IEnumerable<INavigationPage> pages, SettingsViewModel settings, StartupDependencyCheckViewModel dependencyCheck, DependencyReportViewModel dependencyReport)
     {
         ArgumentNullException.ThrowIfNull(pages);
+        ArgumentNullException.ThrowIfNull(settings);
         ArgumentNullException.ThrowIfNull(dependencyCheck);
         ArgumentNullException.ThrowIfNull(dependencyReport);
         INavigationPage[] navigationPages = [.. pages];
         var media = navigationPages.OfType<MediaViewModel>().Single();
-        var settings = navigationPages.OfType<SettingsViewModel>().Single();
         this.media = media;
         this.dependencyCheck = dependencyCheck;
         this.dependencyReport = dependencyReport;
         Settings = settings;
-        operations = [.. navigationPages.OfType<OperationViewModel>()];
+        operations = [.. navigationPages.OfType<OperationViewModel>(), settings];
         // Media is shown from the start; InitializeAsync loads its summary as part of startup.
         Navigation = new NavigationService(navigationPages, guard: this, initialPage: media);
         Navigation.PropertyChanged += NavigationChanged;
-        Navigation.NavigationFailed += (_, failure) => Settings.SetStatus(ViewStatus.Error, failure.Exception.Message);
-        media.RequestNavigateToSettings += () => CurrentPage = settings;
+        Navigation.NavigationFailed += (_, failure) => (CurrentPage as OperationViewModel)?.SetStatus(ViewStatus.Error, failure.Exception.Message);
+        // The Media status bar summarizes the output, retention, FEL and archive choices on the Conversion page.
+        var conversion = settings.Sections.Pages.OfType<ConversionSettingsSection>().Single();
+        media.RequestOpenSettings += () =>
+        {
+            if (OpenSettingsCommand.CanExecute(conversion))
+            {
+                OpenSettingsCommand.Execute(conversion);
+            }
+        };
         settings.Saved += media.UpdateSettingsSummary;
         settings.CacheClearing += media.CancelPreviewsAsync;
         media.ConversionStarting += settings.FlushAsync;
@@ -118,6 +127,48 @@ public sealed class ShellViewModel : ObservableObject, INavigationGuard, IDispos
     /// <summary>Navigation waits while an operation runs, settings save, or a save error is unresolved.</summary>
     bool INavigationGuard.CanNavigate => operations.All(o => !o.IsBusy) && !Settings.IsSaving && Settings.SaveError is null;
 
+    /// <summary>Whether the settings frame is shown over the pages. Only its commands change it.</summary>
+    [ObservableProperty]
+    [NotifyCanExecuteChangedFor(nameof(OpenSettingsCommand))]
+    [NotifyCanExecuteChangedFor(nameof(CloseSettingsCommand))]
+    public partial bool IsSettingsOpen { get; private set; }
+
+    private bool CanOpenSettings(SettingsSection? section) => CanNavigate && !IsSettingsOpen;
+
+    /// <summary>Opens the settings frame, at <paramref name="section"/> when one is given, and reloads the settings.</summary>
+    /// <remarks>Like page navigation, it is unavailable while an operation runs, so options cannot change under a running batch.</remarks>
+    [RelayCommand(CanExecute = nameof(CanOpenSettings))]
+    private async Task OpenSettings(SettingsSection? section)
+    {
+        IsSettingsOpen = true;
+        if (section is not null)
+        {
+            await Settings.Sections.NavigateAsync(section);
+        }
+
+        await Settings.LoadCommand.ExecuteAsync(null);
+    }
+
+    // A save in progress does not block closing: closing waits for it. An unresolved save error needs the frame to recover.
+    private bool CanCloseSettings() => IsSettingsOpen && Settings.IsIdle && Settings.SaveError is null;
+
+    /// <summary>Closes the settings frame once pending changes are saved. A failed save keeps it open, showing the error.</summary>
+    [RelayCommand(CanExecute = nameof(CanCloseSettings))]
+    private async Task CloseSettings()
+    {
+        try
+        {
+            await Settings.FlushAsync();
+        }
+        catch (InvalidOperationException)
+        {
+            // The frame shows the save error with its recovery actions.
+            return;
+        }
+
+        IsSettingsOpen = false;
+    }
+
     public event EventHandler? CanNavigateChanged;
 
     async Task<bool> INavigationGuard.ConfirmNavigationAsync(INavigationPage from, INavigationPage to, CancellationToken cancellationToken)
@@ -149,6 +200,11 @@ public sealed class ShellViewModel : ObservableObject, INavigationGuard, IDispos
             RefreshStatusItems();
         }
 
+        if (e.PropertyName == nameof(INavigationService.CanNavigate))
+        {
+            OpenSettingsCommand.NotifyCanExecuteChanged();
+        }
+
         OnPropertyChanged(e.PropertyName);
     }
 
@@ -178,6 +234,7 @@ public sealed class ShellViewModel : ObservableObject, INavigationGuard, IDispos
         if (e.PropertyName is nameof(OperationViewModel.IsBusy) or nameof(SettingsViewModel.IsSaving) or nameof(SettingsViewModel.SaveError))
         {
             CanNavigateChanged?.Invoke(this, EventArgs.Empty);
+            CloseSettingsCommand.NotifyCanExecuteChanged();
         }
     }
 

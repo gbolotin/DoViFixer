@@ -5,6 +5,7 @@ using System.Windows.Automation.Peers;
 using System.Windows.Automation.Provider;
 using System.Windows.Controls;
 using System.Windows.Controls.Primitives;
+using System.Windows.Input;
 using System.Windows.Media;
 using System.Windows.Media.Imaging;
 using System.Windows.Threading;
@@ -109,10 +110,10 @@ public sealed class VisualTests
             window.Height = 900;
             await LayoutAsync(window);
             var navigation = Descendants<ListBox>(window).Single(list => ReferenceEquals(list.ItemsSource, shell.Pages));
-            var pageHost = Descendants<RetainedPageHost>(window).Single();
+            var pageHost = Descendants<RetainedPageHost>(window).Single(host => ReferenceEquals(host.Navigation, shell.Navigation));
             var mediaView = PageView(pageHost, media);
             Assert.AreSame(media, navigation.SelectedItem);
-            Assert.HasCount(3, navigation.Items);
+            Assert.HasCount(2, navigation.Items);
             VerifyCommandIcons(mediaView);
             SaveRender((FrameworkElement)window.Content, "command-icons-empty");
 
@@ -151,9 +152,6 @@ public sealed class VisualTests
             {
                 [media] = VisualTreeHelper.GetChild(mediaView, 0)
             };
-            double? settingsOffset = null;
-            runtime.AnalysisCacheBytes = 262144;
-            runtime.FrameCacheBytes = 10485760;
             foreach (var page in shell.Pages.Skip(1).Append(media).Concat(shell.Pages.Skip(1).Append(media)))
             {
                 navigation.SelectedItem = page;
@@ -184,44 +182,6 @@ public sealed class VisualTests
                     }
                     Assert.IsFalse(hidden.IsKeyboardFocusWithin);
                 }
-                if (ReferenceEquals(page, shell.Settings))
-                {
-                    var scroll = Descendants<ScrollViewer>(workspace).Single(view => view.Content is StackPanel);
-                    if (settingsOffset is { } offset)
-                    {
-                        Assert.AreEqual(offset, scroll.VerticalOffset, 0.1, "Settings must retain its scroll position.");
-                    }
-                    else
-                    {
-                        var cacheSize = Descendants<TextBlock>(workspace).Single(text => text.Text == shell.Settings.CacheSizeText);
-                        var cacheCard = (FrameworkElement)((FrameworkElement)cacheSize.Parent).Parent;
-                        cacheCard.BringIntoView();
-                        await LayoutAsync(window);
-                        var cacheLocation = Descendants<TextBlock>(workspace).Single(text => text.Inlines.FirstInline is System.Windows.Documents.Run { Text: "Location: " });
-                        var cacheLocationLink = cacheLocation.Inlines.OfType<System.Windows.Documents.Hyperlink>().Single();
-                        Assert.AreEqual(shell.Settings.CacheDirectory, ((System.Windows.Documents.Run)cacheLocationLink.Inlines.FirstInline).Text);
-                        Assert.AreSame(shell.Settings.OpenCacheFolderCommand, cacheLocationLink.Command, "The cache location link must open the cache folder.");
-                        Assert.HasCount(1, Descendants<TextBlock>(workspace).Where(text => text.Text == "DoViFixer " + shell.Settings.Version));
-                        Assert.IsTrue(cacheSize.IsVisible);
-                        AssertInside(cacheSize, (FrameworkElement)window.Content);
-                        AssertInside(cacheLocation, (FrameworkElement)window.Content);
-                        SaveRender((FrameworkElement)window.Content, "settings-cache-size");
-                        foreach (var tool in Enum.GetValues<NativeTool>())
-                        {
-                            Assert.HasCount(1, Descendants<TextBlock>(workspace).Where(text => text.Text == NativeToolDescriptions.Purpose(tool)));
-                        }
-                        var toolDescriptions = Descendants<TextBlock>(workspace).Single(text => text.Text == NativeToolDescriptions.Purpose(NativeTool.DoviTool));
-                        toolDescriptions.BringIntoView();
-                        await LayoutAsync(window);
-                        AssertInside(toolDescriptions, (FrameworkElement)window.Content);
-                        SaveRender((FrameworkElement)window.Content, "settings-tool-descriptions");
-                        scroll.ScrollToEnd();
-                        await LayoutAsync(window);
-                        settingsOffset = scroll.VerticalOffset;
-                        Assert.IsTrue(settingsOffset > 0, "The test must exercise a scrolled page.");
-                    }
-                }
-
                 var navigationTask = shell.NavigationTask;
                 navigation.UnselectAll();
                 await LayoutAsync(window);
@@ -318,12 +278,8 @@ public sealed class VisualTests
             }
 
             Assert.IsFalse(Descendants<Button>(mediaView).Any(button => Equals(button.Content, "Settings")));
-            navigation.SelectedItem = shell.Settings;
-            await LayoutAsync(window);
-            await shell.NavigationTask;
-            Assert.AreSame(shell.Settings, navigation.SelectedItem);
-            var settingsView = PageView(pageHost, shell.Settings);
-            await VerifySettingsRecoveryAsync(runtime, shell, window, navigation, settingsView);
+            await VerifySettingsFrameAsync(runtime, shell, window, navigation);
+            await VerifySettingsRecoveryAsync(runtime, shell, window);
             Assert.AreEqual("", errors.Errors.ToString(), "WPF binding errors were reported.");
         }
         finally
@@ -965,8 +921,154 @@ public sealed class VisualTests
         Assert.AreEqual(Visibility.Collapsed, removeMissing.Visibility);
     }
 
-    private static async Task VerifySettingsRecoveryAsync(TestRuntime runtime, ShellViewModel shell, Window window, ListBox navigation, DependencyObject settingsView)
+    /// <summary>
+    /// The Settings button opens the frame over the page, every close gesture returns to the page, and each section
+    /// renders the shared settings in its own retained view. Leaves the frame open on Conversion.
+    /// </summary>
+    private static async Task VerifySettingsFrameAsync(TestRuntime runtime, ShellViewModel shell, Window window, ListBox navigation)
     {
+        var content = (FrameworkElement)window.Content;
+        var overlay = Descendants<ContentOverlay>(window).Single();
+        var open = Descendants<Button>(window).Single(button => ReferenceEquals(button.Command, shell.OpenSettingsCommand));
+        Assert.AreEqual("Settings", open.Content);
+        Assert.AreSame(window.FindResource("WfNavigationButtonStyle"), open.Style);
+        Assert.AreEqual(Visibility.Collapsed, overlay.Visibility);
+        AssertInside(open, content);
+        runtime.AnalysisCacheBytes = 262144;
+        runtime.FrameCacheBytes = 10485760;
+
+        async Task OpenAsync()
+        {
+            Invoke(open);
+            await LayoutAsync(window);
+            await (shell.OpenSettingsCommand.ExecutionTask ?? Task.CompletedTask);
+            await LayoutAsync(window);
+            Assert.IsTrue(shell.IsSettingsOpen);
+            Assert.IsTrue(overlay.IsVisible);
+            Assert.IsFalse(open.IsEnabled || navigation.IsEnabled, "The pages behind the frame are inert.");
+            if (window.IsActive)
+            {
+                Assert.IsTrue(OverlayPart(overlay, "PART_Card").IsKeyboardFocusWithin, "Opening moves focus into the frame.");
+            }
+        }
+
+        foreach (var (gesture, close) in new (string, Action)[]
+        {
+            ("close button", () => Invoke(CloseButton(overlay))),
+            ("click outside", () => OverlayPart(overlay, "PART_Smoke").RaiseEvent(new MouseButtonEventArgs(Mouse.PrimaryDevice, 0, MouseButton.Left) { RoutedEvent = UIElement.MouseLeftButtonDownEvent })),
+            ("Esc", () => PressEscape(Descendants<ListBox>(overlay).Single()))
+        })
+        {
+            open.Focus();
+            await OpenAsync();
+            close();
+            await LayoutAsync(window);
+            await (shell.CloseSettingsCommand.ExecutionTask ?? Task.CompletedTask);
+            await LayoutAsync(window);
+            Assert.IsFalse(shell.IsSettingsOpen, gesture + " must close the frame.");
+            Assert.AreEqual(Visibility.Collapsed, overlay.Visibility);
+            Assert.IsTrue(open.IsEnabled && navigation.IsEnabled);
+            if (window.IsActive)
+            {
+                Assert.IsTrue(open.IsKeyboardFocused, gesture + " must return focus to the Settings button.");
+            }
+        }
+
+        await OpenAsync();
+        var card = OverlayPart(overlay, "PART_Card");
+        AssertInside(card, content);
+        Assert.IsTrue(Descendants<TextBlock>(card).Any(text => text.Text == "Settings" && text.IsVisible), "The frame is titled Settings.");
+        var sections = Descendants<ListBox>(overlay).Single(list => ReferenceEquals(list.ItemsSource, shell.Settings.Sections.Pages));
+        Assert.HasCount(5, sections.Items);
+        var host = Descendants<RetainedPageHost>(overlay).Single();
+        var retained = new Dictionary<object, DependencyObject>();
+        double? toolsOffset = null;
+        var pages = shell.Settings.Sections.Pages;
+        foreach (var section in pages.Concat(pages))
+        {
+            sections.SelectedItem = section;
+            await LayoutAsync(window);
+            Assert.AreSame(section, shell.Settings.Sections.CurrentPage);
+            var view = PageView(host, section);
+            Assert.IsTrue(view.IsVisible);
+            Assert.AreEqual(1, host.RetainedPages.Count(page => PageView(host, page).IsVisible), "Exactly one section is shown.");
+            var root = (FrameworkElement)VisualTreeHelper.GetChild(view, 0);
+            bool firstVisit = !retained.TryGetValue(section, out var previousRoot);
+            if (!firstVisit)
+            {
+                Assert.AreSame(previousRoot, root, "Each section keeps its view.");
+            }
+            retained[section] = root;
+            Assert.AreSame(shell.Settings, root.DataContext, "Every section binds to the shared settings.");
+            Assert.IsTrue(Descendants<TextBlock>(view).Any(text => text.Text == section.NavigationName && text.IsVisible), "Each section is titled with its name.");
+            AssertInside(view, content);
+            var scroll = Descendants<ScrollViewer>(view).Single(viewer => viewer.Content is StackPanel);
+            switch (section)
+            {
+                case GeneralSettingsSection when firstVisit:
+                    SaveRender(content, "settings-minimum");
+                    break;
+                case ScanningSettingsSection when firstVisit:
+                    var cacheSize = Descendants<TextBlock>(view).Single(text => text.Text == shell.Settings.CacheSizeText);
+                    cacheSize.BringIntoView();
+                    await LayoutAsync(window);
+                    var cacheLocation = Descendants<TextBlock>(view).Single(text => text.Inlines.FirstInline is System.Windows.Documents.Run { Text: "Location: " });
+                    var cacheLocationLink = cacheLocation.Inlines.OfType<System.Windows.Documents.Hyperlink>().Single();
+                    Assert.AreEqual(shell.Settings.CacheDirectory, ((System.Windows.Documents.Run)cacheLocationLink.Inlines.FirstInline).Text);
+                    Assert.AreSame(shell.Settings.OpenCacheFolderCommand, cacheLocationLink.Command, "The cache location link must open the cache folder.");
+                    Assert.IsTrue(cacheSize.IsVisible);
+                    AssertInside(cacheSize, content);
+                    AssertInside(cacheLocation, content);
+                    SaveRender(content, "settings-cache-size");
+                    break;
+                case NativeToolsSettingsSection when firstVisit:
+                    foreach (var tool in Enum.GetValues<NativeTool>())
+                    {
+                        Assert.HasCount(1, Descendants<TextBlock>(view).Where(text => text.Text == NativeToolDescriptions.Purpose(tool)));
+                    }
+                    var toolDescriptions = Descendants<TextBlock>(view).Single(text => text.Text == NativeToolDescriptions.Purpose(NativeTool.DoviTool));
+                    toolDescriptions.BringIntoView();
+                    await LayoutAsync(window);
+                    AssertInside(toolDescriptions, content);
+                    SaveRender(content, "settings-tool-descriptions");
+                    scroll.ScrollToEnd();
+                    await LayoutAsync(window);
+                    toolsOffset = scroll.VerticalOffset;
+                    Assert.IsTrue(toolsOffset > 0, "The test must exercise a scrolled section.");
+                    break;
+                case NativeToolsSettingsSection:
+                    Assert.AreEqual(toolsOffset!.Value, scroll.VerticalOffset, 0.1, "A section keeps its scroll position.");
+                    break;
+                case AboutSettingsSection:
+                    Assert.HasCount(1, Descendants<TextBlock>(view).Where(text => text.Text == "DoViFixer " + shell.Settings.Version));
+                    break;
+            }
+        }
+
+        double width = window.Width;
+        double height = window.Height;
+        window.Width = 1400;
+        window.Height = 900;
+        sections.SelectedItem = pages[0];
+        await LayoutAsync(window);
+        AssertInside(card, content);
+        Assert.AreEqual(1040, card.ActualWidth, 1, "A large window shows the frame at its largest width.");
+        SaveRender(content, "settings-general");
+        window.Width = width;
+        window.Height = height;
+        sections.SelectedItem = pages.OfType<ConversionSettingsSection>().Single();
+        await LayoutAsync(window);
+    }
+
+    private static async Task VerifySettingsRecoveryAsync(TestRuntime runtime, ShellViewModel shell, Window window)
+    {
+        var content = (FrameworkElement)window.Content;
+        var overlay = Descendants<ContentOverlay>(window).Single();
+        var host = Descendants<RetainedPageHost>(overlay).Single();
+        var sections = shell.Settings.Sections;
+        var conversion = sections.Pages.OfType<ConversionSettingsSection>().Single();
+        Assert.AreSame(conversion, sections.CurrentPage);
+        var settingsView = PageView(host, conversion);
         var outputFolder = Descendants<ComboBox>(settingsView).Single(box => System.Windows.Automation.AutomationProperties.GetName(box) == "Output folder");
         var outputPath = Descendants<TextBox>(settingsView).Single(box => System.Windows.Automation.AutomationProperties.GetName(box) == "Output folder path");
         Assert.AreEqual(0, outputFolder.SelectedIndex);
@@ -976,14 +1078,21 @@ public sealed class VisualTests
         await shell.Settings.SaveTask;
         await LayoutAsync(window);
         Assert.IsTrue(outputPath.IsVisible);
-        var discard = Button(settingsView, "Discard unsaved changes");
+        var discard = Button(overlay, "Discard unsaved changes");
         Assert.IsTrue(discard.IsVisible);
-        AssertInside(discard, (FrameworkElement)window.Content);
-        var scroll = Descendants<ScrollViewer>(settingsView).Single(view => view.Content is StackPanel);
-        scroll.ScrollToEnd();
+        AssertInside(discard, content);
+        Assert.IsFalse(CloseButton(overlay).IsEnabled, "A save error keeps the frame open for recovery.");
+        OverlayPart(overlay, "PART_Smoke").RaiseEvent(new MouseButtonEventArgs(Mouse.PrimaryDevice, 0, MouseButton.Left) { RoutedEvent = UIElement.MouseLeftButtonDownEvent });
+        PressEscape(outputPath);
         await LayoutAsync(window);
-        AssertInside(discard, (FrameworkElement)window.Content);
-        SaveRender((FrameworkElement)window.Content, "settings-save-error");
+        Assert.IsTrue(shell.IsSettingsOpen && overlay.IsVisible, "Neither a click outside nor Esc closes the frame with a save error.");
+        await sections.NavigateAsync(sections.Pages.OfType<AboutSettingsSection>().Single());
+        await LayoutAsync(window);
+        Assert.IsTrue(discard.IsVisible, "Every section shows the recovery actions.");
+        AssertInside(discard, content);
+        SaveRender(content, "settings-save-error");
+        await sections.NavigateAsync(conversion);
+        await LayoutAsync(window);
 
         bool closed = false;
         window.Closed += (_, _) => closed = true;
@@ -1005,22 +1114,28 @@ public sealed class VisualTests
         try
         {
             await LayoutAsync(window);
-            Assert.IsFalse(navigation.IsEnabled);
-            var cancel = Button(settingsView, "Cancel operation");
+            Assert.IsFalse(CloseButton(overlay).IsEnabled, "The frame stays open while a settings operation runs.");
+            var cancel = Button(overlay, "Cancel operation");
             Assert.IsTrue(cancel.IsVisible);
+            AssertInside(cancel, content);
             Invoke(cancel);
             await LayoutAsync(window);
             await checking.WaitAsync(TimeSpan.FromSeconds(10));
             Assert.AreEqual(ViewStatus.Cancelled, shell.Settings.Status);
             await LayoutAsync(window);
-            var status = StatusItem(window, 0);
-            Assert.AreEqual("Cancelled; cleanup finished.", status.Text);
+            Assert.IsTrue(Descendants<TextBlock>(overlay).Any(text => text.Text == "Cancelled; cleanup finished." && text.IsVisible), "The frame shows the settings status.");
         }
         finally
         {
             shell.Settings.CancelCommand.Invoke();
             await checking.WaitAsync(TimeSpan.FromSeconds(10));
         }
+        runtime.DuringDependencyCheck = null;
+        Invoke(CloseButton(overlay));
+        await LayoutAsync(window);
+        await (shell.CloseSettingsCommand.ExecutionTask ?? Task.CompletedTask);
+        await LayoutAsync(window);
+        Assert.IsFalse(overlay.IsVisible);
         window.Close();
         await LayoutAsync(window);
         Assert.IsTrue(closed, "Closing must succeed after recovery.");
@@ -1034,6 +1149,13 @@ public sealed class VisualTests
     }
 
     private static Button Button(DependencyObject parent, string caption) => Descendants<Button>(parent).Single(button => Equals(button.Content, caption));
+
+    private static FrameworkElement OverlayPart(ContentOverlay overlay, string name) => (FrameworkElement)overlay.Template.FindName(name, overlay);
+
+    private static Button CloseButton(ContentOverlay overlay) => NamedButton(overlay, "Close");
+
+    private static void PressEscape(UIElement target) =>
+        target.RaiseEvent(new KeyEventArgs(Keyboard.PrimaryDevice, PresentationSource.FromVisual(target), 0, Key.Escape) { RoutedEvent = Keyboard.KeyDownEvent });
 
     private static Button NamedButton(DependencyObject parent, string name) => Descendants<Button>(parent).Single(button => System.Windows.Automation.AutomationProperties.GetName(button) == name);
 

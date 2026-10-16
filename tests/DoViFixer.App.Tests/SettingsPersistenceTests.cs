@@ -11,9 +11,7 @@ namespace DoViFixer.App.Tests;
 public sealed class SettingsPersistenceTests
 {
     [TestMethod]
-    [DataRow(false)]
-    [DataRow(true)]
-    public async Task NavigationWaitsForPageReadAndRejectsOverlappingRequests(bool settingsPage)
+    public async Task NavigationWaitsForPageReadAndRejectsOverlappingRequests()
     {
         using var runtime = new TestRuntime();
         var store = new DelayedReadStore(runtime);
@@ -22,7 +20,7 @@ public sealed class SettingsPersistenceTests
         var media = shell.Pages.OfType<MediaViewModel>().Single();
         var archive = shell.Pages.OfType<ArchiveViewModel>().Single();
         shell.CurrentPage = archive;
-        shell.CurrentPage = settingsPage ? shell.Settings : media;
+        shell.CurrentPage = media;
         var navigating = shell.NavigationTask;
         Task closing = Task.CompletedTask;
         try
@@ -34,11 +32,9 @@ public sealed class SettingsPersistenceTests
             shell.CurrentPage = archive;
             Assert.AreSame(currentPage, shell.CurrentPage);
             Assert.AreSame(navigating, shell.NavigationTask);
-            if (!settingsPage)
-            {
-                closing = shell.CancelAndWaitAsync();
-                Assert.IsFalse(closing.IsCompleted, "Shutdown must also wait for a media summary refresh.");
-            }
+            Assert.IsFalse(shell.OpenSettingsCommand.CanExecute(null), "Settings must not open during navigation.");
+            closing = shell.CancelAndWaitAsync();
+            Assert.IsFalse(closing.IsCompleted, "Shutdown must also wait for a media summary refresh.");
         }
         finally
         {
@@ -53,19 +49,81 @@ public sealed class SettingsPersistenceTests
     }
 
     [TestMethod]
-    public async Task FailedPageLoadReportsErrorAndReenablesNavigation()
+    public async Task OpeningSettingsShowsTheFrameWhileItLoadsAndReloadsOnEveryOpen()
     {
         using var runtime = new TestRuntime();
         var store = new DelayedReadStore(runtime);
         runtime.Services.AddSingleton<ISettingsStore>(store);
         var shell = runtime.Container.GetRequiredService<ShellViewModel>();
-        shell.CurrentPage = shell.Settings;
+        var opening = shell.OpenSettingsCommand.InvokeAsync();
+        try
+        {
+            await store.Started.Task.WaitAsync(TimeSpan.FromSeconds(10));
+            Assert.IsTrue(shell.IsSettingsOpen, "The frame shows while settings load.");
+            Assert.IsFalse(opening.IsCompleted);
+            Assert.IsFalse(shell.CloseSettingsCommand.CanExecute(null), "The frame cannot close until settings have loaded.");
+            Assert.IsFalse(shell.OpenSettingsCommand.CanExecute(null));
+        }
+        finally
+        {
+            store.Release.TrySetResult();
+            await opening.WaitAsync(TimeSpan.FromSeconds(10));
+        }
+
+        Assert.AreEqual(ViewStatus.SettingsLoaded, shell.Settings.Status);
+        await shell.CloseSettingsCommand.InvokeAsync();
+        Assert.IsFalse(shell.IsSettingsOpen);
+        await shell.OpenSettingsCommand.InvokeAsync();
+        Assert.AreEqual(2, store.Reads, "Settings reload every time the frame opens.");
+    }
+
+    [TestMethod]
+    public async Task ClosingSettingsWaitsForAPendingSaveWhileSectionsStayAvailable()
+    {
+        using var runtime = new TestRuntime();
+        var store = new DelayedStore(runtime);
+        runtime.Services.AddSingleton<ISettingsStore>(store);
+        var shell = runtime.Container.GetRequiredService<ShellViewModel>();
+        await shell.OpenSettingsCommand.InvokeAsync();
+
+        shell.Settings.ReplaceOriginal = true;
+        await store.Started.Task.WaitAsync(TimeSpan.FromSeconds(10));
+        Assert.IsTrue(shell.Settings.IsSaving);
+        Assert.IsTrue(shell.CloseSettingsCommand.CanExecute(null), "A save in progress does not block closing; closing waits for it.");
+        var closing = shell.CloseSettingsCommand.InvokeAsync();
+        try
+        {
+            Assert.IsFalse(closing.IsCompleted);
+            Assert.IsTrue(shell.IsSettingsOpen, "The frame stays until the save has finished.");
+            var about = shell.Settings.Sections.Pages.OfType<AboutSettingsSection>().Single();
+            Assert.IsTrue(await shell.Settings.Sections.NavigateAsync(about), "Moving between sections never waits for a save.");
+        }
+        finally
+        {
+            store.Release.TrySetResult();
+            await closing.WaitAsync(TimeSpan.FromSeconds(10));
+        }
+
+        Assert.IsFalse(shell.IsSettingsOpen);
+        Assert.IsTrue(runtime.Settings.ReplaceOriginal);
+    }
+
+    [TestMethod]
+    public async Task FailedSettingsLoadShowsTheErrorAndAllowsClosing()
+    {
+        using var runtime = new TestRuntime();
+        var store = new DelayedReadStore(runtime);
+        runtime.Services.AddSingleton<ISettingsStore>(store);
+        var shell = runtime.Container.GetRequiredService<ShellViewModel>();
+        var opening = shell.OpenSettingsCommand.InvokeAsync();
         await store.Started.Task.WaitAsync(TimeSpan.FromSeconds(10));
         store.Release.SetException(new IOException("Settings unavailable"));
-        await shell.NavigationTask.WaitAsync(TimeSpan.FromSeconds(10));
+        await opening.WaitAsync(TimeSpan.FromSeconds(10));
         Assert.AreEqual(ViewStatus.Error, shell.Settings.Status);
         Assert.AreEqual("Settings unavailable", shell.Settings.StatusMessage);
         Assert.IsTrue(shell.CanNavigate);
+        await shell.CloseSettingsCommand.InvokeAsync();
+        Assert.IsFalse(shell.IsSettingsOpen);
         var archive = shell.Pages.OfType<ArchiveViewModel>().Single();
         shell.CurrentPage = archive;
         await shell.NavigationTask;
