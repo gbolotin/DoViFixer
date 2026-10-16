@@ -54,6 +54,7 @@ public sealed record OperationProgress(Guid OperationId, string Stage, string? I
 /// <summary>Original and Archive name the retained source and the enhancement-layer archive when an operation keeps them.</summary>
 public sealed record OperationItemResult(string Item, OperationStatus Status, string? Output = null, string Message = "") : IOperationItemResult
 {
+    public Diagnostics.FailureDiagnosis? Failure { get; init; }
     public string? Original { get; init; }
     public string? Archive { get; init; }
 }

@@ -4,6 +4,7 @@ using DoViFixer.Application.Dependencies;
 using DoViFixer.Application.Settings;
 using DoViFixer.Application.Abstractions;
 using DoViFixer.Application.Updates;
+using DoViFixer.Application.Diagnostics;
 using WpfFoundation.Operations;
 
 namespace DoViFixer.App.ViewModels;
@@ -20,6 +21,8 @@ public sealed partial class SettingsViewModel : OperationViewModel, INavigationP
     private readonly DependencySetup setup;
     private readonly IFileDialogService files;
     private readonly IFileExplorer explorer;
+    private readonly DiagnosticsService diagnostics;
+    public string DiagnosticContentsNotice => DiagnosticsService.ContentsNotice;
     private bool includeSimple;
     private bool forceComplex;
     private AppTheme selectedTheme = AppTheme.System;
@@ -47,7 +50,7 @@ public sealed partial class SettingsViewModel : OperationViewModel, INavigationP
 
     public DependencyReportViewModel Dependencies { get; }
 
-    public SettingsViewModel(SettingsService settings, DependencySetup setup, DependencyReportViewModel dependencies, IFileDialogService files, IFileExplorer explorer, IAnalysisCache cache, IThemeService themeService, IMediaPreview mediaPreview, IOperationFeedback? feedback = null)
+    public SettingsViewModel(SettingsService settings, DependencySetup setup, DependencyReportViewModel dependencies, IFileDialogService files, IFileExplorer explorer, IAnalysisCache cache, IThemeService themeService, IMediaPreview mediaPreview, DiagnosticsService diagnostics, IOperationFeedback? feedback = null)
         : base(feedback)
     {
         this.settings = settings;
@@ -57,6 +60,7 @@ public sealed partial class SettingsViewModel : OperationViewModel, INavigationP
         this.setup = setup;
         this.files = files;
         this.explorer = explorer;
+        this.diagnostics = diagnostics;
         Dependencies = dependencies;
     }
 
@@ -505,6 +509,26 @@ public sealed partial class SettingsViewModel : OperationViewModel, INavigationP
     [RelayCommand]
     private void OpenLogs() => explorer.OpenLogs();
 
+    [RelayCommand(CanExecute = nameof(IsIdle))]
+    private Task ExportDiagnostics()
+    {
+        string? path = files.PickSaveFile("Diagnostic ZIP|*.zip", "diagnostics.zip");
+        if (path is null)
+        {
+            return Task.CompletedTask;
+        }
+        return RunAsync("Diagnostic export", async (token, _) =>
+        {
+            // An invalid settings file must not prevent exporting the evidence needed to repair it.
+            var result = await Task.Run(() => diagnostics.ExportAsync(path, token), token);
+            if (result.Status == DoViFixer.Application.Operations.OperationStatus.Partial)
+            {
+                ReportItemFailed();
+            }
+            SetStatus(ViewStatus.Result, result.Message);
+        });
+    }
+
     protected override void CommandsChanged()
     {
         LoadCommand?.NotifyCanExecuteChanged();
@@ -515,5 +539,6 @@ public sealed partial class SettingsViewModel : OperationViewModel, INavigationP
         InstallCommand?.NotifyCanExecuteChanged();
         SetToolCommand?.NotifyCanExecuteChanged();
         ResetToolCommand?.NotifyCanExecuteChanged();
+        ExportDiagnosticsCommand?.NotifyCanExecuteChanged();
     }
 }

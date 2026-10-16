@@ -56,7 +56,7 @@ public static class McpComposition
     private static void ConfigureLogging(LoggerConfiguration logging, IConfiguration configuration)
     {
         string root = configuration["DoViFixer:DataDirectory"] ?? Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData), "DoViFixer");
-        string directory = Path.Combine(root, "Logs");
+        string directory = Path.GetFullPath(configuration["DoViFixer:Logging:Directory"] ?? Path.Combine(root, "Logs"));
         Directory.CreateDirectory(directory);
         // Compact JSON (CLEF) opens in Seq and Compact Log Viewer; @m keeps the rendered message for plain readers.
         var json = new RenderedCompactJsonFormatter();

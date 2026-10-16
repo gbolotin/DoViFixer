@@ -89,7 +89,7 @@ public sealed class NativeIntegrationTests
         var verifier = new MediaVerifier(probe, processor, tools, runner, NullLogger<MediaVerifier>.Instance);
         var dependencies = new DependencyService(new ReadyDetector(tools), null!, null!, tools, NullLogger<DependencyService>.Instance);
         var cache = new AnalysisCache(new StorageOptions(workspace.DirectoryPath), NullLogger<AnalysisCache>.Instance);
-        var service = new ConversionService(dependencies, files, factory, processor, verifier, new OutputPublisher(NullLogger<OutputPublisher>.Instance), new BackupArchiveStore(), NullLogger<ConversionService>.Instance, cache);
+        var service = new ConversionService(dependencies, files, factory, processor, verifier, new OutputPublisher(NullLogger<OutputPublisher>.Instance, new DoViFixer.Infrastructure.Diagnostics.WindowsFileLockInspector()), new BackupArchiveStore(), NullLogger<ConversionService>.Instance, cache);
         var analysis = MediaClassifier.Classify(copy, await probe.AnalyzeAsync(copy, AnalysisMethod.FullRpu, workspace, default));
         string converted = files.PrepareOutputPath(input, null, " - DV P8.1.mkv");
         var result = await service.ExecuteAsync(new(Guid.NewGuid(), analysis, ConversionTarget.Profile81, converted, null, workspace.DirectoryPath, ConversionPolicy.RequiredScratchBytes(copy.Source.Length), "explicit native test", Safe: safe), null, default);
@@ -402,7 +402,7 @@ public sealed class NativeIntegrationTests
             var serviceVerifier = new MediaVerifier(serviceProbe, serviceProcessor, tools, serviceRunner, NullLogger<MediaVerifier>.Instance);
             var dependencies = new DependencyService(new ReadyDetector(tools), null!, null!, tools, NullLogger<DependencyService>.Instance);
             var cache = new AnalysisCache(new StorageOptions(workspace.DirectoryPath), NullLogger<AnalysisCache>.Instance);
-            var service = new ConversionService(dependencies, files, factory, serviceProcessor, serviceVerifier, new OutputPublisher(NullLogger<OutputPublisher>.Instance), archiveStore, NullLogger<ConversionService>.Instance, cache);
+            var service = new ConversionService(dependencies, files, factory, serviceProcessor, serviceVerifier, new OutputPublisher(NullLogger<OutputPublisher>.Instance, new DoViFixer.Infrastructure.Diagnostics.WindowsFileLockInspector()), archiveStore, NullLogger<ConversionService>.Instance, cache);
             var sourceMedia = media with
             {
                 Source = files.Identify(serviceInput)

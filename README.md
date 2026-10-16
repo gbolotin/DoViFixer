@@ -157,6 +157,22 @@ Get-Content (Join-Path $logs 'history-*.jsonl') |
 
 For a bug report, find the failed event's `SessionId`, then collect matching events from the diagnostic files along with the command, expected behavior, and actual result. Logs can include local paths, user/machine names, and native-tool arguments; review them before sharing. Logging makes no automatic uploads. Audit records are ordinary local files subject to retention, not a tamper-proof ledger or a substitute for media verification.
 
+### Failure explanations and diagnostic ZIPs
+
+Native-tool failures and final output-publication failures include a cause category and recovery guidance. Windows error codes take precedence over tool-output phrases; unfamiliar native errors stay unclassified tool failures. The original exception or bounded tool output remains available, together with the tool invocation identifier. Publication keeps its existing sharing-lock retries. After a final sharing or access failure, [Windows Restart Manager](https://learn.microsoft.com/windows/win32/api/restartmanager/nf-restartmanager-rmgetlist) identifies applications using the destination when possible. Inspection never closes applications. A missing holder list does not prove that the file is unlocked.
+
+In **Settings**, select **Export diagnostics**, or run:
+
+```powershell
+DoViFixer.Console diagnostics export "C:\Support\diagnostics.zip"
+```
+
+The ZIP contains `snapshot.json`, `manifest.json`, and recent compact JSON logs from the WPF, Console, and MCP apps. The snapshot includes app/runtime versions, explicit saved preferences and tool paths, and versions already known to the current process. Export does not launch tools to discover versions. No environment-variable dump, media files, cache, or arbitrary configuration is included. Logs can contain media paths, user names, machine names, and tool arguments. Nothing is uploaded; review the ZIP before sharing it.
+
+Collection keeps at most **three newest files per log kind** (diagnostic/history/audit across all apps), **2 MiB per log**, and **256 KiB for the settings/tool snapshot**. Log tails contain only complete newline-terminated records. The manifest lists missing, unreadable, trimmed, or changing entries. Active logs are read with sharing enabled and remain unchanged. The command returns `0` for a complete bundle, `1` for a saved bundle with omissions or an export failure (the message distinguishes these), and `130` for cancellation.
+
+The ZIP is staged on the destination volume and published only after completion. Existing files are never overwritten, including a collision during export; choose a new filename. Cancellation removes the owned staging directory. `DoViFixer__Logging__Directory` selects the log directory consistently in all three applications.
+
 ## Tests
 
 ```powershell

@@ -43,7 +43,7 @@ public static class AppComposition
             provider.GetRequiredService<ILogger<CompletionNotifications>>()));
         services.AddSingleton<ITaskbarService>(_ => new TaskbarService(System.Windows.Application.Current));
         services.AddSingleton<IOperationFeedback>(provider => new OperationFeedback(provider.GetRequiredService<ITaskbarService>(), provider.GetRequiredService<CompletionNotifications>()));
-        services.AddSingleton<IFileExplorer>(provider => new FileExplorer(Path.Combine(root, "Logs"), provider.GetRequiredService<IDialogService>()));
+        services.AddSingleton<IFileExplorer>(provider => new FileExplorer(configuration["DoViFixer:Logging:Directory"] ?? Path.Combine(root, "Logs"), provider.GetRequiredService<IDialogService>()));
         services.AddSingleton<DependencyReportViewModel>();
         services.AddSingleton<DependencySetup>();
         services.AddTransient<StartupDependencyCheckViewModel>();
@@ -61,7 +61,7 @@ public static class AppComposition
     private static void ConfigureLogging(LoggerConfiguration logging, IConfiguration configuration)
     {
         string root = configuration["DoViFixer:DataDirectory"] ?? Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData), "DoViFixer");
-        string directory = Path.Combine(root, "Logs");
+        string directory = Path.GetFullPath(configuration["DoViFixer:Logging:Directory"] ?? Path.Combine(root, "Logs"));
         Directory.CreateDirectory(directory);
         // Compact JSON (CLEF) opens in Seq and Compact Log Viewer; @m keeps the rendered message for plain readers.
         var json = new RenderedCompactJsonFormatter();

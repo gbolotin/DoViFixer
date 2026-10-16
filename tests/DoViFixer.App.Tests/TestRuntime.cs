@@ -381,7 +381,8 @@ internal sealed class TestRuntime : IFileDiscovery, IFileOperations, IMediaProbe
         return allowMultiple ? PickedFiles : PickedFiles.Take(1).ToArray();
     }
     public string? PickFolder() => PickedFolder;
-    public string? PickSaveFile(string filter, string? fileName = null) => null;
+    public string? SaveFilePath { get; set; }
+    public string? PickSaveFile(string filter, string? fileName = null) => SaveFilePath;
     public string? OpenedFolder
     {
         get;

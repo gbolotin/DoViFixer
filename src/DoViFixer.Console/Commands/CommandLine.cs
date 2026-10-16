@@ -30,6 +30,7 @@ public sealed record CommandLine(string Command, IReadOnlyList<string> Arguments
             "cleanup" => ["recursive", "delete-backups", "yes"],
             "dependencies" => ["yes", "repair", "json"],
             "settings" => ["json"],
+            "diagnostics" => [],
             "update-check" => ["json"],
             _ => throw new ArgumentException($"Unknown command '{command}'. Run --help.")
         };
@@ -108,6 +109,7 @@ public sealed record CommandLine(string Command, IReadOnlyList<string> Arguments
             "inspect" or "backup" => Arguments.Count == 1,
             "restore" => Arguments.Count is 1 or 2 && !(Arguments.Count == 2 && Has("source")),
             "update-check" => Arguments.Count == 0,
+            "diagnostics" => Arguments.Count == 2 && Arguments[0] == "export",
             "dependencies" => Arguments.Count >= 1 && Arguments[0] is "check" or "install" && Arguments.Skip(1).All(a => Enum.TryParse<NativeTool>(a, true, out var tool) && Enum.IsDefined(tool)),
             "settings" => Arguments.Count >= 1 && (Arguments[0] switch
             {

@@ -474,7 +474,7 @@ public sealed class ConversionService(DependencyService dependencies, IFileOpera
             logger.LogError(ex, "Conversion failed: {Reason} Original: {OriginalPath} Archive: {ArchivePath}", ex.Message, original, archive);
             return new(approvedPlan.Analysis.Media.Source.Path, ex is OperationCanceledException ? OperationStatus.Cancelled : OperationStatus.Failed, published ? approvedPlan.Output : null, ex.Message + recovery + archiveNote)
             {
-                Original = original, Archive = archive
+                Original = original, Archive = archive, Failure = Diagnostics.FailureDiagnosis.FromException(ex)
             };
         }
     }

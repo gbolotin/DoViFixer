@@ -46,6 +46,8 @@ internal sealed class HelpRenderer(ConsoleRenderer renderer)
         Command("settings temp <directory>", "Save the temporary directory; creates missing folders and checks write access.");
         Command("settings add-to-path", "Add this app folder to your user PATH. No administrator rights needed. Reopen your terminal afterwards and keep the app in that folder.");
         Examples(("settings show", "Show current configuration"), ("settings tool FFmpeg \"C:\\Tools\\ffmpeg.exe\"", "Set a tool path"), ("settings temp \"D:\\DoViScratch\"", "Set the working directory for temporary files"));
+        Group("Diagnostics");
+        Command("diagnostics export <path.zip>", "Save app/runtime details, known tool paths/versions, saved settings and bounded recent logs locally. May contain personal paths and names. Nothing is uploaded. Existing files are never overwritten. Missing or trimmed entries are listed in manifest.json.");
         Group("Updates");
         Command("update-check [--json]", $"Compare this version with the latest {ApplicationTitle.Name} release on GitHub. Nothing is downloaded or installed.");
         Examples(("update-check", $"Check for a newer {ApplicationTitle.Name} release"));

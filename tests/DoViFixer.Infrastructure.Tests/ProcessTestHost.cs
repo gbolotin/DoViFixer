@@ -17,6 +17,12 @@ internal static class ProcessTestHost
         }
 
         string mode = args[0];
+        if (mode == "lock")
+        {
+            using var held = new FileStream(args[1], FileMode.Open, FileAccess.Read, FileShare.Read);
+            await File.WriteAllTextAsync(args[2], Environment.ProcessId.ToString());
+            await Task.Delay(Timeout.Infinite);
+        }
         if (mode == "echo")
         {
             Console.WriteLine(args[1]);

@@ -282,6 +282,13 @@
                         <Run Text="%LOCALAPPDATA%\DoViFixer\Logs" />
                     </Hyperlink>
                 </TextBlock>
+                <HeaderedContentControl Header="Diagnostic ZIP"
+                                        AutomationProperties.HelpText="{Binding DiagnosticContentsNotice}"
+                                        Style="{StaticResource WfSettingRowStyle}">
+                    <Button Content="Export diagnostics"
+                            Command="{Binding ExportDiagnosticsCommand}"
+                            AutomationProperties.Name="Export diagnostics" />
+                </HeaderedContentControl>
                 <ProgressBar Value="{Binding Percent, Mode=OneWay}"
                              IsIndeterminate="{Binding IsIndeterminate}"
                              Visibility="{Binding IsBusy, Converter={StaticResource WfBooleanToVisibilityConverter}}" />

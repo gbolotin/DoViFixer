@@ -1,5 +1,6 @@
 using System.ComponentModel;
 using System.Diagnostics;
+using DoViFixer.Application.Diagnostics;
 using DoViFixer.Infrastructure.MediaTools.Processes;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Logging.Abstractions;
@@ -134,7 +135,10 @@ public sealed class ProcessLifetimeTests
         ProcessTestHost.Release(directory);
         var process = await ReadProcessAsync("timeout");
         var child = await ReadProcessAsync("timeout-child");
-        await Assert.ThrowsExactlyAsync<TimeoutException>(() => operation.WaitAsync(TimeSpan.FromSeconds(15)));
+        var failure = await Assert.ThrowsExactlyAsync<OperationTimeoutException>(() => operation.WaitAsync(TimeSpan.FromSeconds(15)));
+        Assert.AreEqual(FailureCategory.Timeout, failure.Diagnosis.Category);
+        Assert.IsInstanceOfType<TimeoutException>(failure.InnerException);
+        Assert.IsNotNull(failure.Diagnosis.ToolInvocationId);
         await process.WaitForExitAsync().WaitAsync(TimeSpan.FromSeconds(15));
         await child.WaitForExitAsync().WaitAsync(TimeSpan.FromSeconds(15));
     }
@@ -175,7 +179,9 @@ public sealed class ProcessLifetimeTests
         var logger = new StartedProcessLogger(owned);
         var observedRunner = new ProcessRunner(logger);
         var missing = new ProcessRequest(Path.Combine(directory, "missing.exe"), []);
-        await Assert.ThrowsExactlyAsync<Win32Exception>(() => observedRunner.PipeAsync(missing, ProcessTestHost.Request("tree", directory, "consumer"), default));
+        var failure = await Assert.ThrowsExactlyAsync<ToolStartFailureException>(() => observedRunner.PipeAsync(missing, ProcessTestHost.Request("tree", directory, "consumer"), default));
+        Assert.AreEqual(FailureCategory.MissingTool, failure.Diagnosis.Category);
+        Assert.IsInstanceOfType<Win32Exception>(failure.InnerException);
         Assert.HasCount(1, owned);
         Assert.IsTrue(owned[0].HasExited, "The consumer must exit before the startup failure is returned.");
         // A subsequent invocation remains usable after the failed pipeline.
@@ -187,7 +193,8 @@ public sealed class ProcessLifetimeTests
     public async Task ConsumerStartupFailureDoesNotStartProducer()
     {
         var missing = new ProcessRequest(Path.Combine(directory, "missing.exe"), []);
-        await Assert.ThrowsExactlyAsync<Win32Exception>(() => runner.PipeAsync(ProcessTestHost.Request("tree", directory, "producer"), missing, default));
+        var failure = await Assert.ThrowsExactlyAsync<ToolStartFailureException>(() => runner.PipeAsync(ProcessTestHost.Request("tree", directory, "producer"), missing, default));
+        Assert.AreEqual(FailureCategory.MissingTool, failure.Diagnosis.Category);
         Assert.IsFalse(File.Exists(Path.Combine(directory, "producer.pid")));
     }
 
@@ -199,7 +206,10 @@ public sealed class ProcessLifetimeTests
         Assert.AreEqual(argument + Environment.NewLine, result.Output);
         StringAssert.Contains(result.Error, "diagnostic");
         Assert.AreEqual(1, result.ExitCode);
-        await Assert.ThrowsExactlyAsync<IOException>(() => runner.RunAsync(ProcessTestHost.Request("echo", "failure", "7"), default));
+        var failure = await Assert.ThrowsExactlyAsync<OperationFailureException>(() => runner.RunAsync(ProcessTestHost.Request("echo", "failure", "7"), default));
+        Assert.AreEqual(FailureCategory.NativeToolFailed, failure.Diagnosis.Category);
+        Assert.IsNotNull(failure.Diagnosis.ToolInvocationId);
+        StringAssert.Contains(failure.Diagnosis.TechnicalDetail, "failure");
     }
 
     private async Task<Process> ReadProcessAsync(string name)

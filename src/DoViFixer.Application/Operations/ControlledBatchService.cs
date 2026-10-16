@@ -31,7 +31,7 @@ public sealed class ControlledBatchService(ILogger<ControlledBatchService> logge
             catch (Exception ex)
             {
                 logger.LogError(ex, "Batch item failed: {Item}", key);
-                result = new(key, OperationStatus.Failed, null, ex.Message);
+                result = new(key, OperationStatus.Failed, null, ex.Message) { Failure = Diagnostics.FailureDiagnosis.FromException(ex) };
             }
             finally
             {

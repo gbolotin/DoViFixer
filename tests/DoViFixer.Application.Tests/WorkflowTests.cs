@@ -1024,6 +1024,7 @@ public sealed class WorkflowTests
         }
 
         public string GetPath(NativeTool tool) => catalog[tool];
+        public IReadOnlyList<DependencyStatus> Snapshot() => [];
         public void Refresh(IEnumerable<DependencyStatus> statuses)
         {
             foreach (var status in statuses.Where(s => s.State == DependencyState.Ready))

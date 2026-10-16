@@ -3,6 +3,7 @@ using DoViFixer.Application.Updates;
 using DoViFixer.Infrastructure.Archives;
 using DoViFixer.Infrastructure.Configuration;
 using DoViFixer.Infrastructure.Dependencies;
+using DoViFixer.Infrastructure.Diagnostics;
 using DoViFixer.Infrastructure.FileSystem;
 using DoViFixer.Infrastructure.MediaTools;
 using DoViFixer.Infrastructure.MediaTools.Processes;
@@ -19,6 +20,7 @@ public static class DependencyInjection
     {
         string root = configuration["DoViFixer:DataDirectory"] ?? Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData), "DoViFixer");
         services.AddSingleton(new StorageOptions(Path.GetFullPath(root)));
+        services.AddSingleton(new DiagnosticOptions(Path.GetFullPath(configuration["DoViFixer:Logging:Directory"] ?? Path.Combine(root, "Logs"))));
         services.TryAddSingleton(TimeProvider.System);
         services.AddSingleton<ISettingsStore, SettingsStore>();
         services.AddTransient<IAnalysisCache, AnalysisCache>();
@@ -41,6 +43,8 @@ public static class DependencyInjection
         services.AddTransient<ISourceFileMonitor, SourceFileMonitor>();
         services.AddTransient<ITemporaryWorkspaceFactory, TemporaryWorkspaceFactory>();
         services.AddTransient<IOutputPublisher, OutputPublisher>();
+        services.AddTransient<IFileLockInspector, WindowsFileLockInspector>();
+        services.AddTransient<IDiagnosticBundleWriter, DiagnosticBundleWriter>();
         services.AddTransient<MediaProbe>();
         services.AddTransient<IMediaProbe, MediaProbe>();
         services.AddSingleton<IMediaPreview, MediaPreview>();

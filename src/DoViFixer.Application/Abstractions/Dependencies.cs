@@ -25,4 +25,5 @@ public interface IToolCatalog
 {
     string GetPath(NativeTool tool);
     void Refresh(IEnumerable<DependencyStatus> statuses);
+    IReadOnlyList<DependencyStatus> Snapshot();
 }

@@ -1,5 +1,8 @@
 using System.Diagnostics;
 using System.Text;
+using System.ComponentModel;
+using DoViFixer.Application.Diagnostics;
+using DoViFixer.Infrastructure.Diagnostics;
 using Microsoft.Extensions.Logging;
 
 namespace DoViFixer.Infrastructure.MediaTools.Processes;
@@ -16,15 +19,16 @@ internal sealed class ProcessRunner(ILogger<ProcessRunner> logger) : IProcessRun
 {
     public async Task<ProcessResult> RunAsync(ProcessRequest request, CancellationToken cancellationToken)
     {
+        Guid invocationId = Guid.NewGuid();
         using var scope = logger.BeginScope(new Dictionary<string, object>
         {
-            ["ToolInvocationId"] = Guid.NewGuid(), ["Tool"] = Path.GetFileName(request.Executable), ["ToolPath"] = request.Executable
+            ["ToolInvocationId"] = invocationId, ["Tool"] = Path.GetFileName(request.Executable), ["ToolPath"] = request.Executable
         });
         long started = Stopwatch.GetTimestamp();
         logger.LogDebug("Starting native tool with arguments {Arguments}; working directory {WorkingDirectory}; timeout {Timeout}", request.Arguments, request.WorkingDirectory ?? Environment.CurrentDirectory, request.Timeout ?? TimeSpan.FromHours(24));
         try
         {
-            var result = await RunCoreAsync(request, cancellationToken);
+            var result = await RunCoreAsync(request, invocationId, cancellationToken);
             logger.LogDebug("Native tool completed with {ExitCode} after {ElapsedMilliseconds} ms", result.ExitCode, Stopwatch.GetElapsedTime(started).TotalMilliseconds);
             return result;
         }
@@ -32,12 +36,22 @@ internal sealed class ProcessRunner(ILogger<ProcessRunner> logger) : IProcessRun
         {
             // Detection may intentionally try an absent executable; the owning workflow decides whether this is an error.
             logger.LogDebug(ex, "Native tool stopped after {ElapsedMilliseconds} ms; cancellation requested {CancellationRequested}", Stopwatch.GetElapsedTime(started).TotalMilliseconds, cancellationToken.IsCancellationRequested);
+            if (ex is Win32Exception)
+            {
+                throw new ToolStartFailureException(FailureClassifier.Describe(ex, "Start native tool", request.Executable, invocationId, startingTool: true), ex);
+            }
+            if (ex is TimeoutException timeout)
+            {
+                throw new OperationTimeoutException(FailureClassifier.Describe(ex, Path.GetFileName(request.Executable), invocationId: invocationId), timeout);
+            }
             throw;
         }
     }
 
     public async Task PipeAsync(ProcessRequest producer, ProcessRequest consumer, CancellationToken cancellationToken)
     {
+        Guid invocationId = Guid.NewGuid();
+        using var scope = logger.BeginScope(new Dictionary<string, object> { ["ToolInvocationId"] = invocationId });
         cancellationToken.ThrowIfCancellationRequested();
         using var job = new ProcessJob();
         using var timeout = new CancellationTokenSource(TimeSpan.FromHours(24));
@@ -71,12 +85,22 @@ internal sealed class ProcessRunner(ILogger<ProcessRunner> logger) : IProcessRun
             await targetOutput;
             if (source.ExitCode != 0 || target.ExitCode != 0)
             {
-                throw new IOException($"Streaming failed: producer exit {source.ExitCode}, consumer exit {target.ExitCode}: {Tail(error)}");
+                bool producerFailed = source.ExitCode != 0;
+                string tool = Path.GetFileName(producerFailed ? producer.Executable : consumer.Executable);
+                int exitCode = producerFailed ? source.ExitCode : target.ExitCode;
+                throw new OperationFailureException(FailureClassifier.ToolExit(tool, exitCode,
+                    $"Streaming failed: producer exit {source.ExitCode}, consumer exit {target.ExitCode}: {Tail(error)}", invocationId));
             }
         }
         catch (OperationCanceledException)when (!cancellationToken.IsCancellationRequested && timeout.IsCancellationRequested)
         {
-            throw new TimeoutException("Streaming conversion exceeded its time limit.");
+            var error = new TimeoutException("Streaming conversion exceeded its time limit.");
+            throw new OperationTimeoutException(FailureClassifier.Describe(error, "Streaming conversion", invocationId: invocationId), error);
+        }
+        catch (Win32Exception ex)
+        {
+            string executable = targetStarted ? producer.Executable : consumer.Executable;
+            throw new ToolStartFailureException(FailureClassifier.Describe(ex, "Start streaming tool", executable, invocationId, startingTool: true), ex);
         }
         finally
         {
@@ -159,7 +183,7 @@ internal sealed class ProcessRunner(ILogger<ProcessRunner> logger) : IProcessRun
         };
     }
 
-    private async Task<ProcessResult> RunCoreAsync(ProcessRequest request, CancellationToken cancellationToken)
+    private async Task<ProcessResult> RunCoreAsync(ProcessRequest request, Guid invocationId, CancellationToken cancellationToken)
     {
         cancellationToken.ThrowIfCancellationRequested();
         using var job = new ProcessJob();
@@ -228,7 +252,7 @@ internal sealed class ProcessRunner(ILogger<ProcessRunner> logger) : IProcessRun
         logger.LogDebug("Native tool exit {ExitCode}; stdout characters {OutputLength}, tail {OutputTail}; stderr characters {ErrorLength}, tail {ErrorTail}", result.ExitCode, result.Output.Length, Tail(result.Output), result.Error.Length, Tail(result.Error));
         if (result.ExitCode != 0 && !(request.AllowWarnings && result.ExitCode == 1) && !(request.AcceptedExitCodes?.Contains(result.ExitCode) ?? false))
         {
-            throw new IOException($"{Path.GetFileName(request.Executable)} exited {result.ExitCode}: {Tail(result.Error + result.Output)}");
+            throw new OperationFailureException(FailureClassifier.ToolExit(Path.GetFileName(request.Executable), result.ExitCode, Tail(result.Error + result.Output), invocationId));
         }
 
         if (result.ExitCode == 1 && request.AllowWarnings)

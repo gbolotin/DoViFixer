@@ -36,6 +36,7 @@ public static class ConsoleHost
         builder.Services.AddTransient<IConsoleCommand, ArchiveCommand>();
         builder.Services.AddTransient<IConsoleCommand, CleanupCommand>();
         builder.Services.AddTransient<IConsoleCommand, SettingsCommand>();
+        builder.Services.AddTransient<IConsoleCommand, DiagnosticsCommand>();
         builder.Services.AddTransient<IConsoleCommand, UpdateCommand>();
         return builder.Build();
     }

@@ -126,8 +126,8 @@ public sealed class InfrastructureTests
     {
         string output = Path.Combine(directory, "movie.mkv");
         await File.WriteAllTextAsync(output, "existing");
-        var publisher = new OutputPublisher(NullLogger<OutputPublisher>.Instance);
-        Assert.ThrowsExactly<IOException>(() => publisher.Stage(output));
+        var publisher = new OutputPublisher(NullLogger<OutputPublisher>.Instance, new DoViFixer.Infrastructure.Diagnostics.WindowsFileLockInspector());
+        Assert.ThrowsExactly<DoViFixer.Application.Diagnostics.OperationFailureException>(() => publisher.Stage(output));
         await using (var staged = publisher.Stage(output, replaceExisting: true))
         {
             await File.WriteAllTextAsync(staged.Path, "verified");
@@ -152,7 +152,7 @@ public sealed class InfrastructureTests
         {
             0, 255, 128, 13, 10
         }, await File.ReadAllBytesAsync(output));
-        await Assert.ThrowsExactlyAsync<IOException>(() => runner.PipeAsync(Request("exit 7"), consumer, default));
+        await Assert.ThrowsExactlyAsync<DoViFixer.Application.Diagnostics.OperationFailureException>(() => runner.PipeAsync(Request("exit 7"), consumer, default));
         using var cancellation = new CancellationTokenSource(TimeSpan.FromMilliseconds(500));
         await Assert.ThrowsAsync<OperationCanceledException>(() => runner.PipeAsync(Request("Start-Sleep -Seconds 60"), consumer, cancellation.Token));
     }
@@ -330,13 +330,13 @@ public sealed class InfrastructureTests
     public async Task PublisherRejectsCollisionThatAppearsAfterStaging()
     {
         string output = Path.Combine(directory, "movie.mkv");
-        var publisher = new OutputPublisher(NullLogger<OutputPublisher>.Instance);
+        var publisher = new OutputPublisher(NullLogger<OutputPublisher>.Instance, new DoViFixer.Infrastructure.Diagnostics.WindowsFileLockInspector());
         await using (var staged = publisher.Stage(output))
         {
             Assert.IsFalse(staged.Path.EndsWith(".mkv", StringComparison.OrdinalIgnoreCase));
             await File.WriteAllTextAsync(staged.Path, "new");
             await File.WriteAllTextAsync(output, "existing");
-            await Assert.ThrowsExactlyAsync<IOException>(() => staged.PublishAsync(default));
+            await Assert.ThrowsExactlyAsync<DoViFixer.Application.Diagnostics.OperationFailureException>(() => staged.PublishAsync(default));
         }
 
         Assert.AreEqual("existing", await File.ReadAllTextAsync(output));
@@ -347,7 +347,7 @@ public sealed class InfrastructureTests
     public async Task SuccessfulPublicationAndWorkspaceDisposalCleanUpOwnedFolders()
     {
         string output = Path.Combine(directory, "movie.mkv");
-        var publisher = new OutputPublisher(NullLogger<OutputPublisher>.Instance);
+        var publisher = new OutputPublisher(NullLogger<OutputPublisher>.Instance, new DoViFixer.Infrastructure.Diagnostics.WindowsFileLockInspector());
         await using (var staged = publisher.Stage(output))
         {
             await File.WriteAllTextAsync(staged.Path, "verified");
