@@ -1,0 +1,44 @@
+<UserControl x:Class="DoViFixer.App.Views.Settings.AboutSettingsView"
+             xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:viewModels="clr-namespace:DoViFixer.App.ViewModels"
+             xmlns:updates="clr-namespace:DoViFixer.Application.Updates;assembly=DoViFixer.Application"
+             xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
+             xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
+             mc:Ignorable="d"
+             d:DataContext="{d:DesignInstance Type=viewModels:SettingsViewModel}">
+    <!-- The About page of the settings frame. Its DataContext is the SettingsViewModel all pages share. -->
+    <ScrollViewer VerticalScrollBarVisibility="Auto">
+        <StackPanel Margin="24,8,24,24">
+            <TextBlock Text="About" Style="{StaticResource WfHeadingTextStyle}" />
+            <Border Style="{StaticResource WfCardStyle}">
+                <StackPanel>
+                    <TextBlock Foreground="{DynamicResource TextFillColorSecondaryBrush}">
+                        <TextBlock.Text>
+                            <MultiBinding StringFormat="{}{0} {1}">
+                                <Binding Source="{x:Static updates:ApplicationTitle.Name}" />
+                                <Binding Path="Version" />
+                            </MultiBinding>
+                        </TextBlock.Text>
+                    </TextBlock>
+                    <TextBlock TextWrapping="Wrap"
+                               Foreground="{DynamicResource TextFillColorSecondaryBrush}"
+                               Margin="0,4,0,12">
+                        <Run Text="Operation history, audit and diagnostics: " /><Hyperlink Command="{Binding OpenLogsCommand}"
+                                   AutomationProperties.Name="Open logs folder">
+                            <Run Text="%LOCALAPPDATA%\DoViFixer\Logs" />
+                        </Hyperlink>
+                    </TextBlock>
+                    <Separator />
+                    <HeaderedContentControl Header="Diagnostic ZIP"
+                                            AutomationProperties.HelpText="{Binding DiagnosticContentsNotice}"
+                                            Style="{StaticResource WfSettingRowStyle}">
+                        <Button Content="Export diagnostics"
+                                Command="{Binding ExportDiagnosticsCommand}"
+                                AutomationProperties.Name="Export diagnostics" />
+                    </HeaderedContentControl>
+                </StackPanel>
+            </Border>
+        </StackPanel>
+    </ScrollViewer>
+</UserControl>

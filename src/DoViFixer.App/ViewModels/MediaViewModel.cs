@@ -642,9 +642,9 @@ public sealed partial class MediaViewModel : OperationViewModel, INavigationPage
     private void OpenRowOutput(MediaRow? row) => explorer.ShowInFolder(row!.Result!.Output!);
 
     [RelayCommand(CanExecute = nameof(IsIdle))]
-    private void OpenSettings() => RequestNavigateToSettings?.Invoke();
+    private void OpenSettings() => RequestOpenSettings?.Invoke();
 
-    public event Action? RequestNavigateToSettings;
+    public event Action? RequestOpenSettings;
     public event Func<CancellationToken, Task>? ConversionStarting;
 
     [ObservableProperty]

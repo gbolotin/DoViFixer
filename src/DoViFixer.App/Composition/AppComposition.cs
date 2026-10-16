@@ -53,7 +53,7 @@ public static class AppComposition
         // The sidebar shows the pages in registration order.
         services.AddTransient<INavigationPage>(provider => provider.GetRequiredService<MediaViewModel>());
         services.AddTransient<INavigationPage>(provider => provider.GetRequiredService<ArchiveViewModel>());
-        services.AddTransient<INavigationPage>(provider => provider.GetRequiredService<SettingsViewModel>());
+        // Settings opens in a frame over the pages, from the sidebar's Settings button.
         services.AddTransient<ShellViewModel>();
         services.AddTransient<Shell>();
     }

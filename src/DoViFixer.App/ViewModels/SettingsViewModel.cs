@@ -8,10 +8,8 @@ using DoViFixer.Application.Diagnostics;
 using WpfFoundation.Operations;
 
 namespace DoViFixer.App.ViewModels;
-public sealed partial class SettingsViewModel : OperationViewModel, INavigationPage, IPageActivation
+public sealed partial class SettingsViewModel : OperationViewModel
 {
-    public string NavigationName => "Settings";
-    public string? NavigationIcon => "\uE713";
     public string Version { get; } = ApplicationVersion.Of(typeof(SettingsViewModel).Assembly);
 
     private readonly SettingsService settings;
@@ -62,7 +60,16 @@ public sealed partial class SettingsViewModel : OperationViewModel, INavigationP
         this.explorer = explorer;
         this.diagnostics = diagnostics;
         Dependencies = dependencies;
+        var general = new GeneralSettingsSection(this);
+        Sections = new NavigationService(
+            [general, new ConversionSettingsSection(this), new ScanningSettingsSection(this), new NativeToolsSettingsSection(this), new AboutSettingsSection(this)],
+            initialPage: general);
     }
+
+    /// <summary>
+    /// The pages of the settings frame. Moving between them never waits: saving, errors and progress show in the frame's footer.
+    /// </summary>
+    public NavigationService Sections { get; }
 
     private async Task RecheckToolsAsync(CancellationToken token)
     {
@@ -433,8 +440,6 @@ public sealed partial class SettingsViewModel : OperationViewModel, INavigationP
         get;
     }
     = Enum.GetValues<NativeTool>();
-    /// <summary>Settings reload every time the page is shown.</summary>
-    public Task OnActivatedAsync(CancellationToken cancellationToken) => LoadCommand.ExecuteAsync(null);
 
     [RelayCommand(CanExecute = nameof(IsIdle))]
     private Task Load() => RunAsync(async (token, _) =>

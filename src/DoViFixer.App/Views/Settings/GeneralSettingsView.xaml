@@ -1,0 +1,40 @@
+<UserControl x:Class="DoViFixer.App.Views.Settings.GeneralSettingsView"
+             xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:viewModels="clr-namespace:DoViFixer.App.ViewModels"
+             xmlns:updates="clr-namespace:DoViFixer.Application.Updates;assembly=DoViFixer.Application"
+             xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
+             xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
+             mc:Ignorable="d"
+             d:DataContext="{d:DesignInstance Type=viewModels:SettingsViewModel}">
+    <!-- The General page of the settings frame. Its DataContext is the SettingsViewModel all pages share. -->
+    <ScrollViewer VerticalScrollBarVisibility="Auto">
+        <StackPanel Margin="24,8,24,24">
+            <TextBlock Text="General" Style="{StaticResource WfHeadingTextStyle}" />
+            <Border Style="{StaticResource WfCardStyle}">
+                <StackPanel>
+                    <TextBlock Text="Appearance"
+                               Style="{StaticResource SubtitleTextBlockStyle}" />
+                    <HeaderedContentControl Header="App theme"
+                                            AutomationProperties.HelpText="{Binding Source={x:Static updates:ApplicationTitle.Name}, StringFormat='Select whether {0} follows your Windows system color theme, or uses Light or Dark theme.'}"
+                                            Style="{StaticResource WfSettingRowStyle}">
+                        <ComboBox ItemsSource="{Binding Themes}"
+                                  SelectedItem="{Binding SelectedTheme}"
+                                  AutomationProperties.Name="App theme"
+                                  Width="220" />
+                    </HeaderedContentControl>
+                </StackPanel>
+            </Border>
+            <Border Style="{StaticResource WfCardStyle}" Margin="0,24,0,0">
+                <StackPanel>
+                    <TextBlock Text="Notifications"
+                               Style="{StaticResource SubtitleTextBlockStyle}" />
+                    <CheckBox Content="Show a notification when an operation finishes"
+                              AutomationProperties.HelpText="When a scan, conversion, backup or restore finishes while the window is minimized or behind another app, Windows shows a notification. The taskbar button shows progress either way. Do not disturb and the app's switch in Windows Settings still apply."
+                              IsChecked="{Binding ShowCompletionNotifications}"
+                              Style="{StaticResource WfToggleSwitchStyle}" />
+                </StackPanel>
+            </Border>
+        </StackPanel>
+    </ScrollViewer>
+</UserControl>

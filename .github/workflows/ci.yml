@@ -72,6 +72,14 @@ jobs:
       - name: Test
         run: dotnet test DoViFixer.sln -c Release --no-build -p:UseLocalWpfFoundation=false --filter "TestCategory!=NativeIntegration"
 
+      # The WPF visual tests render the real views; keep them so each run shows the UI, failed runs included.
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: wpf-renders
+          path: artifacts/wpf-template-navigation/*.png
+          if-no-files-found: warn
+
       # Framework-dependent: the apps need the .NET 10 Desktop Runtime.
       - name: Publish apps
         shell: pwsh
