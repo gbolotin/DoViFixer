@@ -8,6 +8,9 @@ public sealed class ShellViewModel : ObservableObject, INavigationGuard, IDispos
     /// <param name="pages">The sidebar pages in display order. They must include the Media and Settings pages, which the shell wires together.</param>
     public ShellViewModel(IEnumerable<INavigationPage> pages, StartupDependencyCheckViewModel dependencyCheck, DependencyReportViewModel dependencyReport)
     {
+        ArgumentNullException.ThrowIfNull(pages);
+        ArgumentNullException.ThrowIfNull(dependencyCheck);
+        ArgumentNullException.ThrowIfNull(dependencyReport);
         INavigationPage[] navigationPages = [.. pages];
         var media = navigationPages.OfType<MediaViewModel>().Single();
         var settings = navigationPages.OfType<SettingsViewModel>().Single();
