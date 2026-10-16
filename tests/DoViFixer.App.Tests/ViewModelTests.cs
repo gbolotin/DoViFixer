@@ -1498,6 +1498,7 @@ public sealed class ViewModelTests
         Assert.AreEqual(2, model.BatchProgress.Processed);
         Assert.AreEqual("Converted", model.Files[0].Status);
         Assert.AreEqual("Converted", model.Files[1].Status);
+        StringAssert.StartsWith(model.StatusMessage, "Conversion to DV8.1: 2 Completed in ");
     }
 
     [TestMethod]

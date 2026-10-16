@@ -9,6 +9,7 @@ public sealed partial class BatchProgressViewModel(TimeProvider time) : Observab
     private readonly object gate = new();
     private ITimer? clock;
     private DateTimeOffset jobStarted;
+    private DateTimeOffset batchStarted;
     private DateTimeOffset stageStarted;
     private string stage = "";
     private double stageStartPercent;
@@ -34,6 +35,7 @@ public sealed partial class BatchProgressViewModel(TimeProvider time) : Observab
     }
 
     public string CurrentJobElapsed => CurrentJob is null ? "" : Format(time.GetUtcNow() - jobStarted);
+    public string BatchElapsed => FormatCompletedTime(time.GetUtcNow() - batchStarted);
 
     /// <summary>
     /// The current step's remaining time at its average rate so far. Steps rewrite or read the whole video at
@@ -70,6 +72,23 @@ public sealed partial class BatchProgressViewModel(TimeProvider time) : Observab
 
     private static string Format(TimeSpan span) => span < TimeSpan.Zero ? "00:00:00" : $"{(int)span.TotalHours:00}:{span.Minutes:00}:{span.Seconds:00}";
 
+    private static string FormatCompletedTime(TimeSpan span)
+    {
+        if (span < TimeSpan.FromSeconds(1))
+        {
+            return $"{Math.Max(0, (int)Math.Round(span.TotalMilliseconds))}ms";
+        }
+
+        int seconds = (int)span.TotalSeconds;
+        if (seconds < 60)
+        {
+            return $"{seconds}s";
+        }
+
+        int minutes = seconds / 60;
+        return $"{minutes}m {seconds % 60}sec";
+    }
+
     public void Begin(int fileCount, string operationName)
     {
         lock (gate)
@@ -80,6 +99,7 @@ public sealed partial class BatchProgressViewModel(TimeProvider time) : Observab
             processed = 0;
             cancelled = 0;
             operation = operationName;
+            batchStarted = time.GetUtcNow();
             CurrentJob = null;
             IsRunning = true;
         }

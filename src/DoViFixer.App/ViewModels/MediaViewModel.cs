@@ -53,6 +53,7 @@ public sealed partial class MediaViewModel : OperationViewModel, INavigationPage
     private int availabilityCheckQueued;
 
     private static string Summary(BatchResult result) => string.Join(" · ", result.Items.GroupBy(r => r.Status).Select(g => $"{g.Count()} {g.Key}"));
+    private string TimedSummary(BatchResult result) => $"{Summary(result)}{(result.Status == OperationStatus.Completed ? " in " : " · Finished in ")}{BatchProgress.BatchElapsed}";
     public MediaViewModel(IFileDiscovery discovery, InspectionService inspection, ConversionService conversion, ControlledBatchService batch, SettingsService settings, DependencySetup dependencies, IDialogService dialogs, IFileDialogService files, IFileExplorer explorer, ILogger<MediaViewModel> logger, IMediaPreview mediaPreview, RestoreService restore, ISourceFileMonitor sourceFiles, ReportService reports, IOperationFeedback? feedback = null)
         : base(feedback)
     {
@@ -1055,7 +1056,7 @@ public sealed partial class MediaViewModel : OperationViewModel, INavigationPage
                     row.IsSelected = false;
                 }
             }), token);
-            SetStatus(ViewStatus.Result, $"{(method == AnalysisMethod.SampledRpu ? "Scan" : "Inspection")}: {Summary(results)}");
+            SetStatus(ViewStatus.Result, $"{(method == AnalysisMethod.SampledRpu ? "Scan" : "Inspection")}: {TimedSummary(results)}");
         }
         finally
         {
@@ -1166,7 +1167,7 @@ public sealed partial class MediaViewModel : OperationViewModel, INavigationPage
                     row.SetFailed(itemResult);
                 }
             }), token);
-            SetStatus(ViewStatus.Result, $"Restoration: {Summary(result)}");
+            SetStatus(ViewStatus.Result, $"Restoration: {TimedSummary(result)}");
         }
         finally
         {
@@ -1353,7 +1354,7 @@ public sealed partial class MediaViewModel : OperationViewModel, INavigationPage
                 }
             }), token);
 
-            SetStatus(ViewStatus.Result, $"{opName}: {Summary(result)}");
+            SetStatus(ViewStatus.Result, $"{opName}: {TimedSummary(result)}");
         }
         finally
         {
