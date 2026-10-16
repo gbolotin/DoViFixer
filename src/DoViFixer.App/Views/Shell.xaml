@@ -95,13 +95,23 @@
                         </Border>
                         <navigation:RetainedPageHost Navigation="{Binding Navigation}" Margin="8,0,8,0" />
                     </DockPanel>
+                    <!-- The title sits on the section list's background, as a small label above the sections. -->
                     <wf:ContentOverlay Header="Settings"
                                        Content="{Binding Settings}"
                                        IsOpen="{Binding IsSettingsOpen, Mode=OneWay}"
                                        CloseCommand="{Binding CloseSettingsCommand}"
+                                       HeaderBackground="{DynamicResource ListBoxBackground}"
                                        CardMaxWidth="1040"
                                        CardMaxHeight="760"
-                                       Padding="32" />
+                                       Padding="32">
+                        <wf:ContentOverlay.HeaderTemplate>
+                            <DataTemplate>
+                                <TextBlock Text="{Binding}"
+                                           Style="{StaticResource CaptionTextBlockStyle}"
+                                           Foreground="{DynamicResource TextFillColorSecondaryBrush}" />
+                            </DataTemplate>
+                        </wf:ContentOverlay.HeaderTemplate>
+                    </wf:ContentOverlay>
                 </Grid>
             </DataTemplate>
 

@@ -984,7 +984,11 @@ public sealed class VisualTests
         await OpenAsync();
         var card = OverlayPart(overlay, "PART_Card");
         AssertInside(card, content);
-        Assert.IsTrue(Descendants<TextBlock>(card).Any(text => text.Text == "Settings" && text.IsVisible), "The frame is titled Settings.");
+        var title = Descendants<TextBlock>(card).Single(text => text.Text == "Settings");
+        Assert.IsTrue(title.IsVisible, "The frame is titled Settings.");
+        Assert.AreSame(window.FindResource("CaptionTextBlockStyle"), title.Style, "The title is a small label above the sections.");
+        Assert.AreSame(window.FindResource("TextFillColorSecondaryBrush"), title.Foreground);
+        Assert.AreSame(window.FindResource("ListBoxBackground"), overlay.HeaderBackground, "The title shares the section list's background.");
         var sections = Descendants<ListBox>(overlay).Single(list => ReferenceEquals(list.ItemsSource, shell.Settings.Sections.Pages));
         Assert.HasCount(5, sections.Items);
         var host = Descendants<RetainedPageHost>(overlay).Single();
