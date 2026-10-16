@@ -932,6 +932,13 @@ public sealed class VisualTests
         var open = Descendants<Button>(window).Single(button => ReferenceEquals(button.Command, shell.OpenSettingsCommand));
         Assert.AreEqual("Settings", open.Content);
         Assert.AreSame(window.FindResource("WfNavigationButtonStyle"), open.Style);
+        var sidebar = (Border)((FrameworkElement)open.Parent).Parent;
+        Assert.AreSame(window.FindResource("ListBoxBackground"), sidebar.Background, "The Settings button sits on the sidebar background.");
+        Assert.AreEqual(Colors.Transparent, ((SolidColorBrush)navigation.Background).Color, "The pages show the sidebar background behind them, not a second layer.");
+        var shortcut = window.InputBindings.OfType<KeyBinding>().Single(binding => ReferenceEquals(binding.Command, shell.OpenSettingsCommand));
+        Assert.AreEqual(Key.OemComma, shortcut.Key);
+        Assert.AreEqual(ModifierKeys.Control, shortcut.Modifiers, "Ctrl+comma opens Settings.");
+        Assert.AreEqual("Settings (Ctrl+,)", open.ToolTip);
         Assert.AreEqual(Visibility.Collapsed, overlay.Visibility);
         AssertInside(open, content);
         runtime.AnalysisCacheBytes = 262144;

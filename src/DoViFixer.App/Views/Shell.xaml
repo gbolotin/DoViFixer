@@ -11,6 +11,12 @@
         MinWidth="800"
         MinHeight="600"
         WindowStartupLocation="CenterScreen">
+    <!-- Ctrl+comma opens Settings, as in Windows apps such as Visual Studio Code and Windows Terminal. -->
+    <Window.InputBindings>
+        <KeyBinding Key="OemComma"
+                    Modifiers="Control"
+                    Command="{Binding OpenSettingsCommand}" />
+    </Window.InputBindings>
     <Window.Resources>
         <ResourceDictionary>
             <!-- Each page ViewModel shows its own UserControl; the navigation host creates it on the first visit and keeps it.
@@ -65,19 +71,24 @@
                                 </DataTemplate>
                             </StatusBar.Resources>
                         </StatusBar>
+                        <!-- The sidebar background covers the pages and the Settings button below them. -->
                         <Border DockPanel.Dock="Left"
+                                Background="{DynamicResource ListBoxBackground}"
                                 BorderBrush="{DynamicResource DividerStrokeColorDefaultBrush}"
                                 BorderThickness="0,0,1,0">
                             <DockPanel>
                                 <Button Content="Settings"
                                         Tag="&#xE713;"
                                         Command="{Binding OpenSettingsCommand}"
+                                        ToolTip="Settings (Ctrl+,)"
+                                        AutomationProperties.AcceleratorKey="Ctrl+,"
                                         DockPanel.Dock="Bottom"
                                         Margin="8"
                                         Style="{StaticResource WfNavigationButtonStyle}" />
                                 <ListBox ItemsSource="{Binding Pages}"
                                          SelectedItem="{Binding CurrentPage}"
                                          IsEnabled="{Binding CanNavigate}"
+                                         Background="Transparent"
                                          BorderThickness="0"
                                          Style="{StaticResource WfNavigationSidebarStyle}" />
                             </DockPanel>
