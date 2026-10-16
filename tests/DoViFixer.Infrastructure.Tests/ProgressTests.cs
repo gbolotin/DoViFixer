@@ -24,12 +24,14 @@ public sealed class ProgressTests
         var tools = new ToolCatalog();
         tools.Refresh([
             new(NativeTool.FFmpeg, DependencyState.Ready, "ffmpeg", "test", "fixture"),
+            new(NativeTool.DoviTool, DependencyState.Ready, "dovi_tool", "test", "fixture"),
             new(NativeTool.MkvExtract, DependencyState.Ready, "mkvextract", "test", "fixture")
         ]);
         var files = new FileOperations();
         var factory = new TemporaryWorkspaceFactory(files, NullLogger<TemporaryWorkspaceFactory>.Instance);
         await using var workspace = await factory.CreateAsync(1024, null, default);
-        var media = new MediaInfo(new("movie.mkv", 1024, DateTime.UnixEpoch), DolbyVisionProfile.Profile7, "HEVC", 0, 1920, 1080, 24, 2400, 100, 0, 1000, [], 0, 0, null, "{}");
+        string identification = await File.ReadAllTextAsync(Path.Combine(AppContext.BaseDirectory, "Fixtures", "mkvmerge.json"));
+        var media = new MediaInfo(new("movie.mkv", 1024, DateTime.UnixEpoch), DolbyVisionProfile.Profile7, "HEVC", 0, 1920, 1080, 24, 2400, 100, 0, 1000, [], 0, 0, null, identification);
         var probe = new MediaProbe(tools, new FailingRunner(), files, NullLogger<MediaProbe>.Instance);
         var sink = new RecordingProgress();
         var result = await probe.AnalyzeAsync(media, method, workspace, default, sink);
@@ -39,6 +41,11 @@ public sealed class ProgressTests
             CollectionAssert.AreEqual(Enumerable.Range(0, 11).Select(value => (double?)(value * 10)).ToArray(), sink.Values.Select(value => value.Percent).ToArray());
             Assert.AreEqual(0, result.SuccessfulSamples, "Progress measures attempts, not successful evidence.");
             Assert.IsNotNull(result.SampleDiagnostics);
+        }
+        else if (method == AnalysisMethod.FullRpu)
+        {
+            CollectionAssert.AreEqual(new double?[] { 0, null, 0, 45 }, sink.Values.Select(value => value.Percent).ToArray());
+            Assert.IsNotNull(result.Error);
         }
         else
         {
@@ -142,7 +149,7 @@ public sealed class ProgressTests
             throw new IOException("Fixture tool failure");
         }
 
-        public Task PipeAsync(ProcessRequest producer, ProcessRequest consumer, CancellationToken cancellationToken) => throw new NotSupportedException();
+        public Task PipeAsync(ProcessRequest producer, ProcessRequest consumer, CancellationToken cancellationToken) => throw new IOException("Fixture streaming failure");
     }
 
     // Writes the files mkvextract and dovi_tool would; demuxing pauses halfway so its output can be measured while it runs.

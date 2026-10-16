@@ -22,6 +22,115 @@ public sealed class NativeIntegrationTests
 {
     [TestMethod]
     [TestCategory("NativeIntegration")]
+    [DataRow(false)]
+    [DataRow(true)]
+    public async Task StreamedFullRpuMatchesDiskEvidenceOnNativeFixture(bool convertToMel)
+    {
+        var toolPaths = new Dictionary<NativeTool, string>();
+        foreach (var tool in new[] { NativeTool.MkvMerge, NativeTool.MkvExtract, NativeTool.DoviTool, NativeTool.FFprobe, NativeTool.FFmpeg })
+        {
+            string? path = Environment.GetEnvironmentVariable("DOVIFIXER_TEST_" + tool.ToString().ToUpperInvariant());
+            if (path is null || !File.Exists(path))
+            {
+                Assert.Inconclusive($"Set DOVIFIXER_TEST_{tool.ToString().ToUpperInvariant()} to opt in with an existing executable.");
+            }
+
+            toolPaths[tool] = path;
+        }
+
+        var tools = new ToolCatalog();
+        tools.Refresh(toolPaths.Select(p => new DependencyStatus(p.Key, DependencyState.Ready, p.Value, "test", "explicit test tool")));
+        var runner = new ProcessRunner(NullLogger<ProcessRunner>.Instance);
+        var files = new FileOperations();
+        var factory = new TemporaryWorkspaceFactory(files, NullLogger<TemporaryWorkspaceFactory>.Instance);
+        await using var workspace = await factory.CreateAsync(16 * 1024 * 1024, null, default);
+        string profile7 = workspace.File("profile7.hevc");
+        string input = workspace.File("stream, (é שלום test).mkv");
+        string fixture = Path.Combine(AppContext.BaseDirectory, "Fixtures", "regular_start_code_4_muxed_el.hevc");
+        if (convertToMel)
+        {
+            await runner.RunAsync(new(tools.GetPath(NativeTool.DoviTool), new[]
+            {
+                "-m", "1", "convert", fixture, "-o", profile7
+            }), default);
+        }
+        else
+        {
+            File.Copy(fixture, profile7);
+        }
+        await runner.RunAsync(new(tools.GetPath(NativeTool.MkvMerge), new[] { "-o", input, profile7 }, AllowWarnings: true), default);
+        var identification = await runner.RunAsync(new(tools.GetPath(NativeTool.MkvMerge), new[] { "-J", input }, AllowWarnings: true), default);
+        var media = new MediaInfo(files.Identify(input), DolbyVisionProfile.Profile7, "HEVC", 0, 256, 144, 259, 24000.0 / 1001, null, 0, null, [new(0, "video", "HEVC", "", "", true, false, null)], 0, 0, null, identification.Output);
+        var streamingProbe = new MediaProbe(tools, runner, files, NullLogger<MediaProbe>.Instance);
+        var diskProbe = new MediaProbe(tools, new FailingPipelineRunner(runner), files, NullLogger<MediaProbe>.Instance);
+        var stopwatch = System.Diagnostics.Stopwatch.StartNew();
+        var streamed = await streamingProbe.AnalyzeAsync(media, AnalysisMethod.FullRpu, workspace, default);
+        TimeSpan streamingElapsed = stopwatch.Elapsed;
+        long streamingScratch = Directory.GetFiles(workspace.DirectoryPath).Sum(path => new FileInfo(path).Length);
+        Assert.IsFalse(File.Exists(workspace.File("inspection.hevc")), "The native fixture must succeed through the streaming path.");
+        File.Delete(workspace.File("inspection.rpu"));
+        File.Delete(workspace.File("rpu.json"));
+        stopwatch.Restart();
+        var disk = await diskProbe.AnalyzeAsync(media, AnalysisMethod.FullRpu, workspace, default);
+        TimeSpan diskElapsed = stopwatch.Elapsed;
+        long diskScratch = Directory.GetFiles(workspace.DirectoryPath).Sum(path => new FileInfo(path).Length);
+        Assert.IsNull(streamed.Error, streamed.Error);
+        Assert.AreEqual(259, streamed.Frames);
+        Assert.AreEqual(disk, streamed, $"Stream {streamingElapsed}; disk {diskElapsed}; scratch {streamingScratch}/{diskScratch} bytes");
+        Assert.IsTrue(File.Exists(workspace.File("inspection.hevc")));
+        Assert.IsTrue(streamingScratch < diskScratch);
+        Console.WriteLine($"Native {streamed.Layer} parity: stream {streamingElapsed.TotalMilliseconds:F0} ms, disk {diskElapsed.TotalMilliseconds:F0} ms; scratch {streamingScratch}/{diskScratch} bytes (includes fixture source).");
+    }
+
+    [TestMethod]
+    [TestCategory("NativeIntegration")]
+    public async Task ExplicitSourceStreamedFullRpuMatchesDiskEvidence()
+    {
+        string? source = Environment.GetEnvironmentVariable("DOVIFIXER_TEST_PARITY_SOURCE");
+        if (source is null)
+        {
+            Assert.Inconclusive("Set DOVIFIXER_TEST_PARITY_SOURCE to a read-only MKV for streamed/disk inspection parity.");
+        }
+
+        var toolPaths = new Dictionary<NativeTool, string>();
+        foreach (var tool in new[] { NativeTool.MkvMerge, NativeTool.MkvExtract, NativeTool.DoviTool, NativeTool.FFprobe, NativeTool.FFmpeg })
+        {
+            string? path = Environment.GetEnvironmentVariable("DOVIFIXER_TEST_" + tool.ToString().ToUpperInvariant());
+            if (path is null || !File.Exists(path))
+            {
+                Assert.Inconclusive($"Set DOVIFIXER_TEST_{tool.ToString().ToUpperInvariant()} to opt in with an existing executable.");
+            }
+
+            toolPaths[tool] = path;
+        }
+
+        var tools = new ToolCatalog();
+        tools.Refresh(toolPaths.Select(p => new DependencyStatus(p.Key, DependencyState.Ready, p.Value, "test", "explicit test tool")));
+        var runner = new ProcessRunner(NullLogger<ProcessRunner>.Instance);
+        var files = new FileOperations();
+        var identification = await runner.RunAsync(new(tools.GetPath(NativeTool.MkvMerge), new[] { "-J", source }, AllowWarnings: true), default);
+        using var json = JsonDocument.Parse(identification.Output);
+        int trackId = json.RootElement.GetProperty("tracks").EnumerateArray().Single(track => track.GetProperty("type").GetString() == "video").GetProperty("id").GetInt32();
+        var media = new MediaInfo(files.Identify(source), DolbyVisionProfile.Profile7, "HEVC", trackId, 0, 0, null, null, null, 0, null, [new(trackId, "video", "HEVC", "", "", true, false, null)], 0, 0, null, identification.Output);
+        var factory = new TemporaryWorkspaceFactory(files, NullLogger<TemporaryWorkspaceFactory>.Instance);
+        await using var workspace = await factory.CreateAsync(media.Source.Length + (2L << 30), null, default);
+        var stopwatch = System.Diagnostics.Stopwatch.StartNew();
+        var streamed = await new MediaProbe(tools, runner, files, NullLogger<MediaProbe>.Instance).AnalyzeAsync(media, AnalysisMethod.FullRpu, workspace, default);
+        TimeSpan streamElapsed = stopwatch.Elapsed;
+        bool streamedWithoutDisk = !File.Exists(workspace.File("inspection.hevc"));
+        long streamScratch = Directory.GetFiles(workspace.DirectoryPath).Sum(path => new FileInfo(path).Length);
+        stopwatch.Restart();
+        var disk = await new MediaProbe(tools, new FailingPipelineRunner(runner), files, NullLogger<MediaProbe>.Instance).AnalyzeAsync(media, AnalysisMethod.FullRpu, workspace, default);
+        TimeSpan diskElapsed = stopwatch.Elapsed;
+        long diskScratch = Directory.GetFiles(workspace.DirectoryPath).Sum(path => new FileInfo(path).Length);
+        Assert.AreEqual(disk, streamed, $"Stream {streamElapsed}; disk {diskElapsed}; scratch {streamScratch}/{diskScratch} bytes");
+        Assert.IsTrue(streamedWithoutDisk, "The source used the disk fallback during streaming.");
+        Assert.IsNull(streamed.Error, streamed.Error);
+        Console.WriteLine($"Native source parity: {Path.GetFileName(source)}; {streamed.Layer}, {streamed.Frames} frames; stream {streamElapsed.TotalSeconds:F2} s, disk {diskElapsed.TotalSeconds:F2} s; scratch {streamScratch}/{diskScratch} bytes.");
+    }
+
+    [TestMethod]
+    [TestCategory("NativeIntegration")]
     public async Task ExplicitDirectorySupportsHandleBoundBackupDeletion()
     {
         string? directory = Environment.GetEnvironmentVariable("DOVIFIXER_TEST_DELETE_DIRECTORY");
