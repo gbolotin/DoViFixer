@@ -1,4 +1,5 @@
 using System.Globalization;
+using System.Text.Json;
 using DoViFixer.Application.Abstractions;
 using DoViFixer.Application.Dependencies;
 using DoViFixer.Application.Operations;
@@ -31,19 +32,49 @@ internal sealed class MediaProbe(IToolCatalog tools, IProcessRunner processes, I
         {
             if (method is AnalysisMethod.FullRpu or AnalysisMethod.DeepInspection)
             {
-                progress?.Report(new(Guid.Empty, "Extracting video", media.Source.Path, 0));
                 string raw = workspace.File("inspection.hevc");
-                await processes.RunAsync(new(tools.GetPath(NativeTool.MkvExtract), new[]
+                RpuEvidence evidence;
+                long? frames = null;
+                if (method == AnalysisMethod.FullRpu)
                 {
-                    "--gui-mode", media.Source.Path, "tracks", $"{media.VideoTrackId}:{raw}"
-                }, AllowWarnings: true, OutputLine: new MkvProgress(progress, Guid.Empty, "Extracting video", media.Source.Path).Report), cancellationToken);
-                progress?.Report(new(Guid.Empty, "Analyzing RPU metadata", media.Source.Path));
-                var evidence = await AnalyzeRawAsync(raw, method, workspace, cancellationToken);
+                    bool streamed = false;
+                    try
+                    {
+                        evidence = await AnalyzeStreamAsync(media, workspace, progress, cancellationToken);
+                        streamed = true;
+                    }
+                    catch (Exception ex) when (ex is (IOException or InvalidDataException or JsonException or TimeoutException) && !cancellationToken.IsCancellationRequested)
+                    {
+                        logger.LogWarning(ex, "Streaming RPU extraction failed; retrying once with disk extraction for {Input}", media.Source.Path);
+                        File.Delete(workspace.File("inspection.rpu"));
+                        File.Delete(workspace.File("rpu.json"));
+                        progress?.Report(new(Guid.Empty, "Retrying with disk extraction", media.Source.Path));
+                        evidence = await AnalyzeDiskAsync(media, method, raw, workspace, progress, cancellationToken);
+                    }
+
+                    if (streamed)
+                    {
+                        progress?.Report(new(Guid.Empty, "Checking frame coverage", media.Source.Path));
+                        frames = await CountFramesAsync(media.Source.Path, cancellationToken);
+                        if (evidence.Frames <= 0 || evidence.Frames != frames)
+                        {
+                            // A shorter RPU stream may have a valid metadata-free ending, but only the raw
+                            // access units can establish its position and that no enhancement data follows it.
+                            logger.LogInformation("Streaming RPU count {RpuFrames} differs from packet count {VideoFrames}; verifying with disk extraction", evidence.Frames, frames);
+                            evidence = await AnalyzeDiskAsync(media, method, raw, workspace, progress, cancellationToken);
+                        }
+                    }
+                }
+                else
+                {
+                    evidence = await AnalyzeDiskAsync(media, method, raw, workspace, progress, cancellationToken);
+                }
+
                 progress?.Report(new(Guid.Empty, "Checking frame coverage", media.Source.Path));
-                long frames = await CountFramesAsync(media.Source.Path, cancellationToken);
-                if (evidence.Frames != frames)
+                frames ??= await CountFramesAsync(media.Source.Path, cancellationToken);
+                if (evidence.Frames != frames.Value)
                 {
-                    if (method == AnalysisMethod.DeepInspection || evidence.Frames <= 0 || evidence.Frames > frames)
+                    if (method == AnalysisMethod.DeepInspection || evidence.Frames <= 0 || evidence.Frames > frames.Value)
                     {
                         return evidence with
                         {
@@ -52,7 +83,7 @@ internal sealed class MediaProbe(IToolCatalog tools, IProcessRunner processes, I
                     }
 
                     var coverage = await RpuCoverage.VerifyAsync(raw, media.Source.Path, evidence.Frames, tools, processes, cancellationToken);
-                    if (coverage.TotalFrames != frames)
+                    if (coverage.TotalFrames != frames.Value)
                     {
                         throw new InvalidDataException("RPU coverage frame count differs from video packet count.");
                     }
@@ -68,11 +99,12 @@ internal sealed class MediaProbe(IToolCatalog tools, IProcessRunner processes, I
                     // Demuxing rewrites the stream once; decoding and measuring every frame dominates the stage.
                     var measuring = new PhasedProgress(progress, Guid.Empty, "Measuring base-layer brightness", media.Source.Path, 5, 95);
                     measuring.Report(0, 0);
-                    var brightness = await AnalyzeBrightnessAsync(raw, frames, measuring, workspace, cancellationToken);
+                    var brightness = await AnalyzeBrightnessAsync(raw, frames.Value, measuring, workspace, cancellationToken);
                     progress?.Report(new(Guid.Empty, "Measuring base-layer brightness", media.Source.Path, 100));
                     return brightness;
                 }
 
+                progress?.Report(new(Guid.Empty, "Checking frame coverage", media.Source.Path, 100));
                 return evidence;
             }
 
@@ -120,6 +152,35 @@ internal sealed class MediaProbe(IToolCatalog tools, IProcessRunner processes, I
         }
     }
 
+    private async Task<RpuEvidence> AnalyzeDiskAsync(MediaInfo media, AnalysisMethod method, string raw, ITemporaryWorkspace workspace, IProgress<OperationProgress>? progress, CancellationToken token)
+    {
+        progress?.Report(new(Guid.Empty, "Extracting video", media.Source.Path, 0));
+        await processes.RunAsync(new(tools.GetPath(NativeTool.MkvExtract), new[]
+        {
+            "--gui-mode", media.Source.Path, "tracks", $"{media.VideoTrackId}:{raw}"
+        }, AllowWarnings: true, OutputLine: new MkvProgress(progress, Guid.Empty, "Extracting video", media.Source.Path).Report), token);
+        progress?.Report(new(Guid.Empty, "Analyzing RPU metadata", media.Source.Path));
+        return await AnalyzeRawAsync(raw, method, workspace, token);
+    }
+
+    private async Task<RpuEvidence> AnalyzeStreamAsync(MediaInfo media, ITemporaryWorkspace workspace, IProgress<OperationProgress>? progress, CancellationToken token)
+    {
+        int lengthSize = HevcAnnexB.LengthSize(media.IdentificationJson, media.VideoTrackId);
+        double streamLength = Math.Max(1, HevcAnnexB.StreamLength(media));
+        var streaming = new PhasedProgress(progress, Guid.Empty, "Streaming RPU extraction", media.Source.Path, 1);
+        streaming.Report(0, 0);
+        string rpu = workspace.File("inspection.rpu");
+        File.Delete(rpu);
+        File.Delete(workspace.File("rpu.json"));
+        await processes.PipeAsync(new(tools.GetPath(NativeTool.FFmpeg), new[]
+        {
+            "-nostdin", "-v", "error", "-i", media.Source.Path, "-map", "0:v:0", "-c:v", "copy", "-an", "-sn", "-dn", "-f", "data", "-"
+        }, OutputRelay: (input, output, cancellation) => HevcAnnexB.CopyAsync(input, output, lengthSize, cancellation, read => streaming.Report(0, read / streamLength))),
+            new(tools.GetPath(NativeTool.DoviTool), new[] { "extract-rpu", "-", "-o", "inspection.rpu" }, workspace.DirectoryPath), token);
+        progress?.Report(new(Guid.Empty, "Analyzing RPU metadata", media.Source.Path));
+        return await ExportRpuAsync(AnalysisMethod.FullRpu, workspace, token);
+    }
+
     private async Task<RpuEvidence> AnalyzeBrightnessAsync(string raw, long frames, PhasedProgress measuring, ITemporaryWorkspace workspace, CancellationToken cancellationToken)
     {
         string baseLayer = workspace.File("inspection-bl.hevc");
@@ -163,6 +224,12 @@ internal sealed class MediaProbe(IToolCatalog tools, IProcessRunner processes, I
         {
             "extract-rpu", raw, "-o", rpu
         }), cancellationToken);
+        return await ExportRpuAsync(method, workspace, cancellationToken);
+    }
+
+    private async Task<RpuEvidence> ExportRpuAsync(AnalysisMethod method, ITemporaryWorkspace workspace, CancellationToken cancellationToken)
+    {
+        string json = workspace.File("rpu.json");
         // Relative export destination avoids dovi_tool's comma-separated option grammar interpreting path punctuation.
         await processes.RunAsync(new(tools.GetPath(NativeTool.DoviTool), new[]
         {
