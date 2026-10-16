@@ -7,6 +7,7 @@ using DoViFixer.Application.Abstractions;
 using DoViFixer.Application.Dependencies;
 using DoViFixer.Application.Operations;
 using DoViFixer.Application.Settings;
+using DoViFixer.Application.Reports;
 using DoViFixer.Domain.Analysis;
 using DoViFixer.Domain.Conversion;
 using DoViFixer.Domain.Media;
@@ -14,7 +15,7 @@ using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
 
 namespace DoViFixer.App.Tests;
-internal sealed class TestRuntime : IFileDiscovery, IFileOperations, IMediaProbe, IMediaPreview, ISettingsStore, IDependencyDetector, IDependencyInstaller, ITemporaryWorkspaceFactory, IAnalysisCache, IVideoProcessor, IMediaVerifier, IOutputPublisher, IBackupArchiveStore, IDialogService, IFileDialogService, IFileExplorer, IThemeService, ISourceFileMonitor, IDisposable
+internal sealed class TestRuntime : IFileDiscovery, IFileOperations, IMediaProbe, IMediaPreview, ISettingsStore, IDependencyDetector, IDependencyInstaller, ITemporaryWorkspaceFactory, IAnalysisCache, IVideoProcessor, IMediaVerifier, IOutputPublisher, IBackupArchiveStore, IReportWriter, IDialogService, IFileDialogService, IFileExplorer, IThemeService, ISourceFileMonitor, IDisposable
 {
     private ServiceProvider? container;
     public IServiceCollection Services { get; } = new ServiceCollection();
@@ -81,7 +82,7 @@ internal sealed class TestRuntime : IFileDiscovery, IFileOperations, IMediaProbe
     public TestRuntime()
     {
         AppComposition.Register(Services, new ConfigurationBuilder().Build(), false);
-        Type[] contracts = [typeof(IFileDiscovery), typeof(IFileOperations), typeof(IMediaProbe), typeof(IMediaPreview), typeof(ISettingsStore), typeof(IDependencyDetector), typeof(IDependencyInstaller), typeof(ITemporaryWorkspaceFactory), typeof(IAnalysisCache), typeof(IVideoProcessor), typeof(IMediaVerifier), typeof(IOutputPublisher), typeof(IBackupArchiveStore), typeof(IDialogService), typeof(IFileDialogService), typeof(IFileExplorer), typeof(IThemeService), typeof(ISourceFileMonitor)];
+        Type[] contracts = [typeof(IFileDiscovery), typeof(IFileOperations), typeof(IMediaProbe), typeof(IMediaPreview), typeof(ISettingsStore), typeof(IDependencyDetector), typeof(IDependencyInstaller), typeof(ITemporaryWorkspaceFactory), typeof(IAnalysisCache), typeof(IVideoProcessor), typeof(IMediaVerifier), typeof(IOutputPublisher), typeof(IBackupArchiveStore), typeof(IReportWriter), typeof(IDialogService), typeof(IFileDialogService), typeof(IFileExplorer), typeof(IThemeService), typeof(ISourceFileMonitor)];
         foreach (var contract in contracts)
         {
             Services.AddSingleton(contract, this);
@@ -92,6 +93,13 @@ internal sealed class TestRuntime : IFileDiscovery, IFileOperations, IMediaProbe
     }
 
     public RecordingFeedback Feedback { get; } = new();
+    public ReportSnapshot? ExportedReport { get; private set; }
+    public Task WriteAsync(string destination, ReportSnapshot snapshot, CancellationToken cancellationToken)
+    {
+        cancellationToken.ThrowIfCancellationRequested();
+        ExportedReport = snapshot;
+        return Task.CompletedTask;
+    }
 
     public void Dispose() => container?.Dispose();
     public Func<string, CancellationToken, Task<byte[]>> Preview { get; set; } = (_, _) => Task.FromException<byte[]>(new IOException("Fixture preview unavailable."));

@@ -5,6 +5,7 @@ using DoViFixer.Application.Dependencies;
 using DoViFixer.Application.Inspection;
 using DoViFixer.Application.Operations;
 using DoViFixer.Application.Restore;
+using DoViFixer.Application.Reports;
 using DoViFixer.Application.Scanning;
 using DoViFixer.Application.Settings;
 using DoViFixer.Application.Updates;
@@ -14,7 +15,7 @@ using DoViFixer.Domain.Analysis;
 using DoViFixer.Domain.Conversion;
 
 namespace DoViFixer.Console.Commands;
-public sealed class MediaReadCommand(ScanService scan, InspectionService inspection, ConsoleRenderer renderer) : IConsoleCommand
+public sealed class MediaReadCommand(ScanService scan, InspectionService inspection, ReportService reports, ConsoleRenderer renderer) : IConsoleCommand
 {
     public bool Handles(string command) => command is "scan" or "inspect";
     public async Task<int> ExecuteAsync(CommandLine command, CancellationToken cancellationToken)
@@ -30,6 +31,13 @@ public sealed class MediaReadCommand(ScanService scan, InspectionService inspect
 
                 var scanRenderer = command.Has("json") ? null : new ScanRenderer(renderer, command.Has("candidates-only"));
                 var results = await scan.ScanAsync(input, command.Depth, command.Value("temp"), renderer, cancellationToken, scanRenderer, command.Has("inspect-simple"));
+                if (command.Value("report") is { } scanReport)
+                {
+                    var snapshot = reports.CreateSnapshot(results.Select(item => new ReportInput(item.Path,
+                        item.Error is not null ? "Failed" : item.Analysis?.Verdict == AnalysisVerdict.AnalysisFailed ? "Failed" : "Scanned",
+                        item.Analysis, item.Error)));
+                    await reports.ExportAsync(scanReport, snapshot, cancellationToken);
+                }
                 var visible = command.Has("candidates-only") ? results.Where(r => r.InitialAnalysis is not null || r.Error is not null || r.Analysis?.Verdict is AnalysisVerdict.Mel or AnalysisVerdict.SimpleFel or AnalysisVerdict.AnalysisFailed).ToArray() : results;
                 if (command.Has("json"))
                 {
@@ -48,6 +56,12 @@ public sealed class MediaReadCommand(ScanService scan, InspectionService inspect
                 }
 
                 var analysis = await inspection.InspectAsync(input, command.Has("deep") ? AnalysisMethod.DeepInspection : AnalysisMethod.FullRpu, command.Value("temp"), cancellationToken);
+                if (command.Value("report") is { } inspectReport)
+                {
+                    var snapshot = reports.CreateSnapshot([new ReportInput(input,
+                        analysis.Verdict == AnalysisVerdict.AnalysisFailed ? "Failed" : "Inspected", analysis)]);
+                    await reports.ExportAsync(inspectReport, snapshot, cancellationToken);
+                }
                 if (command.Has("json"))
                 {
                     renderer.Json(analysis);

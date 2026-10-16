@@ -29,6 +29,27 @@ public sealed class MediaFilterTests
     }
 
     [TestMethod]
+    public async Task ExportScopesFollowFilterAndCheckboxesWithoutNewProbes()
+    {
+        using var runtime = new TestRuntime { SaveFilePath = "report.csv" };
+        var model = await CreateAsync(runtime);
+        int probes = runtime.Probes;
+        Row(model, Profile7).IsSelected = true;
+        Row(model, Profile81).IsSelected = false;
+        model.FileFilter = MediaFileFilter.Profile7;
+
+        await model.ExportVisibleResultsCommand.InvokeAsync();
+        Assert.AreEqual(1, runtime.ExportedReport?.Entries.Count);
+        Assert.AreEqual(Profile7, runtime.ExportedReport!.Entries[0].Path);
+
+        model.FileFilter = MediaFileFilter.All;
+        await model.ExportSelectedResultsCommand.InvokeAsync();
+        Assert.IsFalse(runtime.ExportedReport!.Entries.Any(entry => entry.Path == Profile81));
+        Assert.IsTrue(runtime.ExportedReport.Entries.Any(entry => entry.Path == Unscanned && entry.Status == "NotScanned"));
+        Assert.AreEqual(probes, runtime.Probes);
+    }
+
+    [TestMethod]
     public async Task FilterOptionsCountFilesByScanResult()
     {
         using var runtime = new TestRuntime();
