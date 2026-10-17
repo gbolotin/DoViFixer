@@ -46,6 +46,62 @@ public sealed class MediaLibraryTests
     }
 
     [TestMethod]
+    public async Task ForgetRemovesOnlyRequestedRecordsAndTheirLegacyResultsAcrossRestart()
+    {
+        var forgotten = await CreateAsync("Forget.mkv", 5);
+        var kept = await CreateAsync("Keep.mkv", 6);
+        using var library = Library();
+        await library.WriteAsync(Analysis(forgotten), default);
+        await library.WriteAsync(Analysis(kept), default);
+        await library.WriteBaseLayerHashAsync(forgotten, new string('A', 64), default);
+        await library.WriteConversionResultAsync(forgotten, new(forgotten.Path, OperationStatus.Completed, "output.mkv"), default);
+        var fingerprint = (await library.FindAsync(forgotten, default))!.Fingerprint;
+        var legacy = new AnalysisCache(Options, NullLogger<AnalysisCache>.Instance, Settings);
+        await legacy.WriteAsync(Analysis(forgotten), default);
+        await legacy.WriteBaseLayerHashAsync(forgotten, new string('B', 64), default);
+        string preview = Path.Combine(Options.CacheDirectory, "previews", "keep.jpg");
+        Directory.CreateDirectory(Path.GetDirectoryName(preview)!);
+        await File.WriteAllTextAsync(preview, "preview");
+        Assert.AreEqual(1, await library.ForgetAsync([forgotten.Path.ToUpperInvariant(), forgotten.Path, "absent.mkv"], default));
+        using var reopened = Library();
+        Assert.AreEqual(kept.Path, (await reopened.ReadAllAsync(default)).Single().Source.Path);
+        Assert.HasCount(0, await reopened.ReadHistoryAsync(fingerprint, default));
+        Assert.IsNull(await reopened.ReadAsync(forgotten, AnalysisMethod.FullRpu, default));
+        Assert.IsNull(await reopened.ReadBaseLayerHashAsync(forgotten, default));
+        Assert.IsNull(await reopened.ReadConversionResultAsync(forgotten, default));
+        Assert.IsNotNull(await reopened.ReadAsync(kept, AnalysisMethod.FullRpu, default));
+        Assert.AreEqual(1024L, new FileInfo(forgotten.Path).Length);
+        Assert.AreEqual(1024L, new FileInfo(kept.Path).Length);
+        Assert.AreEqual("preview", await File.ReadAllTextAsync(preview));
+    }
+
+    [TestMethod]
+    public async Task DeleteRemovesAllLibraryDataAndLegacyFallbacksWithoutDeletingMediaOrPreviews()
+    {
+        var source = await CreateAsync("Keep.mkv", 5);
+        using var library = Library();
+        var analysis = Analysis(source);
+        await library.WriteAsync(analysis, default);
+        await library.WriteBaseLayerHashAsync(source, new string('A', 64), default);
+        var key = (await library.ReadAllAsync(default)).Single().Fingerprint;
+        var legacy = new AnalysisCache(Options, NullLogger<AnalysisCache>.Instance, Settings);
+        await legacy.WriteAsync(analysis, default);
+        string preview = Path.Combine(Options.CacheDirectory, "previews", "keep.jpg");
+        Directory.CreateDirectory(Path.GetDirectoryName(preview)!);
+        await File.WriteAllTextAsync(preview, "preview");
+        Assert.AreEqual(1, await library.DeleteAsync(default));
+        using var reopened = Library();
+        Assert.HasCount(0, await reopened.ReadAllAsync(default));
+        Assert.HasCount(0, await reopened.ReadHistoryAsync(key, default));
+        Assert.IsNull(await reopened.ReadAsync(source, AnalysisMethod.FullRpu, default));
+        Assert.IsNull(await reopened.ReadBaseLayerHashAsync(source, default));
+        Assert.IsTrue(File.Exists(source.Path));
+        Assert.AreEqual("preview", await File.ReadAllTextAsync(preview));
+        await reopened.WriteAsync(analysis, default);
+        Assert.HasCount(1, await reopened.ReadAllAsync(default));
+    }
+
+    [TestMethod]
     public async Task AnalysisAndHistorySurviveRestartAndFollowRenamedContent()
     {
         var source = await CreateAsync("Before.mkv", 1);

@@ -122,6 +122,46 @@ internal sealed class TestRuntime : IFileDiscovery, IFileOperations, IMediaProbe
     }
     public Task<IReadOnlyList<LibraryFile>> ReadAllAsync(CancellationToken token) => Task.FromResult<IReadOnlyList<LibraryFile>>(LibraryFiles.Values.ToArray());
     public Task<IReadOnlyList<LibraryEvent>> ReadHistoryAsync(string fingerprint, CancellationToken token) => Task.FromResult<IReadOnlyList<LibraryEvent>>(Array.Empty<LibraryEvent>());
+    public Exception? ForgetLibraryFailure { get; set; }
+    public Task<int> ForgetAsync(IReadOnlyList<string> paths, CancellationToken token)
+    {
+        token.ThrowIfCancellationRequested();
+        if (ForgetLibraryFailure is not null)
+        {
+            throw ForgetLibraryFailure;
+        }
+        int removed = 0;
+        foreach (string path in paths)
+        {
+            if (LibraryFiles.Remove(path))
+            {
+                removed++;
+            }
+            foreach (var key in cache.Keys.Where(key => string.Equals(key.Item1.Path, path, StringComparison.OrdinalIgnoreCase)).ToArray())
+            {
+                cache.Remove(key);
+            }
+            foreach (var key in ConversionResults.Keys.Where(key => string.Equals(key.Path, path, StringComparison.OrdinalIgnoreCase)).ToArray())
+            {
+                ConversionResults.Remove(key);
+            }
+        }
+        return Task.FromResult(removed);
+    }
+
+    public Exception? DeleteLibraryFailure { get; set; }
+    public async Task<int> DeleteAsync(CancellationToken token)
+    {
+        if (DeleteLibraryFailure is not null)
+        {
+            throw DeleteLibraryFailure;
+        }
+        int count = LibraryFiles.Count;
+        LibraryFiles.Clear();
+        await ClearAsync(token);
+        ConversionResults.Clear();
+        return count;
+    }
     public Task<int> CleanMissingAsync(CancellationToken token)
     {
         string[] paths = LibraryFiles.Keys.Where(MissingFiles.Contains).ToArray();

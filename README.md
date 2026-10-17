@@ -48,6 +48,8 @@ The desktop app remembers added files in `%LOCALAPPDATA%\DoViFixer\library.db` (
 
 File identity uses a versioned SHA-256 fingerprint of the file length and three 8 MiB windows (start, middle and end). Files up to 24 MiB are read entirely. Unchanged paths reuse their recorded fingerprint while size and modification time match. This is collection identification, not a full-file integrity check. Renames in the last known folder are recovered on library load and before cleanup; a move to another folder is recognized when that location is added. Identical copies share one record at the last observed path.
 
+**Remove**, **Remove missing files**, and **Clear all** also forget the affected library records, including saved analysis and history. Removed files stay out of the list after restart. Media and preview files are kept. Clear all affects only files in the current list.
+
 **Automatically scan added files** keeps its existing behavior. Loading remembered files does not start a new scan. **Reuse saved results for Scan and Convert** controls reuse during Scan and Convert; Inspect and Deep Inspect always analyze again and save successful results; changing analysis settings prevents incompatible results from being reused. Full inspection evidence takes priority over a sampled scan.
 
 Settings → Performance → **Clean library** removes only records whose files can be confirmed missing. Existing media, existing-file analysis, and frame previews remain unchanged. Inaccessible files are retained. Current missing rows keep their existing presentation until removed from the list or the app is restarted.
@@ -253,3 +255,5 @@ dotnet test tests/DoViFixer.Infrastructure.Tests --no-restore --filter TestCateg
 These tests execute native conversion, HDR10 removal, backup/restore, and the verification pipeline with controlled MediaInfo JSON. They cover Unicode/punctuation in paths, timestamps, HDR container fields, and fixtures with/without audio, subtitles, tags, chapters and attachments. Actual MediaInfo CLI execution, real installer execution, and large commercial FEL titles remain integration checks for an explicitly configured environment. No native dependencies were installed during implementation.
 
 See [architecture](docs/architecture.md), [upstream parity and limitations](docs/upstream-parity.md), and [fixture provenance](tests/DoViFixer.Infrastructure.Tests/Fixtures/README.md).
+
+**Delete library** removes all remembered file records, saved analyses and history, including legacy analysis cache entries. The current list is also cleared. Media files and frame previews remain unchanged. Adding files again can populate the library.

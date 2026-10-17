@@ -11,6 +11,8 @@ public interface IMediaLibrary
     Task<LibraryFile> RememberAsync(FileIdentity source, CancellationToken cancellationToken);
     Task<IReadOnlyList<LibraryFile>> ReadAllAsync(CancellationToken cancellationToken);
     Task<IReadOnlyList<LibraryEvent>> ReadHistoryAsync(string fingerprint, CancellationToken cancellationToken);
+    Task<int> ForgetAsync(IReadOnlyList<string> paths, CancellationToken cancellationToken);
+    Task<int> DeleteAsync(CancellationToken cancellationToken);
     Task<int> CleanMissingAsync(CancellationToken cancellationToken);
     Task<long> GetSizeAsync(CancellationToken cancellationToken);
 }

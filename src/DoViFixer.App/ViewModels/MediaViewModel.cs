@@ -1426,62 +1426,49 @@ public sealed partial class MediaViewModel : OperationViewModel, INavigationPage
     private bool CanRemoveFile(MediaRow? row) => row is not null && IsIdle && Files.Contains(row);
 
     [RelayCommand(CanExecute = nameof(CanRemoveFile))]
-    private void RemoveFile(MediaRow? row)
-    {
-        if (row is null || !RemoveFileCommand.CanExecute(row))
-        {
-            return;
-        }
-
-        row.PropertyChanged -= OnRowPropertyChanged;
-        bool wasFocused = ReferenceEquals(Focused, row);
-        Files.Remove(row);
-        StartBackgroundPreviews();
-        if (wasFocused)
-        {
-            Focused = Files.FirstOrDefault();
-        }
-
-        InvalidatePlan();
-        if (IsFileListEmpty)
-        {
-            SetStatus(ViewStatus.FileListCleared);
-        }
-        OnPropertyChanged(nameof(SelectionSummary));
-        OnPropertyChanged(nameof(AllFilesSelected));
-    }
+    private Task RemoveFile(MediaRow? row) => row is not null && CanRemoveFile(row)
+        ? RemoveRowsAsync([row])
+        : Task.CompletedTask;
 
     private bool CanRemoveMissing() => IsIdle && HasMissingFiles;
 
     [RelayCommand(CanExecute = nameof(CanRemoveMissing))]
-    private void RemoveMissing()
-    {
-        foreach (var row in Files.Where(row => row.IsMissing).ToArray())
-        {
-            RemoveFile(row);
-        }
-    }
+    private Task RemoveMissing() => RemoveRowsAsync(Files.Where(row => row.IsMissing).ToArray());
 
     private bool CanClearAll() => IsIdle && Files.Count > 0;
 
     [RelayCommand(CanExecute = nameof(CanClearAll))]
-    private void ClearAll()
-    {
-        if (!IsIdle)
-        {
-            return;
-        }
+    private Task ClearAll() => RemoveRowsAsync(Files.ToArray());
 
+    private Task RemoveRowsAsync(MediaRow[] rows) => RunAsync(async (token, _) =>
+    {
+        await library.ForgetAsync(rows.Select(row => row.Path).ToArray(), token);
+        RemoveRowsFromList(rows);
+    });
+
+    /// <summary>Clears the visible collection after Settings has successfully deleted the library.</summary>
+    public void ClearDeletedLibrary() => RemoveRowsFromList(Files.ToArray());
+
+    private void RemoveRowsFromList(MediaRow[] rows)
+    {
         CancelPreviews();
-        foreach (var row in Files)
+        bool wasFocused = rows.Contains(Focused);
+        foreach (var row in rows)
         {
             row.PropertyChanged -= OnRowPropertyChanged;
+            Files.Remove(row);
         }
-
-        Files.Clear();
-        Focused = null;
+        if (wasFocused)
+        {
+            Focused = Files.FirstOrDefault();
+        }
+        StartBackgroundPreviews();
         InvalidatePlan();
-        SetStatus(ViewStatus.FileListCleared);
+        if (IsFileListEmpty)
+        {
+            Focused = null;
+            SetStatus(ViewStatus.FileListCleared);
+        }
         OnPropertyChanged(nameof(SelectionSummary));
         OnPropertyChanged(nameof(AllFilesSelected));
         CommandsChanged();

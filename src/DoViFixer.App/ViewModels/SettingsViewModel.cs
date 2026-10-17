@@ -41,6 +41,7 @@ public sealed partial class SettingsViewModel : OperationViewModel
     public string? DestinationError => OtherFolder && string.IsNullOrWhiteSpace(Destination) ? "Choose an output folder." : null;
 
     public event Action<UserSettings>? Saved;
+    public event Action? LibraryDeleted;
     public string LibraryDirectory => Path.GetDirectoryName(library.FilePath)!;
     [ObservableProperty]
     public partial string LibrarySizeText { get; private set; } = "Library: …";
@@ -615,6 +616,15 @@ public sealed partial class SettingsViewModel : OperationViewModel
     });
 
     [RelayCommand(CanExecute = nameof(IsIdle))]
+    private Task DeleteLibrary() => RunAsync(async (token, _) =>
+    {
+        int removed = await Task.Run(() => library.DeleteAsync(token), token);
+        LibraryDeleted?.Invoke();
+        await RefreshLibrarySizeAsync(token);
+        SetStatus(ViewStatus.Result, $"Deleted {removed} library record{(removed == 1 ? "" : "s")}, saved analyses and history. The current list was cleared. Media files and frame previews were not changed.");
+    });
+
+    [RelayCommand(CanExecute = nameof(IsIdle))]
     private Task Check() => RunAsync(async (token, _) =>
     {
         var report = await setup.CheckAsync(token);
@@ -687,6 +697,7 @@ public sealed partial class SettingsViewModel : OperationViewModel
         SaveCommand?.NotifyCanExecuteChanged();
         DiscardChangesCommand?.NotifyCanExecuteChanged();
         CleanLibraryCommand?.NotifyCanExecuteChanged();
+        DeleteLibraryCommand?.NotifyCanExecuteChanged();
         CheckCommand?.NotifyCanExecuteChanged();
         InstallCommand?.NotifyCanExecuteChanged();
         SetToolCommand?.NotifyCanExecuteChanged();

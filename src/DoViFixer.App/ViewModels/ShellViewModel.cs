@@ -34,6 +34,7 @@ public sealed partial class ShellViewModel : ObservableObject, INavigationGuard,
             }
         };
         settings.Saved += media.UpdateSettingsSummary;
+        settings.LibraryDeleted += media.ClearDeletedLibrary;
         media.ConversionStarting += settings.FlushAsync;
         dependencyReport.PropertyChanged += DependencyReportChanged;
         dependencyCheck.PropertyChanged += DependencyCheckChanged;
@@ -269,6 +270,7 @@ public sealed partial class ShellViewModel : ObservableObject, INavigationGuard,
 
     public void Dispose()
     {
+        Settings.LibraryDeleted -= media.ClearDeletedLibrary;
         dependencyReport.PropertyChanged -= DependencyReportChanged;
         dependencyCheck.PropertyChanged -= DependencyCheckChanged;
         Navigation.PropertyChanged -= NavigationChanged;

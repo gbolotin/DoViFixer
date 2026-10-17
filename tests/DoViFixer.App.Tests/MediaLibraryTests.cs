@@ -11,6 +11,102 @@ namespace DoViFixer.App.Tests;
 public sealed class MediaLibraryTests
 {
     [TestMethod]
+    [DataRow("Remove")]
+    [DataRow("Clear")]
+    [DataRow("Remove missing")]
+    public async Task RemovingRowsForgetsTheirLibraryRecordsAcrossReload(string action)
+    {
+        using var runtime = new TestRuntime();
+        string first = @"C:\Media\First.mkv";
+        string second = @"C:\Media\Second.mkv";
+        string outside = @"C:\Media\Outside.mkv";
+        runtime.LibraryFiles[first] = new("first", runtime.Identify(first), null);
+        runtime.LibraryFiles[second] = new("second", runtime.Identify(second), null);
+        if (action == "Remove missing")
+        {
+            runtime.MissingFiles.Add(first);
+        }
+        var media = runtime.Container.GetRequiredService<MediaViewModel>();
+        await media.LoadLibraryAsync();
+        // A library record outside this list must survive Clear all.
+        runtime.LibraryFiles[outside] = new("outside", runtime.Identify(outside), null);
+        if (action == "Clear")
+        {
+            await media.ClearAllCommand.InvokeAsync();
+        }
+        else if (action == "Remove missing")
+        {
+            await media.RemoveMissingCommand.InvokeAsync();
+        }
+        else
+        {
+            await media.RemoveFileCommand.InvokeAsync(media.Files.Single(row => row.Path == first));
+        }
+        Assert.IsFalse(runtime.LibraryFiles.ContainsKey(first));
+        Assert.AreEqual(action != "Clear", runtime.LibraryFiles.ContainsKey(second));
+        Assert.IsTrue(runtime.LibraryFiles.ContainsKey(outside));
+        Assert.HasCount(0, runtime.DeletedFiles, "Removing rows must never delete media.");
+        media.Dispose();
+        var reopened = runtime.Container.GetRequiredService<MediaViewModel>();
+        await reopened.LoadLibraryAsync();
+        Assert.IsFalse(reopened.Files.Any(row => row.Path == first));
+        Assert.AreEqual(action != "Clear", reopened.Files.Any(row => row.Path == second));
+        await reopened.CancelPreviewsAsync();
+    }
+
+    [TestMethod]
+    public async Task FailedLibraryRemovalKeepsRowsForRetry()
+    {
+        using var runtime = new TestRuntime();
+        string path = @"C:\Media\Keep.mkv";
+        runtime.LibraryFiles[path] = new("keep", runtime.Identify(path), null);
+        var media = runtime.Container.GetRequiredService<MediaViewModel>();
+        await media.LoadLibraryAsync();
+        runtime.ForgetLibraryFailure = new IOException("Library is unavailable.");
+        await media.ClearAllCommand.InvokeAsync();
+        Assert.HasCount(1, media.Files);
+        Assert.HasCount(1, runtime.LibraryFiles);
+        Assert.AreEqual(DoViFixer.App.Presentation.Application.ViewStatus.Error, media.Status);
+        runtime.ForgetLibraryFailure = null;
+        await media.ClearAllCommand.InvokeAsync();
+        Assert.HasCount(0, media.Files);
+        Assert.HasCount(0, runtime.LibraryFiles);
+        await media.CancelPreviewsAsync();
+    }
+
+    [TestMethod]
+    [DataRow(false)]
+    [DataRow(true)]
+    public async Task DeleteLibraryClearsSavedRecordsAndCurrentListButKeepsPreviews(bool failFirst)
+    {
+        using var runtime = new TestRuntime();
+        string path = @"C:\Media\Keep.mkv";
+        runtime.LibraryFiles[path] = new("keep", runtime.Identify(path), null);
+        runtime.CachedFrames = 3;
+        var shell = runtime.Container.GetRequiredService<ShellViewModel>();
+        var media = (MediaViewModel)shell.CurrentPage!;
+        await media.LoadLibraryAsync();
+        var settings = shell.Settings;
+        if (failFirst)
+        {
+            runtime.DeleteLibraryFailure = new IOException("Library is unavailable.");
+            await settings.DeleteLibraryCommand.InvokeAsync();
+            Assert.HasCount(1, media.Files, "A failed deletion must keep the current list.");
+            Assert.HasCount(1, runtime.LibraryFiles);
+            runtime.DeleteLibraryFailure = null;
+        }
+        await settings.DeleteLibraryCommand.InvokeAsync();
+        Assert.HasCount(0, runtime.LibraryFiles);
+        Assert.HasCount(0, media.Files);
+        Assert.IsNull(media.Focused);
+        Assert.IsFalse(media.ClearAllCommand.CanExecute(null));
+        Assert.HasCount(0, runtime.DeletedFiles);
+        Assert.AreEqual(3, runtime.CachedFrames);
+        StringAssert.Contains(settings.StatusMessage, "Deleted 1 library record");
+        await media.CancelPreviewsAsync();
+    }
+
+    [TestMethod]
     public async Task PublishedConversionResultReturnsWithItsRememberedFile()
     {
         using var runtime = new TestRuntime();

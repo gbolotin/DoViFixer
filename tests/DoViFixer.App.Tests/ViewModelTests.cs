@@ -882,7 +882,8 @@ public sealed class ViewModelTests
         await model.AddAsync([@"C:\Media\Mountain.mkv", @"C:\Media\Ocean.mkv"]);
         Assert.HasCount(2, model.Files);
         Assert.AreEqual(2, runtime.Analyses);
-        model.ClearAllCommand.Invoke();
+        model.Dispose();
+        model = runtime.Container.GetRequiredService<MediaViewModel>();
         runtime.Ready = false;
         await model.AddAsync([@"C:\Media\Mountain.mkv"]);
         Assert.AreEqual("", model.Files.Single().Status);
@@ -1538,7 +1539,8 @@ public sealed class ViewModelTests
         Assert.IsTrue(model.Files[0].IsSelected);
         Assert.IsFalse(model.Files[1].IsSelected);
 
-        model.ClearAllCommand.Invoke();
+        model.Dispose();
+        model = runtime.Container.GetRequiredService<MediaViewModel>();
         runtime.Ready = false;
 
         await model.AddAsync([@"C:\Media\Mountain.mkv", @"C:\Media\City.mkv"]);

@@ -47,6 +47,21 @@ internal sealed class AnalysisCache(StorageOptions options, ILogger<AnalysisCach
         return Task.FromResult(removed);
     }
 
+    public Task ForgetAsync(FileIdentity source, CancellationToken cancellationToken)
+    {
+        cancellationToken.ThrowIfCancellationRequested();
+        if (!Directory.Exists(Path.Combine(RootDirectory, "analysis")))
+        {
+            return Task.CompletedTask;
+        }
+        foreach (string suffix in Enum.GetNames<AnalysisMethod>().Concat(["base-layer", "conversion"]))
+        {
+            cancellationToken.ThrowIfCancellationRequested();
+            File.Delete(CachePath(source, suffix));
+        }
+        return Task.CompletedTask;
+    }
+
     public async Task<MediaAnalysis?> ReadAsync(FileIdentity source, AnalysisMethod method, CancellationToken cancellationToken)
     {
         var entry = await ReadEntryAsync<Entry>(CachePath(source, method.ToString()), "Analysis", source.Path, cancellationToken);

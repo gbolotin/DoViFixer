@@ -378,6 +378,57 @@ internal sealed class MediaLibrary(StorageOptions options, ISettingsStore settin
         return Convert.ToInt64(await command.ExecuteScalarAsync(cancellationToken));
     }
 
+    public async Task<int> ForgetAsync(IReadOnlyList<string> paths, CancellationToken cancellationToken)
+    {
+        // Complete the legacy import before removing records so a later startup cannot restore them.
+        await ImportLegacyAsync(cancellationToken);
+        await using var connection = await OpenAsync(cancellationToken);
+        using var transaction = connection.BeginTransaction();
+        int removed = 0;
+        foreach (string path in paths.Distinct(StringComparer.OrdinalIgnoreCase))
+        {
+            cancellationToken.ThrowIfCancellationRequested();
+            using var find = Command(connection, "SELECT source_json FROM media WHERE path=$path", transaction, ("$path", path));
+            if (await find.ExecuteScalarAsync(cancellationToken) is string json)
+            {
+                var source = JsonSerializer.Deserialize<FileIdentity>(json)!;
+                await legacy.ForgetAsync(source, cancellationToken);
+            }
+            // Foreign keys remove this record's analysis and history in the same transaction.
+            using var delete = Command(connection, "DELETE FROM media WHERE path=$path", transaction, ("$path", path));
+            removed += await delete.ExecuteNonQueryAsync(cancellationToken);
+        }
+        transaction.Commit();
+        return removed;
+    }
+
+    public async Task<int> DeleteAsync(CancellationToken cancellationToken)
+    {
+        await importGate.WaitAsync(cancellationToken);
+        try
+        {
+            // Remove legacy fallbacks too, so deleted results cannot return after restart.
+            await legacy.ClearAsync(cancellationToken);
+            await using var connection = await OpenAsync(cancellationToken);
+            using var transaction = connection.BeginTransaction();
+            using var count = Command(connection, "SELECT COUNT(*) FROM media", transaction);
+            int removed = Convert.ToInt32(await count.ExecuteScalarAsync(cancellationToken));
+            using var delete = Command(connection, """
+                DELETE FROM history;
+                DELETE FROM analyses;
+                DELETE FROM media;
+                INSERT OR REPLACE INTO metadata(key,value) VALUES('legacy_imported','1');
+                """, transaction);
+            await delete.ExecuteNonQueryAsync(cancellationToken);
+            transaction.Commit();
+            return removed;
+        }
+        finally
+        {
+            importGate.Release();
+        }
+    }
+
     public async Task<int> ClearAsync(CancellationToken cancellationToken)
     {
         await using var connection = await OpenAsync(cancellationToken);

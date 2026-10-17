@@ -88,12 +88,18 @@
                                Margin="0,8,0,12" />
                     <Separator />
                     <DockPanel Margin="0,12">
-                        <Button Content="Clean library"
-                                DockPanel.Dock="Right"
-                                Command="{Binding CleanLibraryCommand}"
-                                ToolTip="Remove library records for files that no longer exist. Media files, existing records and frame previews are kept."
-                                VerticalAlignment="Center"
-                                Margin="24,0,0,0" />
+                        <StackPanel DockPanel.Dock="Right"
+                                    Orientation="Horizontal"
+                                    VerticalAlignment="Center"
+                                    Margin="24,0,0,0">
+                            <Button Content="Clean library"
+                                    Command="{Binding CleanLibraryCommand}"
+                                    ToolTip="Remove library records for files that no longer exist. Media files, existing records and frame previews are kept." />
+                            <Button Content="Delete library"
+                                    Command="{Binding DeleteLibraryCommand}"
+                                    ToolTip="Delete all remembered file records, saved analyses and history. Also clears the current list. Media files and frame previews are kept."
+                                    Margin="8,0,0,0" />
+                        </StackPanel>
                         <StackPanel>
                             <TextBlock Text="Media library" />
                             <TextBlock Text="{Binding LibrarySizeText}"

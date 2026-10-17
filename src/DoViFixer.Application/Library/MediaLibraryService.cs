@@ -7,6 +7,8 @@ namespace DoViFixer.Application.Library;
 /// <summary>Reconciles remembered paths without running media analysis or removing missing rows.</summary>
 public sealed class MediaLibraryService(IMediaLibrary library, IFileOperations files, IFileDiscovery discovery, ILogger<MediaLibraryService> logger)
 {
+    public Task<int> ForgetAsync(IReadOnlyList<string> paths, CancellationToken token) => library.ForgetAsync(paths, token);
+
     public async Task<int> CleanMissingAsync(CancellationToken token)
     {
         // Recover same-folder renames before deciding that a record is missing.
