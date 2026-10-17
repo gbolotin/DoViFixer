@@ -1056,7 +1056,7 @@ public sealed class VisualTests
         Assert.AreSame(window.FindResource("TextFillColorSecondaryBrush"), title.Foreground);
         Assert.AreSame(window.FindResource("ListBoxBackground"), overlay.HeaderBackground, "The title shares the section list's background.");
         var sections = Descendants<ListBox>(overlay).Single(list => ReferenceEquals(list.ItemsSource, shell.Settings.Sections.Pages));
-        Assert.HasCount(6, sections.Items);
+        Assert.HasCount(7, sections.Items);
         var host = Descendants<RetainedPageHost>(overlay).Single();
         var retained = new Dictionary<object, DependencyObject>();
         double? toolsOffset = null;
@@ -1084,6 +1084,15 @@ public sealed class VisualTests
             {
                 case GeneralSettingsSection when firstVisit:
                     SaveRender(content, "settings-minimum");
+                    break;
+                case AnalysisSettingsSection when firstVisit:
+                    foreach (string name in new[] { "Brightness margin", "Assumed peak brightness" })
+                    {
+                        var input = Descendants<TextBox>(view).Single(box => System.Windows.Automation.AutomationProperties.GetName(box) == name);
+                        AssertInside(input, content);
+                    }
+                    Assert.HasCount(2, Descendants<Slider>(view));
+                    SaveRender(content, "settings-analysis");
                     break;
                 case PerformanceSettingsSection when firstVisit:
                     foreach (string name in new[] { "Simultaneous conversions", "Parallel scan samples per file", "Tool process priority", "Video pipe buffer (KiB)" })

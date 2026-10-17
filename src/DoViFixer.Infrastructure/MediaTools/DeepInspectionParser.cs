@@ -33,11 +33,10 @@ internal static class DeepInspectionParser
         };
     }
 
-    internal static async Task<RpuEvidence> CompareAsync(Stream rpu, TextReader measurements, CancellationToken cancellationToken)
+    internal static async Task<RpuEvidence> CompareAsync(Stream rpu, TextReader measurements, CancellationToken cancellationToken, double threshold = 50)
     {
         long compared = 0, expanded = 0, maxFrame = 0;
         double basePeak = 0, maxDelta = double.NegativeInfinity;
-        const double threshold = 50;
         var evidence = await RpuParser.ParseAsync(rpu, AnalysisMethod.DeepInspection, cancellationToken, (index, pq) =>
         {
             cancellationToken.ThrowIfCancellationRequested();

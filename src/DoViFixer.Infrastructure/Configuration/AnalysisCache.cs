@@ -8,7 +8,7 @@ using DoViFixer.Domain.Media;
 using Microsoft.Extensions.Logging;
 
 namespace DoViFixer.Infrastructure.Configuration;
-internal sealed class AnalysisCache(StorageOptions options, ILogger<AnalysisCache> logger) : IAnalysisCache
+internal sealed class AnalysisCache(StorageOptions options, ILogger<AnalysisCache> logger, ISettingsStore? settings = null) : IAnalysisCache
 {
     public string RootDirectory => options.CacheDirectory;
     // Bump when probing, evidence interpretation, or analysis algorithms change.
@@ -66,6 +66,15 @@ internal sealed class AnalysisCache(StorageOptions options, ILogger<AnalysisCach
         }
 
         // Recompute the verdict instead of trusting a serialized decision.
+        if (settings is not null && method != AnalysisMethod.MetadataOnly)
+        {
+            var snapshot = await settings.ReadAsync(cancellationToken);
+            if (evidence.Options != snapshot.AnalysisOptions ||
+                (evidence.Brightness is { } brightness && brightness.ThresholdNits != snapshot.BrightnessMarginNits))
+            {
+                return null;
+            }
+        }
         return MediaClassifier.Classify(analysis.Media, evidence);
     }
 

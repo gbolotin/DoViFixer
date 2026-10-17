@@ -11,6 +11,42 @@ namespace DoViFixer.App.Tests;
 public sealed class ViewModelTests
 {
     [TestMethod]
+    public async Task AnalysisSettingsPersistResetAndRejectOutOfRangeValues()
+    {
+        using var runtime = new TestRuntime();
+        var model = runtime.Container.GetRequiredService<SettingsViewModel>();
+        await model.LoadCommand.InvokeAsync();
+        Assert.IsTrue(model.Sections.Pages.Any(page => page is AnalysisSettingsSection));
+        Assert.AreEqual(50, model.BrightnessMarginNits);
+        Assert.AreEqual(1000, model.AssumedPeakBrightnessNits);
+        model.BrightnessMarginNits = 75;
+        model.AssumedPeakBrightnessNits = 2000;
+        await model.SaveTask;
+        var reloaded = runtime.Container.GetRequiredService<SettingsViewModel>();
+        await reloaded.LoadCommand.InvokeAsync();
+        Assert.AreEqual(75, reloaded.BrightnessMarginNits);
+        Assert.AreEqual(2000, reloaded.AssumedPeakBrightnessNits);
+        reloaded.ResetBrightnessMarginCommand.Invoke();
+        reloaded.ResetAssumedPeakBrightnessCommand.Invoke();
+        await reloaded.SaveTask;
+        Assert.AreEqual(50, runtime.Settings.BrightnessMarginNits);
+        Assert.AreEqual(1000, runtime.Settings.AssumedPeakBrightnessNits);
+        reloaded.BrightnessMarginNits = -1;
+        await reloaded.SaveTask;
+        Assert.IsTrue(reloaded.HasSaveError);
+        Assert.AreEqual(50, runtime.Settings.BrightnessMarginNits);
+        reloaded.DiscardChangesCommand.Invoke();
+        Assert.AreEqual(50, reloaded.BrightnessMarginNits);
+        var service = runtime.Container.GetRequiredService<DoViFixer.Application.Settings.SettingsService>();
+        await Assert.ThrowsExactlyAsync<ArgumentOutOfRangeException>(() =>
+            service.SetPreferencesAsync(null, null, false, false, default, brightnessMarginNits: 1001));
+        await Assert.ThrowsExactlyAsync<ArgumentOutOfRangeException>(() =>
+            service.SetPreferencesAsync(null, null, false, false, default, assumedPeakBrightnessNits: 99));
+        await Assert.ThrowsExactlyAsync<ArgumentOutOfRangeException>(() =>
+            service.SetPreferencesAsync(null, null, false, false, default, assumedPeakBrightnessNits: 10001));
+    }
+
+    [TestMethod]
     [DataRow(61.2710416, "00:01:01")]
     [DataRow(90061d, "25:01:01")]
     [DataRow(double.NaN, "Unknown")]
@@ -376,9 +412,9 @@ public sealed class ViewModelTests
 
         var sections = shell.Settings.Sections;
         CollectionAssert.AreEqual(
-            new[] { typeof(GeneralSettingsSection), typeof(ConversionSettingsSection), typeof(SafetySettingsSection), typeof(PerformanceSettingsSection), typeof(NativeToolsSettingsSection), typeof(AboutSettingsSection) },
+            new[] { typeof(GeneralSettingsSection), typeof(ConversionSettingsSection), typeof(AnalysisSettingsSection), typeof(SafetySettingsSection), typeof(PerformanceSettingsSection), typeof(NativeToolsSettingsSection), typeof(AboutSettingsSection) },
             sections.Pages.Select(page => page.GetType()).ToArray());
-        CollectionAssert.AreEqual(new[] { "General", "Conversion", "Safety", "Performance", "Native tools", "About" }, sections.Pages.Select(page => page.NavigationName).ToArray());
+        CollectionAssert.AreEqual(new[] { "General", "Conversion", "Analysis", "Safety", "Performance", "Native tools", "About" }, sections.Pages.Select(page => page.NavigationName).ToArray());
         Assert.IsTrue(sections.Pages.All(page => page.NavigationIcon is { Length: 1 }), "Each section has a Segoe Fluent Icons glyph.");
         Assert.IsTrue(sections.Pages.Cast<SettingsSection>().All(section => ReferenceEquals(section.Settings, shell.Settings)), "Every section shows the same settings.");
         Assert.AreSame(sections.Pages[0], sections.CurrentPage);

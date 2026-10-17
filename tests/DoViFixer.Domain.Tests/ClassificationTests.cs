@@ -7,6 +7,22 @@ namespace DoViFixer.Domain.Tests;
 [TestClass]
 public sealed class ClassificationTests
 {
+    [TestMethod]
+    [DataRow(null, 50d, AnalysisVerdict.ComplexFel)]
+    [DataRow(0d, 50d, AnalysisVerdict.ComplexFel)]
+    [DataRow(99d, 50d, AnalysisVerdict.ComplexFel)]
+    [DataRow(1000d, 100d, AnalysisVerdict.SimpleFel)]
+    [DataRow(2000d, 50d, AnalysisVerdict.SimpleFel)]
+    public void ConfiguredMarginAndFallbackPreferValidMaxCll(double? maxCll, double margin, AnalysisVerdict expected)
+    {
+        var evidence = new RpuEvidence(AnalysisMethod.FullRpu, EnhancementLayer.Fel, 24, 1100, 1, 1,
+            Options: new(margin, 1000));
+        var analysis = MediaClassifier.Classify(Media(maxCll), evidence);
+        Assert.AreEqual(expected, analysis.Verdict);
+        Assert.AreEqual(maxCll is null or < 100, analysis.Reason.Contains("assumed base-layer peak"));
+        Assert.AreEqual(maxCll, analysis.Media.MaxCll, "Assumed brightness must not replace source metadata.");
+    }
+
     private static MediaInfo Media(double? maxCll = 1000) => new(new("movie.mkv", 1000, DateTime.UnixEpoch), DolbyVisionProfile.Profile7, "HEVC", 0, 1920, 1080, 24, 24, 1, 0, maxCll, new[]
     {
         new MediaTrack(0, "video", "HEVC", "und", "", true, false, "1")

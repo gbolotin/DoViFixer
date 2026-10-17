@@ -94,6 +94,7 @@ public sealed class InspectionService(DependencyService dependencies, IMediaProb
 
         await using var workspace = await workspaces.CreateAsync(RequiredScratchBytes(media.Source.Length, method), temporaryDirectory ?? snapshot.TemporaryDirectory, cancellationToken);
         var evidence = await probe.AnalyzeAsync(media, method, workspace, cancellationToken, progress);
+        evidence = evidence with { Options = evidence.Options ?? snapshot.AnalysisOptions };
         progress?.Report(new(Guid.Empty, "Saving analysis", path));
         var analysis = MediaClassifier.Classify(media, evidence);
         await cache.WriteAsync(analysis, cancellationToken);

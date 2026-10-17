@@ -5,6 +5,10 @@ using DoViFixer.Application.Dependencies;
 namespace DoViFixer.Application.Settings;
 public sealed record UserSettings
 {
+    public int BrightnessMarginNits { get; init; } = 50;
+    public int AssumedPeakBrightnessNits { get; init; } = 1000;
+    [JsonIgnore]
+    public DoViFixer.Domain.Analysis.AnalysisOptions AnalysisOptions => new(BrightnessMarginNits, AssumedPeakBrightnessNits);
     public bool AutomaticallyScanAddedFiles
     {
         get;

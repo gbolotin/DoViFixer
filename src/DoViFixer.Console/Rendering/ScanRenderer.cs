@@ -63,7 +63,7 @@ public sealed class ScanRenderer(ConsoleRenderer renderer, bool candidatesOnly) 
             AnalysisVerdict.NotApplicable => "Not applicable",
             _ => "Unknown"
         };
-        string details = analysis.Evidence.Method != AnalysisMethod.DeepInspection && analysis.Verdict is AnalysisVerdict.SimpleFel or AnalysisVerdict.ComplexFel ? $"Metadata L1 peak: {analysis.Evidence.PeakNits:N0} nits | MaxCLL: {analysis.Media.MaxCll:N0} nits" : analysis.Reason;
+        string details = analysis.Evidence.Method != AnalysisMethod.DeepInspection && analysis.Media.MaxCll is >= 100 && analysis.Verdict is AnalysisVerdict.SimpleFel or AnalysisVerdict.ComplexFel ? $"Metadata L1 peak: {analysis.Evidence.PeakNits:N0} nits | MaxCLL: {analysis.Media.MaxCll:N0} nits" : analysis.Reason;
         string update = item.InitialAnalysis is null ? "" : "Auto-inspected: Simple FEL -> ";
         return $"{item.Path}\n  {profile} | {update}{verdict}\n  Evidence: {analysis.Evidence.Method}\n  {details}\n";
     }

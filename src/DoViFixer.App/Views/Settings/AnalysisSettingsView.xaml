@@ -1,0 +1,94 @@
+<UserControl x:Class="DoViFixer.App.Views.Settings.AnalysisSettingsView"
+             xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:viewModels="clr-namespace:DoViFixer.App.ViewModels"
+             xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
+             xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
+             mc:Ignorable="d"
+             d:DataContext="{d:DesignInstance Type=viewModels:SettingsViewModel}">
+    <UserControl.Resources>
+        <Style x:Key="AnalysisNoteTextStyle"
+               TargetType="TextBlock"
+               BasedOn="{StaticResource WfSettingNoteTextStyle}">
+            <Setter Property="Margin" Value="0,8,0,12" />
+        </Style>
+    </UserControl.Resources>
+    <ScrollViewer VerticalScrollBarVisibility="Auto">
+        <StackPanel Margin="24,8,24,24">
+            <TextBlock Text="Analysis" Style="{StaticResource WfHeadingTextStyle}" />
+            <TextBlock Text="Choose the brightness comparison used to classify Simple and Complex FEL."
+                       TextWrapping="Wrap"
+                       Style="{StaticResource AnalysisNoteTextStyle}" />
+            <TextBlock Text="Complex FEL detection" Style="{StaticResource WfLabelTextStyle}" />
+            <Border Style="{StaticResource WfCardStyle}">
+                <StackPanel>
+                    <HeaderedContentControl Header="Brightness margin"
+                                            Style="{StaticResource WfSettingRowStyle}">
+                        <StackPanel Orientation="Horizontal">
+                            <TextBox Text="{Binding BrightnessMarginNits, ValidatesOnExceptions=True}"
+                                     Width="128"
+                                     VerticalAlignment="Center"
+                                     AutomationProperties.Name="Brightness margin"
+                                     AutomationProperties.HelpText="Brightness difference in nits. Valid range: 0 to 1000." />
+                            <TextBlock Text="nits"
+                                       VerticalAlignment="Center"
+                                       Margin="8,0,16,0" />
+                            <Button Content="Reset"
+                                    Command="{Binding ResetBrightnessMarginCommand}"
+                                    AutomationProperties.Name="Reset brightness margin" />
+                        </StackPanel>
+                    </HeaderedContentControl>
+                    <Slider Minimum="0"
+                            Maximum="1000"
+                            TickFrequency="1"
+                            IsSnapToTickEnabled="True"
+                            Value="{Binding BrightnessMarginNits}"
+                            AutomationProperties.Name="Brightness margin slider"
+                            Margin="0,8" />
+                    <TextBlock Text="Default: 50 nits. A smaller margin classifies more FEL files as Complex. A larger margin can miss brightness expansion."
+                               TextWrapping="Wrap"
+                               Style="{StaticResource AnalysisNoteTextStyle}" />
+                    <Separator />
+                    <HeaderedContentControl Header="Assumed peak brightness"
+                                            Style="{StaticResource WfSettingRowStyle}">
+                        <StackPanel Orientation="Horizontal">
+                            <TextBox Text="{Binding AssumedPeakBrightnessNits, ValidatesOnExceptions=True}"
+                                     Width="128"
+                                     VerticalAlignment="Center"
+                                     AutomationProperties.Name="Assumed peak brightness"
+                                     AutomationProperties.HelpText="Fallback peak brightness in nits. Valid range: 100 to 10000." />
+                            <TextBlock Text="nits"
+                                       VerticalAlignment="Center"
+                                       Margin="8,0,16,0" />
+                            <Button Content="Reset"
+                                    Command="{Binding ResetAssumedPeakBrightnessCommand}"
+                                    AutomationProperties.Name="Reset assumed peak brightness" />
+                        </StackPanel>
+                    </HeaderedContentControl>
+                    <Slider Minimum="100"
+                            Maximum="10000"
+                            TickFrequency="1"
+                            IsSnapToTickEnabled="True"
+                            Value="{Binding AssumedPeakBrightnessNits}"
+                            AutomationProperties.Name="Assumed peak brightness slider"
+                            Margin="0,8" />
+                    <TextBlock Text="Default: 1,000 nits. Used for scan and regular inspection only when MaxCLL is missing, invalid, or below 100 nits. Results identify this value as assumed."
+                               TextWrapping="Wrap"
+                               Style="{StaticResource AnalysisNoteTextStyle}" />
+                </StackPanel>
+            </Border>
+            <TextBlock Text="How the comparison works"
+                       Style="{StaticResource WfLabelTextStyle}"
+                       Margin="0,16,0,0" />
+            <TextBlock Text="Scan and regular inspection classify FEL as Complex when the Dolby Vision L1 peak exceeds MaxCLL (or the assumed peak) plus the margin."
+                       TextWrapping="Wrap"
+                       Style="{StaticResource AnalysisNoteTextStyle}" />
+            <TextBlock Text="Deep Inspection uses the same margin against each measured base-layer frame. It does not use the assumed peak."
+                       TextWrapping="Wrap"
+                       Style="{StaticResource AnalysisNoteTextStyle}" />
+            <TextBlock Text="Brightness comparisons are heuristics. They do not prove that removing FEL picture data is safe. Changes apply to future analysis and conversion planning; existing results remain until analyzed again."
+                       TextWrapping="Wrap"
+                       Style="{StaticResource AnalysisNoteTextStyle}" />
+        </StackPanel>
+    </ScrollViewer>
+</UserControl>

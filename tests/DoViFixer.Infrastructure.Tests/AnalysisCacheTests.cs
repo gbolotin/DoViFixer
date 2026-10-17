@@ -9,6 +9,23 @@ namespace DoViFixer.Infrastructure.Tests;
 [TestClass]
 public sealed class AnalysisCacheTests
 {
+    [TestMethod]
+    public async Task AnalysisSettingsChangesInvalidateCachedEvidence()
+    {
+        var storage = new StorageOptions(directory);
+        var settings = new SettingsStore(storage, NullLogger<SettingsStore>.Instance);
+        var cache = new AnalysisCache(storage, NullLogger<AnalysisCache>.Instance, settings);
+        var original = Analysis();
+        var preferences = await settings.ReadAsync(default);
+        var analysis = MediaClassifier.Classify(original.Media, original.Evidence with { Options = preferences.AnalysisOptions });
+        await cache.WriteAsync(analysis, default);
+        Assert.IsNotNull(await cache.ReadAsync(analysis.Media.Source, AnalysisMethod.FullRpu, default));
+        await settings.UpdateAsync(value => value with { BrightnessMarginNits = 75 }, default);
+        Assert.IsNull(await cache.ReadAsync(analysis.Media.Source, AnalysisMethod.FullRpu, default));
+        await settings.UpdateAsync(value => value with { BrightnessMarginNits = 50, AssumedPeakBrightnessNits = 2000 }, default);
+        Assert.IsNull(await cache.ReadAsync(analysis.Media.Source, AnalysisMethod.FullRpu, default));
+    }
+
     private readonly string directory = Path.Combine(Path.GetTempPath(), "DoViFixer-cache-tests", Guid.NewGuid().ToString("N"));
     private AnalysisCache Cache() => new(new StorageOptions(directory), NullLogger<AnalysisCache>.Instance);
     private MediaAnalysis Analysis() => MediaClassifier.Classify(new MediaInfo(new(Path.Combine(directory, "Movie.mkv"), 1234, DateTime.UnixEpoch), DolbyVisionProfile.Profile7, "HEVC", 0, 1920, 1080, 24, 24, 1, 0, 1000, [], 0, 0, null, "{}"), new(AnalysisMethod.FullRpu, EnhancementLayer.Mel, 24, null, 1, 1));

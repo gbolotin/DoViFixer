@@ -62,7 +62,7 @@ public sealed partial class SettingsViewModel : OperationViewModel
         Dependencies = dependencies;
         var general = new GeneralSettingsSection(this);
         Sections = new NavigationService(
-            [general, new ConversionSettingsSection(this), new SafetySettingsSection(this), new PerformanceSettingsSection(this), new NativeToolsSettingsSection(this), new AboutSettingsSection(this)],
+            [general, new ConversionSettingsSection(this), new AnalysisSettingsSection(this), new SafetySettingsSection(this), new PerformanceSettingsSection(this), new NativeToolsSettingsSection(this), new AboutSettingsSection(this)],
             initialPage: general);
     }
 
@@ -70,6 +70,20 @@ public sealed partial class SettingsViewModel : OperationViewModel
     /// The pages of the settings frame. Moving between them never waits: saving, errors and progress show in the frame's footer.
     /// </summary>
     public NavigationService Sections { get; }
+
+    [ObservableProperty]
+    public partial int BrightnessMarginNits { get; set; } = 50;
+    partial void OnBrightnessMarginNitsChanged(int value) => TriggerAutoSave();
+
+    [ObservableProperty]
+    public partial int AssumedPeakBrightnessNits { get; set; } = 1000;
+    partial void OnAssumedPeakBrightnessNitsChanged(int value) => TriggerAutoSave();
+
+    [RelayCommand]
+    private void ResetBrightnessMargin() => BrightnessMarginNits = 50;
+
+    [RelayCommand]
+    private void ResetAssumedPeakBrightness() => AssumedPeakBrightnessNits = 1000;
 
     private async Task RecheckToolsAsync(CancellationToken token)
     {
@@ -114,6 +128,8 @@ public sealed partial class SettingsViewModel : OperationViewModel
             ReplaceOriginal = value.ReplaceOriginal;
             CreateArchive = value.CreateElArchive;
             ConversionWorkers = settings.Hardware.ConversionWorkers(value.ConversionWorkers);
+            BrightnessMarginNits = value.BrightnessMarginNits;
+            AssumedPeakBrightnessNits = value.AssumedPeakBrightnessNits;
             AnalysisWorkers = settings.Hardware.AnalysisWorkers(value.AnalysisWorkers);
             ToolProcessPriority = value.ToolProcessPriority;
             PipeBufferKiB = value.PipeBufferKiB;
@@ -481,6 +497,8 @@ public sealed partial class SettingsViewModel : OperationViewModel
             ReplaceOriginal = ReplaceOriginal,
             CreateElArchive = CreateArchive,
             ConversionWorkers = ConversionWorkers,
+            BrightnessMarginNits = BrightnessMarginNits,
+            AssumedPeakBrightnessNits = AssumedPeakBrightnessNits,
             AnalysisWorkers = AnalysisWorkers,
             ToolProcessPriority = ToolProcessPriority,
             PipeBufferKiB = PipeBufferKiB,
@@ -514,7 +532,7 @@ public sealed partial class SettingsViewModel : OperationViewModel
             freeSpaceMarginPercent: snapshot.FreeSpaceMarginPercent,
             analysisWorkers: snapshot.AnalysisWorkers,
             toolProcessPriority: snapshot.ToolProcessPriority,
-            pipeBufferKiB: snapshot.PipeBufferKiB), token);
+            pipeBufferKiB: snapshot.PipeBufferKiB, brightnessMarginNits: snapshot.BrightnessMarginNits, assumedPeakBrightnessNits: snapshot.AssumedPeakBrightnessNits), token);
 
         lastSavedSettings = snapshot;
         SetStatus(ViewStatus.SettingsSaved);

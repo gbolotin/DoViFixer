@@ -24,7 +24,8 @@ public sealed record MetadataFreeTail(long TotalFrames, long RpuFrames, string P
 {
     public long TailFrames => TotalFrames - RpuFrames;
 }
-public sealed record RpuEvidence(AnalysisMethod Method, EnhancementLayer Layer, long Frames, double? PeakNits, int SuccessfulSamples, int RequestedSamples, string? Error = null, BrightnessComparison? Brightness = null, string? SampleDiagnostics = null, MetadataFreeTail? MetadataFreeTail = null);
+public sealed record AnalysisOptions(double BrightnessMarginNits = 50, double? AssumedPeakNits = null);
+public sealed record RpuEvidence(AnalysisMethod Method, EnhancementLayer Layer, long Frames, double? PeakNits, int SuccessfulSamples, int RequestedSamples, string? Error = null, BrightnessComparison? Brightness = null, string? SampleDiagnostics = null, MetadataFreeTail? MetadataFreeTail = null, AnalysisOptions? Options = null);
 public sealed record BrightnessComparison(long ComparedFrames, long ExpandedFrames, double BaseLayerPeakNits, double MaximumDeltaNits, long MaximumDeltaFrame, double ThresholdNits = 50);
 public sealed record MediaAnalysis(MediaInfo Media, RpuEvidence Evidence, AnalysisVerdict Verdict, string Reason);
 public static class MediaClassifier
@@ -93,7 +94,10 @@ public static class MediaClassifier
             return new(media, evidence, brightness.ExpandedFrames > 0 ? AnalysisVerdict.ComplexFel : AnalysisVerdict.SimpleFel, $"Deep inspection: {brightness.ExpandedFrames:N0}/{brightness.ComparedFrames:N0} frames exceed base-layer luminance by more than {brightness.ThresholdNits:F0} nits. " + $"Base-layer peak {brightness.BaseLayerPeakNits:F1} nits; maximum RPU minus base-layer difference {brightness.MaximumDeltaNits:F1} nits at frame {brightness.MaximumDeltaFrame} (zero-based). " + "RPU L1 may describe a scene rather than individual frame content; this indicates possible expansion, not proof of FEL picture contribution or safe removal.");
         }
 
-        if (evidence.Layer != EnhancementLayer.Fel || evidence.PeakNits is null || media.MaxCll is null or <= 0)
+        var options = evidence.Options ?? new AnalysisOptions();
+        bool assumed = media.MaxCll is null or < 100;
+        double? basePeak = assumed ? options.AssumedPeakNits : media.MaxCll;
+        if (evidence.Layer != EnhancementLayer.Fel || evidence.PeakNits is null || basePeak is null or <= 0)
         {
             if (evidence.Layer == EnhancementLayer.Fel && HasVerifiedTail(evidence))
             {
@@ -103,8 +107,9 @@ public static class MediaClassifier
             return new(media, evidence, AnalysisVerdict.Unknown, "FEL classification requires layer type, L1 metadata and measured MaxCLL metadata.");
         }
 
-        bool complex = evidence.PeakNits > media.MaxCll + 50;
-        return new(media, evidence, complex ? AnalysisVerdict.ComplexFel : AnalysisVerdict.SimpleFel, $"Metadata heuristic: L1 peak {evidence.PeakNits:F0} nits; MaxCLL {media.MaxCll:F0} nits. This is not a base-layer frame measurement or a playback guarantee.");
+        bool complex = evidence.PeakNits > basePeak + options.BrightnessMarginNits;
+        string peakSource = assumed ? "assumed base-layer peak (MaxCLL unavailable or below 100 nits)" : "MaxCLL";
+        return new(media, evidence, complex ? AnalysisVerdict.ComplexFel : AnalysisVerdict.SimpleFel, $"Metadata heuristic: L1 peak {evidence.PeakNits:F0} nits; {peakSource} {basePeak:F0} nits; margin {options.BrightnessMarginNits:F0} nits. This is not a base-layer frame measurement or a playback guarantee.");
     }
 
     public static double PqToNits(int value)

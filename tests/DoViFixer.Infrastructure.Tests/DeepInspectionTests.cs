@@ -17,6 +17,18 @@ public sealed class DeepInspectionTests
     private static MemoryStream Rpu(string frames) => new(Encoding.UTF8.GetBytes("[" + frames + "]"));
     private const string Frame = "{\"el_type\":\"FEL\",\"Level1\":{\"max_pq\":3079}}";
     [TestMethod]
+    [DataRow(50d, 1L)]
+    [DataRow(1000d, 0L)]
+    public async Task ComparisonUsesConfiguredBrightnessMargin(double margin, long expanded)
+    {
+        using var rpu = Rpu(Frame);
+        using var peaks = new StringReader("frame:0    pts:0\nlavfi.signalstats.YMAX=3277\n");
+        var evidence = await DeepInspectionParser.CompareAsync(rpu, peaks, default, margin);
+        Assert.AreEqual(expanded, evidence.Brightness!.ExpandedFrames);
+        Assert.AreEqual(margin, evidence.Brightness.ThresholdNits);
+    }
+
+    [TestMethod]
     public async Task ComparesMatchingFramesInsteadOfGlobalMaxima()
     {
         using var rpu = Rpu(Frame + "," + Frame);

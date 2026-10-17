@@ -17,6 +17,7 @@
         <DataTemplate DataType="{x:Type viewModels:ConversionSettingsSection}">
             <settings:ConversionSettingsView DataContext="{Binding Settings}" />
         </DataTemplate>
+        <DataTemplate DataType="{x:Type viewModels:AnalysisSettingsSection}"><settings:AnalysisSettingsView DataContext="{Binding Settings}" /></DataTemplate>
         <DataTemplate DataType="{x:Type viewModels:SafetySettingsSection}">
             <settings:SafetySettingsView DataContext="{Binding Settings}" />
         </DataTemplate>

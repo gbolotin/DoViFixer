@@ -9,7 +9,7 @@ public sealed class SettingsService(ISettingsStore store, IDependencyDetector de
     public HardwareProfile Hardware => hardware?.Profile ?? new(1, 1, false);
 
     public Task<UserSettings> ReadAsync(CancellationToken cancellationToken) => store.ReadAsync(cancellationToken);
-    public async Task SetPreferencesAsync(string? temporaryDirectory, string? outputDirectory, bool replaceOriginal, bool createElArchive, CancellationToken cancellationToken, bool? automaticallyScanAddedFiles = null, bool? useCachedResults = null, bool? autoSelectAfterScan = null, AppTheme? theme = null, bool? allowFel = null, bool? includeSimple = null, bool? forceComplex = null, bool? showCompletionNotifications = null, int? conversionWorkers = null, VerificationLevel? verificationLevel = null, bool? recycleDeletedOriginalsAndBackups = null, double? freeSpaceMarginPercent = null, int? analysisWorkers = null, ToolProcessPriority? toolProcessPriority = null, int? pipeBufferKiB = null)
+    public async Task SetPreferencesAsync(string? temporaryDirectory, string? outputDirectory, bool replaceOriginal, bool createElArchive, CancellationToken cancellationToken, bool? automaticallyScanAddedFiles = null, bool? useCachedResults = null, bool? autoSelectAfterScan = null, AppTheme? theme = null, bool? allowFel = null, bool? includeSimple = null, bool? forceComplex = null, bool? showCompletionNotifications = null, int? conversionWorkers = null, VerificationLevel? verificationLevel = null, bool? recycleDeletedOriginalsAndBackups = null, double? freeSpaceMarginPercent = null, int? analysisWorkers = null, ToolProcessPriority? toolProcessPriority = null, int? pipeBufferKiB = null, int? brightnessMarginNits = null, int? assumedPeakBrightnessNits = null)
     {
         cancellationToken.ThrowIfCancellationRequested();
         if (conversionWorkers is < 0 or > 16)
@@ -36,6 +36,14 @@ public sealed class SettingsService(ISettingsStore store, IDependencyDetector de
         {
             throw new ArgumentOutOfRangeException(nameof(freeSpaceMarginPercent));
         }
+        if (brightnessMarginNits is < 0 or > 1000)
+        {
+            throw new ArgumentOutOfRangeException(nameof(brightnessMarginNits));
+        }
+        if (assumedPeakBrightnessNits is < 100 or > 10000)
+        {
+            throw new ArgumentOutOfRangeException(nameof(assumedPeakBrightnessNits));
+        }
         string? temporary = string.IsNullOrWhiteSpace(temporaryDirectory) ? null : Path.GetFullPath(temporaryDirectory);
         string? full = string.IsNullOrWhiteSpace(outputDirectory) ? null : Path.GetFullPath(outputDirectory);
         if (temporary is not null)
@@ -55,6 +63,8 @@ public sealed class SettingsService(ISettingsStore store, IDependencyDetector de
             OutputDirectory = full,
             ReplaceOriginal = replaceOriginal,
             CreateElArchive = createElArchive,
+            BrightnessMarginNits = brightnessMarginNits ?? s.BrightnessMarginNits,
+            AssumedPeakBrightnessNits = assumedPeakBrightnessNits ?? s.AssumedPeakBrightnessNits,
             ConversionWorkers = conversionWorkers ?? s.ConversionWorkers,
             AnalysisWorkers = analysisWorkers ?? s.AnalysisWorkers,
             ToolProcessPriority = toolProcessPriority ?? s.ToolProcessPriority,

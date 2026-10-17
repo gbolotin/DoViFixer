@@ -29,6 +29,13 @@ internal sealed class MediaProbe(IToolCatalog tools, IProcessRunner processes, I
 
     public async Task<RpuEvidence> AnalyzeAsync(MediaInfo media, AnalysisMethod method, ITemporaryWorkspace workspace, CancellationToken cancellationToken, IProgress<OperationProgress>? progress = null)
     {
+        var snapshot = settings is null ? new UserSettings() : await settings.ReadAsync(cancellationToken);
+        var evidence = await AnalyzeCoreAsync(media, method, workspace, snapshot, cancellationToken, progress);
+        return evidence with { Options = snapshot.AnalysisOptions };
+    }
+
+    private async Task<RpuEvidence> AnalyzeCoreAsync(MediaInfo media, AnalysisMethod method, ITemporaryWorkspace workspace, UserSettings snapshot, CancellationToken cancellationToken, IProgress<OperationProgress>? progress)
+    {
         try
         {
             if (method is AnalysisMethod.FullRpu or AnalysisMethod.DeepInspection)
@@ -100,7 +107,7 @@ internal sealed class MediaProbe(IToolCatalog tools, IProcessRunner processes, I
                     // Demuxing rewrites the stream once; decoding and measuring every frame dominates the stage.
                     var measuring = new PhasedProgress(progress, Guid.Empty, "Measuring base-layer brightness", media.Source.Path, 5, 95);
                     measuring.Report(0, 0);
-                    var brightness = await AnalyzeBrightnessAsync(raw, frames.Value, measuring, workspace, cancellationToken);
+                    var brightness = await AnalyzeBrightnessAsync(raw, frames.Value, measuring, workspace, snapshot.BrightnessMarginNits, cancellationToken);
                     progress?.Report(new(Guid.Empty, "Measuring base-layer brightness", media.Source.Path, 100));
                     return brightness;
                 }
@@ -114,7 +121,6 @@ internal sealed class MediaProbe(IToolCatalog tools, IProcessRunner processes, I
                 return new(method, EnhancementLayer.Unknown, 0, null, 0, 10, "Duration is unavailable for sample selection.");
             }
 
-            var snapshot = settings is null ? new UserSettings() : await settings.ReadAsync(cancellationToken);
             int workers = (hardware?.Profile ?? new HardwareProfile(1, 1, false)).AnalysisWorkers(snapshot.AnalysisWorkers);
             var results = new RpuEvidence?[10];
             var diagnostics = new string?[10];
@@ -204,7 +210,7 @@ internal sealed class MediaProbe(IToolCatalog tools, IProcessRunner processes, I
         return await ExportRpuAsync(AnalysisMethod.FullRpu, workspace, token);
     }
 
-    private async Task<RpuEvidence> AnalyzeBrightnessAsync(string raw, long frames, PhasedProgress measuring, ITemporaryWorkspace workspace, CancellationToken cancellationToken)
+    private async Task<RpuEvidence> AnalyzeBrightnessAsync(string raw, long frames, PhasedProgress measuring, ITemporaryWorkspace workspace, int brightnessMarginNits, CancellationToken cancellationToken)
     {
         string baseLayer = workspace.File("inspection-bl.hevc");
         string enhancementLayer = workspace.File("inspection-el.hevc");
@@ -234,7 +240,7 @@ internal sealed class MediaProbe(IToolCatalog tools, IProcessRunner processes, I
         }), cancellationToken);
         await using var rpu = File.OpenRead(workspace.File("rpu.json"));
         using var peaks = File.OpenText(workspace.File("brightness.txt"));
-        return await DeepInspectionParser.CompareAsync(rpu, peaks, cancellationToken);
+        return await DeepInspectionParser.CompareAsync(rpu, peaks, cancellationToken, brightnessMarginNits);
     }
 
     private async Task<RpuEvidence> AnalyzeRawAsync(string raw, AnalysisMethod method, ITemporaryWorkspace workspace, CancellationToken cancellationToken, string rpuName = "inspection.rpu", string jsonName = "rpu.json")

@@ -17,6 +17,22 @@ namespace DoViFixer.Application.Tests;
 public sealed class WorkflowTests
 {
     [TestMethod]
+    public async Task InspectionUsesSavedAnalysisSettingsForFutureOperations()
+    {
+        var runtime = new Runtime { PlanningFixtures = true };
+        var inspection = new InspectionService(runtime.Dependencies(), runtime, runtime, runtime, runtime,
+            NullLogger<InspectionService>.Instance, new MemoryCache());
+        var first = await inspection.InspectAsync("complex.mkv", AnalysisMethod.FullRpu, null, default);
+        Assert.AreEqual(AnalysisVerdict.ComplexFel, first.Verdict);
+        await runtime.UpdateAsync(value => value with { BrightnessMarginNits = 250, UseCachedResults = false }, default);
+        var second = await inspection.InspectAsync("complex.mkv", AnalysisMethod.FullRpu, null, default);
+        Assert.AreEqual(AnalysisVerdict.SimpleFel, second.Verdict);
+        Assert.AreEqual(250d, second.Evidence.Options!.BrightnessMarginNits);
+        Assert.AreEqual(1000d, second.Evidence.Options.AssumedPeakNits);
+        Assert.AreEqual(1000d, second.Media.MaxCll);
+    }
+
+    [TestMethod]
     [DataRow(false, false)]
     [DataRow(true, false)]
     [DataRow(true, true)]

@@ -13,7 +13,7 @@ The filter converts PQ RGB to linear light, then computes BT.2020 luminance (0.2
 
 Measurements are compared in presentation order with dovi_tool's exported RPU frame sequence. Every frame must have a measurement and L1 max_pq; frame indices must be contiguous and decoded-frame/RPU/video-packet counts must agree. JSON is streamed one RPU at a time and the temporary measurement file is read incrementally. Temporary files are removed on completion, failure or cancellation.
 
-The report includes compared frames, frames exceeding a 50-nit difference, base-layer peak, maximum RPU-minus-base-layer difference and its zero-based frame index. FEL is classified as Complex when any compared frame exceeds that threshold; otherwise it is classified as Simple. This threshold is a heuristic, not a Dolby specification. Static MaxCLL is unnecessary in this mode.
+The report includes compared frames, frames exceeding the configured brightness margin (50 nits by default), base-layer peak, maximum RPU-minus-base-layer difference and its zero-based frame index. FEL is classified as Complex when any compared frame exceeds that threshold; otherwise it is classified as Simple. This threshold is a heuristic, not a Dolby specification. Static MaxCLL is unnecessary in this mode.
 
 L1 metadata can describe scene brightness, so a dark frame within a bright scene can trigger the indicator. This is evidence of possible expansion, not a reconstruction of FEL picture data or a guarantee that discarding FEL is safe. Native validation covers black, approximately 1,000-nit and 10,000-nit gray frames, saturated full-range RGB colors, and complete extraction/decoding/comparison of the repository's tiny Dolby Vision fixture. Commercial-title detection accuracy is not established.
 
