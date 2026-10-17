@@ -1,0 +1,121 @@
+<UserControl x:Class="DoViFixer.App.Views.Settings.PerformanceSettingsView"
+             xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:viewModels="clr-namespace:DoViFixer.App.ViewModels"
+             xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
+             xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
+             mc:Ignorable="d"
+             d:DataContext="{d:DesignInstance Type=viewModels:SettingsViewModel}">
+    <!-- Performance settings share the parent settings view model. -->
+    <ScrollViewer VerticalScrollBarVisibility="Auto">
+        <StackPanel Margin="24,8,24,24">
+            <TextBlock Text="Performance" Style="{StaticResource WfHeadingTextStyle}" />
+            <TextBlock Text="Concurrency" Style="{StaticResource WfLabelTextStyle}" />
+            <Border Style="{StaticResource WfCardStyle}">
+                <StackPanel>
+                    <TextBlock Text="{Binding HardwareSummary}" TextWrapping="Wrap" />
+                    <TextBlock Text="{Binding ConcurrencyRecommendation}"
+                               Style="{StaticResource WfSettingNoteTextStyle}"
+                               Margin="0,8,0,12" />
+                    <Separator />
+                    <HeaderedContentControl Header="Simultaneous conversions"
+                                            AutomationProperties.HelpText="Maximum files converted at once. Additional files wait in the queue. More workers require more temporary and output disk space. The recommended value is based on physical CPU cores."
+                                            Style="{StaticResource WfSettingRowStyle}">
+                        <ComboBox ItemsSource="{Binding ConversionWorkerChoices}"
+                                  DisplayMemberPath="Label"
+                                  SelectedValuePath="Value"
+                                  SelectedValue="{Binding ConversionWorkers}"
+                                  Width="160"
+                                  AutomationProperties.Name="Simultaneous conversions" />
+                    </HeaderedContentControl>
+                    <Separator />
+                    <HeaderedContentControl Header="Parallel scan samples per file"
+                                            AutomationProperties.HelpText="Maximum sample probes analyzed together within one file. Each scan checks 10 samples. This does not run full inspections in parallel. The recommended value is based on physical CPU cores."
+                                            Style="{StaticResource WfSettingRowStyle}">
+                        <ComboBox ItemsSource="{Binding AnalysisWorkerChoices}"
+                                  DisplayMemberPath="Label"
+                                  SelectedValuePath="Value"
+                                  SelectedValue="{Binding AnalysisWorkers}"
+                                  Width="160"
+                                  AutomationProperties.Name="Parallel scan samples per file" />
+                    </HeaderedContentControl>
+                    <TextBlock Text="A scan checks 10 samples. This setting controls samples within one file; files are scanned one at a time."
+                               Style="{StaticResource WfSettingNoteTextStyle}" />
+                </StackPanel>
+            </Border>
+            <TextBlock Text="System impact" Style="{StaticResource WfLabelTextStyle}" />
+            <Border Style="{StaticResource WfCardStyle}">
+                <StackPanel>
+                    <HeaderedContentControl Header="Tool process priority"
+                                            AutomationProperties.HelpText="CPU priority for native tools. Below Normal leaves more CPU time for other applications. Above Normal can reduce responsiveness."
+                                            Style="{StaticResource WfSettingRowStyle}">
+                        <ComboBox ItemsSource="{Binding ToolPriorityChoices}"
+                                  DisplayMemberPath="Label"
+                                  SelectedValuePath="Value"
+                                  SelectedValue="{Binding ToolProcessPriority}"
+                                  Width="160"
+                                  AutomationProperties.Name="Tool process priority" />
+                    </HeaderedContentControl>
+                    <TextBlock Text="Below normal is recommended when you use the computer during a batch. Priority does not limit disk usage."
+                               Style="{StaticResource WfSettingNoteTextStyle}" />
+                    <Separator />
+                    <HeaderedContentControl Header="Video pipe buffer (KiB)"
+                                            AutomationProperties.HelpText="Buffer size for video passed between native tools. 1024 KiB equals 1 MiB. Larger buffers use more memory per active pipeline."
+                                            Style="{StaticResource WfSettingRowStyle}">
+                        <ComboBox ItemsSource="{Binding PipeBufferChoices}"
+                                  SelectedItem="{Binding PipeBufferKiB}"
+                                  Width="160"
+                                  AutomationProperties.Name="Video pipe buffer (KiB)" />
+                    </HeaderedContentControl>
+                    <TextBlock Text="4096 KiB (4 MiB) is recommended. Transformed video pipelines buffer both reading and writing. Changes apply to tools started afterward."
+                               Style="{StaticResource WfSettingNoteTextStyle}" />
+                </StackPanel>
+            </Border>
+            <TextBlock Text="Scanning &amp; cache" Style="{StaticResource WfLabelTextStyle}" />
+            <Border Style="{StaticResource WfCardStyle}">
+                <StackPanel>
+                    <CheckBox Content="Automatically scan added files"
+                              AutomationProperties.HelpText="Starts a scan as soon as files are added to the Media list."
+                              IsChecked="{Binding AutomaticallyScanAddedFiles}"
+                              Style="{StaticResource WfToggleSwitchStyle}" />
+                    <Separator />
+                    <CheckBox Content="Reuse saved scan results"
+                              AutomationProperties.HelpText="When disabled, scans and inspections analyze files again. Successful results are still saved."
+                              IsChecked="{Binding UseCachedResults}"
+                              Style="{StaticResource WfToggleSwitchStyle}" />
+                    <Separator />
+                    <DockPanel Margin="0,12">
+                        <Button Content="Clear cache"
+                                DockPanel.Dock="Right"
+                                Command="{Binding ClearCacheCommand}"
+                                ToolTip="Delete cached analysis results and movie frame previews."
+                                VerticalAlignment="Center"
+                                Margin="24,0,0,0" />
+                        <StackPanel>
+                            <TextBlock Text="Analysis cache" />
+                            <TextBlock Text="{Binding CacheSizeText}"
+                                       Style="{StaticResource CaptionTextBlockStyle}"
+                                       Foreground="{DynamicResource TextFillColorSecondaryBrush}"
+                                       ToolTip="Total disk space used by cached analysis results and movie frame previews."
+                                       Margin="0,4,0,0" />
+                            <TextBlock TextWrapping="Wrap"
+                                       Style="{StaticResource CaptionTextBlockStyle}"
+                                       Foreground="{DynamicResource TextFillColorSecondaryBrush}"
+                                       ToolTip="{Binding CacheDirectory}">
+                                <Run Text="Location: " /><Hyperlink Command="{Binding OpenCacheFolderCommand}"
+                                           AutomationProperties.Name="Open cache folder">
+                                    <Run Text="{Binding CacheDirectory, Mode=OneWay}" />
+                                </Hyperlink>
+                            </TextBlock>
+                        </StackPanel>
+                    </DockPanel>
+                    <Separator />
+                    <CheckBox Content="Automatically select convertible files after scan"
+                              AutomationProperties.HelpText="When a scan finishes, selects the files that can be converted with the current FEL settings."
+                              IsChecked="{Binding AutoSelectAfterScan}"
+                              Style="{StaticResource WfToggleSwitchStyle}" />
+                </StackPanel>
+            </Border>
+        </StackPanel>
+    </ScrollViewer>
+</UserControl>

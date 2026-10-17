@@ -217,7 +217,7 @@ Missing native dependencies must be detected and installable automatically from 
 | Dependency | Executables to validate |
 | --- | --- |
 | FFmpeg | `ffmpeg.exe`, `ffprobe.exe` |
-| MKVToolNix | `mkvmerge.exe`, `mkvextract.exe` |
+| MKVToolNix | `mkvmerge.exe`, `mkvextract.exe`, `mkvpropedit.exe` |
 | MediaInfo CLI | `mediainfo.exe` with working command-line output |
 | dovi_tool | `dovi_tool.exe` |
 

@@ -49,8 +49,12 @@ public sealed record UserSettings
         get;
         init;
     }
-    /// <summary>Maximum number of files converted at once; additional files wait in the batch queue.</summary>
-    public int ConversionWorkers { get; init; } = 1;
+    /// <summary>Maximum files converted at once; zero selects the hardware recommendation. Additional files wait in the batch queue.</summary>
+    public int ConversionWorkers { get; init; }
+    /// <summary>Samples analyzed at once within one file. Zero selects the hardware recommendation.</summary>
+    public int AnalysisWorkers { get; init; }
+    public ToolProcessPriority ToolProcessPriority { get; init; } = ToolProcessPriority.BelowNormal;
+    public int PipeBufferKiB { get; init; } = 4096;
     public VerificationLevel VerificationLevel { get; init; } = VerificationLevel.FrameCountWithRecount;
     public bool RecycleDeletedOriginalsAndBackups { get; init; } = true;
     public double FreeSpaceMarginPercent { get; init; } = 20;

@@ -62,7 +62,8 @@ internal sealed class TestRuntime : IFileDiscovery, IFileOperations, IMediaProbe
         get;
         private set;
     }
-    = new();
+    // Sequential fixtures must not depend on the test computer's CPU topology.
+    = new() { ConversionWorkers = 1 };
     public bool Approval
     {
         get;

@@ -2,6 +2,7 @@ using System.Globalization;
 using System.Text.Json;
 using DoViFixer.Application.Abstractions;
 using DoViFixer.Application.Dependencies;
+using DoViFixer.Application.Settings;
 using DoViFixer.Application.Operations;
 using DoViFixer.Domain.Analysis;
 using DoViFixer.Domain.Media;
@@ -10,7 +11,7 @@ using DoViFixer.Infrastructure.MediaTools.Processes;
 using Microsoft.Extensions.Logging;
 
 namespace DoViFixer.Infrastructure.MediaTools;
-internal sealed class MediaProbe(IToolCatalog tools, IProcessRunner processes, IFileOperations files, ILogger<MediaProbe> logger) : IMediaProbe
+internal sealed class MediaProbe(IToolCatalog tools, IProcessRunner processes, IFileOperations files, ILogger<MediaProbe> logger, ISettingsStore? settings = null, IHardwareInfoProvider? hardware = null) : IMediaProbe
 {
     public async Task<MediaInfo> ProbeAsync(string path, CancellationToken cancellationToken)
     {
@@ -113,37 +114,59 @@ internal sealed class MediaProbe(IToolCatalog tools, IProcessRunner processes, I
                 return new(method, EnhancementLayer.Unknown, 0, null, 0, 10, "Duration is unavailable for sample selection.");
             }
 
-            var samples = new List<RpuEvidence>();
-            var diagnostics = new List<string>();
-            for (int i = 0; i < 10; i++)
+            var snapshot = settings is null ? new UserSettings() : await settings.ReadAsync(cancellationToken);
+            int workers = (hardware?.Profile ?? new HardwareProfile(1, 1, false)).AnalysisWorkers(snapshot.AnalysisWorkers);
+            var results = new RpuEvidence?[10];
+            var diagnostics = new string?[10];
+            int completed = 0;
+            var progressLock = new object();
+            await Parallel.ForEachAsync(Enumerable.Range(0, 10), new ParallelOptions
             {
-                progress?.Report(new(Guid.Empty, $"Analyzing sample {i + 1} of 10", media.Source.Path, i * 10));
+                MaxDegreeOfParallelism = workers,
+                CancellationToken = cancellationToken
+            }, async (i, token) =>
+            {
                 string raw = workspace.File($"sample-{i}.hevc");
+                string rpuName = $"sample-{i}.rpu";
+                string jsonName = $"sample-{i}.json";
+                lock (progressLock)
+                {
+                    progress?.Report(new(Guid.Empty, $"Analyzing sample {i + 1} of 10", media.Source.Path, completed * 10));
+                }
                 try
                 {
                     string time = (media.DurationSeconds.Value * (0.05 + i * 0.1)).ToString("F3", CultureInfo.InvariantCulture);
                     await processes.RunAsync(new(tools.GetPath(NativeTool.FFmpeg), new[]
                     {
                         "-nostdin", "-v", "error", "-ss", time, "-i", media.Source.Path, "-map", "0:v:0", "-c:v", "copy", "-an", "-sn", "-dn", "-bsf:v", "hevc_mp4toannexb", "-f", "hevc", "-t", "1", raw
-                    }), cancellationToken);
-                    samples.Add(await AnalyzeRawAsync(raw, method, workspace, cancellationToken));
+                    }), token);
+                    results[i] = await AnalyzeRawAsync(raw, method, workspace, token, rpuName, jsonName);
                 }
-                catch (Exception ex)when (ex is IOException or InvalidDataException or System.Text.Json.JsonException)
+                catch (Exception ex) when (ex is IOException or InvalidDataException or JsonException)
                 {
                     logger.LogDebug(ex, "RPU sample {SampleIndex} failed for {Input}", i, media.Source.Path);
                     var position = TimeSpan.FromSeconds(media.DurationSeconds.Value * (0.05 + i * 0.1));
-                    diagnostics.Add($"Sample {i + 1}/10 at {position:hh\\:mm\\:ss}: {ex.Message}");
-                // Missing sample coverage remains Unknown; never turn a failed probe into complex FEL.
+                    diagnostics[i] = $"Sample {i + 1}/10 at {position:hh\\:mm\\:ss}: {ex.Message}";
+                    // Missing sample coverage remains Unknown; never turn a failed probe into complex FEL.
                 }
                 finally
                 {
                     File.Delete(raw);
+                    File.Delete(workspace.File(rpuName));
+                    File.Delete(workspace.File(jsonName));
                 }
-            }
+                lock (progressLock)
+                {
+                    completed++;
+                    progress?.Report(new(Guid.Empty, $"Analyzed {completed} of 10 samples", media.Source.Path, completed * 10));
+                }
+            });
+            var samples = results.OfType<RpuEvidence>().ToList();
+            var failures = diagnostics.OfType<string>().ToArray();
 
             progress?.Report(new(Guid.Empty, "Samples analyzed", media.Source.Path, 100));
             EnhancementLayer layer = samples.Any(s => s.Layer == EnhancementLayer.Fel) ? EnhancementLayer.Fel : samples.Count > 0 && samples.All(s => s.Layer == EnhancementLayer.Mel) ? EnhancementLayer.Mel : EnhancementLayer.Unknown;
-            return new(method, layer, samples.Sum(s => s.Frames), samples.Select(s => s.PeakNits).Max(), samples.Count, 10, SampleDiagnostics: diagnostics.Count == 0 ? null : string.Join("\n", diagnostics));
+            return new(method, layer, samples.Sum(s => s.Frames), samples.Select(s => s.PeakNits).Max(), samples.Count, 10, SampleDiagnostics: failures.Length == 0 ? null : string.Join("\n", failures));
         }
         catch (Exception ex)when (ex is not OperationCanceledException)
         {
@@ -214,26 +237,26 @@ internal sealed class MediaProbe(IToolCatalog tools, IProcessRunner processes, I
         return await DeepInspectionParser.CompareAsync(rpu, peaks, cancellationToken);
     }
 
-    private async Task<RpuEvidence> AnalyzeRawAsync(string raw, AnalysisMethod method, ITemporaryWorkspace workspace, CancellationToken cancellationToken)
+    private async Task<RpuEvidence> AnalyzeRawAsync(string raw, AnalysisMethod method, ITemporaryWorkspace workspace, CancellationToken cancellationToken, string rpuName = "inspection.rpu", string jsonName = "rpu.json")
     {
-        string rpu = workspace.File("inspection.rpu");
-        string json = workspace.File("rpu.json");
+        string rpu = workspace.File(rpuName);
+        string json = workspace.File(jsonName);
         File.Delete(rpu);
         File.Delete(json);
         await processes.RunAsync(new(tools.GetPath(NativeTool.DoviTool), new[]
         {
             "extract-rpu", raw, "-o", rpu
         }), cancellationToken);
-        return await ExportRpuAsync(method, workspace, cancellationToken);
+        return await ExportRpuAsync(method, workspace, cancellationToken, rpuName, jsonName);
     }
 
-    private async Task<RpuEvidence> ExportRpuAsync(AnalysisMethod method, ITemporaryWorkspace workspace, CancellationToken cancellationToken)
+    private async Task<RpuEvidence> ExportRpuAsync(AnalysisMethod method, ITemporaryWorkspace workspace, CancellationToken cancellationToken, string rpuName = "inspection.rpu", string jsonName = "rpu.json")
     {
-        string json = workspace.File("rpu.json");
+        string json = workspace.File(jsonName);
         // Relative export destination avoids dovi_tool's comma-separated option grammar interpreting path punctuation.
         await processes.RunAsync(new(tools.GetPath(NativeTool.DoviTool), new[]
         {
-            "export", "-i", "inspection.rpu", "-d", "all=rpu.json"
+            "export", "-i", rpuName, "-d", $"all={jsonName}"
         }, workspace.DirectoryPath), cancellationToken);
         await using var stream = File.OpenRead(json);
         return await RpuParser.ParseAsync(stream, method, cancellationToken);

@@ -37,7 +37,7 @@ internal sealed class HelpRenderer(ConsoleRenderer renderer)
         Command("dependencies check [Tool ...] [--json]", "Check native tool availability and compatibility. Omit tool names to check all tools.");
         Command("dependencies install [Tool ...] [--yes]", "Prepare an installation plan for missing, unusable, or incompatible tools, then ask for approval. Validated tool paths are saved after installation.");
         Options(("--yes", "Approve this software installation plan without prompting."), ("--repair", "Accepted for compatibility; repair is already included when needed."));
-        Paragraph("Tool names: FFmpeg, FFprobe, MkvMerge, MkvExtract, MediaInfo, DoviTool.");
+        Paragraph("Tool names: FFmpeg, FFprobe, MkvMerge, MkvExtract, MkvPropEdit, MediaInfo, DoviTool.");
         Examples(("dependencies check", "Check all native tools"), ("dependencies check FFmpeg DoviTool --json", "Check selected tools as JSON"), ("dependencies install", "Review and approve required installations"));
         Group("Settings");
         Command("settings show [--json]", "Display saved settings and tool paths.");

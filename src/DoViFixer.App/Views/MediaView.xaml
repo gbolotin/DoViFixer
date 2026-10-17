@@ -891,150 +891,6 @@
         </DataTemplate>
 
         <!-- Laid out like the job card mockup: preview and file, step progress and steps, then times and Cancel. -->
-        <DataTemplate x:Key="MediaCurrentJobProgressTemplate" DataType="{x:Type viewModels:MediaViewModel}">
-            <Grid>
-                <Grid.ColumnDefinitions>
-                    <ColumnDefinition Width="Auto" />
-                    <ColumnDefinition Width="*"
-                                      MinWidth="160"
-                                      MaxWidth="320" />
-                    <ColumnDefinition Width="2*" />
-                    <ColumnDefinition Width="Auto" />
-                    <ColumnDefinition Width="Auto" />
-                </Grid.ColumnDefinitions>
-                <Grid Width="160"
-                      Height="90"
-                      VerticalAlignment="Top">
-                    <Border Background="{DynamicResource SubtleFillColorSecondaryBrush}" CornerRadius="{DynamicResource ControlCornerRadius}">
-                        <TextBlock Text="&#xE714;"
-                                   FontFamily="{StaticResource SymbolThemeFontFamily}"
-                                   Style="{StaticResource SubtitleTextBlockStyle}"
-                                   Foreground="{DynamicResource TextFillColorTertiaryBrush}"
-                                   HorizontalAlignment="Center"
-                                   VerticalAlignment="Center" />
-                    </Border>
-                    <Border CornerRadius="{DynamicResource ControlCornerRadius}" AutomationProperties.Name="Current job frame preview">
-                        <Border.Background>
-                            <ImageBrush ImageSource="{Binding CurrentJobPreview}" Stretch="UniformToFill" />
-                        </Border.Background>
-                    </Border>
-                </Grid>
-                <StackPanel Grid.Column="1"
-                            Margin="16,0,24,0"
-                            DataContext="{Binding BatchProgress.CurrentJob}">
-                    <TextBlock Text="{Binding Name}"
-                               Style="{StaticResource SubtitleTextBlockStyle}"
-                               TextTrimming="CharacterEllipsis"
-                               ToolTip="{Binding Path}" />
-                    <ItemsControl ItemsSource="{Binding Progress.Details}" Margin="0,4,0,0">
-                        <ItemsControl.ItemTemplate>
-                            <DataTemplate>
-                                <TextBlock Text="{Binding}"
-                                           Foreground="{DynamicResource TextFillColorSecondaryBrush}"
-                                           TextTrimming="CharacterEllipsis"
-                                           ToolTip="{Binding}" />
-                            </DataTemplate>
-                        </ItemsControl.ItemTemplate>
-                    </ItemsControl>
-                </StackPanel>
-                <Grid Grid.Column="2"
-                      Margin="0,0,24,0"
-                      DataContext="{Binding BatchProgress.CurrentJob.Progress}">
-                    <Grid.ColumnDefinitions>
-                        <ColumnDefinition Width="*" />
-                        <ColumnDefinition Width="Auto" />
-                    </Grid.ColumnDefinitions>
-                    <Grid.RowDefinitions>
-                        <RowDefinition Height="Auto" />
-                        <RowDefinition Height="Auto" />
-                        <RowDefinition Height="Auto" />
-                    </Grid.RowDefinitions>
-                    <TextBlock Grid.ColumnSpan="2"
-                               Text="{Binding Stage}"
-                               Foreground="{DynamicResource TextFillColorSecondaryBrush}"
-                               TextTrimming="CharacterEllipsis"
-                               ToolTip="{Binding Stage}" />
-                    <ProgressBar Grid.Row="1"
-                                 Margin="0,8,0,0"
-                                 VerticalAlignment="Center"
-                                 Value="{Binding Percent, Mode=OneWay, FallbackValue=0}"
-                                 IsIndeterminate="{Binding IsIndeterminate, FallbackValue=False}"
-                                 Height="8"
-                                 AutomationProperties.Name="Current job progress" />
-                    <!-- Fixed width for "100%", so the bar keeps its length; empty while the bar is indeterminate. -->
-                    <TextBlock Grid.Row="1" Grid.Column="1">
-                        <TextBlock.Style>
-                            <Style TargetType="TextBlock" BasedOn="{StaticResource ProgressPercentTextStyle}">
-                                <Setter Property="Margin" Value="16,8,0,0" />
-                                <Setter Property="Text" Value="{Binding ProgressText}" />
-                                <Style.Triggers>
-                                    <DataTrigger Binding="{Binding IsIndeterminate}" Value="True">
-                                        <Setter Property="Text" Value="" />
-                                    </DataTrigger>
-                                </Style.Triggers>
-                            </Style>
-                        </TextBlock.Style>
-                    </TextBlock>
-                    <!-- Only under the bar, with the last step at its right end, so the steps are as wide as the bar. -->
-                    <ItemsControl Grid.Row="2"
-                                  Margin="0,16,0,0"
-                                  ItemsSource="{Binding Steps}"
-                                  ItemTemplate="{StaticResource JobStepTemplate}"
-                                  Focusable="False"
-                                  AutomationProperties.Name="Current job steps"
-                                  Visibility="{Binding HasSteps, Converter={StaticResource WfBooleanToVisibilityConverter}}">
-                        <ItemsControl.ItemsPanel>
-                            <ItemsPanelTemplate>
-                                <views:StepRowPanel />
-                            </ItemsPanelTemplate>
-                        </ItemsControl.ItemsPanel>
-                    </ItemsControl>
-                </Grid>
-                <Rectangle Grid.Column="3"
-                           Width="1"
-                           Fill="{DynamicResource DividerStrokeColorDefaultBrush}" />
-                <StackPanel Grid.Column="4" Margin="24,0,0,0">
-                    <Grid>
-                        <Grid.ColumnDefinitions>
-                            <ColumnDefinition Width="Auto" />
-                            <!-- Fixed, wide enough for "Estimating…", so the column never moves as the times tick. -->
-                            <ColumnDefinition Width="120" />
-                        </Grid.ColumnDefinitions>
-                        <Grid.RowDefinitions>
-                            <RowDefinition Height="Auto" />
-                            <RowDefinition Height="Auto" />
-                        </Grid.RowDefinitions>
-                        <TextBlock Text="Elapsed time" Foreground="{DynamicResource TextFillColorSecondaryBrush}" />
-                        <TextBlock Grid.Column="1"
-                                   Text="{Binding BatchProgress.CurrentJobElapsed}"
-                                   Margin="24,0,0,0"
-                                   TextAlignment="Right"
-                                   Typography.NumeralAlignment="Tabular" />
-                        <TextBlock Grid.Row="1"
-                                   Text="Step remaining"
-                                   Margin="0,4,0,0"
-                                   Foreground="{DynamicResource TextFillColorSecondaryBrush}"
-                                   ToolTip="The current step's remaining time at its average rate so far" />
-                        <TextBlock Grid.Row="1"
-                                   Grid.Column="1"
-                                   Text="{Binding BatchProgress.CurrentStepRemaining}"
-                                   Margin="24,4,0,0"
-                                   TextAlignment="Right"
-                                   Typography.NumeralAlignment="Tabular" />
-                    </Grid>
-                    <Button Content="Cancel"
-                            Tag="&#xE711;"
-                            ContentTemplate="{StaticResource WfIconContentTemplate}"
-                            HorizontalAlignment="Stretch"
-                            Margin="0,16,0,0"
-                            ToolTip="Cancel job"
-                            AutomationProperties.Name="Cancel job"
-                            Command="{Binding CancelFileCommand}"
-                            CommandParameter="{Binding BatchProgress.CurrentJob}" />
-                </StackPanel>
-            </Grid>
-        </DataTemplate>
-
         <DataTemplate x:Key="MediaActiveProgressTemplate" DataType="{x:Type viewModels:MediaViewModel}">
             <Grid>
                 <Grid.RowDefinitions>
@@ -1048,7 +904,7 @@
                 </Grid.ColumnDefinitions>
                 <DockPanel Grid.ColumnSpan="2" Margin="0,0,0,8">
                     <StackPanel DockPanel.Dock="Right" Orientation="Horizontal">
-                        <!-- Cancel is last so it lines up with the job card's Cancel below. -->
+                        <!-- Keep cancellation beside the batch pause control. -->
                         <Button Style="{StaticResource ProgressIconButtonStyle}"
                                 Content="{Binding PauseBatchIcon}"
                                 ToolTip="{Binding PauseBatchToolTip}"
@@ -1097,39 +953,7 @@
 
         <DataTemplate x:Key="MediaProgressTemplate" DataType="{x:Type viewModels:MediaViewModel}">
             <Border Style="{StaticResource WfCardStyle}">
-                <StackPanel Grid.IsSharedSizeScope="True">
-                    <ContentControl Content="{Binding}" ContentTemplate="{StaticResource MediaActiveProgressTemplate}">
-                        <ContentControl.Style>
-                            <Style TargetType="ContentControl">
-                                <Setter Property="Margin" Value="0,0,0,16" />
-                                <Style.Triggers>
-                                    <DataTrigger Binding="{Binding BatchProgress.CurrentJob}" Value="{x:Null}">
-                                        <Setter Property="Margin" Value="0" />
-                                    </DataTrigger>
-                                    <MultiDataTrigger>
-                                        <MultiDataTrigger.Conditions>
-                                            <Condition Binding="{Binding BatchProgress.IsRunning}" Value="True" />
-                                            <Condition Binding="{Binding BatchProgress.Total}" Value="1" />
-                                        </MultiDataTrigger.Conditions>
-                                        <Setter Property="Visibility" Value="Collapsed" />
-                                    </MultiDataTrigger>
-                                </Style.Triggers>
-                            </Style>
-                        </ContentControl.Style>
-                    </ContentControl>
-                    <ContentControl Content="{Binding}" ContentTemplate="{StaticResource MediaCurrentJobProgressTemplate}">
-                        <ContentControl.Style>
-                            <Style TargetType="ContentControl">
-                                <Setter Property="Visibility" Value="{Binding BatchProgress.IsRunning, Converter={StaticResource WfBooleanToVisibilityConverter}}" />
-                                <Style.Triggers>
-                                    <DataTrigger Binding="{Binding BatchProgress.CurrentJob}" Value="{x:Null}">
-                                        <Setter Property="Visibility" Value="Collapsed" />
-                                    </DataTrigger>
-                                </Style.Triggers>
-                            </Style>
-                        </ContentControl.Style>
-                    </ContentControl>
-                </StackPanel>
+                <ContentControl Content="{Binding}" ContentTemplate="{StaticResource MediaActiveProgressTemplate}" />
             </Border>
         </DataTemplate>
 

@@ -46,28 +46,40 @@ public sealed class HevcAnnexBTests
     }
 
     [TestMethod]
-    public async Task StreamingConversionPassesMatroskaFramesThroughWithoutFfmpegsAnnexBFilter()
+    [DataRow(false)]
+    [DataRow(true)]
+    public async Task StreamingConversionPassesMatroskaFramesThroughWithoutFfmpegsAnnexBFilter(bool failMetadataEdit)
     {
         string directory = Path.Combine(Path.GetTempPath(), "DoViFixer-tests-" + Guid.NewGuid().ToString("N"));
         Directory.CreateDirectory(directory);
         try
         {
             var tools = new ToolCatalog();
-            foreach (var tool in new[] { NativeTool.FFmpeg, NativeTool.DoviTool, NativeTool.MkvExtract, NativeTool.MkvMerge })
+            foreach (var tool in new[] { NativeTool.FFmpeg, NativeTool.DoviTool, NativeTool.MkvExtract, NativeTool.MkvMerge, NativeTool.MkvPropEdit })
             {
                 tools.Refresh([new(tool, DependencyState.Ready, tool.ToString(), "test", "fixture")]);
             }
 
             string json = await File.ReadAllTextAsync(Path.Combine(AppContext.BaseDirectory, "Fixtures", "mkvmerge.json"));
             var media = new MediaInfo(new("movie.mkv", 1024, DateTime.UnixEpoch), DolbyVisionProfile.Profile7, "HEVC", 0, 1920, 1080, 24, 2400, 100, 0, 1000, [new(0, "video", "HEVC", "eng", "", true, false, null)], 0, 0, null, json);
-            var runner = new StreamingRunner(LengthPrefixed(4, nalUnits));
+            var runner = new StreamingRunner(LengthPrefixed(4, nalUnits), failMetadataEdit);
             var processor = new VideoProcessor(tools, runner, TimeProvider.System, NullLogger<VideoProcessor>.Instance);
+            if (failMetadataEdit)
+            {
+                var progress = new RecordingProgress();
+                await Assert.ThrowsExactlyAsync<IOException>(() => processor.ConvertAsync(media, ConversionTarget.Profile81, new Workspace(directory), Path.Combine(directory, "output.mkv"), progress, Guid.NewGuid(), default));
+                Assert.IsFalse(progress.Values.Any(value => value.Stage == "Remuxing" && value.Percent == 100));
+                return;
+            }
             await processor.ConvertAsync(media, ConversionTarget.Profile81, new Workspace(directory), Path.Combine(directory, "output.mkv"), null, Guid.NewGuid(), default);
             Assert.IsNotNull(runner.Producer);
             Assert.AreEqual("FFmpeg", runner.Producer.Executable);
             Assert.DoesNotContain("hevc_mp4toannexb", runner.Producer.Arguments);
             CollectionAssert.IsSubsetOf(new[] { "-c:v", "copy", "-f", "data" }, runner.Producer.Arguments.ToArray());
             CollectionAssert.AreEqual(nalUnits.SelectMany(n => new byte[] { 0, 0, 0, 1 }.Concat(n)).ToArray(), runner.Relayed);
+            var edit = runner.Requests.Single(request => request.Executable == nameof(NativeTool.MkvPropEdit));
+            CollectionAssert.AreEqual(new[] { Path.Combine(directory, "output.mkv"), "--edit", "track:v1", "--set", "default-duration=41708333" }, edit.Arguments.ToArray());
+            Assert.IsTrue(runner.Requests.IndexOf(edit) > runner.Requests.FindIndex(request => request.Executable == nameof(NativeTool.MkvMerge)));
             Assert.IsFalse(runner.Requests.Any(r => r.Arguments.Contains("tracks") && r.Arguments.Contains("--gui-mode")), "Streaming succeeded, so the video is not extracted to disk.");
         }
         finally
@@ -111,7 +123,7 @@ public sealed class HevcAnnexBTests
     private static ToolCatalog Tools()
     {
         var tools = new ToolCatalog();
-        foreach (var tool in new[] { NativeTool.FFmpeg, NativeTool.DoviTool, NativeTool.MkvExtract, NativeTool.MkvMerge })
+        foreach (var tool in new[] { NativeTool.FFmpeg, NativeTool.DoviTool, NativeTool.MkvExtract, NativeTool.MkvMerge, NativeTool.MkvPropEdit })
         {
             tools.Refresh([new(tool, DependencyState.Ready, tool.ToString(), "test", "fixture")]);
         }
@@ -144,7 +156,7 @@ public sealed class HevcAnnexBTests
         public override ValueTask<int> ReadAsync(Memory<byte> buffer, CancellationToken cancellationToken = default) => base.ReadAsync(buffer[..Math.Min(1, buffer.Length)], cancellationToken);
     }
 
-    private sealed class StreamingRunner(byte[] producerOutput) : IProcessRunner
+    private sealed class StreamingRunner(byte[] producerOutput, bool failMetadataEdit = false) : IProcessRunner
     {
         public ProcessRequest? Producer
         {
@@ -170,6 +182,10 @@ public sealed class HevcAnnexBTests
         public Task<ProcessResult> RunAsync(ProcessRequest request, CancellationToken cancellationToken)
         {
             Requests.Add(request);
+            if (failMetadataEdit && request.Executable == nameof(NativeTool.MkvPropEdit))
+            {
+                throw new IOException("Frame-rate metadata correction failed.");
+            }
             return Task.FromResult(new ProcessResult(0, "", ""));
         }
 

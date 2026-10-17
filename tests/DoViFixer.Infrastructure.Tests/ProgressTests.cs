@@ -38,7 +38,8 @@ public sealed class ProgressTests
         Assert.IsTrue(sink.Values.All(value => value.Item == media.Source.Path));
         if (method == AnalysisMethod.SampledRpu)
         {
-            CollectionAssert.AreEqual(Enumerable.Range(0, 11).Select(value => (double?)(value * 10)).ToArray(), sink.Values.Select(value => value.Percent).ToArray());
+            CollectionAssert.AreEqual(Enumerable.Range(0, 11).Select(value => (double?)(value * 10)).ToArray(), sink.Values.Select(value => value.Percent).Distinct().ToArray());
+            Assert.IsTrue(sink.Values.Zip(sink.Values.Skip(1)).All(pair => pair.First.Percent <= pair.Second.Percent));
             Assert.AreEqual(0, result.SuccessfulSamples, "Progress measures attempts, not successful evidence.");
             Assert.IsNotNull(result.SampleDiagnostics);
         }

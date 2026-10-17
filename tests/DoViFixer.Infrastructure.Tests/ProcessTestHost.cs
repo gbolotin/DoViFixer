@@ -17,6 +17,18 @@ internal static class ProcessTestHost
         }
 
         string mode = args[0];
+        if (mode == "bytes")
+        {
+            byte[] payload = Enumerable.Range(0, 300_000).Select(index => (byte)(index % 251)).ToArray();
+            await Console.OpenStandardOutput().WriteAsync(payload);
+            return 0;
+        }
+        if (mode == "copy")
+        {
+            await using var destination = File.Create(args[1]);
+            await Console.OpenStandardInput().CopyToAsync(destination);
+            return 0;
+        }
         if (mode == "lock")
         {
             using var held = new FileStream(args[1], FileMode.Open, FileAccess.Read, FileShare.Read);

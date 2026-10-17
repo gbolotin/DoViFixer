@@ -233,6 +233,16 @@ internal sealed class VideoProcessor(IToolCatalog tools, IProcessRunner processe
 
         arguments.Add(video);
         await processes.RunAsync(new(tools.GetPath(NativeTool.MkvMerge), arguments, AllowWarnings: true, OutputLine: outputLine), cancellationToken);
+        // External millisecond timestamps can make mkvmerge replace DefaultDuration with a rounded
+        // delta. Restore only the staged track header; packet timestamps and payloads stay intact.
+        if (videoProperties.TryGetProperty("default_duration", out var duration) && duration.GetInt64() > 0)
+        {
+            string value = duration.GetInt64().ToString(CultureInfo.InvariantCulture);
+            await processes.RunAsync(new(tools.GetPath(NativeTool.MkvPropEdit), new[]
+            {
+                output, "--edit", "track:v1", "--set", "default-duration=" + value
+            }, AllowWarnings: true), cancellationToken);
+        }
     }
 
     internal static async Task<string> HashAsync(string path, CancellationToken cancellationToken, Action<long>? bytesRead = null)

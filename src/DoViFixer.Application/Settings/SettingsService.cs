@@ -4,15 +4,29 @@ using DoViFixer.Application.Operations;
 using Microsoft.Extensions.Logging;
 
 namespace DoViFixer.Application.Settings;
-public sealed class SettingsService(ISettingsStore store, IDependencyDetector detector, IToolCatalog catalog, IFileOperations files, ILogger<SettingsService> logger)
+public sealed class SettingsService(ISettingsStore store, IDependencyDetector detector, IToolCatalog catalog, IFileOperations files, ILogger<SettingsService> logger, IHardwareInfoProvider? hardware = null)
 {
+    public HardwareProfile Hardware => hardware?.Profile ?? new(1, 1, false);
+
     public Task<UserSettings> ReadAsync(CancellationToken cancellationToken) => store.ReadAsync(cancellationToken);
-    public async Task SetPreferencesAsync(string? temporaryDirectory, string? outputDirectory, bool replaceOriginal, bool createElArchive, CancellationToken cancellationToken, bool? automaticallyScanAddedFiles = null, bool? useCachedResults = null, bool? autoSelectAfterScan = null, AppTheme? theme = null, bool? allowFel = null, bool? includeSimple = null, bool? forceComplex = null, bool? showCompletionNotifications = null, int? conversionWorkers = null, VerificationLevel? verificationLevel = null, bool? recycleDeletedOriginalsAndBackups = null, double? freeSpaceMarginPercent = null)
+    public async Task SetPreferencesAsync(string? temporaryDirectory, string? outputDirectory, bool replaceOriginal, bool createElArchive, CancellationToken cancellationToken, bool? automaticallyScanAddedFiles = null, bool? useCachedResults = null, bool? autoSelectAfterScan = null, AppTheme? theme = null, bool? allowFel = null, bool? includeSimple = null, bool? forceComplex = null, bool? showCompletionNotifications = null, int? conversionWorkers = null, VerificationLevel? verificationLevel = null, bool? recycleDeletedOriginalsAndBackups = null, double? freeSpaceMarginPercent = null, int? analysisWorkers = null, ToolProcessPriority? toolProcessPriority = null, int? pipeBufferKiB = null)
     {
         cancellationToken.ThrowIfCancellationRequested();
-        if (conversionWorkers is < 1 or > 8)
+        if (conversionWorkers is < 0 or > 16)
         {
-            throw new ArgumentOutOfRangeException(nameof(conversionWorkers), "Conversion workers must be between 1 and 8.");
+            throw new ArgumentOutOfRangeException(nameof(conversionWorkers), "Conversion workers must be Automatic (0) or between 1 and 16.");
+        }
+        if (analysisWorkers is < 0 or > 10)
+        {
+            throw new ArgumentOutOfRangeException(nameof(analysisWorkers));
+        }
+        if (pipeBufferKiB is < 64 or > 65536)
+        {
+            throw new ArgumentOutOfRangeException(nameof(pipeBufferKiB));
+        }
+        if (toolProcessPriority is not null && !Enum.IsDefined(toolProcessPriority.Value))
+        {
+            throw new ArgumentOutOfRangeException(nameof(toolProcessPriority));
         }
         if (verificationLevel is not null && !Enum.IsDefined(verificationLevel.Value))
         {
@@ -42,6 +56,9 @@ public sealed class SettingsService(ISettingsStore store, IDependencyDetector de
             ReplaceOriginal = replaceOriginal,
             CreateElArchive = createElArchive,
             ConversionWorkers = conversionWorkers ?? s.ConversionWorkers,
+            AnalysisWorkers = analysisWorkers ?? s.AnalysisWorkers,
+            ToolProcessPriority = toolProcessPriority ?? s.ToolProcessPriority,
+            PipeBufferKiB = pipeBufferKiB ?? s.PipeBufferKiB,
             VerificationLevel = verificationLevel ?? s.VerificationLevel,
             RecycleDeletedOriginalsAndBackups = recycleDeletedOriginalsAndBackups ?? s.RecycleDeletedOriginalsAndBackups,
             FreeSpaceMarginPercent = freeSpaceMarginPercent ?? s.FreeSpaceMarginPercent,

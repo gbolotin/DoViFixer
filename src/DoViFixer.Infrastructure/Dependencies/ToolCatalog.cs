@@ -26,6 +26,7 @@ internal static class ToolDefinitions
         NativeTool.FFprobe => "ffprobe.exe",
         NativeTool.MkvMerge => "mkvmerge.exe",
         NativeTool.MkvExtract => "mkvextract.exe",
+        NativeTool.MkvPropEdit => "mkvpropedit.exe",
         NativeTool.MediaInfo => "mediainfo.exe",
         NativeTool.DoviTool => "dovi_tool.exe",
         _ => throw new ArgumentOutOfRangeException(nameof(tool))
@@ -33,7 +34,7 @@ internal static class ToolDefinitions
     internal static int MinimumMajor(NativeTool tool) => tool switch
     {
         NativeTool.FFmpeg or NativeTool.FFprobe => 6,
-        NativeTool.MkvMerge or NativeTool.MkvExtract => 80,
+        NativeTool.MkvMerge or NativeTool.MkvExtract or NativeTool.MkvPropEdit => 80,
         NativeTool.MediaInfo => 24,
         NativeTool.DoviTool => 2,
         _ => throw new ArgumentOutOfRangeException(nameof(tool))

@@ -47,7 +47,6 @@ public sealed partial class MediaViewModel : OperationViewModel, INavigationPage
     private CancellationTokenSource? previewCancellation;
     private CancellationTokenSource? backgroundPreviewCancellation;
     private Task previewCompletion = Task.CompletedTask;
-    private CancellationTokenSource? currentJobPreviewCancellation;
     private readonly ISourceFileMonitor sourceFiles;
     private readonly ReportService reports;
     private readonly SynchronizationContext? uiContext;
@@ -99,10 +98,6 @@ public sealed partial class MediaViewModel : OperationViewModel, INavigationPage
             if (e.PropertyName is nameof(BatchProgress.Percent) or nameof(BatchProgress.IsRunning))
             {
                 ReportActivityProgress();
-            }
-            if (e.PropertyName == nameof(BatchProgress.CurrentJob))
-            {
-                previewCompletion = Task.WhenAll(previewCompletion, LoadCurrentJobPreviewAsync(BatchProgress.CurrentJob));
             }
         };
         Progress.PropertyChanged += (_, _) => NotifyActiveProgress();
@@ -225,47 +220,6 @@ public sealed partial class MediaViewModel : OperationViewModel, INavigationPage
     [ObservableProperty]
     public partial string PreviewStatus { get; private set; } = "";
 
-    /// <summary>The current job's frame preview; null while it loads or when the file has none.</summary>
-    [ObservableProperty]
-    public partial BitmapSource? CurrentJobPreview { get; private set; }
-
-    private async Task LoadCurrentJobPreviewAsync(MediaRow? row)
-    {
-        currentJobPreviewCancellation?.Cancel();
-        currentJobPreviewCancellation = null;
-        CurrentJobPreview = null;
-        if (row is null || row.IsMissing)
-        {
-            return;
-        }
-
-        using var cancellation = new CancellationTokenSource();
-        currentJobPreviewCancellation = cancellation;
-        try
-        {
-            var image = await Task.Run(() => LoadBitmapAsync(row.Path, cancellation.Token), cancellation.Token);
-            if (!cancellation.IsCancellationRequested)
-            {
-                CurrentJobPreview = image;
-            }
-        }
-        catch (OperationCanceledException) when (cancellation.IsCancellationRequested)
-        {
-        }
-        catch (Exception ex)
-        {
-            // The card shows a placeholder instead.
-            logger.LogDebug(ex, "Current job preview unavailable for {Input}", row.Path);
-        }
-        finally
-        {
-            if (ReferenceEquals(currentJobPreviewCancellation, cancellation))
-            {
-                currentJobPreviewCancellation = null;
-            }
-        }
-    }
-
     private async Task<BitmapSource> LoadBitmapAsync(string path, CancellationToken cancellationToken)
     {
         byte[] bytes = await mediaPreview.LoadAsync(path, cancellationToken);
@@ -386,7 +340,6 @@ public sealed partial class MediaViewModel : OperationViewModel, INavigationPage
     private void CancelPreviews()
     {
         previewCancellation?.Cancel();
-        currentJobPreviewCancellation?.Cancel();
         backgroundPreviewCancellation?.Cancel();
     }
 
@@ -1288,7 +1241,7 @@ public sealed partial class MediaViewModel : OperationViewModel, INavigationPage
         BeginBatch(rows, opName);
         try
         {
-            var result = await batch.ExecuteQueuedAsync(rows, Math.Clamp(userSettings.ConversionWorkers, 1, 8), r => r.Path, async (row, itemToken) =>
+            var result = await batch.ExecuteQueuedAsync(rows, settings.Hardware.ConversionWorkers(userSettings.ConversionWorkers), r => r.Path, async (row, itemToken) =>
             {
                 if (!sourceFiles.Exists(row.Path))
                 {

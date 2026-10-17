@@ -10,6 +10,7 @@ public static class NativeToolDescriptions
         [NativeTool.FFprobe] = ("FFprobe", "Reads stream and frame information."),
         [NativeTool.MkvMerge] = ("mkvmerge (MKVToolNix)", "Builds the output MKV with video, audio, and subtitles."),
         [NativeTool.MkvExtract] = ("mkvextract (MKVToolNix)", "Extracts tracks for conversion, backup, and restoration."),
+        [NativeTool.MkvPropEdit] = ("mkvpropedit (MKVToolNix)", "Preserves the original frame-rate metadata after remuxing."),
         [NativeTool.MediaInfo] = ("MediaInfo CLI", "Identifies media formats and Dolby Vision profiles."),
         [NativeTool.DoviTool] = ("dovi_tool", "Analyzes and converts Dolby Vision metadata and handles enhancement-layer data.")
     };

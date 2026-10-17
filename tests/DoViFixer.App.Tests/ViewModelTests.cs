@@ -1,3 +1,4 @@
+using DoViFixer.Application.Dependencies;
 using System.ComponentModel;
 using DoViFixer.App.ViewModels;
 using DoViFixer.App.Presentation.Application;
@@ -375,9 +376,9 @@ public sealed class ViewModelTests
 
         var sections = shell.Settings.Sections;
         CollectionAssert.AreEqual(
-            new[] { typeof(GeneralSettingsSection), typeof(ConversionSettingsSection), typeof(SafetySettingsSection), typeof(ScanningSettingsSection), typeof(NativeToolsSettingsSection), typeof(AboutSettingsSection) },
+            new[] { typeof(GeneralSettingsSection), typeof(ConversionSettingsSection), typeof(SafetySettingsSection), typeof(PerformanceSettingsSection), typeof(NativeToolsSettingsSection), typeof(AboutSettingsSection) },
             sections.Pages.Select(page => page.GetType()).ToArray());
-        CollectionAssert.AreEqual(new[] { "General", "Conversion", "Safety", "Scanning & cache", "Native tools", "About" }, sections.Pages.Select(page => page.NavigationName).ToArray());
+        CollectionAssert.AreEqual(new[] { "General", "Conversion", "Safety", "Performance", "Native tools", "About" }, sections.Pages.Select(page => page.NavigationName).ToArray());
         Assert.IsTrue(sections.Pages.All(page => page.NavigationIcon is { Length: 1 }), "Each section has a Segoe Fluent Icons glyph.");
         Assert.IsTrue(sections.Pages.Cast<SettingsSection>().All(section => ReferenceEquals(section.Settings, shell.Settings)), "Every section shows the same settings.");
         Assert.AreSame(sections.Pages[0], sections.CurrentPage);
@@ -940,7 +941,7 @@ public sealed class ViewModelTests
         Assert.AreEqual(missing, shell.Settings.Dependencies.HasWarning);
         Assert.AreEqual(missing, shell.StatusItems.Contains(shell.Settings.Dependencies));
         Assert.AreEqual(!ready && approve ? 1 : 0, runtime.Installations);
-        Assert.AreEqual(6, shell.Settings.Dependencies.Tools.Count);
+        Assert.AreEqual(DependencyRequirements.All.Count, shell.Settings.Dependencies.Tools.Count);
         Assert.IsTrue(shell.CanNavigate);
         if (!ready)
         {
@@ -1553,10 +1554,35 @@ public sealed class ViewModelTests
     }
 
     [TestMethod]
-    public async Task ConversionWorkersQueueFilesBeyondTheActiveLimit()
+    public async Task WorkerChoicesMarkRecommendedCountsAndResolvePreviouslyAutomaticValues()
     {
         using var runtime = new TestRuntime();
-        await runtime.UpdateAsync(settings => settings with { AllowFel = true, ConversionWorkers = 2 }, default);
+        runtime.Services.AddSingleton<IHardwareInfoProvider>(new EightCoreHardware());
+        await runtime.UpdateAsync(value => value with { ConversionWorkers = 0, AnalysisWorkers = 0 }, default);
+        var model = runtime.Container.GetRequiredService<SettingsViewModel>();
+        await model.LoadCommand.InvokeAsync();
+        Assert.AreEqual(2, model.ConversionWorkers);
+        Assert.AreEqual(6, model.AnalysisWorkers);
+        Assert.AreEqual("2 (Recommended)", model.ConversionWorkerChoices.Single(choice => choice.Value == 2).Label);
+        Assert.AreEqual("6 (Recommended)", model.AnalysisWorkerChoices.Single(choice => choice.Value == 6).Label);
+        Assert.IsFalse(model.ConversionWorkerChoices.Any(choice => choice.Value == 0));
+        Assert.IsFalse(model.AnalysisWorkerChoices.Any(choice => choice.Value == 0));
+        Assert.AreEqual(0, runtime.Settings.ConversionWorkers, "Loading the page must not save settings.");
+    }
+
+    private sealed class EightCoreHardware : IHardwareInfoProvider
+    {
+        public DoViFixer.Application.Settings.HardwareProfile Profile { get; } = new(8, 16, true);
+    }
+
+    [TestMethod]
+    [DataRow(2)]
+    [DataRow(0)]
+    public async Task ConversionWorkersQueueFilesBeyondTheActiveLimit(int configuredWorkers)
+    {
+        using var runtime = new TestRuntime();
+        runtime.Services.AddSingleton<IHardwareInfoProvider>(new EightCoreHardware());
+        await runtime.UpdateAsync(settings => settings with { AllowFel = true, ConversionWorkers = configuredWorkers }, default);
         var model = runtime.Container.GetRequiredService<MediaViewModel>();
         await model.AddAsync([@"C:\Media\Mountain.mkv", @"C:\Media\Ocean.mkv", @"C:\Media\City.mkv"]);
         model.Files[2].IsSelected = true;
@@ -2010,6 +2036,24 @@ public sealed class ViewModelTests
         using var runtime = new TestRuntime();
         var settings = runtime.Container.GetRequiredService<SettingsViewModel>();
         await settings.LoadCommand.InvokeAsync();
+
+        settings.ConversionWorkers = 16;
+        await settings.SaveTask;
+        Assert.AreEqual(16, runtime.Settings.ConversionWorkers);
+        settings.AnalysisWorkers = 10;
+        await settings.SaveTask;
+        Assert.AreEqual(10, runtime.Settings.AnalysisWorkers);
+        settings.ToolProcessPriority = DoViFixer.Application.Settings.ToolProcessPriority.Normal;
+        await settings.SaveTask;
+        Assert.AreEqual(DoViFixer.Application.Settings.ToolProcessPriority.Normal, runtime.Settings.ToolProcessPriority);
+        settings.PipeBufferKiB = 8192;
+        await settings.SaveTask;
+        Assert.AreEqual(8192, runtime.Settings.PipeBufferKiB);
+        settings.ConversionWorkers = 0;
+        settings.AnalysisWorkers = 0;
+        await settings.SaveTask;
+        Assert.AreEqual(0, runtime.Settings.ConversionWorkers);
+        Assert.AreEqual(0, runtime.Settings.AnalysisWorkers);
 
         Assert.AreEqual(3, settings.VerificationLevel);
         settings.VerificationLevel = 4;

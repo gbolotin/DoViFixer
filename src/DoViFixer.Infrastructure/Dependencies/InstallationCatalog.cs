@@ -17,7 +17,7 @@ internal static class InstallationCatalog
             }, true),
             new("MoritzBunkus.MKVToolNix", "95.0.0", "https://mkvtoolnix.download/windows/releases/95.0/mkvtoolnix-64-bit-95.0.zip", "561CF85FE27406CB8842E237EFD1803376A58061848ACBAD89E822A6BEA9AE80", new[]
             {
-                NativeTool.MkvMerge, NativeTool.MkvExtract
+                NativeTool.MkvMerge, NativeTool.MkvExtract, NativeTool.MkvPropEdit
             }, true),
             new("MediaArea.MediaInfo", "26.05", "https://mediaarea.net/download/binary/mediainfo/26.05/MediaInfo_CLI_26.05_Windows_x64.zip", "F7F80620CE6D14F4995F0DE6F98E3EF18AD29496DB01899571152EE3311229F9", new[]
             {

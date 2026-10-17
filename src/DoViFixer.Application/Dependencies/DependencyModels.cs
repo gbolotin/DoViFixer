@@ -8,7 +8,8 @@ public enum NativeTool
     MkvMerge,
     MkvExtract,
     MediaInfo,
-    DoviTool
+    DoviTool,
+    MkvPropEdit
 }
 
 public enum DependencyState
@@ -45,5 +46,5 @@ public static class DependencyRequirements
     {
         NativeTool.MkvMerge, NativeTool.MediaInfo
     });
-    public static readonly IReadOnlyList<NativeTool> Analysis = All;
+    public static readonly IReadOnlyList<NativeTool> Analysis = Array.AsReadOnly(All.Where(tool => tool != NativeTool.MkvPropEdit).ToArray());
 }

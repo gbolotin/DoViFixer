@@ -1,4 +1,6 @@
 using System.Diagnostics;
+using DoViFixer.Application.Abstractions;
+using DoViFixer.Application.Settings;
 using System.Text;
 using System.ComponentModel;
 using DoViFixer.Application.Diagnostics;
@@ -15,10 +17,11 @@ internal interface IProcessRunner
     Task PipeAsync(ProcessRequest producer, ProcessRequest consumer, CancellationToken cancellationToken);
 }
 
-internal sealed class ProcessRunner(ILogger<ProcessRunner> logger) : IProcessRunner
+internal sealed class ProcessRunner(ILogger<ProcessRunner> logger, ISettingsStore? settings = null) : IProcessRunner
 {
     public async Task<ProcessResult> RunAsync(ProcessRequest request, CancellationToken cancellationToken)
     {
+        var preferences = settings is null ? new UserSettings() : await settings.ReadAsync(cancellationToken);
         Guid invocationId = Guid.NewGuid();
         using var scope = logger.BeginScope(new Dictionary<string, object>
         {
@@ -28,7 +31,7 @@ internal sealed class ProcessRunner(ILogger<ProcessRunner> logger) : IProcessRun
         logger.LogDebug("Starting native tool with arguments {Arguments}; working directory {WorkingDirectory}; timeout {Timeout}", request.Arguments, request.WorkingDirectory ?? Environment.CurrentDirectory, request.Timeout ?? TimeSpan.FromHours(24));
         try
         {
-            var result = await RunCoreAsync(request, invocationId, cancellationToken);
+            var result = await RunCoreAsync(request, invocationId, preferences, cancellationToken);
             logger.LogDebug("Native tool completed with {ExitCode} after {ElapsedMilliseconds} ms", result.ExitCode, Stopwatch.GetElapsedTime(started).TotalMilliseconds);
             return result;
         }
@@ -50,6 +53,7 @@ internal sealed class ProcessRunner(ILogger<ProcessRunner> logger) : IProcessRun
 
     public async Task PipeAsync(ProcessRequest producer, ProcessRequest consumer, CancellationToken cancellationToken)
     {
+        var preferences = settings is null ? new UserSettings() : await settings.ReadAsync(cancellationToken);
         Guid invocationId = Guid.NewGuid();
         using var scope = logger.BeginScope(new Dictionary<string, object> { ["ToolInvocationId"] = invocationId });
         cancellationToken.ThrowIfCancellationRequested();
@@ -66,12 +70,14 @@ internal sealed class ProcessRunner(ILogger<ProcessRunner> logger) : IProcessRun
             linked.Token.ThrowIfCancellationRequested();
             logger.LogDebug("Starting pipeline {Producer} {ProducerArguments} -> {Consumer} {ConsumerArguments}", producer.Executable, producer.Arguments, consumer.Executable, consumer.Arguments);
             await job.StartAsync(target);
+            SetPriority(target, preferences.ToolProcessPriority);
             targetStarted = true;
             logger.LogDebug("Started protected pipeline consumer {NativeProcessId}", target.Id);
 
             targetError = DrainAsync(target.StandardError);
             targetOutput = DrainAsync(target.StandardOutput, consumer.OutputLine);
             await job.StartAsync(source);
+            SetPriority(source, preferences.ToolProcessPriority);
             sourceStarted = true;
             logger.LogDebug("Started protected pipeline producer {NativeProcessId}", source.Id);
 
@@ -145,8 +151,20 @@ internal sealed class ProcessRunner(ILogger<ProcessRunner> logger) : IProcessRun
         {
             try
             {
-                var relay = producer.OutputRelay ?? ((input, output, token) => input.CopyToAsync(output, token));
-                await relay(source.StandardOutput.BaseStream, target.StandardInput.BaseStream, linked.Token);
+                int bufferBytes = Math.Clamp(preferences.PipeBufferKiB, 64, 65536) * 1024;
+                if (producer.OutputRelay is { } relay)
+                {
+                    // Buffer transformed streams too; Annex B relays write small NAL prefixes.
+                    // Do not dispose wrappers: the process StreamReader/StreamWriter owns the underlying streams.
+                    var input = new BufferedStream(source.StandardOutput.BaseStream, bufferBytes);
+                    var output = new BufferedStream(target.StandardInput.BaseStream, bufferBytes);
+                    await relay(input, output, linked.Token);
+                    await output.FlushAsync(linked.Token);
+                }
+                else
+                {
+                    await source.StandardOutput.BaseStream.CopyToAsync(target.StandardInput.BaseStream, bufferBytes, linked.Token);
+                }
             }
             catch
             {
@@ -157,6 +175,25 @@ internal sealed class ProcessRunner(ILogger<ProcessRunner> logger) : IProcessRun
             {
                 target.StandardInput.Close();
             }
+        }
+    }
+
+    private void SetPriority(Process process, ToolProcessPriority priority)
+    {
+        var nativePriority = priority switch
+        {
+            ToolProcessPriority.Idle => ProcessPriorityClass.Idle,
+            ToolProcessPriority.BelowNormal => ProcessPriorityClass.BelowNormal,
+            ToolProcessPriority.AboveNormal => ProcessPriorityClass.AboveNormal,
+            _ => ProcessPriorityClass.Normal
+        };
+        try
+        {
+            process.PriorityClass = nativePriority;
+        }
+        catch (Exception ex) when (ex is Win32Exception or InvalidOperationException or NotSupportedException)
+        {
+            logger.LogDebug(ex, "Could not apply tool process priority {Priority}", priority);
         }
     }
 
@@ -183,7 +220,7 @@ internal sealed class ProcessRunner(ILogger<ProcessRunner> logger) : IProcessRun
         };
     }
 
-    private async Task<ProcessResult> RunCoreAsync(ProcessRequest request, Guid invocationId, CancellationToken cancellationToken)
+    private async Task<ProcessResult> RunCoreAsync(ProcessRequest request, Guid invocationId, UserSettings preferences, CancellationToken cancellationToken)
     {
         cancellationToken.ThrowIfCancellationRequested();
         using var job = new ProcessJob();
@@ -210,6 +247,7 @@ internal sealed class ProcessRunner(ILogger<ProcessRunner> logger) : IProcessRun
         using var timeout = new CancellationTokenSource(request.Timeout ?? TimeSpan.FromHours(24));
         using var linked = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken, timeout.Token);
         await job.StartAsync(process);
+        SetPriority(process, preferences.ToolProcessPriority);
         Task<string>? stdout = null, stderr = null;
         try
         {

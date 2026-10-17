@@ -24,6 +24,17 @@ namespace DoViFixer.Infrastructure.Tests;
 public sealed class InfrastructureTests
 {
     [TestMethod]
+    [DataRow(16666666L, 17000000L)]
+    [DataRow(41708333L, 42000000L)]
+    public void VideoMetadataRejectsRoundedDefaultFrameDuration(long sourceDuration, long outputDuration)
+    {
+        using var source = JsonDocument.Parse($"{{\"default_duration\":{sourceDuration}}}");
+        using var output = JsonDocument.Parse($"{{\"default_duration\":{outputDuration}}}");
+        CollectionAssert.AreEqual(new[] { "default_duration" }, MkvVideoMetadata.Differences(source.RootElement, output.RootElement).ToArray());
+        Assert.IsEmpty(MkvVideoMetadata.Differences(source.RootElement, source.RootElement));
+    }
+
+    [TestMethod]
     public void TagComparisonIgnoresOrderAndRedundantLanguageButPreservesMeaning()
     {
         var original = System.Xml.Linq.XDocument.Parse("<Tags><Tag><Targets><TrackUID>1</TrackUID><TargetType>MOVIE</TargetType></Targets><Simple><Name>SOURCE_ID</Name><TagLanguage>eng</TagLanguage><String>001011</String></Simple></Tag></Tags>");
@@ -503,6 +514,26 @@ public sealed class InfrastructureTests
         Assert.AreEqual(DependencyState.Ready, rediscovered.Tools[0].State);
         Assert.AreEqual(installed, rediscovered.Tools[0].Path);
         Assert.AreEqual(Path.Combine(directory, "missing.exe"), (await settings.ReadAsync(default)).ToolPaths[NativeTool.MkvMerge]);
+    }
+
+    [TestMethod]
+    public async Task PropertyEditorIsDiscoveredBesideConfiguredMkvToolAndUsesExistingPackage()
+    {
+        string custom = Path.Combine(directory, "custom-mkvtoolnix");
+        Directory.CreateDirectory(custom);
+        string merge = Path.Combine(custom, "mkvmerge.exe");
+        string editor = Path.Combine(custom, "mkvpropedit.exe");
+        await File.WriteAllTextAsync(editor, "fake console executable");
+        var storage = new StorageOptions(directory);
+        var settings = new SettingsStore(storage, NullLogger<SettingsStore>.Instance);
+        await settings.UpdateAsync(value => value with { ToolPaths = value.ToolPaths.SetItem(NativeTool.MkvMerge, merge) }, default);
+        var detector = new DependencyDetector(settings, storage, new FakeProcessRunner { Output = "mkvpropedit v95.0.0" }, NullLogger<DependencyDetector>.Instance);
+        var report = await detector.DetectAsync([NativeTool.MkvPropEdit], default);
+        Assert.AreEqual(DependencyState.Ready, report.Tools.Single().State);
+        Assert.AreEqual(editor, report.Tools.Single().Path);
+        var package = InstallationCatalog.Packages.Single(package => package.Tools.Contains(NativeTool.MkvMerge));
+        CollectionAssert.Contains(package.Tools.ToArray(), NativeTool.MkvPropEdit);
+        Assert.IsFalse(DependencyRequirements.Analysis.Contains(NativeTool.MkvPropEdit));
     }
 
     [TestMethod]

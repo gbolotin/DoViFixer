@@ -119,6 +119,15 @@ public sealed class NativeIntegrationTests
         Assert.AreEqual(disk, streamed, $"Stream {streamingElapsed}; disk {diskElapsed}; scratch {streamingScratch}/{diskScratch} bytes");
         Assert.IsTrue(File.Exists(workspace.File("inspection.hevc")));
         Assert.IsTrue(streamingScratch < diskScratch);
+        var scanSettings = new SettingsStore(new StorageOptions(Path.Combine(workspace.DirectoryPath, "settings")), NullLogger<SettingsStore>.Instance);
+        await scanSettings.UpdateAsync(value => value with { AnalysisWorkers = 3 }, default);
+        var parallelProbe = new MediaProbe(tools, runner, files, NullLogger<MediaProbe>.Instance, scanSettings);
+        var sampled = await parallelProbe.AnalyzeAsync(media with { DurationSeconds = 10.803 }, AnalysisMethod.SampledRpu, workspace, default);
+        Assert.IsNull(sampled.Error, sampled.Error);
+        Assert.AreEqual(10, sampled.SuccessfulSamples, sampled.SampleDiagnostics);
+        Assert.AreEqual(streamed.Layer, sampled.Layer);
+        Assert.AreEqual(0, Directory.GetFiles(workspace.DirectoryPath, "sample-*").Length);
+
         Console.WriteLine($"Native {streamed.Layer} parity: stream {streamingElapsed.TotalMilliseconds:F0} ms, disk {diskElapsed.TotalMilliseconds:F0} ms; scratch {streamingScratch}/{diskScratch} bytes (includes fixture source).");
     }
 
@@ -279,17 +288,20 @@ public sealed class NativeIntegrationTests
 
     [TestMethod]
     [TestCategory("NativeIntegration")]
-    [DataRow(false, false, false)]
-    [DataRow(true, false, false)]
-    [DataRow(true, true, false)]
-    [DataRow(true, false, true)]
-    public async Task NativeFixtureConvertsBacksUpAndRestoresWithIdenticalBaseAndEnhancementPayloads(bool includeMetadata, bool safe, bool failStreaming)
+    [DataRow(false, false, false, false)]
+    [DataRow(true, false, false, false)]
+    [DataRow(true, true, false, false)]
+    [DataRow(true, false, true, false)]
+    [DataRow(true, false, false, true)]
+    [DataRow(true, true, false, true)]
+    public async Task NativeFixtureConvertsBacksUpAndRestoresWithIdenticalBaseAndEnhancementPayloads(bool includeMetadata, bool safe, bool failStreaming, bool highFrameRate)
     {
         var toolPaths = new Dictionary<NativeTool, string>();
         foreach (var tool in new[]
         {
             NativeTool.MkvMerge,
             NativeTool.MkvExtract,
+            NativeTool.MkvPropEdit,
             NativeTool.DoviTool,
             NativeTool.FFprobe,
             NativeTool.FFmpeg
@@ -390,16 +402,24 @@ public sealed class NativeIntegrationTests
             });
         }
 
+        if (highFrameRate)
+        {
+            muxArguments.InsertRange(0, ["--default-duration", "0:60fps"]);
+        }
         await runner.RunAsync(new(tools.GetPath(NativeTool.MkvMerge), muxArguments), default);
         var identification = await runner.RunAsync(new(tools.GetPath(NativeTool.MkvMerge), new[]
         {
             "-J", input
         }), default);
         // Synthetic MediaInfo schema for this fixed public fixture; this test exercises native processing, not the MediaInfo executable.
-        const string mi = """
+        string mi = """
             {"media":{"track":[{"@type":"Video","Format":"HEVC","Width":"256","Height":"144","FrameCount":"259",
              "FrameRate":"23.976","Duration":"10.803","HDR_Format":"Dolby Vision","HDR_Format_Profile":"dvhe.07.06","MaxCLL":"1000"}]}}
             """;
+        if (highFrameRate)
+        {
+            mi = mi.Replace("23.976", "60.000").Replace("10.803", "4.317");
+        }
         var media = MediaMetadataParser.Parse(files.Identify(input), identification.Output, mi);
         await using var sourceLease = await files.AcquireReadLeaseAsync(media.Source, default);
         var processor = new VideoProcessor(tools, failStreaming ? new FailingPipelineRunner(runner) : runner, TimeProvider.System, NullLogger<VideoProcessor>.Instance);
@@ -435,6 +455,10 @@ public sealed class NativeIntegrationTests
         using (var a = JsonDocument.Parse(identification.Output))
         using (var b = JsonDocument.Parse(convertedIdentification.Output))
         {
+            if (highFrameRate)
+            {
+                Assert.AreEqual(16666666L, b.RootElement.GetProperty("tracks")[0].GetProperty("properties").GetProperty("default_duration").GetInt64());
+            }
             var changed = MkvVideoMetadata.Differences(a.RootElement.GetProperty("tracks")[0].GetProperty("properties"), b.RootElement.GetProperty("tracks")[0].GetProperty("properties")).ToArray();
             Assert.AreEqual(0, changed.Length, string.Join(", ", changed.Select(p => p + ": " + a.RootElement.GetProperty("tracks")[0].GetProperty("properties").GetProperty(p) + " -> " + MediaMetadataParser.Text(b.RootElement.GetProperty("tracks")[0].GetProperty("properties"), p))));
         }

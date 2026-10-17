@@ -62,7 +62,7 @@ public sealed partial class SettingsViewModel : OperationViewModel
         Dependencies = dependencies;
         var general = new GeneralSettingsSection(this);
         Sections = new NavigationService(
-            [general, new ConversionSettingsSection(this), new SafetySettingsSection(this), new ScanningSettingsSection(this), new NativeToolsSettingsSection(this), new AboutSettingsSection(this)],
+            [general, new ConversionSettingsSection(this), new SafetySettingsSection(this), new PerformanceSettingsSection(this), new NativeToolsSettingsSection(this), new AboutSettingsSection(this)],
             initialPage: general);
     }
 
@@ -113,7 +113,10 @@ public sealed partial class SettingsViewModel : OperationViewModel
             OtherFolder = value.OutputDirectory is not null;
             ReplaceOriginal = value.ReplaceOriginal;
             CreateArchive = value.CreateElArchive;
-            ConversionWorkers = value.ConversionWorkers;
+            ConversionWorkers = settings.Hardware.ConversionWorkers(value.ConversionWorkers);
+            AnalysisWorkers = settings.Hardware.AnalysisWorkers(value.AnalysisWorkers);
+            ToolProcessPriority = value.ToolProcessPriority;
+            PipeBufferKiB = value.PipeBufferKiB;
             VerificationLevel = (int)value.VerificationLevel;
             RecycleDeletedOriginalsAndBackups = value.RecycleDeletedOriginalsAndBackups;
             FreeSpaceMarginPercent = value.FreeSpaceMarginPercent;
@@ -255,10 +258,39 @@ public sealed partial class SettingsViewModel : OperationViewModel
 
     partial void OnCreateArchiveChanged(bool value) => TriggerAutoSave();
 
-    public int[] ConversionWorkerChoices { get; } = [1, 2, 3, 4, 5, 6, 7, 8];
+    public sealed record WorkerChoice(int Value, string Label);
+    public WorkerChoice[] ConversionWorkerChoices => WorkerChoices(16, settings.Hardware.RecommendedConversionWorkers);
+    public WorkerChoice[] AnalysisWorkerChoices => WorkerChoices(10, settings.Hardware.RecommendedAnalysisWorkers);
+    private static WorkerChoice[] WorkerChoices(int maximum, int recommended) =>
+        Enumerable.Range(1, maximum).Select(value => new WorkerChoice(value, value == recommended ? $"{value} (Recommended)" : value.ToString())).ToArray();
+    public string HardwareSummary => settings.Hardware.PhysicalCoresDetected
+        ? $"{settings.Hardware.PhysicalCores} physical CPU cores; {settings.Hardware.LogicalProcessors} logical processors available."
+        : $"Physical core detection unavailable. Using a conservative estimate of {settings.Hardware.PhysicalCores} cores; {settings.Hardware.LogicalProcessors} logical processors available.";
+    public string ConcurrencyRecommendation => $"Recommended: {settings.Hardware.RecommendedConversionWorkers} simultaneous conversions and {settings.Hardware.RecommendedAnalysisWorkers} scan samples per file. These CPU-based values are starting points. Use fewer workers on mechanical drives or when disk throughput falls.";
+    public sealed record PriorityChoice(ToolProcessPriority Value, string Label);
+    public PriorityChoice[] ToolPriorityChoices { get; } =
+    [
+        new(ToolProcessPriority.Idle, "Idle"),
+        new(ToolProcessPriority.BelowNormal, "Below normal"),
+        new(ToolProcessPriority.Normal, "Normal"),
+        new(ToolProcessPriority.AboveNormal, "Above normal")
+    ];
+    public int[] PipeBufferChoices { get; } = [64, 128, 256, 512, 1024, 2048, 4096, 8192, 16384, 32768, 65536];
 
     [ObservableProperty]
-    public partial int ConversionWorkers { get; set; } = 1;
+    public partial int AnalysisWorkers { get; set; }
+    partial void OnAnalysisWorkersChanged(int value) => TriggerAutoSave();
+
+    [ObservableProperty]
+    public partial ToolProcessPriority ToolProcessPriority { get; set; } = ToolProcessPriority.BelowNormal;
+    partial void OnToolProcessPriorityChanged(ToolProcessPriority value) => TriggerAutoSave();
+
+    [ObservableProperty]
+    public partial int PipeBufferKiB { get; set; } = 4096;
+    partial void OnPipeBufferKiBChanged(int value) => TriggerAutoSave();
+
+    [ObservableProperty]
+    public partial int ConversionWorkers { get; set; }
 
     partial void OnConversionWorkersChanged(int value) => TriggerAutoSave();
 
@@ -449,6 +481,9 @@ public sealed partial class SettingsViewModel : OperationViewModel
             ReplaceOriginal = ReplaceOriginal,
             CreateElArchive = CreateArchive,
             ConversionWorkers = ConversionWorkers,
+            AnalysisWorkers = AnalysisWorkers,
+            ToolProcessPriority = ToolProcessPriority,
+            PipeBufferKiB = PipeBufferKiB,
             VerificationLevel = (Application.Settings.VerificationLevel)VerificationLevel,
             RecycleDeletedOriginalsAndBackups = RecycleDeletedOriginalsAndBackups,
             FreeSpaceMarginPercent = FreeSpaceMarginPercent,
@@ -476,7 +511,10 @@ public sealed partial class SettingsViewModel : OperationViewModel
             conversionWorkers: snapshot.ConversionWorkers,
             verificationLevel: snapshot.VerificationLevel,
             recycleDeletedOriginalsAndBackups: snapshot.RecycleDeletedOriginalsAndBackups,
-            freeSpaceMarginPercent: snapshot.FreeSpaceMarginPercent), token);
+            freeSpaceMarginPercent: snapshot.FreeSpaceMarginPercent,
+            analysisWorkers: snapshot.AnalysisWorkers,
+            toolProcessPriority: snapshot.ToolProcessPriority,
+            pipeBufferKiB: snapshot.PipeBufferKiB), token);
 
         lastSavedSettings = snapshot;
         SetStatus(ViewStatus.SettingsSaved);

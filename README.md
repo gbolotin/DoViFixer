@@ -44,7 +44,7 @@ Phase 4 follows the Studio v3 Media mockups and v2 Backup & Restore / Settings d
 
 ## Dependencies
 
-The app validates FFmpeg, ffprobe, mkvmerge, mkvextract, MediaInfo **CLI**, and dovi_tool. Existing compatible installations are reused. Invalid configured paths are reported instead of silently replaced. MediaInfo GUI does not satisfy the CLI requirement.
+The app validates FFmpeg, ffprobe, mkvmerge, mkvextract, mkvpropedit, MediaInfo **CLI**, and dovi_tool. Existing compatible installations are reused. Invalid configured paths are reported instead of silently replaced. MediaInfo GUI does not satisfy the CLI requirement.
 
 ```powershell
 dotnet run --project src/DoViFixer.Console -- dependencies install
@@ -97,7 +97,7 @@ Scan samples ten positions; inspect and conversion planning analyze the full RPU
 
 Conversion streams FFmpeg output directly to dovi_tool by default and retries with disk extraction on streaming or verification failure. `--safe` forces disk extraction. Ordinary full RPU inspection also streams its selected video track into dovi_tool. It uses disk extraction if streaming fails or frame counts differ, so metadata-free tail checks still inspect the raw video. Deep inspection, archive operations and output verification continue to use disk. [Inspection validation](docs/streamed-inspection-validation.md) records native parity and measurements. Streaming does not remove the scratch-space requirement. Workspaces are owned per operation. Estimates are deliberately conservative: full inspection/conversion/backup currently reserve eight input sizes plus 1 GiB, with an additional archive allowance for restoration. Destination capacity is checked independently. This trades additional free-space requirements for room for extraction, RPU JSON, payload verification and publication; actual disk usage is usually lower.
 
-Before publication, verification checks the target profile and full RPU count/profile (or absence for HDR10), video dimensions/codec and packet counts, per-track timestamps, audio/subtitle payload hashes, normalized base-layer hashes, attachments, chapters, tags and supported video container metadata. Failed or unavailable checks prevent publication. MKVToolNix may normalize `DefaultDuration`; actual timestamps are compared within 1 ms and video duration within 50 ms. Non-pixel Matroska display units are currently rejected. Full MKV byte identity is not promised.
+Before publication, verification checks the target profile and full RPU count/profile (or absence for HDR10), video dimensions/codec and packet counts, per-track timestamps, audio/subtitle payload hashes, normalized base-layer hashes, attachments, chapters, tags and supported video container metadata. Failed or unavailable checks prevent publication. After remuxing, mkvpropedit restores the source video track’s `DefaultDuration` without changing packet timestamps or payloads. Verification rejects a changed `DefaultDuration`; actual timestamps are compared within 1 ms and video duration within 50 ms. Non-pixel Matroska display units are currently rejected. Full MKV byte identity is not promised.
 
 Batch failures are reported per file and do not stop subsequent files. Ctrl+C stops the batch, terminates owned native processes, and disposes temporary resources. A cancelled external installer can leave package-manager changes; run `dependencies check` before retrying. Successfully published enhancement archives remain available if a subsequent conversion fails.
 
@@ -105,7 +105,11 @@ Each native-tool invocation owns a Windows Job Object; both processes in a strea
 
 Protection starts when the process is assigned to the job immediately after `.NET Process.Start`. A crash, process exit, or child launch in the brief start-to-assignment interval can escape this protection. Eliminating that interval requires a native launcher with atomic job assignment. An abnormal application exit also cannot run managed workspace cleanup, so temporary files may remain. See [Windows Job Objects](https://learn.microsoft.com/windows/win32/procthread/job-objects) for the operating-system behavior.
 
-In the WPF app, Settings → Conversion → Conversion workers controls how many selected files convert at once (1–8; default 1). Every selected file enters the batch queue, so the worker count does not limit batch size. Pause prevents queued files from starting while active conversions finish. Each active conversion has its own temporary workspace. Concurrent conversions reserve conservative scratch and output disk budgets before execution; a queued worker waits if another active conversion is using the available space.
+In the WPF app, Settings → Performance → Simultaneous conversions controls how many selected files convert at once (1–16). The recommended value uses physical CPU cores: one worker per four cores, limited to 1–8. Existing saved counts remain selected. Every selected file enters the batch queue, so the worker count does not limit batch size. Pause prevents queued files from starting while active conversions finish. Each active conversion has its own temporary workspace. Concurrent conversions reserve conservative scratch and output disk budgets before execution; a queued worker waits if another active conversion is using the available space.
+
+The same Performance page groups concurrency, system impact, and scanning/cache settings without reset buttons. Parallel scan samples per file runs up to 10 sample probes concurrently inside one file; files and full inspections remain sequential. The recommended scan value uses three workers per four physical cores, limited to 1–10 because each scan has 10 samples. If Windows cannot report physical cores, the page identifies the conservative fallback estimate. CPU recommendations are starting points: lower the counts for mechanical disks, limited temporary storage, or falling throughput.
+
+Tool process priority applies to native tools started afterward; Below normal is the default. Video pipe buffer size is shown in KiB (4096 KiB = 4 MiB by default). Transformed pipelines buffer both reads and writes, so larger values consume more memory per active pipeline. Reuse saved scan results uses unchanged files' cached analysis; disabling reuse still saves successful results. All settings save automatically.
 
 ## AI assistants (MCP)
 
@@ -198,6 +202,7 @@ Native integration is opt-in and uses tiny public dovi_tool fixtures plus genera
 ```powershell
 $env:DOVIFIXER_TEST_MKVMERGE = 'C:\Tools\MKVToolNix\mkvmerge.exe'
 $env:DOVIFIXER_TEST_MKVEXTRACT = 'C:\Tools\MKVToolNix\mkvextract.exe'
+$env:DOVIFIXER_TEST_MKVPROPEDIT = 'C:\Tools\MKVToolNix\mkvpropedit.exe'
 $env:DOVIFIXER_TEST_DOVITOOL = 'C:\Tools\dovi_tool.exe'
 $env:DOVIFIXER_TEST_FFPROBE = 'C:\Tools\ffprobe.exe'
 $env:DOVIFIXER_TEST_FFMPEG = 'C:\Tools\ffmpeg.exe'

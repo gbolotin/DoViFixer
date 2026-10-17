@@ -278,6 +278,7 @@ public sealed class VisualTests
             }
 
             Assert.IsFalse(Descendants<Button>(mediaView).Any(button => Equals(button.Content, "Settings")));
+            await VerifyTotalAndInlineProgressAsync();
             await VerifySettingsFrameAsync(runtime, shell, window, navigation);
             await VerifySettingsRecoveryAsync(runtime, shell, window);
             Assert.AreEqual("", errors.Errors.ToString(), "WPF binding errors were reported.");
@@ -287,6 +288,71 @@ public sealed class VisualTests
             source.Listeners.Remove(errors);
             source.Switch.Level = previousLevel;
             app.Shutdown();
+        }
+    }
+
+    private static async Task VerifyTotalAndInlineProgressAsync()
+    {
+        using var runtime = new TestRuntime();
+        await runtime.UpdateAsync(settings => settings with { AllowFel = true, ConversionWorkers = 2 }, default);
+        runtime.Preview = (_, _) => Task.FromResult(MediaPreviewTests.CreateImage());
+        var window = runtime.Container.GetRequiredService<Shell>();
+        var media = ((ShellViewModel)window.DataContext).Pages.OfType<MediaViewModel>().Single();
+        await media.AddAsync([@"C:\Media\Mountain.mkv", @"C:\Media\Ocean.mkv"]);
+        foreach (var row in media.Files)
+        {
+            row.IsSelected = true;
+        }
+        var started = System.Threading.Channels.Channel.CreateUnbounded<bool>();
+        runtime.DuringConversion = async token =>
+        {
+            started.Writer.TryWrite(true);
+            await Task.Delay(Timeout.Infinite, token);
+        };
+        window.Width = 1100;
+        window.Height = 800;
+        window.ShowInTaskbar = false;
+        window.WindowStartupLocation = WindowStartupLocation.Manual;
+        window.Left = -10000;
+        window.Top = -10000;
+        window.Show();
+        await LayoutAsync(window);
+        var view = Descendants<MediaView>(window).Single();
+        var conversion = media.ConvertDv81Command.InvokeAsync();
+        try
+        {
+            await started.Reader.ReadAsync().AsTask().WaitAsync(TimeSpan.FromSeconds(5));
+            await started.Reader.ReadAsync().AsTask().WaitAsync(TimeSpan.FromSeconds(5));
+            await LayoutAsync(window);
+            Assert.AreEqual(2, media.BatchProgress.ActiveCount);
+            Assert.AreEqual(1, Descendants<ProgressBar>(view).Count(bar => bar.IsVisible && System.Windows.Automation.AutomationProperties.GetName(bar) == "Overall progress"));
+            Assert.IsFalse(Descendants<ProgressBar>(view).Any(bar => System.Windows.Automation.AutomationProperties.GetName(bar) == "Current job progress"));
+            var list = Descendants<ListView>(view).Single();
+            foreach (var row in media.Files)
+            {
+                var container = (ListViewItem)list.ItemContainerGenerator.ContainerFromItem(row);
+                Assert.IsTrue(Descendants<ProgressBar>(container).Any(bar => bar.IsVisible && bar.Value == row.Progress.StagePercent));
+            }
+            SaveRender((FrameworkElement)window.Content, "total-and-inline-progress-minimum");
+            var cancelled = media.Files[1];
+            var item = (ListViewItem)list.ItemContainerGenerator.ContainerFromItem(cancelled);
+            Invoke(Button(item, "Cancel"));
+            for (int attempt = 0; media.BatchProgress.ActiveCount == 2 && attempt < 100; attempt++)
+            {
+                await Task.Delay(10);
+            }
+            Assert.AreEqual(1, media.BatchProgress.ActiveCount);
+            await LayoutAsync(window);
+            Assert.IsTrue(Descendants<ProgressBar>(view).Single(bar => System.Windows.Automation.AutomationProperties.GetName(bar) == "Overall progress").IsVisible);
+            Assert.IsTrue(cancelled.IsCancellationRequested);
+            Assert.IsFalse(media.Files[0].IsCancellationRequested);
+        }
+        finally
+        {
+            media.CancelCommand.Invoke();
+            await conversion.WaitAsync(TimeSpan.FromSeconds(5));
+            await media.CancelPreviewsAsync();
+            window.Close();
         }
     }
 
@@ -867,7 +933,7 @@ public sealed class VisualTests
             AssertStableActionSlots(list, slots, "job cancelling");
             Assert.AreEqual("Cancelling…", row.Progress.Stage);
             Assert.IsFalse(cancel.IsEnabled);
-            Assert.IsFalse(NamedButton(mediaView, "Cancel job").IsEnabled);
+            Assert.IsFalse(Descendants<Button>(mediaView).Any(button => System.Windows.Automation.AutomationProperties.GetName(button) == "Cancel job"));
             SaveRender((FrameworkElement)window.Content, "cancelling-job");
         }
         finally
@@ -1019,7 +1085,16 @@ public sealed class VisualTests
                 case GeneralSettingsSection when firstVisit:
                     SaveRender(content, "settings-minimum");
                     break;
-                case ScanningSettingsSection when firstVisit:
+                case PerformanceSettingsSection when firstVisit:
+                    foreach (string name in new[] { "Simultaneous conversions", "Parallel scan samples per file", "Tool process priority", "Video pipe buffer (KiB)" })
+                    {
+                        Assert.HasCount(1, Descendants<ComboBox>(view).Where(combo => System.Windows.Automation.AutomationProperties.GetName(combo) == name));
+                    }
+                    var hardwareSummary = Descendants<TextBlock>(view).Single(text => text.Text == shell.Settings.HardwareSummary);
+                    var recommendation = Descendants<TextBlock>(view).Single(text => text.Text == shell.Settings.ConcurrencyRecommendation);
+                    Assert.IsGreaterThanOrEqualTo(hardwareSummary.TranslatePoint(new Point(0, hardwareSummary.ActualHeight), content).Y,
+                        recommendation.TranslatePoint(new Point(), content).Y, "Hardware recommendations must not overlap the hardware summary.");
+                    SaveRender(content, "settings-performance");
                     var cacheSize = Descendants<TextBlock>(view).Single(text => text.Text == shell.Settings.CacheSizeText);
                     cacheSize.BringIntoView();
                     await LayoutAsync(window);

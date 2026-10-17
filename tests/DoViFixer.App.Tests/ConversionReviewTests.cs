@@ -110,7 +110,7 @@ public sealed class ConversionReviewTests
     public async Task CancelConversionClearsPlanAndKeepsOriginalBatchTotal(bool cancelBatch)
     {
         using var runtime = new TestRuntime();
-        await runtime.UpdateAsync(settings => settings with { IncludeSimple = true }, default);
+        await runtime.UpdateAsync(settings => settings with { IncludeSimple = true, ConversionWorkers = 1 }, default);
         var model = runtime.Container.GetRequiredService<MediaViewModel>();
         await model.AddAsync([@"C:\Media\Ocean.mkv", @"C:\Media\Mountain.mkv"]);
         var first = model.Files[0];

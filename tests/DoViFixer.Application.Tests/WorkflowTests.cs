@@ -234,7 +234,7 @@ public sealed class WorkflowTests
         }, []), null, default);
         Assert.IsTrue(result.Report.Ready);
         Assert.AreEqual(1, runtime.InstallCalls);
-        Assert.AreEqual(6, runtime.Settings.ToolPaths.Count);
+        Assert.AreEqual(DependencyRequirements.All.Count, runtime.Settings.ToolPaths.Count);
         Assert.AreEqual("ready-DoviTool", runtime.GetPath(NativeTool.DoviTool));
     }
 

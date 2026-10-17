@@ -12,7 +12,7 @@ namespace DoViFixer.Mcp.Tools;
 public sealed class SetupTools(DependencyService dependencies, SettingsService settings, UpdateService updates, JobRegistry jobs, PlanRegistry plans, ILogger<SetupTools> logger)
 {
     [McpServerTool(Name = "check_dependencies", Title = "Check dependencies", ReadOnly = true, Destructive = false, OpenWorld = false)]
-    [Description("Check whether the native tools DoViFixer needs (FFmpeg, FFprobe, MkvMerge, MkvExtract, MediaInfo, DoviTool) are installed and compatible.")]
+    [Description("Check whether the native tools DoViFixer needs (FFmpeg, FFprobe, MkvMerge, MkvExtract, MkvPropEdit, MediaInfo, DoviTool) are installed and compatible.")]
     public async Task<string> CheckDependencies([Description("Tools to check. Omit to check all.")] string[]? tools = null, CancellationToken cancellationToken = default) => ToolViews.Json(await dependencies.CheckAsync(ToolArguments.Tools(tools), cancellationToken));
 
     [McpServerTool(Name = "plan_dependency_install", Title = "Plan dependency installation", ReadOnly = true, Destructive = false, OpenWorld = true)]
@@ -63,7 +63,7 @@ public sealed class SetupTools(DependencyService dependencies, SettingsService s
     [McpServerTool(Name = "set_tool_path", Title = "Set tool path", ReadOnly = false, Destructive = false, Idempotent = true, OpenWorld = false)]
     [Description("Use a specific executable for a native tool. The path is validated before it is saved.")]
     public async Task<string> SetToolPath(
-        [Description("FFmpeg, FFprobe, MkvMerge, MkvExtract, MediaInfo or DoviTool.")] string tool,
+        [Description("FFmpeg, FFprobe, MkvMerge, MkvExtract, MkvPropEdit, MediaInfo or DoviTool.")] string tool,
         [Description("Absolute path of the executable.")] string path,
         CancellationToken cancellationToken = default)
     {

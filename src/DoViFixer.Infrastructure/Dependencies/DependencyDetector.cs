@@ -27,7 +27,7 @@ internal sealed class DependencyDetector(ISettingsStore settings, StorageOptions
 
             DependencyStatus? failure = null;
             DependencyStatus? ready = null;
-            foreach (string candidate in Candidates(tool))
+            foreach (string candidate in Candidates(tool, snapshot.ToolPaths))
             {
                 var result = await ValidatePathAsync(tool, candidate, cancellationToken);
                 if (result.State == DependencyState.Ready)
@@ -142,10 +142,20 @@ internal sealed class DependencyDetector(ISettingsStore settings, StorageOptions
         return reader.ReadUInt16() == 2;
     }
 
-    private IEnumerable<string> Candidates(NativeTool tool)
+    private IEnumerable<string> Candidates(NativeTool tool, IReadOnlyDictionary<NativeTool, string> configuredPaths)
     {
         string executable = ToolDefinitions.Executable(tool);
         var found = new List<string>();
+        if (tool == NativeTool.MkvPropEdit)
+        {
+            foreach (var sibling in configuredPaths.Where(pair => pair.Key is NativeTool.MkvMerge or NativeTool.MkvExtract))
+            {
+                if (Path.IsPathFullyQualified(sibling.Value) && Path.GetDirectoryName(sibling.Value) is { } directory)
+                {
+                    found.Add(Path.Combine(directory, executable));
+                }
+            }
+        }
         foreach (string root in new[]
         {
             storage.ToolsDirectory,

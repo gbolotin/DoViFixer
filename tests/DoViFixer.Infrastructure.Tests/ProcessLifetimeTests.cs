@@ -36,6 +36,60 @@ public sealed class ProcessLifetimeTests
     }
 
     [TestMethod]
+    [DataRow(64, false)]
+    [DataRow(4096, true)]
+    public async Task ConfiguredBuffersPreservePipelineBytes(int bufferKiB, bool transformed)
+    {
+        var store = new Configuration.SettingsStore(new Configuration.StorageOptions(Path.Combine(directory, "settings")), NullLogger<Configuration.SettingsStore>.Instance);
+        await store.UpdateAsync(value => value with { PipeBufferKiB = bufferKiB }, default);
+        var configuredRunner = new ProcessRunner(NullLogger<ProcessRunner>.Instance, store);
+        var producer = ProcessTestHost.Request("bytes");
+        bool relayInvoked = false;
+        if (transformed)
+        {
+            producer = producer with
+            {
+                OutputRelay = async (input, output, token) =>
+                {
+                    relayInvoked = true;
+                    Assert.IsInstanceOfType<BufferedStream>(input);
+                    Assert.IsInstanceOfType<BufferedStream>(output);
+                    await input.CopyToAsync(output, token);
+                }
+            };
+        }
+        string destination = Path.Combine(directory, "output.bin");
+        await configuredRunner.PipeAsync(producer, ProcessTestHost.Request("copy", destination), default);
+        CollectionAssert.AreEqual(Enumerable.Range(0, 300_000).Select(index => (byte)(index % 251)).ToArray(), await File.ReadAllBytesAsync(destination));
+        Assert.AreEqual(transformed, relayInvoked);
+    }
+
+    [TestMethod]
+    public async Task ConfiguredPriorityAppliesToStandaloneAndBothPipelineProcesses()
+    {
+        var store = new Configuration.SettingsStore(new Configuration.StorageOptions(Path.Combine(directory, "settings")), NullLogger<Configuration.SettingsStore>.Instance);
+        await store.UpdateAsync(value => value with { ToolProcessPriority = Application.Settings.ToolProcessPriority.BelowNormal }, default);
+        var configuredRunner = new ProcessRunner(NullLogger<ProcessRunner>.Instance, store);
+        using var cancellation = new CancellationTokenSource();
+        Task standalone = configuredRunner.RunAsync(ProcessTestHost.Request("leaf", directory, "standalone"), cancellation.Token);
+        Task pipeline = configuredRunner.PipeAsync(ProcessTestHost.Request("leaf", directory, "producer"), ProcessTestHost.Request("leaf", directory, "consumer"), cancellation.Token);
+        try
+        {
+            foreach (string name in new[] { "standalone", "producer", "consumer" })
+            {
+                var process = await ReadProcessAsync(name);
+                Assert.AreEqual(ProcessPriorityClass.BelowNormal, process.PriorityClass);
+            }
+        }
+        finally
+        {
+            cancellation.Cancel();
+            await Assert.ThrowsAsync<OperationCanceledException>(() => standalone);
+            await Assert.ThrowsAsync<OperationCanceledException>(() => pipeline);
+        }
+    }
+
+    [TestMethod]
     [DataRow("host-single")]
     [DataRow("host-pipeline")]
     public async Task AbruptHostTerminationKillsAssignedProcessesAndDescendants(string mode)

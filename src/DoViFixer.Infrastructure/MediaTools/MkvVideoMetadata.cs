@@ -36,11 +36,10 @@ internal static class MkvVideoMetadata
 
     internal static IEnumerable<string> Differences(JsonElement source, JsonElement target)
     {
-        // External timestamps can make mkvmerge normalize DefaultDuration to its modal delta.
-        // The verifier compares every actual timestamp and the frame count instead.
+        // DefaultDuration controls the reported frame rate even when actual timestamps match.
         foreach (string property in options.Select(p => p.Property).Concat(new[]
         {
-            "display_unit", "pixel_crop_left", "pixel_crop_top", "pixel_crop_right", "pixel_crop_bottom"
+            "default_duration", "display_unit", "pixel_crop_left", "pixel_crop_top", "pixel_crop_right", "pixel_crop_bottom"
         }))
         {
             if (source.TryGetProperty(property, out var expected) && (!target.TryGetProperty(property, out var actual) || expected.ToString() != actual.ToString()))

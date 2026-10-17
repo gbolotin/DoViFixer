@@ -11,6 +11,5 @@ src/DoViFixer.App/Views/MediaView.xaml | color | Background="Black" | Video fram
 src/DoViFixer.App/Views/MediaView.xaml | color | Foreground="White" | Text on the black video letterbox.
 src/DoViFixer.App/Views/MediaView.xaml | typography | FontSize="16" | Open audit finding: progress card title and percent, Body 14 or Subtitle 20.
 src/DoViFixer.App/Views/SettingsView.xaml | typography | FontWeight="SemiBold" | Save error heading; BodyStrongTextBlockStyle would fit it.
-src/DoViFixer.App/Views/Settings/ScanningSettingsView.xaml | spacing | Margin="0,2,0,0" | Open audit finding: 0,4,0,0 suggested.
 src/DoViFixer.App/Views/Settings/NativeToolsSettingsView.xaml | typography | FontSize="12" | Settings state icon; CaptionTextBlockFontSize has the same value.
 src/DoViFixer.App/Views/Shell.xaml | typography | FontWeight="SemiBold" | Warning glyph in the status bar is drawn SemiBold.
