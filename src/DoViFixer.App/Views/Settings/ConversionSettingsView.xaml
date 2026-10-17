@@ -37,7 +37,7 @@
                                 DockPanel.Dock="Right"
                                 Command="{Binding BrowseDestinationCommand}"
                                 Margin="8,0,0,0" />
-                        <TextBox Text="{Binding Destination}" AutomationProperties.Name="Output folder path" />
+                        <TextBox Text="{Binding Destination, UpdateSourceTrigger=PropertyChanged, ValidatesOnNotifyDataErrors=True}" AutomationProperties.Name="Output folder path" />
                     </DockPanel>
                     <TextBlock Text="{Binding DestinationError}"
                                TextWrapping="Wrap"

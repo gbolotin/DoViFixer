@@ -25,7 +25,7 @@
                     <HeaderedContentControl Header="Brightness margin"
                                             Style="{StaticResource WfSettingRowStyle}">
                         <StackPanel Orientation="Horizontal">
-                            <TextBox Text="{Binding BrightnessMarginNits, ValidatesOnExceptions=True}"
+                            <TextBox Text="{Binding BrightnessMarginText, UpdateSourceTrigger=PropertyChanged, ValidatesOnNotifyDataErrors=True}"
                                      Width="128"
                                      VerticalAlignment="Center"
                                      AutomationProperties.Name="Brightness margin"
@@ -52,7 +52,7 @@
                     <HeaderedContentControl Header="Assumed peak brightness"
                                             Style="{StaticResource WfSettingRowStyle}">
                         <StackPanel Orientation="Horizontal">
-                            <TextBox Text="{Binding AssumedPeakBrightnessNits, ValidatesOnExceptions=True}"
+                            <TextBox Text="{Binding AssumedPeakBrightnessText, UpdateSourceTrigger=PropertyChanged, ValidatesOnNotifyDataErrors=True}"
                                      Width="128"
                                      VerticalAlignment="Center"
                                      AutomationProperties.Name="Assumed peak brightness"

@@ -73,17 +73,17 @@ public sealed partial class SettingsViewModel : OperationViewModel
 
     [ObservableProperty]
     public partial int BrightnessMarginNits { get; set; } = 50;
-    partial void OnBrightnessMarginNitsChanged(int value) => TriggerAutoSave();
+    partial void OnBrightnessMarginNitsChanged(int value) => NumericPreferenceChanged(nameof(BrightnessMarginText));
 
     [ObservableProperty]
     public partial int AssumedPeakBrightnessNits { get; set; } = 1000;
-    partial void OnAssumedPeakBrightnessNitsChanged(int value) => TriggerAutoSave();
+    partial void OnAssumedPeakBrightnessNitsChanged(int value) => NumericPreferenceChanged(nameof(AssumedPeakBrightnessText));
 
     [RelayCommand]
-    private void ResetBrightnessMargin() => BrightnessMarginNits = 50;
+    private void ResetBrightnessMargin() => BrightnessMarginText = "50";
 
     [RelayCommand]
-    private void ResetAssumedPeakBrightness() => AssumedPeakBrightnessNits = 1000;
+    private void ResetAssumedPeakBrightness() => AssumedPeakBrightnessText = "1000";
 
     private async Task RecheckToolsAsync(CancellationToken token)
     {
@@ -151,6 +151,8 @@ public sealed partial class SettingsViewModel : OperationViewModel
         }
         finally
         {
+            SynchronizeNumericText();
+            ValidatePreferences();
             isLoading = false;
         }
     }
@@ -343,7 +345,7 @@ public sealed partial class SettingsViewModel : OperationViewModel
     [ObservableProperty]
     public partial double FreeSpaceMarginPercent { get; set; } = 20;
 
-    partial void OnFreeSpaceMarginPercentChanged(double value) => TriggerAutoSave();
+    partial void OnFreeSpaceMarginPercentChanged(double value) => NumericPreferenceChanged(nameof(FreeSpaceMarginText));
 
     public bool IncludeSimple
     {
@@ -388,6 +390,7 @@ public sealed partial class SettingsViewModel : OperationViewModel
 
     private void TriggerAutoSave()
     {
+        ValidatePreferences();
         if (isLoading)
         {
             return;
@@ -483,9 +486,10 @@ public sealed partial class SettingsViewModel : OperationViewModel
 
     private async Task SaveCoreAsync(CancellationToken token)
     {
-        if (OtherFolder && string.IsNullOrWhiteSpace(Destination))
+        ValidatePreferences();
+        if (HasErrors)
         {
-            throw new InvalidOperationException("Choose an output folder.");
+            throw new InvalidOperationException(string.Join(Environment.NewLine, validationErrors.Values));
         }
 
         // Capture one consistent UI snapshot before moving directory validation

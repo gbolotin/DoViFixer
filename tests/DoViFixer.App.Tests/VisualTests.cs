@@ -1092,6 +1092,31 @@ public sealed class VisualTests
                         AssertInside(input, content);
                     }
                     Assert.HasCount(2, Descendants<Slider>(view));
+                    var marginInput = Descendants<TextBox>(view).Single(box => System.Windows.Automation.AutomationProperties.GetName(box) == "Brightness margin");
+                    string savedMargin = marginInput.Text;
+                    marginInput.Text = "not a number";
+                    await shell.Settings.SaveTask;
+                    await LayoutAsync(window);
+                    Assert.IsTrue(Validation.GetHasError(marginInput));
+                    Assert.AreSame(window.FindResource("DefaultTextBoxInvalidationStyle"), Validation.GetErrorTemplate(marginInput));
+                    Assert.IsFalse(Validation.GetHasError((DependencyObject)view), "The whole page must not receive field errors.");
+                    StringAssert.Contains(UIElementAutomationPeer.CreatePeerForElement(marginInput).GetItemStatus(), "0 to 1000");
+                    var validationLayer = System.Windows.Documents.AdornerLayer.GetAdornerLayer(marginInput)!;
+                    Assert.HasCount(1, validationLayer.GetAdorners(marginInput)!);
+                    var validationAdorner = validationLayer.GetAdorners(marginInput)!.Single();
+                    await shell.Settings.Sections.NavigateAsync(shell.Settings.Sections.Pages.OfType<GeneralSettingsSection>().Single());
+                    await LayoutAsync(window);
+                    Assert.IsFalse(validationAdorner.IsVisible, "A validation outline must not leak onto another section.");
+                    await shell.Settings.Sections.NavigateAsync(section);
+                    await LayoutAsync(window);
+                    Assert.HasCount(1, validationLayer.GetAdorners(marginInput)!);
+                    Assert.AreEqual("not a number", marginInput.Text);
+                    marginInput.Text = savedMargin;
+                    await shell.Settings.SaveTask;
+                    await LayoutAsync(window);
+                    Assert.IsFalse(Validation.GetHasError(marginInput));
+                    Assert.IsTrue(validationLayer.GetAdorners(marginInput) is null or { Length: 0 });
+                    Assert.AreEqual(string.Empty, UIElementAutomationPeer.CreatePeerForElement(marginInput).GetItemStatus());
                     SaveRender(content, "settings-analysis");
                     break;
                 case PerformanceSettingsSection when firstVisit:

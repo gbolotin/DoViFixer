@@ -10,6 +10,8 @@
              d:DataContext="{d:DesignInstance Type=viewModels:SettingsViewModel}">
     <!-- The body of the settings frame: section navigation, the retained section pages, and a footer every section shares. -->
     <UserControl.Resources>
+        <Style TargetType="TextBox" BasedOn="{StaticResource WfValidationOutlineTextBoxStyle}" />
+        <Style TargetType="ComboBox" BasedOn="{StaticResource WfValidationOutlineComboBoxStyle}" />
         <!-- Every section shows part of the same SettingsViewModel, so each page binds to it rather than to its section. -->
         <DataTemplate DataType="{x:Type viewModels:GeneralSettingsSection}">
             <settings:GeneralSettingsView DataContext="{Binding Settings}" />

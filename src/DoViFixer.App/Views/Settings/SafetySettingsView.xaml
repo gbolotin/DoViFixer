@@ -75,7 +75,7 @@
                                             Style="{StaticResource WfSettingRowStyle}"
                                             Margin="0,12,0,0">
                         <StackPanel Orientation="Horizontal">
-                            <TextBox Text="{Binding FreeSpaceMarginPercent}"
+                            <TextBox Text="{Binding FreeSpaceMarginText, UpdateSourceTrigger=PropertyChanged, ValidatesOnNotifyDataErrors=True}"
                                      Width="128"
                                      AutomationProperties.Name="Extra free-space margin" />
                             <TextBlock Text="%" VerticalAlignment="Center" Margin="8,0,0,0" />
