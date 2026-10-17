@@ -53,7 +53,7 @@ public sealed class ConsoleInteraction(ILogger<ConsoleInteraction> logger)
         }
 
         string code = "APPROVE " + plan.ToString("N")[..8].ToUpperInvariant();
-        System.Console.Error.Write($"Permanently delete these exact backups? Type {code}: ");
+        System.Console.Error.Write($"Remove these exact backups (Recycle Bin if enabled in Safety settings)? Type {code}: ");
         bool approved = (await System.Console.In.ReadLineAsync(cancellationToken))?.Trim() == code;
         OperationLog.Audit(logger, "DeleteApproval", "Backup cleanup", approved ? "ApprovedInteractive" : "DeclinedInteractive", plan);
         return approved;

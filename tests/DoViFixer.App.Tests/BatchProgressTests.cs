@@ -107,6 +107,40 @@ public sealed class BatchProgressTests
         Assert.AreEqual(expected, model.BatchElapsed);
     }
 
+    [TestMethod]
+    public void ConcurrentJobsKeepSeparateProgressAndTheCardMovesToTheNextActiveFile()
+    {
+        var previous = SynchronizationContext.Current;
+        var context = new QueuedContext();
+        SynchronizationContext.SetSynchronizationContext(context);
+        try
+        {
+            var model = new BatchProgressViewModel();
+            var first = new MediaRow("first.mkv");
+            var second = new MediaRow("second.mkv");
+            model.Begin(3, "Conversion");
+            var firstProgress = model.Start(first, "Converting");
+            var secondProgress = model.Start(second, "Converting");
+            firstProgress.Report(new(Guid.Empty, "Converting", first.Path, 20));
+            secondProgress.Report(new(Guid.Empty, "Converting", second.Path, 40));
+            context.Drain();
+
+            Assert.AreEqual(2, model.ActiveCount);
+            Assert.AreSame(first, model.CurrentJob);
+            Assert.AreEqual(20, model.Percent);
+            model.Complete(first, OperationStatus.Completed);
+            Assert.AreSame(second, model.CurrentJob);
+        Assert.AreEqual(2, model.Total - model.Processed);
+            Assert.AreEqual(140d / 3, model.Percent, 0.001);
+            model.Complete(second, OperationStatus.Completed);
+            Assert.IsNull(model.CurrentJob);
+        }
+        finally
+        {
+            SynchronizationContext.SetSynchronizationContext(previous);
+        }
+    }
+
     private sealed class ManualTime : TimeProvider
     {
         private DateTimeOffset now = new(2026, 10, 7, 12, 0, 0, TimeSpan.Zero);

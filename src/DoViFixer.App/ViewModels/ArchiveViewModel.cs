@@ -102,7 +102,7 @@ public sealed partial class ArchiveViewModel(BackupService backup, RestoreServic
             return;
         }
 
-        string review = "Permanently delete exactly these retained backup files:\n\n" + string.Join("\n", plan.Files.Select(f => $"{f.Path} ({f.Length:N0} bytes)"));
+        string review = "Remove exactly these retained backup files (Recycle Bin if enabled in Safety settings; otherwise permanent deletion):\n\n" + string.Join("\n", plan.Files.Select(f => $"{f.Path} ({f.Length:N0} bytes)"));
         if (!await dialogs.ReviewAsync("Review cleanup", review, "Delete"))
         {
             SetStatus(ViewStatus.CleanupNotApproved);

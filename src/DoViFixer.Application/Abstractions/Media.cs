@@ -2,6 +2,7 @@ using DoViFixer.Application.Operations;
 using DoViFixer.Domain.Analysis;
 using DoViFixer.Domain.Conversion;
 using DoViFixer.Domain.Media;
+using DoViFixer.Application.Settings;
 
 namespace DoViFixer.Application.Abstractions;
 public interface IMediaPreview
@@ -35,7 +36,7 @@ public enum VerificationArea
 public sealed record VerificationFinding(VerificationArea Area, string Message);
 public interface IMediaVerifier
 {
-    Task<IReadOnlyList<VerificationFinding>> VerifyAsync(MediaInfo source, string output, DolbyVisionProfile expectedProfile, ITemporaryWorkspace workspace, CancellationToken cancellationToken, IProgress<OperationProgress>? progress = null, Guid operationId = default);
+    Task<IReadOnlyList<VerificationFinding>> VerifyAsync(MediaInfo source, string output, DolbyVisionProfile expectedProfile, ITemporaryWorkspace workspace, CancellationToken cancellationToken, IProgress<OperationProgress>? progress = null, Guid operationId = default, VerificationLevel level = VerificationLevel.FullIntegrity);
 }
 
 // Thrown when an archive's base-layer SHA-256 does not match the input; carries the input's actual hash.

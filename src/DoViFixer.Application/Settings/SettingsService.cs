@@ -7,9 +7,21 @@ namespace DoViFixer.Application.Settings;
 public sealed class SettingsService(ISettingsStore store, IDependencyDetector detector, IToolCatalog catalog, IFileOperations files, ILogger<SettingsService> logger)
 {
     public Task<UserSettings> ReadAsync(CancellationToken cancellationToken) => store.ReadAsync(cancellationToken);
-    public async Task SetPreferencesAsync(string? temporaryDirectory, string? outputDirectory, bool replaceOriginal, bool createElArchive, CancellationToken cancellationToken, bool? automaticallyScanAddedFiles = null, bool? useCachedResults = null, bool? autoSelectAfterScan = null, AppTheme? theme = null, bool? allowFel = null, bool? includeSimple = null, bool? forceComplex = null, bool? showCompletionNotifications = null)
+    public async Task SetPreferencesAsync(string? temporaryDirectory, string? outputDirectory, bool replaceOriginal, bool createElArchive, CancellationToken cancellationToken, bool? automaticallyScanAddedFiles = null, bool? useCachedResults = null, bool? autoSelectAfterScan = null, AppTheme? theme = null, bool? allowFel = null, bool? includeSimple = null, bool? forceComplex = null, bool? showCompletionNotifications = null, int? conversionWorkers = null, VerificationLevel? verificationLevel = null, bool? recycleDeletedOriginalsAndBackups = null, double? freeSpaceMarginPercent = null)
     {
         cancellationToken.ThrowIfCancellationRequested();
+        if (conversionWorkers is < 1 or > 8)
+        {
+            throw new ArgumentOutOfRangeException(nameof(conversionWorkers), "Conversion workers must be between 1 and 8.");
+        }
+        if (verificationLevel is not null && !Enum.IsDefined(verificationLevel.Value))
+        {
+            throw new ArgumentOutOfRangeException(nameof(verificationLevel));
+        }
+        if (freeSpaceMarginPercent is not null && (!double.IsFinite(freeSpaceMarginPercent.Value) || freeSpaceMarginPercent is < 0 or > 200))
+        {
+            throw new ArgumentOutOfRangeException(nameof(freeSpaceMarginPercent));
+        }
         string? temporary = string.IsNullOrWhiteSpace(temporaryDirectory) ? null : Path.GetFullPath(temporaryDirectory);
         string? full = string.IsNullOrWhiteSpace(outputDirectory) ? null : Path.GetFullPath(outputDirectory);
         if (temporary is not null)
@@ -29,6 +41,10 @@ public sealed class SettingsService(ISettingsStore store, IDependencyDetector de
             OutputDirectory = full,
             ReplaceOriginal = replaceOriginal,
             CreateElArchive = createElArchive,
+            ConversionWorkers = conversionWorkers ?? s.ConversionWorkers,
+            VerificationLevel = verificationLevel ?? s.VerificationLevel,
+            RecycleDeletedOriginalsAndBackups = recycleDeletedOriginalsAndBackups ?? s.RecycleDeletedOriginalsAndBackups,
+            FreeSpaceMarginPercent = freeSpaceMarginPercent ?? s.FreeSpaceMarginPercent,
             IncludeSimple = includeSimple ?? (allowFel is not null ? allowFel.Value : s.IncludeSimple),
             ForceComplex = forceComplex ?? (allowFel is not null ? allowFel.Value : s.ForceComplex),
             AutomaticallyScanAddedFiles = automaticallyScanAddedFiles ?? s.AutomaticallyScanAddedFiles,

@@ -193,7 +193,7 @@ internal sealed class FileOperations : IFileOperations, IFileDiscovery
         }
     }
 
-    public Task DeleteAsync(FileIdentity identity, CancellationToken cancellationToken)
+    public Task DeleteAsync(FileIdentity identity, CancellationToken cancellationToken, bool recycle = false)
     {
         cancellationToken.ThrowIfCancellationRequested();
         if (!identity.Path.EndsWith(".dovi", StringComparison.OrdinalIgnoreCase) && !identity.Path.EndsWith(".bak.dovi_convert", StringComparison.OrdinalIgnoreCase))
@@ -206,6 +206,19 @@ internal sealed class FileOperations : IFileOperations, IFileDiscovery
         if (RandomAccess.GetLength(handle) != identity.Length || File.GetLastWriteTimeUtc(handle) != identity.LastWriteUtc)
         {
             throw new IOException("Backup changed since planning; prepare a new cleanup plan.");
+        }
+
+        if (recycle)
+        {
+            // The shell must reopen the path. Recheck the identity after releasing our exclusive handle.
+            handle.Dispose();
+            if (Identify(identity.Path) != identity)
+            {
+                throw new IOException("Backup changed before recycling; prepare a new cleanup plan.");
+            }
+
+            RecycleBin.Send(identity.Path);
+            return Task.CompletedTask;
         }
 
         // Mark the already-open, exclusively held file for deletion, avoiding a close/reopen race.

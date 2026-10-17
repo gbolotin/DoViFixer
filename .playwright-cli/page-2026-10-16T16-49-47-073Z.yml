@@ -1,0 +1,76 @@
+- generic [ref=e2]:
+  - generic [ref=e3]:
+    - generic [ref=e4]: ♧
+    - text: DoViFixer
+  - generic [ref=e5]:
+    - generic [ref=e6]: ▣ Media
+    - generic [ref=e7]: ▢ Backup & Restore
+    - generic [ref=e8]: ⚙ Settings
+  - dialog "Settings mockup" [ref=e10]:
+    - complementary [ref=e11]:
+      - generic [ref=e12]: Settings
+      - generic [ref=e13]:
+        - generic [ref=e14]: ♧
+        - text: General
+      - generic [ref=e15]:
+        - generic [ref=e16]: ⇄
+        - text: Conversion
+      - generic [ref=e17]:
+        - generic [ref=e18]: ◇
+        - text: Safety
+      - generic [ref=e19]:
+        - generic [ref=e20]: ⌕
+        - text: Scanning & cache
+      - generic [ref=e21]:
+        - generic [ref=e22]: ⚒
+        - text: Native tools
+      - generic [ref=e23]:
+        - generic [ref=e24]: ⓘ
+        - text: About
+    - main [ref=e25]:
+      - generic [ref=e26]: Proposed settings page
+      - heading "Safety" [level=1] [ref=e27]
+      - paragraph [ref=e28]: Choose how conversion output is checked, how deleted backups are handled, and how much disk space stays free.
+      - generic [ref=e29]:
+        - generic [ref=e30]: Verification level
+        - generic [ref=e31]:
+          - generic [ref=e32]:
+            - generic [ref=e33]: Most thorough
+            - slider "Verification level" [ref=e34]:
+              - button "Level 4, Full integrity" [ref=e36] [cursor=pointer]:
+                - generic [ref=e37]: "4"
+              - button "Level 3, Frame count and mismatch recount" [ref=e38] [cursor=pointer]:
+                - generic [ref=e39]: "3"
+              - button "Level 2, Frame count" [ref=e40] [cursor=pointer]:
+                - generic [ref=e41]: "2"
+              - button "Level 1, No integrity check" [ref=e42] [cursor=pointer]:
+                - generic [ref=e43]: "1"
+            - generic [ref=e44]: Fastest
+          - generic [ref=e45]:
+            - heading "3 · Frame count + mismatch recount" [level=2] [ref=e46]
+            - paragraph [ref=e47]: Default · Faster than Full integrity
+            - list [ref=e48]:
+              - listitem [ref=e49]: Compare reported source and output frame counts.
+              - listitem [ref=e50]: If they differ, recount the original video to check its actual count.
+            - generic [ref=e51]:
+              - generic [ref=e52]: ⓘ
+              - generic [ref=e53]: This level does not compare audio, subtitles, timestamps, or Dolby Vision metadata. Completion will name the check used.
+      - generic [ref=e54]:
+        - generic [ref=e55]: Deletion
+        - generic [ref=e56]:
+          - generic [ref=e57]:
+            - strong [ref=e58]: Move deleted backups to Recycle Bin
+            - generic [ref=e59]: Applies when replacing an original or cleaning up an approved backup. If Windows cannot recycle it, stop and report the problem.
+          - switch "Move deleted backups to Recycle Bin" [checked] [ref=e60]
+      - generic [ref=e61]:
+        - generic [ref=e62]: Disk space
+        - generic [ref=e63]:
+          - generic [ref=e64]:
+            - strong [ref=e65]: Extra free-space margin
+            - generic [ref=e66]: Require this much additional free space, measured against the source file, beyond DoViFixer’s current workspace and output estimates.
+          - generic [ref=e67]:
+            - spinbutton "Extra free-space margin" [ref=e68]: "20"
+            - generic [ref=e69]: "%"
+    - contentinfo [ref=e70]:
+      - text: Changes save automatically.
+      - generic [ref=e71]: Mockup for review · no app settings changed

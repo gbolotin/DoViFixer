@@ -187,10 +187,11 @@ internal sealed class TestRuntime : IFileDiscovery, IFileOperations, IMediaProbe
         get;
         set;
     }
+    public long? AvailableSpaceBytes { get; set; }
 
     public void EnsureAvailableSpace(string directory, long requiredBytes)
     {
-        if (FailAvailableSpace)
+        if (FailAvailableSpace || requiredBytes > AvailableSpaceBytes)
         {
             throw new IOException("Insufficient disk space");
         }
@@ -206,9 +207,14 @@ internal sealed class TestRuntime : IFileDiscovery, IFileOperations, IMediaProbe
 
     public ValueTask<IAsyncDisposable> AcquireReadLeaseAsync(FileIdentity identity, CancellationToken cancellationToken) => ValueTask.FromResult<IAsyncDisposable>(new Workspace());
     public List<string> DeletedFiles { get; } = [];
-    public Task DeleteAsync(FileIdentity identity, CancellationToken cancellationToken)
+    public List<string> RecycledFiles { get; } = [];
+    public Task DeleteAsync(FileIdentity identity, CancellationToken cancellationToken, bool recycle = false)
     {
         DeletedFiles.Add(identity.Path);
+        if (recycle)
+        {
+            RecycledFiles.Add(identity.Path);
+        }
         return Task.CompletedTask;
     }
     public Func<CancellationToken, Task>? DuringProbe
@@ -374,7 +380,12 @@ internal sealed class TestRuntime : IFileDiscovery, IFileOperations, IMediaProbe
         }
         return Task.FromResult<ArchiveManifest?>(new(1, "source.mkv", new string('A', 64), new string('B', 64), 1000, 1000, DateTimeOffset.UnixEpoch));
     }
-    public Task<IReadOnlyList<VerificationFinding>> VerifyAsync(MediaInfo source, string output, DolbyVisionProfile expectedProfile, ITemporaryWorkspace workspace, CancellationToken cancellationToken, IProgress<OperationProgress>? progress = null, Guid operationId = default) => Task.FromResult<IReadOnlyList<VerificationFinding>>([]);
+    public List<VerificationLevel> VerificationLevels { get; } = [];
+    public Task<IReadOnlyList<VerificationFinding>> VerifyAsync(MediaInfo source, string output, DolbyVisionProfile expectedProfile, ITemporaryWorkspace workspace, CancellationToken cancellationToken, IProgress<OperationProgress>? progress = null, Guid operationId = default, VerificationLevel level = VerificationLevel.FullIntegrity)
+    {
+        VerificationLevels.Add(level);
+        return Task.FromResult<IReadOnlyList<VerificationFinding>>([]);
+    }
     public IStagedOutput Stage(string destination, bool replaceExisting = false)
     {
         StagedOutputs.Add((destination, replaceExisting));

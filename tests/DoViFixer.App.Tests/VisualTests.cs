@@ -990,7 +990,7 @@ public sealed class VisualTests
         Assert.AreSame(window.FindResource("TextFillColorSecondaryBrush"), title.Foreground);
         Assert.AreSame(window.FindResource("ListBoxBackground"), overlay.HeaderBackground, "The title shares the section list's background.");
         var sections = Descendants<ListBox>(overlay).Single(list => ReferenceEquals(list.ItemsSource, shell.Settings.Sections.Pages));
-        Assert.HasCount(5, sections.Items);
+        Assert.HasCount(6, sections.Items);
         var host = Descendants<RetainedPageHost>(overlay).Single();
         var retained = new Dictionary<object, DependencyObject>();
         double? toolsOffset = null;

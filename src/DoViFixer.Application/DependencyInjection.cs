@@ -19,6 +19,7 @@ public static class DependencyInjection
         services.AddTransient<ScanService>();
         services.AddTransient<ConversionPlanner>();
         services.AddTransient<ConversionService>();
+        services.AddTransient<ConversionDiskBudget>();
         services.AddTransient<BatchConversionService>();
         services.AddTransient<Operations.ControlledBatchService>();
         services.AddTransient<BackupService>();

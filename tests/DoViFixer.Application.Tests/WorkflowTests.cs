@@ -1090,7 +1090,7 @@ public sealed class WorkflowTests
             return ValueTask.FromResult<IAsyncDisposable>(new Owned(this));
         }
 
-        public Task DeleteAsync(FileIdentity identity, CancellationToken cancellationToken)
+        public Task DeleteAsync(FileIdentity identity, CancellationToken cancellationToken, bool recycle = false)
         {
             if (identity.Path.EndsWith(".dovi", StringComparison.Ordinal))
             {
@@ -1132,7 +1132,7 @@ public sealed class WorkflowTests
             return Task.CompletedTask;
         }
 
-        public Task<IReadOnlyList<VerificationFinding>> VerifyAsync(MediaInfo source, string output, DolbyVisionProfile expectedProfile, ITemporaryWorkspace workspace, CancellationToken cancellationToken, IProgress<OperationProgress>? progress = null, Guid operationId = default) => Task.FromResult<IReadOnlyList<VerificationFinding>>((source.Source.Path.Contains("bad", StringComparison.Ordinal) || (FailFirstVerification && ConvertCalls == 1)) ? new[]
+        public Task<IReadOnlyList<VerificationFinding>> VerifyAsync(MediaInfo source, string output, DolbyVisionProfile expectedProfile, ITemporaryWorkspace workspace, CancellationToken cancellationToken, IProgress<OperationProgress>? progress = null, Guid operationId = default, DoViFixer.Application.Settings.VerificationLevel level = DoViFixer.Application.Settings.VerificationLevel.FullIntegrity) => Task.FromResult<IReadOnlyList<VerificationFinding>>((source.Source.Path.Contains("bad", StringComparison.Ordinal) || (FailFirstVerification && ConvertCalls == 1)) ? new[]
         {
             VerificationFailure
         }
