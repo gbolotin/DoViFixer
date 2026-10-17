@@ -18,7 +18,7 @@ public sealed class ConversionReviewTests
         row.IsSelected = false;
         model.Focused = model.Files[1];
         bool[] selections = model.Files.Select(file => file.IsSelected).ToArray();
-        var command = model.ConvertRowDv81Command;
+        var command = model.ConvertRowCommand;
         Assert.IsTrue(command.CanExecute(row));
         Assert.IsFalse(command.CanExecute(model.Files[2]));
         Assert.IsFalse(command.CanExecute(model.Files[3]));
@@ -57,7 +57,7 @@ public sealed class ConversionReviewTests
         var row = model.Files.Single();
         row.IsSelected = false;
 
-        await model.ConvertRowDv81Command.InvokeAsync(row);
+        await model.ConvertRowCommand.InvokeAsync(row);
 
         Assert.AreEqual(0, runtime.Conversions);
         Assert.AreEqual(MediaRowState.Skipped, row.State);
@@ -76,7 +76,7 @@ public sealed class ConversionReviewTests
         var row = model.Files.Single();
         string classification = row.Classification;
 
-        await model.ConvertRowDv81Command.InvokeAsync(row);
+        await model.ConvertRowCommand.InvokeAsync(row);
 
         Assert.AreEqual(MediaRowState.Failed, row.State);
         Assert.AreEqual("Conversion failed", row.Status);
@@ -96,7 +96,7 @@ public sealed class ConversionReviewTests
         var row = model.Files.Single();
         runtime.DuringAnalysis = _ => throw new IOException("Fixture inspection failure.");
 
-        await model.ConvertRowDv81Command.InvokeAsync(row);
+        await model.ConvertRowCommand.InvokeAsync(row);
 
         Assert.AreEqual(0, runtime.Conversions);
         Assert.AreEqual(MediaRowState.Failed, row.State);
@@ -142,7 +142,7 @@ public sealed class ConversionReviewTests
             }
         };
 
-        var conversion = model.ConvertDv81Command.InvokeAsync();
+        var conversion = model.ConvertCommand.InvokeAsync();
         try
         {
             await started.Task.WaitAsync(TimeSpan.FromSeconds(10));
@@ -180,12 +180,12 @@ public sealed class ConversionReviewTests
             Assert.IsTrue(second.IsSelected, "Cancelling the batch must preserve queued selections.");
             Assert.IsTrue(first.SelectionEnabled);
             Assert.IsTrue(second.SelectionEnabled);
-            Assert.IsTrue(model.ConvertDv81Command.CanExecute(null));
+            Assert.IsTrue(model.ConvertCommand.CanExecute(null));
             Assert.AreEqual(2, model.BatchProgress.Total);
             Assert.AreEqual(cancelBatch ? 1 : 2, model.BatchProgress.Processed);
             Assert.AreEqual(cancelBatch ? 50d : 100d, model.BatchProgress.Percent);
             runtime.DuringConversion = null;
-            await model.ConvertDv81Command.InvokeAsync();
+            await model.ConvertCommand.InvokeAsync();
             Assert.AreEqual(MediaRowState.Converted, first.State, "Retry must work without selecting the file again.");
         }
         finally
@@ -206,14 +206,15 @@ public sealed class ConversionReviewTests
         var model = runtime.Container.GetRequiredService<MediaViewModel>();
         await model.AddAsync([@"C:\Media\Mountain.mkv"]);
 
-        await model.ConvertDv81Command.InvokeAsync();
+        await model.ConvertCommand.InvokeAsync();
 
         Assert.AreEqual(1, runtime.Messages.Count);
         StringAssert.Contains(runtime.Messages[0], "The configured temporary storage folder does not exist");
         StringAssert.Contains(runtime.Messages[0], nonExistentPath);
         Assert.AreEqual(0, runtime.Conversions);
 
-        await model.ConvertHdrCommand.InvokeAsync();
+        await runtime.UpdateAsync(s => s with { RemoveDolbyVision = true }, default);
+        await model.ConvertCommand.InvokeAsync();
 
         Assert.AreEqual(2, runtime.Messages.Count);
         Assert.AreEqual(0, runtime.Conversions);
@@ -227,7 +228,7 @@ public sealed class ConversionReviewTests
         await model.AddAsync([@"C:\Media\Mountain.mkv", @"C:\Media\Ocean.mkv"]);
         model.Files[1].IsSelected = true;
 
-        await model.ConvertDv81Command.InvokeAsync();
+        await model.ConvertCommand.InvokeAsync();
 
         Assert.AreEqual(1, runtime.Conversions);
         Assert.AreEqual("Converted", model.Files[0].Status);
@@ -253,7 +254,7 @@ public sealed class ConversionReviewTests
         await model.AddAsync([@"C:\Media\Ocean.mkv", @"C:\Media\City.mkv"]);
         model.Files[1].IsSelected = true;
 
-        await model.ConvertDv81Command.InvokeAsync();
+        await model.ConvertCommand.InvokeAsync();
 
         Assert.AreEqual(1, runtime.Conversions);
         Assert.AreEqual("Converted", model.Files[0].Status);
@@ -262,7 +263,7 @@ public sealed class ConversionReviewTests
 
         Assert.AreEqual("Conversion skipped", model.Files[1].Status);
         Assert.AreEqual(MediaRowState.Skipped, model.Files[1].State);
-        StringAssert.Contains(model.Files[1].Notice, "Complex FEL conversion requires enabling 'Force Complex FEL' in Settings.");
+        StringAssert.Contains(model.Files[1].Notice, "Complex FEL conversion requires enabling 'Allow Complex FEL conversion' in Settings.");
         Assert.IsTrue(model.Files[1].HasWarning);
         Assert.AreEqual(model.Files[1].Notice, model.Files[1].Warning);
     }
@@ -276,7 +277,7 @@ public sealed class ConversionReviewTests
         await model.AddAsync([@"C:\Media\City.mkv"]);
         model.Files[0].IsSelected = true;
 
-        await model.ConvertDv81Command.InvokeAsync();
+        await model.ConvertCommand.InvokeAsync();
 
         Assert.AreEqual(1, runtime.Conversions);
         Assert.AreEqual("Converted", model.Files.Single().Status);
@@ -291,7 +292,8 @@ public sealed class ConversionReviewTests
         var model = runtime.Container.GetRequiredService<MediaViewModel>();
         await model.AddAsync([@"C:\Media\Mountain.mkv"]);
 
-        await model.ConvertHdrCommand.InvokeAsync();
+        await runtime.UpdateAsync(s => s with { RemoveDolbyVision = true }, default);
+        await model.ConvertCommand.InvokeAsync();
 
         Assert.AreEqual(1, runtime.Conversions);
         Assert.AreEqual("Converted", model.Files.Single().Status);
@@ -308,7 +310,7 @@ public sealed class ConversionReviewTests
         var model = runtime.Container.GetRequiredService<MediaViewModel>();
         await model.AddAsync([@"C:\Media\Mountain.mkv"]);
 
-        await model.ConvertDv81Command.InvokeAsync();
+        await model.ConvertCommand.InvokeAsync();
 
         Assert.AreEqual(0, runtime.Conversions);
         Assert.AreEqual(0, runtime.FullAnalyses, "Long operation full inspection must NOT run when disk space check fails beforehand.");

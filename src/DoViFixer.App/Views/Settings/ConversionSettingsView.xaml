@@ -7,26 +7,52 @@
              xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
              mc:Ignorable="d"
              d:DataContext="{d:DesignInstance Type=viewModels:SettingsViewModel}">
-    <!-- The Conversion page of the settings frame. Its DataContext is the SettingsViewModel all pages share. -->
     <ScrollViewer VerticalScrollBarVisibility="Auto">
         <StackPanel Margin="24,8,24,24">
             <TextBlock Text="Conversion" Style="{StaticResource WfHeadingTextStyle}" />
+            <TextBlock Text="Conversion method" Style="{StaticResource WfLabelTextStyle}" />
             <Border Style="{StaticResource WfCardStyle}">
                 <StackPanel IsEnabled="{Binding IsIdle}">
-                    <HeaderedContentControl Header="Temporary storage folder"
-                                            AutomationProperties.HelpText="Working space for extracted video, Dolby Vision metadata and verification files during scans, inspections, conversions, backups and restores. Each operation uses its own subfolder and attempts to remove it when finished, including after failure or cancellation. Final output files use the output folder selected below. Leave blank to use the Windows temporary folder."
-                                            Style="{StaticResource WfStackedSettingRowStyle}">
-                        <DockPanel>
-                            <Button Content="Browse"
-                                    DockPanel.Dock="Right"
-                                    Command="{Binding BrowseTemporaryCommand}"
-                                    Margin="8,0,0,0" />
-                            <TextBox Text="{Binding Temporary}"
-                                     behaviors:TextBoxAssist.Placeholder="Use the Windows temporary folder"
-                                     AutomationProperties.Name="Temporary storage folder" />
-                        </DockPanel>
-                    </HeaderedContentControl>
+                    <CheckBox Content="Use disk-based conversion (Safe mode)"
+                              AutomationProperties.HelpText="Extract video to temporary disk storage before processing. This uses more disk space and can be slower. When off, conversion streams video and automatically retries eligible failures with disk extraction."
+                              IsChecked="{Binding SafeMode}"
+                              Style="{StaticResource WfToggleSwitchStyle}" />
                     <Separator />
+                    <CheckBox Content="Convert to HDR10"
+                              AutomationProperties.HelpText="Convert to HDR10 instead of Dolby Vision Profile 8.1. Applies to both selected files and individual file conversions."
+                              IsChecked="{Binding RemoveDolbyVision}"
+                              Style="{StaticResource WfToggleSwitchStyle}" />
+                    <TextBlock Text="When enabled, converted files contain HDR10 without Dolby Vision metadata. Originals follow the file handling settings below."
+                               Style="{StaticResource WfSettingNoteTextStyle}" />
+                </StackPanel>
+            </Border>
+            <TextBlock Text="FEL handling" Style="{StaticResource WfLabelTextStyle}" />
+            <Border Style="{StaticResource WfCardStyle}">
+                <StackPanel IsEnabled="{Binding IsIdle}">
+                    <CheckBox Content="Include Simple FEL conversion"
+                              IsChecked="{Binding IncludeSimple}"
+                              Style="{StaticResource WfToggleSwitchStyle}" />
+                    <TextBlock Style="{StaticResource WfSettingNoteTextStyle}">
+                        <Run Text="&#xE7BA;"
+                             FontFamily="{StaticResource SymbolThemeFontFamily}"
+                             Foreground="{DynamicResource SystemFillColorCautionBrush}" />
+                        <Run Text="Enhancement-layer picture data will be discarded. Simple FEL contains minimal picture data and does not expand dynamic range beyond the base layer, but the original enhancement-layer video track is not retained in the converted file." />
+                    </TextBlock>
+                    <Separator />
+                    <CheckBox Content="Allow Complex FEL conversion"
+                              IsChecked="{Binding ForceComplex}"
+                              Style="{StaticResource WfToggleSwitchStyle}" />
+                    <TextBlock Style="{StaticResource WfSettingNoteTextStyle}">
+                        <Run Text="&#xE7BA;"
+                             FontFamily="{StaticResource SymbolThemeFontFamily}"
+                             Foreground="{DynamicResource SystemFillColorCautionBrush}" />
+                        <Run Text="Active enhancement-layer picture data will be permanently lost. Complex FEL contains video data that expands dynamic range and brightness beyond the base layer. Discarding it during conversion removes this visual detail." />
+                    </TextBlock>
+                </StackPanel>
+            </Border>
+            <TextBlock Text="Output and originals" Style="{StaticResource WfLabelTextStyle}" />
+            <Border Style="{StaticResource WfCardStyle}">
+                <StackPanel IsEnabled="{Binding IsIdle}">
                     <HeaderedContentControl Header="Output folder"
                                             AutomationProperties.HelpText="Where converted files are written."
                                             Style="{StaticResource WfSettingRowStyle}">
@@ -47,36 +73,60 @@
                     <TextBlock Text="{Binding DestinationError}"
                                TextWrapping="Wrap"
                                AutomationProperties.LiveSetting="Polite" />
-                    <TextBlock Text="File handling and policy" Style="{StaticResource WfLabelTextStyle}" />
                     <CheckBox Content="Replace original after verification"
                               AutomationProperties.HelpText="The converted file replaces the source after checks complete. Verification level 1 performs no content check. When off, the original is kept."
                               IsChecked="{Binding ReplaceOriginal}"
                               Style="{StaticResource WfToggleSwitchStyle}" />
                     <Separator />
-                    <CheckBox Content="Create EL archive by default"
+                    <CheckBox Content="Back up enhancement layer"
                               AutomationProperties.HelpText="Saves the enhancement layer in an archive so the original file can be restored from Backup &amp; Restore."
                               IsChecked="{Binding CreateArchive}"
                               Style="{StaticResource WfToggleSwitchStyle}" />
+                </StackPanel>
+            </Border>
+            <TextBlock Text="Input and working folders" Style="{StaticResource WfLabelTextStyle}" />
+            <Border Style="{StaticResource WfCardStyle}">
+                <StackPanel IsEnabled="{Binding IsIdle}">
+                    <HeaderedContentControl Header="Subfolder search depth"
+                                            AutomationProperties.HelpText="How many nested folder levels to search when adding folders or dropping them onto the Media page. Zero searches only the selected folder. Applies to newly added folders."
+                                            Style="{StaticResource WfSettingRowStyle}">
+                        <StackPanel Orientation="Horizontal" Width="248">
+                            <TextBox Text="{Binding FolderSearchDepthText, UpdateSourceTrigger=PropertyChanged, ValidatesOnNotifyDataErrors=True}"
+                                     Width="208"
+                                     Margin="0,0,8,0"
+                                     behaviors:TextBoxAssist.Placeholder="100"
+                                     behaviors:TextBoxAssist.Suffix="levels"
+                                     AutomationProperties.Name="Subfolder search depth"
+                                     AutomationProperties.HelpText="Valid range: 0 to 100. Zero searches only the selected folder." />
+                            <Button Content="&#xE777;"
+                                    FontFamily="{StaticResource SymbolThemeFontFamily}"
+                                    Width="32"
+                                    MinWidth="0"
+                                    Height="32"
+                                    Padding="4"
+                                    VerticalAlignment="Center"
+                                    ToolTip="Reset to default"
+                                    AutomationProperties.Name="Reset subfolder search depth"
+                                    Command="{Binding ResetFolderSearchDepthCommand}"
+                                    Visibility="{Binding IsFolderSearchDepthModified, Converter={StaticResource WfBooleanToVisibilityConverter}}" />
+                        </StackPanel>
+                    </HeaderedContentControl>
+                    <TextBlock Text="Default: 100 levels. Zero searches only the selected folder. Changing this does not remove files already added."
+                               Style="{StaticResource WfSettingNoteTextStyle}" />
                     <Separator />
-                    <CheckBox Content="Include Simple FEL conversion"
-                              IsChecked="{Binding IncludeSimple}"
-                              Style="{StaticResource WfToggleSwitchStyle}" />
-                    <TextBlock Style="{StaticResource WfSettingNoteTextStyle}">
-                        <Run Text="&#xE7BA;"
-                             FontFamily="{StaticResource SymbolThemeFontFamily}"
-                             Foreground="{DynamicResource SystemFillColorCautionBrush}" />
-                        <Run Text="Enhancement-layer picture data will be discarded. Simple FEL contains minimal picture data and does not expand dynamic range beyond the base layer, but the original enhancement-layer video track is not retained in the converted file." />
-                    </TextBlock>
-                    <Separator />
-                    <CheckBox Content="Force Complex FEL conversion"
-                              IsChecked="{Binding ForceComplex}"
-                              Style="{StaticResource WfToggleSwitchStyle}" />
-                    <TextBlock Style="{StaticResource WfSettingNoteTextStyle}">
-                        <Run Text="&#xE7BA;"
-                             FontFamily="{StaticResource SymbolThemeFontFamily}"
-                             Foreground="{DynamicResource SystemFillColorCautionBrush}" />
-                        <Run Text="Active enhancement-layer picture data will be permanently lost. Complex FEL contains video data that expands dynamic range and brightness beyond the base layer. Discarding it during conversion removes this visual detail." />
-                    </TextBlock>
+                    <HeaderedContentControl Header="Temporary storage folder"
+                                            AutomationProperties.HelpText="Working space for extracted video, Dolby Vision metadata and verification files during scans, inspections, conversions, backups and restores. Each operation uses its own subfolder and attempts to remove it when finished, including after failure or cancellation. Final output files use the output folder selected below. Leave blank to use the Windows temporary folder."
+                                            Style="{StaticResource WfStackedSettingRowStyle}">
+                        <DockPanel>
+                            <Button Content="Browse"
+                                    DockPanel.Dock="Right"
+                                    Command="{Binding BrowseTemporaryCommand}"
+                                    Margin="8,0,0,0" />
+                            <TextBox Text="{Binding Temporary}"
+                                     behaviors:TextBoxAssist.Placeholder="Use the Windows temporary folder"
+                                     AutomationProperties.Name="Temporary storage folder" />
+                        </DockPanel>
+                    </HeaderedContentControl>
                 </StackPanel>
             </Border>
         </StackPanel>

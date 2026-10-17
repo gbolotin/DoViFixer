@@ -9,6 +9,41 @@ namespace DoViFixer.App.Tests;
 public sealed class SettingsValidationTests
 {
     [TestMethod]
+    public async Task FolderDepthValidatesPersistsAndControlsNewFolderDiscovery()
+    {
+        using var runtime = new TestRuntime();
+        var settings = runtime.Container.GetRequiredService<SettingsViewModel>();
+        await settings.LoadCommand.InvokeAsync();
+        Assert.AreEqual("100", settings.FolderSearchDepthText);
+        foreach (string invalid in new[] { "", "abc", "-1", "101", "1.5", "NaN" })
+        {
+            settings.FolderSearchDepthText = invalid;
+            await settings.SaveTask;
+            Assert.IsTrue(settings.HasErrors);
+            Assert.IsTrue(settings.IsFolderSearchDepthModified);
+            Assert.AreEqual(100, runtime.Settings.FolderSearchDepth);
+        }
+        settings.ResetFolderSearchDepthCommand.Invoke();
+        await settings.SaveTask;
+        Assert.IsFalse(settings.HasErrors);
+        Assert.IsFalse(settings.IsFolderSearchDepthModified);
+        var media = runtime.Container.GetRequiredService<MediaViewModel>();
+        foreach (int depth in new[] { 0, 1, 5, 100 })
+        {
+            settings.FolderSearchDepthText = depth.ToString(CultureInfo.CurrentCulture);
+            await settings.SaveAsync();
+            Assert.AreEqual(depth, runtime.Settings.FolderSearchDepth);
+            await media.AddAsync([@"C:\Media"]);
+            Assert.AreEqual(depth, runtime.DiscoveryDepths[^1]);
+        }
+        settings.FolderSearchDepthText = "invalid";
+        await settings.SaveTask;
+        settings.DiscardChangesCommand.Invoke();
+        Assert.AreEqual("100", settings.FolderSearchDepthText);
+        Assert.IsFalse(settings.HasErrors);
+    }
+
+    [TestMethod]
     public async Task ResetAvailabilityTracksDraftValuesAndDefaultCorrections()
     {
         using var runtime = new TestRuntime();

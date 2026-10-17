@@ -807,20 +807,22 @@ public sealed class WorkflowTests
         var requestComplex = new CandidateConversionRequest("complex_fel.mkv", ConversionTarget.Profile81, null, null, false, false, IncludeSimple: true, ForceComplex: false);
         var resultComplex = await conversion.PrepareCandidateAsync(requestComplex, null, default);
         Assert.IsInstanceOfType<CandidatePreparationResult.Skipped>(resultComplex);
-        StringAssert.Contains(((CandidatePreparationResult.Skipped)resultComplex).Reason, "Force Complex FEL");
+        StringAssert.Contains(((CandidatePreparationResult.Skipped)resultComplex).Reason, "Allow Complex FEL conversion");
 
         Assert.AreEqual(0, runtime.AnalyzeCalls, "Full inspection must be skipped when cached analysis indicates FEL and policy flags are not enabled.");
     }
 
     [TestMethod]
-    public async Task PrepareCandidateAsyncSucceedsForMelCandidate()
+    [DataRow(false)]
+    [DataRow(true)]
+    public async Task PrepareCandidateAsyncSucceedsForMelCandidate(bool safe)
     {
         var runtime = new Runtime();
         var cache = new MemoryCache();
         var inspection = new InspectionService(runtime.Dependencies(), runtime, runtime, runtime, runtime, NullLogger<InspectionService>.Instance, cache);
         var conversion = runtime.Conversion(inspection);
 
-        var request = new CandidateConversionRequest("good.mkv", ConversionTarget.Profile81, null, null, false, false, AllowFel: false);
+        var request = new CandidateConversionRequest("good.mkv", ConversionTarget.Profile81, null, null, false, false, AllowFel: false) { Safe = safe };
         var result = await conversion.PrepareCandidateAsync(request, null, default);
 
         Assert.IsInstanceOfType<CandidatePreparationResult.Success>(result);
@@ -828,6 +830,7 @@ public sealed class WorkflowTests
         Assert.IsNotNull(success.Plan);
         Assert.IsNull(success.Warning);
         Assert.IsTrue(success.Plan.Output.EndsWith(" - DV P8.1.mkv"));
+        Assert.AreEqual(safe, success.Plan.Safe);
         Assert.AreEqual(1, runtime.AnalyzeCalls);
     }
 

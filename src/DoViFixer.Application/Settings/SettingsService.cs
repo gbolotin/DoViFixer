@@ -9,9 +9,13 @@ public sealed class SettingsService(ISettingsStore store, IDependencyDetector de
     public HardwareProfile Hardware => hardware?.Profile ?? new(1, 1, false);
 
     public Task<UserSettings> ReadAsync(CancellationToken cancellationToken) => store.ReadAsync(cancellationToken);
-    public async Task SetPreferencesAsync(string? temporaryDirectory, string? outputDirectory, bool replaceOriginal, bool createElArchive, CancellationToken cancellationToken, bool? automaticallyScanAddedFiles = null, bool? useCachedResults = null, bool? autoSelectAfterScan = null, AppTheme? theme = null, bool? allowFel = null, bool? includeSimple = null, bool? forceComplex = null, bool? showCompletionNotifications = null, int? conversionWorkers = null, VerificationLevel? verificationLevel = null, bool? recycleDeletedOriginalsAndBackups = null, double? freeSpaceMarginPercent = null, int? analysisWorkers = null, ToolProcessPriority? toolProcessPriority = null, int? pipeBufferKiB = null, int? brightnessMarginNits = null, int? assumedPeakBrightnessNits = null, int? scanSampleCount = null, double? scanSampleSeconds = null, int? minimumScanCoveragePercent = null, double? inspectionPeakPercentile = null)
+    public async Task SetPreferencesAsync(string? temporaryDirectory, string? outputDirectory, bool replaceOriginal, bool createElArchive, CancellationToken cancellationToken, bool? automaticallyScanAddedFiles = null, bool? useCachedResults = null, bool? autoSelectAfterScan = null, AppTheme? theme = null, bool? allowFel = null, bool? includeSimple = null, bool? forceComplex = null, bool? showCompletionNotifications = null, int? conversionWorkers = null, VerificationLevel? verificationLevel = null, bool? recycleDeletedOriginalsAndBackups = null, double? freeSpaceMarginPercent = null, int? analysisWorkers = null, ToolProcessPriority? toolProcessPriority = null, int? pipeBufferKiB = null, int? brightnessMarginNits = null, int? assumedPeakBrightnessNits = null, int? scanSampleCount = null, double? scanSampleSeconds = null, int? minimumScanCoveragePercent = null, double? inspectionPeakPercentile = null, bool? safeMode = null, bool? removeDolbyVision = null, int? folderSearchDepth = null)
     {
         cancellationToken.ThrowIfCancellationRequested();
+        if (folderSearchDepth is < 0 or > 100)
+        {
+            throw new ArgumentOutOfRangeException(nameof(folderSearchDepth), "Folder search depth must be between 0 and 100.");
+        }
         if (conversionWorkers is < 0 or > 16)
         {
             throw new ArgumentOutOfRangeException(nameof(conversionWorkers), "Conversion workers must be Automatic (0) or between 1 and 16.");
@@ -65,6 +69,9 @@ public sealed class SettingsService(ISettingsStore store, IDependencyDetector de
             OutputDirectory = full,
             ReplaceOriginal = replaceOriginal,
             CreateElArchive = createElArchive,
+            SafeMode = safeMode ?? s.SafeMode,
+            FolderSearchDepth = folderSearchDepth ?? s.FolderSearchDepth,
+            RemoveDolbyVision = removeDolbyVision ?? s.RemoveDolbyVision,
             ScanSampleCount = scanSampleCount ?? s.ScanSampleCount,
             ScanSampleSeconds = scanSampleSeconds ?? s.ScanSampleSeconds,
             MinimumScanCoveragePercent = minimumScanCoveragePercent ?? s.MinimumScanCoveragePercent,

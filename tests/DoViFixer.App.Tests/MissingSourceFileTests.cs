@@ -31,7 +31,7 @@ public sealed class MissingSourceFileTests
         Assert.IsNotNull(row.Analysis, "The last scan result stays visible.");
         Assert.IsFalse(row.IsSelected);
         Assert.IsFalse(row.SelectionEnabled);
-        Assert.IsFalse(model.ConvertRowDv81Command.CanExecute(row));
+        Assert.IsFalse(model.ConvertRowCommand.CanExecute(row));
         Assert.AreEqual("File not found.", model.PreviewStatus);
         Assert.IsTrue(model.HasMissingFiles);
 
@@ -60,7 +60,7 @@ public sealed class MissingSourceFileTests
         Assert.AreEqual(status, row.Status);
         Assert.IsTrue(row.SelectionEnabled);
         Assert.IsFalse(model.HasMissingFiles);
-        Assert.IsTrue(model.ConvertRowDv81Command.CanExecute(row));
+        Assert.IsTrue(model.ConvertRowCommand.CanExecute(row));
     }
 
     [TestMethod]
@@ -141,7 +141,7 @@ public sealed class MissingSourceFileTests
             return Task.CompletedTask;
         };
 
-        await model.ConvertDv81Command.InvokeAsync();
+        await model.ConvertCommand.InvokeAsync();
 
         Assert.IsFalse(missingWhileRunning);
         Assert.IsTrue(row.IsMissing);

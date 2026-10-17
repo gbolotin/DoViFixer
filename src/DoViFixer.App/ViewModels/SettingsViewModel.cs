@@ -62,7 +62,7 @@ public sealed partial class SettingsViewModel : OperationViewModel
         Dependencies = dependencies;
         var general = new GeneralSettingsSection(this);
         Sections = new NavigationService(
-            [general, new ConversionSettingsSection(this), new AnalysisSettingsSection(this), new SafetySettingsSection(this), new PerformanceSettingsSection(this), new NativeToolsSettingsSection(this), new AboutSettingsSection(this)],
+            [general, new AnalysisSettingsSection(this), new ConversionSettingsSection(this), new SafetySettingsSection(this), new PerformanceSettingsSection(this), new NativeToolsSettingsSection(this), new AboutSettingsSection(this)],
             initialPage: general);
     }
 
@@ -127,6 +127,9 @@ public sealed partial class SettingsViewModel : OperationViewModel
             OtherFolder = value.OutputDirectory is not null;
             ReplaceOriginal = value.ReplaceOriginal;
             CreateArchive = value.CreateElArchive;
+            SafeMode = value.SafeMode;
+            FolderSearchDepth = value.FolderSearchDepth;
+            RemoveDolbyVision = value.RemoveDolbyVision;
             ConversionWorkers = settings.Hardware.ConversionWorkers(value.ConversionWorkers);
             ScanSampleCount = value.ScanSampleCount;
             ScanSampleSeconds = value.ScanSampleSeconds;
@@ -274,6 +277,24 @@ public sealed partial class SettingsViewModel : OperationViewModel
     public partial bool ReplaceOriginal { get; set; }
 
     partial void OnReplaceOriginalChanged(bool value) => TriggerAutoSave();
+
+    [ObservableProperty]
+    public partial int FolderSearchDepth { get; set; } = 100;
+
+    partial void OnFolderSearchDepthChanged(int value) => NumericPreferenceChanged(nameof(FolderSearchDepthText));
+
+    [RelayCommand]
+    private void ResetFolderSearchDepth() => FolderSearchDepthText = "100";
+
+    [ObservableProperty]
+    public partial bool SafeMode { get; set; }
+
+    partial void OnSafeModeChanged(bool value) => TriggerAutoSave();
+
+    [ObservableProperty]
+    public partial bool RemoveDolbyVision { get; set; }
+
+    partial void OnRemoveDolbyVisionChanged(bool value) => TriggerAutoSave();
 
     [ObservableProperty]
     public partial bool CreateArchive { get; set; }
@@ -504,6 +525,9 @@ public sealed partial class SettingsViewModel : OperationViewModel
             OutputDirectory = OtherFolder ? Destination : null,
             ReplaceOriginal = ReplaceOriginal,
             CreateElArchive = CreateArchive,
+            SafeMode = SafeMode,
+            FolderSearchDepth = FolderSearchDepth,
+            RemoveDolbyVision = RemoveDolbyVision,
             ConversionWorkers = ConversionWorkers,
             ScanSampleCount = ScanSampleCount,
             ScanSampleSeconds = ScanSampleSeconds,
@@ -548,7 +572,10 @@ public sealed partial class SettingsViewModel : OperationViewModel
             scanSampleCount: snapshot.ScanSampleCount,
             scanSampleSeconds: snapshot.ScanSampleSeconds,
             minimumScanCoveragePercent: snapshot.MinimumScanCoveragePercent,
-            inspectionPeakPercentile: snapshot.InspectionPeakPercentile), token);
+            inspectionPeakPercentile: snapshot.InspectionPeakPercentile,
+            safeMode: snapshot.SafeMode,
+            removeDolbyVision: snapshot.RemoveDolbyVision,
+            folderSearchDepth: snapshot.FolderSearchDepth), token);
 
         lastSavedSettings = snapshot;
         SetStatus(ViewStatus.SettingsSaved);

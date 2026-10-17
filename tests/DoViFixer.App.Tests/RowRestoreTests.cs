@@ -31,7 +31,7 @@ public sealed class RowRestoreTests
             Assert.IsTrue(row.IsActive);
             Assert.AreSame(row, model.BatchProgress.CurrentJob);
             Assert.IsFalse(model.RestoreRowCommand.CanExecute(row));
-            Assert.IsFalse(model.ConvertRowDv81Command.CanExecute(model.Files[1]));
+            Assert.IsFalse(model.ConvertRowCommand.CanExecute(model.Files[1]));
             return Task.CompletedTask;
         };
 

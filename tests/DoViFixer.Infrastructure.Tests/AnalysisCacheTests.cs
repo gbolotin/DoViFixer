@@ -50,6 +50,23 @@ public sealed class AnalysisCacheTests
         Assert.AreEqual(new DoViFixer.Application.Settings.UserSettings(), await settings.ReadAsync(default), "Older settings retain the original defaults.");
     }
 
+    [TestMethod]
+    public async Task ConversionPreferencesRoundTripAndOlderSettingsKeepStreamingAndDolbyVision()
+    {
+        var storage = new StorageOptions(directory);
+        var store = new SettingsStore(storage, NullLogger<SettingsStore>.Instance);
+        await store.UpdateAsync(value => value with { SafeMode = true, RemoveDolbyVision = true, FolderSearchDepth = 5 }, default);
+        var saved = await new SettingsStore(storage, NullLogger<SettingsStore>.Instance).ReadAsync(default);
+        Assert.IsTrue(saved.SafeMode);
+        Assert.IsTrue(saved.RemoveDolbyVision);
+        Assert.AreEqual(5, saved.FolderSearchDepth);
+        await File.WriteAllTextAsync(storage.SettingsPath, "{}");
+        var legacy = await store.ReadAsync(default);
+        Assert.IsFalse(legacy.SafeMode);
+        Assert.IsFalse(legacy.RemoveDolbyVision);
+        Assert.AreEqual(100, legacy.FolderSearchDepth);
+    }
+
     private readonly string directory = Path.Combine(Path.GetTempPath(), "DoViFixer-cache-tests", Guid.NewGuid().ToString("N"));
     private AnalysisCache Cache() => new(new StorageOptions(directory), NullLogger<AnalysisCache>.Instance);
     private MediaAnalysis Analysis() => MediaClassifier.Classify(new MediaInfo(new(Path.Combine(directory, "Movie.mkv"), 1234, DateTime.UnixEpoch), DolbyVisionProfile.Profile7, "HEVC", 0, 1920, 1080, 24, 24, 1, 0, 1000, [], 0, 0, null, "{}"), new(AnalysisMethod.FullRpu, EnhancementLayer.Mel, 24, null, 1, 1));

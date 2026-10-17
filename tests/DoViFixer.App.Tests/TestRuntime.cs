@@ -123,10 +123,13 @@ internal sealed class TestRuntime : IFileDiscovery, IFileOperations, IMediaProbe
     public HashSet<string> Folders { get; } = new(StringComparer.OrdinalIgnoreCase);
     public bool IsSupportedInput(string input) => !string.IsNullOrWhiteSpace(input) && (input.EndsWith(".mkv", StringComparison.OrdinalIgnoreCase) || Folders.Contains(input));
     public Exception? ArchiveDiscoveryFailure { get; set; }
+    public List<int> DiscoveryDepths { get; } = [];
+
     public IReadOnlyList<string> Discover(string input, int recursiveDepth, bool cleanup = false)
     {
         if (!cleanup)
         {
+            DiscoveryDepths.Add(recursiveDepth);
             return DiscoverFiles?.Invoke(input) ?? [Path.GetFullPath(input)];
         }
 
@@ -328,9 +331,12 @@ internal sealed class TestRuntime : IFileDiscovery, IFileOperations, IMediaProbe
         AnalysisCacheBytes = 0;
         return Task.FromResult(count);
     }
+    public List<bool> SafeModes { get; } = [];
+
     public async Task ConvertAsync(MediaInfo media, ConversionTarget target, ITemporaryWorkspace workspace, string stagedOutput, IProgress<OperationProgress>? progress, Guid operationId, CancellationToken cancellationToken, bool safe = false)
     {
         Conversions++;
+        SafeModes.Add(safe);
         progress?.Report(new(operationId, "Converting", media.Source.Path, 45));
         if (DuringConversion is not null)
         {

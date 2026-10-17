@@ -187,6 +187,22 @@ public sealed class InfrastructureTests
     }
 
     [TestMethod]
+    [DataRow(0, 1)]
+    [DataRow(1, 2)]
+    [DataRow(2, 3)]
+    [DataRow(100, 3)]
+    public void FolderSearchDepthLimitsNestedMediaDiscovery(int depth, int expectedCount)
+    {
+        string child = Directory.CreateDirectory(Path.Combine(directory, "Child")).FullName;
+        string grandchild = Directory.CreateDirectory(Path.Combine(child, "Grandchild")).FullName;
+        foreach (string folder in new[] { directory, child, grandchild })
+        {
+            File.WriteAllText(Path.Combine(folder, "Movie.mkv"), "media");
+        }
+        Assert.HasCount(expectedCount, files.Discover(directory, depth));
+    }
+
+    [TestMethod]
     public void SupportedDiscoveryInputsAcceptMkvAndFoldersWithoutThrowingForOtherFiles()
     {
         string movie = Path.Combine(directory, "Movie.MKV");

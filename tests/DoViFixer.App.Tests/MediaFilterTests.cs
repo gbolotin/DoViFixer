@@ -94,7 +94,7 @@ public sealed class MediaFilterTests
         Assert.IsTrue(Row(model, Profile7).IsSelected, "Select all leaves hidden files alone.");
         Assert.AreEqual(false, model.AllFilesSelected);
         Assert.IsFalse(model.InspectCommand.CanExecute(null), "Hidden selected files do not enable batch actions.");
-        Assert.IsFalse(model.ConvertDv81Command.CanExecute(null));
+        Assert.IsFalse(model.ConvertCommand.CanExecute(null));
 
         model.FileFilter = MediaFileFilter.OtherProfiles;
         Assert.IsTrue(Option(model, MediaFileFilter.OtherProfiles).IsVisible, "The chosen filter stays visible even when it shows no files.");

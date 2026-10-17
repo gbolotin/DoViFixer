@@ -52,6 +52,9 @@ public sealed record UserSettings
         get;
         init;
     }
+    public int FolderSearchDepth { get; init; } = 100;
+    public bool SafeMode { get; init; }
+    public bool RemoveDolbyVision { get; init; }
     public bool CreateElArchive
     {
         get;

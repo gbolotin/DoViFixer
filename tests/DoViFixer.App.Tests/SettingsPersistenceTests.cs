@@ -11,6 +11,45 @@ namespace DoViFixer.App.Tests;
 public sealed class SettingsPersistenceTests
 {
     [TestMethod]
+    [DataRow(false, false)]
+    [DataRow(false, true)]
+    [DataRow(true, false)]
+    [DataRow(true, true)]
+    public async Task ConversionPreferencesPersistReloadAndControlTheFirstAttempt(bool safeMode, bool removeDolbyVision)
+    {
+        using var runtime = new TestRuntime();
+        var shell = runtime.Container.GetRequiredService<ShellViewModel>();
+        await shell.OpenSettingsCommand.InvokeAsync();
+        shell.Settings.SafeMode = safeMode;
+        shell.Settings.RemoveDolbyVision = removeDolbyVision;
+        await shell.Settings.SaveAsync();
+        Assert.AreEqual(safeMode, runtime.Settings.SafeMode);
+        Assert.AreEqual(removeDolbyVision, runtime.Settings.RemoveDolbyVision);
+        await shell.CloseSettingsCommand.InvokeAsync();
+        await shell.OpenSettingsCommand.InvokeAsync();
+        Assert.AreEqual(safeMode, shell.Settings.SafeMode);
+        Assert.AreEqual(removeDolbyVision, shell.Settings.RemoveDolbyVision);
+
+        // Invalid drafts block both new preferences; Discard restores the saved values.
+        shell.Settings.BrightnessMarginText = "invalid";
+        shell.Settings.SafeMode = !safeMode;
+        shell.Settings.RemoveDolbyVision = !removeDolbyVision;
+        await shell.Settings.SaveTask;
+        Assert.AreEqual(safeMode, runtime.Settings.SafeMode);
+        Assert.AreEqual(removeDolbyVision, runtime.Settings.RemoveDolbyVision);
+        shell.Settings.DiscardChangesCommand.Invoke();
+        Assert.AreEqual(safeMode, shell.Settings.SafeMode);
+        Assert.AreEqual(removeDolbyVision, shell.Settings.RemoveDolbyVision);
+        await shell.CloseSettingsCommand.InvokeAsync();
+
+        var media = shell.Pages.OfType<MediaViewModel>().Single();
+        await media.AddAsync([@"C:\Media\Mountain.mkv"]);
+        await media.ConvertCommand.InvokeAsync();
+        CollectionAssert.AreEqual(new[] { safeMode }, runtime.SafeModes);
+        StringAssert.EndsWith(media.Files[0].Result!.Output!, removeDolbyVision ? " - HDR10.mkv" : " - DV P8.1.mkv");
+    }
+
+    [TestMethod]
     public async Task NavigationWaitsForPageReadAndRejectsOverlappingRequests()
     {
         using var runtime = new TestRuntime();
@@ -184,7 +223,7 @@ public sealed class SettingsPersistenceTests
 
         shell.Settings.ReplaceOriginal = false;
         await store.Started.Task.WaitAsync(TimeSpan.FromSeconds(10));
-        var converting = media.ConvertDv81Command.InvokeAsync();
+        var converting = media.ConvertCommand.InvokeAsync();
         try
         {
             Assert.IsFalse(shell.CanNavigate);
@@ -250,7 +289,7 @@ public sealed class SettingsPersistenceTests
         Assert.AreEqual(shell.Settings.SaveError, shell.Settings.StatusMessage);
         Assert.IsFalse(shell.CanNavigate);
 
-        await media.ConvertDv81Command.InvokeAsync();
+        await media.ConvertCommand.InvokeAsync();
         Assert.AreEqual(0, runtime.Conversions);
         Assert.AreEqual(ViewStatus.Error, media.Status);
         Assert.AreEqual("Directory unavailable", media.StatusMessage);

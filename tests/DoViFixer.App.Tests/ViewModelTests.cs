@@ -97,29 +97,22 @@ public sealed class ViewModelTests
     }
 
     [TestMethod]
-    public async Task ConvertMenuRunsThePickedConversionAndRemembersIt()
+    public async Task ConversionUsesSavedTargetForBatchAndRowActions()
     {
         using var runtime = new TestRuntime();
         var model = runtime.Container.GetRequiredService<MediaViewModel>();
         await model.AddAsync([@"C:\Media\Mountain.mkv"]);
         var row = model.Files[0];
-        Assert.IsFalse(model.IsHdr10ConversionChosen, "Convert targets DV8.1 by default.");
-        model.IsHdr10ConversionChosen = true;
-        Assert.IsTrue(model.ChooseDv81Command.CanExecute(null));
-
-        await model.ChooseDv81Command.ExecuteAsync(null);
-        Assert.AreEqual(1, runtime.Conversions, "Picking DV8.1 converts right away.");
+        await model.ConvertCommand.InvokeAsync();
         Assert.IsTrue(row.Result!.Output!.EndsWith(" - DV P8.1.mkv"));
-        Assert.IsFalse(model.IsHdr10ConversionChosen, "The button converts to DV8.1 next.");
 
-        row.IsSelected = true;
-        await model.ChooseHdr10Command.ExecuteAsync(null);
+        await runtime.UpdateAsync(s => s with { RemoveDolbyVision = true }, default);
+        model.UpdateSettingsSummary(runtime.Settings);
+        await model.ConvertRowCommand.InvokeAsync(row);
         Assert.AreEqual(2, runtime.Conversions);
         Assert.IsTrue(row.Result!.Output!.EndsWith(" - HDR10.mkv"));
-        Assert.IsTrue(model.IsHdr10ConversionChosen);
-
         row.IsSelected = false;
-        Assert.IsFalse(model.ChooseHdr10Command.CanExecute(null), "Nothing to convert without a selection.");
+        Assert.IsFalse(model.ConvertCommand.CanExecute(null));
     }
 
     [TestMethod]
@@ -412,9 +405,9 @@ public sealed class ViewModelTests
 
         var sections = shell.Settings.Sections;
         CollectionAssert.AreEqual(
-            new[] { typeof(GeneralSettingsSection), typeof(ConversionSettingsSection), typeof(AnalysisSettingsSection), typeof(SafetySettingsSection), typeof(PerformanceSettingsSection), typeof(NativeToolsSettingsSection), typeof(AboutSettingsSection) },
+            new[] { typeof(GeneralSettingsSection), typeof(AnalysisSettingsSection), typeof(ConversionSettingsSection), typeof(SafetySettingsSection), typeof(PerformanceSettingsSection), typeof(NativeToolsSettingsSection), typeof(AboutSettingsSection) },
             sections.Pages.Select(page => page.GetType()).ToArray());
-        CollectionAssert.AreEqual(new[] { "General", "Conversion", "Analysis", "Safety", "Performance", "Native tools", "About" }, sections.Pages.Select(page => page.NavigationName).ToArray());
+        CollectionAssert.AreEqual(new[] { "General", "Analysis", "Conversion", "Safety", "Performance", "Native tools", "About" }, sections.Pages.Select(page => page.NavigationName).ToArray());
         Assert.IsTrue(sections.Pages.Where(page => page is not PerformanceSettingsSection).All(page => page.NavigationIcon is { Length: 1 }), "Other sections retain their Segoe Fluent Icons glyphs.");
         Assert.IsNull(sections.Pages.OfType<PerformanceSettingsSection>().Single().NavigationIcon, "Performance uses a vector speedometer.");
         Assert.IsTrue(sections.Pages.Cast<SettingsSection>().All(section => ReferenceEquals(section.Settings, shell.Settings)), "Every section shows the same settings.");
@@ -676,7 +669,7 @@ public sealed class ViewModelTests
         Assert.IsFalse(model.Files[0].ShowsResultComparison);
         Assert.IsTrue(model.Files[0].DetailRows.All(detail => detail.Result == ""), "Before conversion details have no result column.");
         Assert.AreEqual(model.Files[0].Path, model.Files[0].DetailRows.Single(detail => detail.Label == MediaRow.FileLocationLabel).Value);
-        await model.ConvertDv81Command.InvokeAsync();
+        await model.ConvertCommand.InvokeAsync();
         string output = model.Files[0].Result!.Output!;
         StringAssert.StartsWith(output, @"C:\Media\One\");
         Assert.IsTrue(model.Files[0].ShowsResultComparison);
@@ -722,7 +715,7 @@ public sealed class ViewModelTests
         var model = runtime.Container.GetRequiredService<MediaViewModel>();
         await model.AddAsync([@"C:\Media\One\Mountain.mkv"]);
         int conversions = runtime.Conversions;
-        await model.ConvertDv81Command.InvokeAsync();
+        await model.ConvertCommand.InvokeAsync();
         var row = model.Files.Single();
         CollectionAssert.AreEqual(new[] { existing }, runtime.ExistingOutputQuestions);
         if (expectedOutput is null)
@@ -751,7 +744,7 @@ public sealed class ViewModelTests
         }
 
         Assert.AreEqual(2, model.Files.Count(file => file.IsSelected));
-        await model.ConvertDv81Command.InvokeAsync();
+        await model.ConvertCommand.InvokeAsync();
         Assert.AreEqual(0, runtime.ExistingOutputQuestions.Count);
         Assert.AreEqual(MediaRowState.Skipped, model.Files[0].State);
         StringAssert.Contains(model.Files[0].Notice, "Output collision");
@@ -767,7 +760,7 @@ public sealed class ViewModelTests
         const string source = @"C:\Media\One\Mountain.mkv";
         var firstRun = runtime.Container.GetRequiredService<MediaViewModel>();
         await firstRun.AddAsync([source]);
-        await firstRun.ConvertDv81Command.InvokeAsync();
+        await firstRun.ConvertCommand.InvokeAsync();
         var converted = firstRun.Files[0].Result!;
         if (outputDeleted)
         {
@@ -934,13 +927,13 @@ public sealed class ViewModelTests
         Assert.IsNull(model.Focused);
 
         await model.AddAsync([@"C:\Media\Mountain2.mkv"]);
-        Assert.IsTrue(model.ConvertDv81Command.CanExecute(null));
+        Assert.IsTrue(model.ConvertCommand.CanExecute(null));
 
         removedRow.IsSelected = false;
-        Assert.IsTrue(model.ConvertDv81Command.CanExecute(null));
+        Assert.IsTrue(model.ConvertCommand.CanExecute(null));
 
         model.Files.Single().IsSelected = false;
-        Assert.IsFalse(model.ConvertDv81Command.CanExecute(null));
+        Assert.IsFalse(model.ConvertCommand.CanExecute(null));
     }
 
     [TestMethod]
@@ -1191,7 +1184,7 @@ public sealed class ViewModelTests
         Assert.AreEqual(0, runtime.FullAnalyses);
         Assert.AreEqual(0, runtime.Conversions);
 
-        await model.ConvertDv81Command.InvokeAsync();
+        await model.ConvertCommand.InvokeAsync();
         Assert.AreEqual(1, runtime.FullAnalyses);
         Assert.AreEqual(1, runtime.Conversions);
         CollectionAssert.Contains(runtime.VerificationLevels, DoViFixer.Application.Settings.VerificationLevel.FrameCountWithRecount);
@@ -1201,7 +1194,8 @@ public sealed class ViewModelTests
         Assert.IsTrue(model.Files.Single().Result!.Output!.EndsWith(" - DV P8.1.mkv"));
 
         model.Files.Single().IsSelected = true;
-        await model.ConvertHdrCommand.InvokeAsync();
+        await runtime.UpdateAsync(s => s with { RemoveDolbyVision = true }, default);
+        await model.ConvertCommand.InvokeAsync();
         Assert.AreEqual("Converted", model.Files.Single().Status);
         Assert.IsTrue(model.Files.Single().Result!.Output!.EndsWith(" - HDR10.mkv"));
     }
@@ -1213,7 +1207,7 @@ public sealed class ViewModelTests
         await runtime.UpdateAsync(s => s with { AllowFel = true }, default);
         var model = runtime.Container.GetRequiredService<MediaViewModel>();
         await model.AddAsync([@"C:\Media\Mountain.mkv", @"C:\Media\Ocean.mkv"]);
-        await model.ConvertDv81Command.InvokeAsync();
+        await model.ConvertCommand.InvokeAsync();
 
         Assert.IsFalse(model.Files[0].HasWarning);
         Assert.IsNull(model.Files[0].Warning);
@@ -1231,13 +1225,13 @@ public sealed class ViewModelTests
         var model = runtime.Container.GetRequiredService<MediaViewModel>();
         await model.AddAsync([@"C:\Media\Mountain.mkv", @"C:\Media\Ocean.mkv"]);
         model.Focused = model.Files[1];
-        Assert.IsTrue(model.ConvertDv81Command.CanExecute(null));
+        Assert.IsTrue(model.ConvertCommand.CanExecute(null));
         model.Files[1].IsSelected = false;
         Assert.AreSame(model.Files[1], model.Focused);
         Assert.IsTrue(model.Files[0].IsSelected);
-        Assert.IsTrue(model.ConvertDv81Command.CanExecute(null));
+        Assert.IsTrue(model.ConvertCommand.CanExecute(null));
         model.Files[0].IsSelected = false;
-        Assert.IsFalse(model.ConvertDv81Command.CanExecute(null));
+        Assert.IsFalse(model.ConvertCommand.CanExecute(null));
     }
 
     [TestMethod]
@@ -1569,7 +1563,7 @@ public sealed class ViewModelTests
             }
         };
 
-        var convertTask = model.ConvertDv81Command.InvokeAsync();
+        var convertTask = model.ConvertCommand.InvokeAsync();
         await started.Task;
 
         Assert.IsTrue(model.IsBusy);
@@ -1632,7 +1626,7 @@ public sealed class ViewModelTests
             await release.WaitAsync(token);
         };
 
-        var conversion = model.ConvertDv81Command.InvokeAsync();
+        var conversion = model.ConvertCommand.InvokeAsync();
         try
         {
             await started.Reader.ReadAsync().AsTask().WaitAsync(TimeSpan.FromSeconds(5));
@@ -1673,7 +1667,7 @@ public sealed class ViewModelTests
             await release.WaitAsync(token);
         };
 
-        var conversion = model.ConvertDv81Command.InvokeAsync();
+        var conversion = model.ConvertCommand.InvokeAsync();
         try
         {
             await started.Reader.ReadAsync().AsTask().WaitAsync(TimeSpan.FromSeconds(5));
@@ -1729,7 +1723,7 @@ public sealed class ViewModelTests
             }
         };
 
-        var convertTask = model.ConvertDv81Command.InvokeAsync();
+        var convertTask = model.ConvertCommand.InvokeAsync();
         await started.Task;
 
         model.SkipCommand.Invoke(model.Files[2]);
@@ -1754,7 +1748,7 @@ public sealed class ViewModelTests
         var model = runtime.Container.GetRequiredService<MediaViewModel>();
         await model.AddAsync([@"C:\FolderA\Movie.mkv", @"C:\FolderB\Movie.mkv"]);
 
-        await model.ConvertDv81Command.InvokeAsync();
+        await model.ConvertCommand.InvokeAsync();
 
         Assert.AreEqual("Converted", model.Files[0].Status);
         Assert.AreEqual("Conversion skipped", model.Files[1].Status);

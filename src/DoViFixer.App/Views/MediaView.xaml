@@ -169,32 +169,11 @@
                             </ContextMenu>
                         </wfc:SplitButton.DropDownMenu>
                     </wfc:SplitButton>
-                    <wfc:SplitButton ToolTip="{Binding OutputSummaryToolTip}"
-                                     Icon="&#xE8AB;"
-                                     Margin="0,0,0,0">
-                        <wfc:SplitButton.Style>
-                            <Style TargetType="wfc:SplitButton" BasedOn="{StaticResource WfSplitButtonStyle}">
-                                <Setter Property="Content" Value="Convert to DV8.1" />
-                                <Setter Property="Command" Value="{Binding ConvertDv81Command}" />
-                                <Style.Triggers>
-                                    <DataTrigger Binding="{Binding IsHdr10ConversionChosen}" Value="True">
-                                        <Setter Property="Content" Value="Convert to HDR10" />
-                                        <Setter Property="Command" Value="{Binding ConvertHdrCommand}" />
-                                    </DataTrigger>
-                                </Style.Triggers>
-                            </Style>
-                        </wfc:SplitButton.Style>
-                        <wfc:SplitButton.DropDownMenu>
-                            <ContextMenu>
-                                <MenuItem Header="Convert to DV8.1"
-                                          Command="{Binding ChooseDv81Command}"
-                                          IsChecked="{Binding IsHdr10ConversionChosen, Mode=OneWay, Converter={StaticResource WfInverseBooleanConverter}}" />
-                                <MenuItem Header="Convert to HDR10"
-                                          Command="{Binding ChooseHdr10Command}"
-                                          IsChecked="{Binding IsHdr10ConversionChosen, Mode=OneWay}" />
-                            </ContextMenu>
-                        </wfc:SplitButton.DropDownMenu>
-                    </wfc:SplitButton>
+                    <Button Content="Convert"
+                            Command="{Binding ConvertCommand}"
+                            ToolTip="{Binding OutputSummaryToolTip}"
+                            Tag="&#xE8AB;"
+                            ContentTemplate="{StaticResource WfIconContentTemplate}" />
                 </WrapPanel>
             </Border>
         </DataTemplate>
@@ -472,9 +451,9 @@
                                             <Button Padding="7,6"
                                                     Margin="4"
                                                     VerticalAlignment="Center"
-                                                    ToolTip="Convert to DV8.1"
-                                                    AutomationProperties.Name="Convert to DV8.1"
-                                                    Command="{Binding DataContext.ConvertRowDv81Command, RelativeSource={RelativeSource AncestorType=ListView}}"
+                                                    ToolTip="Convert"
+                                                    AutomationProperties.Name="Convert"
+                                                    Command="{Binding DataContext.ConvertRowCommand, RelativeSource={RelativeSource AncestorType=ListView}}"
                                                     CommandParameter="{Binding}"
                                                     Content="&#xE8AB;"
                                                     FontFamily="{StaticResource SymbolThemeFontFamily}">

@@ -58,6 +58,20 @@ public sealed partial class SettingsViewModel : INotifyDataErrorInfo
         }
     });
 
+    [ObservableProperty]
+    [NotifyPropertyChangedFor(nameof(IsFolderSearchDepthModified))]
+    public partial string FolderSearchDepthText { get; set; } = "100";
+
+    public bool IsFolderSearchDepthModified => !int.TryParse(FolderSearchDepthText, NumberStyles.Integer, CultureInfo.CurrentCulture, out int value) || value != 100;
+
+    partial void OnFolderSearchDepthTextChanged(string value) => UpdateNumericPreference(() =>
+    {
+        if (int.TryParse(value, NumberStyles.Integer, CultureInfo.CurrentCulture, out int number))
+        {
+            FolderSearchDepth = number;
+        }
+    });
+
     private void UpdateNumericPreference(Action update)
     {
         if (updatingNumericText)
@@ -96,6 +110,10 @@ public sealed partial class SettingsViewModel : INotifyDataErrorInfo
         updatingNumericText = true;
         try
         {
+            if (propertyName is null or nameof(FolderSearchDepthText))
+            {
+                FolderSearchDepthText = FolderSearchDepth.ToString(CultureInfo.CurrentCulture);
+            }
             if (propertyName is null or nameof(ScanSampleCountText))
             {
                 ScanSampleCountText = ScanSampleCount.ToString(CultureInfo.CurrentCulture);
@@ -133,6 +151,9 @@ public sealed partial class SettingsViewModel : INotifyDataErrorInfo
 
     private void ValidatePreferences()
     {
+        SetValidationError(nameof(FolderSearchDepthText),
+            int.TryParse(FolderSearchDepthText, NumberStyles.Integer, CultureInfo.CurrentCulture, out int depth) && depth is >= 0 and <= 100
+                ? null : "Enter a whole number from 0 to 100 levels.");
         SetValidationError(nameof(BrightnessMarginText),
             int.TryParse(BrightnessMarginText, NumberStyles.Integer, CultureInfo.CurrentCulture, out int margin) && margin is >= 0 and <= 1000
                 ? null : "Enter a whole number from 0 to 1000 nits.");

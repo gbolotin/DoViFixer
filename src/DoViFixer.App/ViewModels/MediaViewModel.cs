@@ -430,7 +430,7 @@ public sealed partial class MediaViewModel : OperationViewModel, INavigationPage
         if (changed)
         {
             OnPropertyChanged(nameof(HasMissingFiles));
-            ConvertRowDv81Command.NotifyCanExecuteChanged();
+            ConvertRowCommand.NotifyCanExecuteChanged();
             CommandsChanged();
         }
     }
@@ -511,20 +511,17 @@ public sealed partial class MediaViewModel : OperationViewModel, INavigationPage
     private Task DeepInspect() => AnalyzeAsync(AnalysisMethod.DeepInspection);
 
     [RelayCommand(CanExecute = nameof(CanOperate))]
-    private Task ConvertDv81() => ConvertBatchAsync(ConversionTarget.Profile81);
+    private Task Convert() => ConvertBatchAsync();
 
-    private bool CanConvertRowDv81(MediaRow? row) => row is not null && IsIdle && Files.Contains(row) && row.IsProfile7 && !row.IsMissing;
+    private bool CanConvertRow(MediaRow? row) => row is not null && IsIdle && Files.Contains(row) && row.IsProfile7 && !row.IsMissing;
 
-    [RelayCommand(CanExecute = nameof(CanConvertRowDv81))]
-    private Task ConvertRowDv81(MediaRow? row) => ConvertBatchAsync(ConversionTarget.Profile81, [row!]);
+    [RelayCommand(CanExecute = nameof(CanConvertRow))]
+    private Task ConvertRow(MediaRow? row) => ConvertBatchAsync([row!]);
 
     private bool CanRestoreRow(MediaRow? row) => row is not null && IsIdle && Files.Contains(row) && row.CanRestore;
 
     [RelayCommand(CanExecute = nameof(CanRestoreRow))]
     private Task RestoreRow(MediaRow? row) => RestoreRowAsync(row!);
-
-    [RelayCommand(CanExecute = nameof(CanOperate))]
-    private Task ConvertHdr() => ConvertBatchAsync(ConversionTarget.Hdr10);
 
     /// <summary>
     /// Whether the Inspect split button runs a deep inspection. Picking an entry in its menu runs that inspection
@@ -533,24 +530,11 @@ public sealed partial class MediaViewModel : OperationViewModel, INavigationPage
     [ObservableProperty]
     public partial bool IsDeepInspectionChosen { get; set; }
 
-    /// <summary>
-    /// Whether the Convert split button converts to HDR10 rather than DV8.1. Picking an entry in its menu runs that
-    /// conversion and makes it what the button runs next.
-    /// </summary>
-    [ObservableProperty]
-    public partial bool IsHdr10ConversionChosen { get; set; }
-
     [RelayCommand(CanExecute = nameof(CanOperate))]
     private Task ChooseInspect() => ChooseAndInspectAsync(deep: false);
 
     [RelayCommand(CanExecute = nameof(CanOperate))]
     private Task ChooseDeepInspect() => ChooseAndInspectAsync(deep: true);
-
-    [RelayCommand(CanExecute = nameof(CanOperate))]
-    private Task ChooseDv81() => ChooseAndConvertAsync(hdr10: false);
-
-    [RelayCommand(CanExecute = nameof(CanOperate))]
-    private Task ChooseHdr10() => ChooseAndConvertAsync(hdr10: true);
 
     private static bool CanCancelFile(MediaRow? row) => row is not null && row.IsActive && !row.IsCancellationRequested;
 
@@ -641,6 +625,8 @@ public sealed partial class MediaViewModel : OperationViewModel, INavigationPage
             : $"Output: {destination}";
 
         var sb = new System.Text.StringBuilder();
+        sb.AppendLine($"Target: {(s.RemoveDolbyVision ? "HDR10" : "Dolby Vision Profile 8.1")}");
+        sb.AppendLine($"Safe mode: {(s.SafeMode ? "On (disk extraction)" : "Off (streaming with automatic disk fallback)")}");
         sb.AppendLine($"Destination: {(string.IsNullOrWhiteSpace(s.OutputDirectory) ? "Same folder as source file" : s.OutputDirectory)}");
         sb.AppendLine($"Retention: {(s.ReplaceOriginal ? "Replace original after conversion (Source file will be replaced!)" : "Keep original (Non-destructive)")}");
         sb.AppendLine($"Verification: level {(int)s.VerificationLevel}");
@@ -707,22 +693,20 @@ public sealed partial class MediaViewModel : OperationViewModel, INavigationPage
         DeepInspectCommand?.NotifyCanExecuteChanged();
         ChooseInspectCommand?.NotifyCanExecuteChanged();
         ChooseDeepInspectCommand?.NotifyCanExecuteChanged();
-        ChooseDv81Command?.NotifyCanExecuteChanged();
-        ChooseHdr10Command?.NotifyCanExecuteChanged();
-        ConvertDv81Command?.NotifyCanExecuteChanged();
-        ConvertRowDv81Command?.NotifyCanExecuteChanged();
+        ConvertCommand?.NotifyCanExecuteChanged();
+        ConvertRowCommand?.NotifyCanExecuteChanged();
         RestoreRowCommand?.NotifyCanExecuteChanged();
-        ConvertHdrCommand?.NotifyCanExecuteChanged();
     }
 
     public Task AddAsync(IEnumerable<string> inputs) => RunAsync("Adding files", async (token, _) =>
     {
+        var preferences = await settings.ReadAsync(token);
         var added = new List<MediaRow>();
         foreach (string input in inputs)
         {
             try
             {
-                var paths = await Task.Run(() => discovery.Discover(input, 100), token);
+                var paths = await Task.Run(() => discovery.Discover(input, preferences.FolderSearchDepth), token);
                 foreach (string path in paths)
                 {
                     if (Files.Any(f => string.Equals(f.Path, path, StringComparison.OrdinalIgnoreCase)))
@@ -769,7 +753,7 @@ public sealed partial class MediaViewModel : OperationViewModel, INavigationPage
 
         if (e.PropertyName == nameof(MediaRow.IsProfile7))
         {
-            ConvertRowDv81Command.NotifyCanExecuteChanged();
+            ConvertRowCommand.NotifyCanExecuteChanged();
         }
 
         if (e.PropertyName == nameof(MediaRow.CanRestore))
@@ -1141,13 +1125,7 @@ public sealed partial class MediaViewModel : OperationViewModel, INavigationPage
         }
     });
 
-    private Task ChooseAndConvertAsync(bool hdr10)
-    {
-        IsHdr10ConversionChosen = hdr10;
-        return ConvertBatchAsync(hdr10 ? ConversionTarget.Hdr10 : ConversionTarget.Profile81);
-    }
-
-    private Task ConvertBatchAsync(ConversionTarget target, MediaRow[]? rows = null) => RunAsync("Conversion", async (token, progress) =>
+    private Task ConvertBatchAsync(MediaRow[]? rows = null) => RunAsync("Conversion", async (token, progress) =>
     {
         if (ConversionStarting is not null)
         {
@@ -1159,6 +1137,7 @@ public sealed partial class MediaViewModel : OperationViewModel, INavigationPage
 
         InvalidatePlan();
         var userSettings = await settings.ReadAsync(token);
+        var target = userSettings.RemoveDolbyVision ? ConversionTarget.Hdr10 : ConversionTarget.Profile81;
         UpdateSettingsSummary(userSettings);
         if (!string.IsNullOrWhiteSpace(userSettings.TemporaryDirectory))
         {
@@ -1213,7 +1192,8 @@ public sealed partial class MediaViewModel : OperationViewModel, INavigationPage
             userSettings.ForceComplex,
             outputs)
         {
-            ExistingOutput = existingOutput
+            ExistingOutput = existingOutput,
+            Safe = userSettings.SafeMode
         };
 
         // A single file asks what to do with an existing output; batches keep skipping such files.

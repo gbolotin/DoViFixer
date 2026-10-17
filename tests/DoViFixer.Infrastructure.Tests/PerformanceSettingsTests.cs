@@ -48,13 +48,16 @@ public sealed class PerformanceSettingsTests
             var catalog = new ToolCatalog();
             var detector = new DependencyDetector(store, options, new MediaTools.Processes.ProcessRunner(NullLogger<MediaTools.Processes.ProcessRunner>.Instance), NullLogger<DependencyDetector>.Instance);
             var service = new SettingsService(store, detector, catalog, files, NullLogger<SettingsService>.Instance);
-            await service.SetPreferencesAsync(null, null, false, false, default, conversionWorkers: 16, analysisWorkers: 10, toolProcessPriority: ToolProcessPriority.AboveNormal, pipeBufferKiB: 65536);
+            await service.SetPreferencesAsync(null, null, false, false, default, folderSearchDepth: 5, conversionWorkers: 16, analysisWorkers: 10, toolProcessPriority: ToolProcessPriority.AboveNormal, pipeBufferKiB: 65536);
             var saved = await store.ReadAsync(default);
+            Assert.AreEqual(5, saved.FolderSearchDepth);
             Assert.AreEqual(16, saved.ConversionWorkers);
             Assert.AreEqual(10, saved.AnalysisWorkers);
             Assert.AreEqual(ToolProcessPriority.AboveNormal, saved.ToolProcessPriority);
             Assert.AreEqual(65536, saved.PipeBufferKiB);
             string before = await File.ReadAllTextAsync(options.SettingsPath);
+            await Assert.ThrowsExactlyAsync<ArgumentOutOfRangeException>(() => service.SetPreferencesAsync(null, null, false, false, default, folderSearchDepth: -1));
+            await Assert.ThrowsExactlyAsync<ArgumentOutOfRangeException>(() => service.SetPreferencesAsync(null, null, false, false, default, folderSearchDepth: 101));
             await Assert.ThrowsExactlyAsync<ArgumentOutOfRangeException>(() => service.SetPreferencesAsync(null, null, false, false, default, conversionWorkers: 17));
             await Assert.ThrowsExactlyAsync<ArgumentOutOfRangeException>(() => service.SetPreferencesAsync(null, null, false, false, default, analysisWorkers: 11));
             await Assert.ThrowsExactlyAsync<ArgumentOutOfRangeException>(() => service.SetPreferencesAsync(null, null, false, false, default, pipeBufferKiB: 63));

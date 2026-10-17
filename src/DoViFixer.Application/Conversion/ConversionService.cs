@@ -37,6 +37,8 @@ public sealed record CandidateConversionRequest(
     {
     }
 
+    public bool Safe { get; init; }
+
     public bool AllowFel => IncludeSimple || ForceComplex;
 
     /// <summary>What to do when the output or archive already exists. Skipping is the default.</summary>
@@ -252,7 +254,7 @@ public sealed class ConversionService(DependencyService dependencies, IFileOpera
 
                 if ((cached.Verdict is AnalysisVerdict.ComplexFel or AnalysisVerdict.FelUnclassified) && !request.ForceComplex)
                 {
-                    return new CandidatePreparationResult.Skipped("Complex FEL conversion requires enabling 'Force Complex FEL' in Settings.");
+                    return new CandidatePreparationResult.Skipped("Complex FEL conversion requires enabling 'Allow Complex FEL conversion' in Settings.");
                 }
             }
         }
@@ -310,7 +312,7 @@ public sealed class ConversionService(DependencyService dependencies, IFileOpera
             request.TemporaryDirectory,
             scratchBytes,
             decision.Reason,
-            Safe: false,
+            Safe: request.Safe,
             DeleteBackup: request.ReplaceOriginal,
             ReplaceExistingOutput: request.ExistingOutput == ExistingOutputHandling.Replace);
 

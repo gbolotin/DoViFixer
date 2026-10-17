@@ -242,20 +242,17 @@ public sealed class VisualTests
             var content = (FrameworkElement)window.Content;
             AssertInside(splitter, content);
             AssertInside(Descendants<Button>(mediaView).Single(button => Equals(button.ToolTip, "Rescan") && button.IsVisible), content);
-            foreach (string caption in new[] { "Inspect", "Convert to DV8.1" })
-            {
-                AssertInside(Descendants<SplitButton>(mediaView).Single(button => Equals(button.Content, caption) && button.IsVisible), content);
-            }
-            // The buttons show what their menus last ran, and the wider captions still fit.
+            AssertInside(Descendants<SplitButton>(mediaView).Single(button => Equals(button.Content, "Inspect") && button.IsVisible), content);
+            AssertInside(Descendants<Button>(mediaView).Single(button => ReferenceEquals(button.Command, media.ConvertCommand) && button.IsVisible), content);
             media.IsDeepInspectionChosen = true;
-            media.IsHdr10ConversionChosen = true;
+            media.UpdateSettingsSummary(runtime.Settings with { RemoveDolbyVision = true });
             await LayoutAsync(window);
-            foreach (string caption in new[] { "Deep Inspect", "Convert to HDR10" })
-            {
-                AssertInside(Descendants<SplitButton>(mediaView).Single(button => Equals(button.Content, caption) && button.IsVisible), content);
-            }
+            AssertInside(Descendants<SplitButton>(mediaView).Single(button => Equals(button.Content, "Deep Inspect") && button.IsVisible), content);
+            var convertButton = Descendants<Button>(mediaView).Single(button => ReferenceEquals(button.Command, media.ConvertCommand) && button.IsVisible);
+            Assert.AreEqual("Convert", convertButton.Content);
+            AssertInside(convertButton, content);
             media.IsDeepInspectionChosen = false;
-            media.IsHdr10ConversionChosen = false;
+            media.UpdateSettingsSummary(runtime.Settings);
             await LayoutAsync(window);
             SaveRender(content, "media-minimum");
             var focusedBeforeComparison = media.Focused;
@@ -318,7 +315,7 @@ public sealed class VisualTests
         window.Show();
         await LayoutAsync(window);
         var view = Descendants<MediaView>(window).Single();
-        var conversion = media.ConvertDv81Command.InvokeAsync();
+        var conversion = media.ConvertCommand.InvokeAsync();
         try
         {
             await started.Reader.ReadAsync().AsTask().WaitAsync(TimeSpan.FromSeconds(5));
@@ -801,15 +798,15 @@ public sealed class VisualTests
         var row = media.Files[0];
         var container = (ListViewItem)list.ItemContainerGenerator.ContainerFromItem(row);
         var remove = Descendants<Button>(container).Single(button => Equals(button.ToolTip, "Remove"));
-        var convert = Descendants<Button>(container).Single(button => Equals(button.ToolTip, "Convert to DV8.1"));
+        var convert = Descendants<Button>(container).Single(button => Equals(button.ToolTip, "Convert"));
         var restore = Descendants<Button>(container).Single(button => Equals(button.ToolTip, "Restore to DV7 from .dovi archive"));
         Assert.AreSame(media.RestoreRowCommand, restore.Command);
         Assert.AreSame(row, restore.CommandParameter);
         Assert.AreEqual("\uE7A7", restore.Content);
         Assert.AreEqual(Visibility.Hidden, restore.Visibility);
-        Assert.AreSame(media.ConvertRowDv81Command, convert.Command);
+        Assert.AreSame(media.ConvertRowCommand, convert.Command);
         Assert.AreSame(row, convert.CommandParameter);
-        Assert.AreEqual("Convert to DV8.1", System.Windows.Automation.AutomationProperties.GetName(convert));
+        Assert.AreEqual("Convert", System.Windows.Automation.AutomationProperties.GetName(convert));
         Assert.AreEqual("\uE8AB", convert.Content);
         var actions = (StackPanel)remove.Parent;
         Assert.AreSame(convert, actions.Children[actions.Children.IndexOf(remove) - 1]);
@@ -909,7 +906,7 @@ public sealed class VisualTests
                 await release.Task;
             }
         };
-        var converting = media.ConvertDv81Command.InvokeAsync();
+        var converting = media.ConvertCommand.InvokeAsync();
         try
         {
             await started.Task.WaitAsync(TimeSpan.FromSeconds(10));
@@ -945,7 +942,7 @@ public sealed class VisualTests
         }
 
         row.IsSelected = true;
-        await media.ConvertDv81Command.InvokeAsync();
+        await media.ConvertCommand.InvokeAsync();
         await LayoutAsync(window);
         AssertStableActionSlots(list, slots, "converted");
         var convertedFile = ConvertedFileLink(container);
