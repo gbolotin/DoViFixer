@@ -64,8 +64,73 @@ public sealed class MediaVerifierTests
         var runner = CreateFrameCountRunner(workspace.DirectoryPath, mkv, output, SourceMediaInfo, wrongSourceCount);
         var findings = await CreateVerifier(runner).VerifyAsync(source, output, DolbyVisionProfile.Profile81, workspace, default, level: VerificationLevel.FrameCountWithRecount);
         Assert.IsEmpty(findings);
-        Assert.AreEqual(1, runner.PacketCountCalls);
+        Assert.AreEqual(2, runner.PacketCountCalls);
         Assert.IsEmpty(runner.VideoExtractions);
+    }
+
+    [TestMethod]
+    [DataRow(260, 259, 260, 260)]
+    [DataRow(258, 259, 260, 260)]
+    [DataRow(260, 259, 259, 258)]
+    public async Task MismatchRecountComparesBothStreams(int recordedSource, int recordedOutput, int actualSource, int actualOutput)
+    {
+        await using var workspace = await CreateWorkspaceAsync();
+        string mkv = await File.ReadAllTextAsync(Path.Combine(AppContext.BaseDirectory, "Fixtures", "mkvmerge.json"));
+        string output = workspace.File("output.mkv");
+        await File.WriteAllTextAsync(output, "converted");
+        var source = MediaMetadataParser.Parse(new(workspace.File("source.mkv"), 1000, DateTime.UnixEpoch), mkv, SourceMediaInfo.Replace("260", recordedSource.ToString()));
+        var runner = CreateFrameCountRunner(workspace.DirectoryPath, mkv, output, SourceMediaInfo.Replace("260", recordedOutput.ToString()));
+        runner.PacketCounts[source.Source.Path] = actualSource.ToString();
+        runner.PacketCounts[output] = actualOutput.ToString();
+
+        var findings = await CreateVerifier(runner).VerifyAsync(source, output, DolbyVisionProfile.Profile81, workspace, default, level: VerificationLevel.FrameCountWithRecount);
+
+        if (actualSource == actualOutput)
+        {
+            Assert.IsEmpty(findings);
+        }
+        else
+        {
+            CollectionAssert.AreEqual(new VerificationFinding[]
+            {
+                new(VerificationArea.VideoStream, $"Video frame count changed ({actualSource} to {actualOutput}).")
+            }, findings.ToArray());
+        }
+
+        Assert.AreEqual(2, runner.PacketCountCalls);
+        Assert.IsEmpty(runner.VideoExtractions);
+    }
+
+    [TestMethod]
+    public async Task MatchingRecordedCountsAvoidRecount()
+    {
+        await using var workspace = await CreateWorkspaceAsync();
+        string mkv = await File.ReadAllTextAsync(Path.Combine(AppContext.BaseDirectory, "Fixtures", "mkvmerge.json"));
+        string output = workspace.File("output.mkv");
+        await File.WriteAllTextAsync(output, "converted");
+        var source = MediaMetadataParser.Parse(new(workspace.File("source.mkv"), 1000, DateTime.UnixEpoch), mkv, SourceMediaInfo);
+        var runner = CreateFrameCountRunner(workspace.DirectoryPath, mkv, output, SourceMediaInfo);
+
+        var findings = await CreateVerifier(runner).VerifyAsync(source, output, DolbyVisionProfile.Profile81, workspace, default, level: VerificationLevel.FrameCountWithRecount);
+
+        Assert.IsEmpty(findings);
+        Assert.AreEqual(0, runner.PacketCountCalls);
+    }
+
+    [TestMethod]
+    [DataRow("0")]
+    [DataRow("N/A")]
+    public async Task MismatchRecountRejectsUnavailableOutputCount(string outputCount)
+    {
+        await using var workspace = await CreateWorkspaceAsync();
+        string mkv = await File.ReadAllTextAsync(Path.Combine(AppContext.BaseDirectory, "Fixtures", "mkvmerge.json"));
+        string output = workspace.File("output.mkv");
+        await File.WriteAllTextAsync(output, "converted");
+        var source = MediaMetadataParser.Parse(new(workspace.File("source.mkv"), 1000, DateTime.UnixEpoch), mkv, SourceMediaInfo);
+        var runner = CreateFrameCountRunner(workspace.DirectoryPath, mkv, output, SourceMediaInfo.Replace("260", "259"));
+        runner.PacketCounts[output] = outputCount;
+
+        await Assert.ThrowsExactlyAsync<InvalidDataException>(() => CreateVerifier(runner).VerifyAsync(source, output, DolbyVisionProfile.Profile81, workspace, default, level: VerificationLevel.FrameCountWithRecount));
     }
 
     private static FakeVerificationTools CreateFrameCountRunner(string workspace, string mkv, string output, string outputMediaInfo, string? sourceMediaInfo = null) =>
@@ -230,6 +295,8 @@ public sealed class MediaVerifierTests
 
         public int PacketCountCalls { get; private set; }
 
+        public Dictionary<string, string> PacketCounts { get; } = [];
+
         public int MostVideoStreams { get; private set; }
 
         public Task PipeAsync(ProcessRequest producer, ProcessRequest consumer, CancellationToken cancellationToken) => throw new NotSupportedException();
@@ -248,7 +315,7 @@ public sealed class MediaVerifierTests
                     break;
                 case (nameof(NativeTool.FFprobe), _) when arguments.Contains("-count_packets"):
                     PacketCountCalls++;
-                    result = result with { Output = Frames.ToString() };
+                    result = result with { Output = PacketCounts.GetValueOrDefault(arguments[^1], Frames.ToString()) };
                     break;
                 case (nameof(NativeTool.FFprobe), _):
                     for (int pts = 0; pts < Frames; pts++)

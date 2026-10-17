@@ -34,9 +34,16 @@ internal sealed class MediaVerifier(MediaProbe probe, VideoProcessor processor, 
                 return [];
             }
 
-            if (level == VerificationLevel.FrameCountWithRecount && await probe.CountFramesAsync(source.Source.Path, cancellationToken) == targetFrames)
+            if (level == VerificationLevel.FrameCountWithRecount)
             {
-                return [];
+                // Timestamp-preserving remuxes can also make the output's recorded count inaccurate.
+                // Compare counts read from both streams, rather than mixing actual and recorded counts.
+                sourceFrames = await probe.CountFramesAsync(source.Source.Path, cancellationToken);
+                targetFrames = await probe.CountFramesAsync(output, cancellationToken);
+                if (sourceFrames == targetFrames)
+                {
+                    return [];
+                }
             }
 
             return [new(VerificationArea.VideoStream, $"Video frame count changed ({sourceFrames} to {targetFrames}).")];

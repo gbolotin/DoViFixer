@@ -22,6 +22,46 @@ public sealed class NativeIntegrationTests
 {
     [TestMethod]
     [TestCategory("NativeIntegration")]
+    public async Task ExplicitRecountAcceptsMatchingStreamsWithDifferentRecordedCounts()
+    {
+        string? sourcePath = Environment.GetEnvironmentVariable("DOVIFIXER_TEST_RECOUNT_SOURCE");
+        string? outputPath = Environment.GetEnvironmentVariable("DOVIFIXER_TEST_RECOUNT_OUTPUT");
+        if (sourcePath is null || outputPath is null || !File.Exists(sourcePath) || !File.Exists(outputPath))
+        {
+            Assert.Inconclusive("Set DOVIFIXER_TEST_RECOUNT_SOURCE and DOVIFIXER_TEST_RECOUNT_OUTPUT to existing files with different recorded counts but matching video packet counts.");
+        }
+
+        var tools = new ToolCatalog();
+        var statuses = new List<DependencyStatus>();
+        foreach (var tool in new[] { NativeTool.MkvMerge, NativeTool.MediaInfo, NativeTool.FFprobe })
+        {
+            string? path = Environment.GetEnvironmentVariable("DOVIFIXER_TEST_" + tool.ToString().ToUpperInvariant());
+            if (path is null || !File.Exists(path))
+            {
+                Assert.Inconclusive($"Set DOVIFIXER_TEST_{tool.ToString().ToUpperInvariant()} to an existing executable.");
+            }
+
+            statuses.Add(new(tool, DependencyState.Ready, path, "test", "explicit test tool"));
+        }
+
+        tools.Refresh(statuses);
+        var runner = new ProcessRunner(NullLogger<ProcessRunner>.Instance);
+        var files = new FileOperations();
+        var probe = new MediaProbe(tools, runner, files, NullLogger<MediaProbe>.Instance);
+        var processor = new VideoProcessor(tools, runner, TimeProvider.System, NullLogger<VideoProcessor>.Instance);
+        var verifier = new MediaVerifier(probe, processor, tools, runner, NullLogger<MediaVerifier>.Instance);
+        var source = await probe.ProbeAsync(sourcePath, default);
+        var output = await probe.ProbeAsync(outputPath, default);
+        Assert.AreNotEqual(source.FrameCount, output.FrameCount, "The fixture must exercise the metadata-count mismatch.");
+        await using var workspace = await new TemporaryWorkspaceFactory(files, NullLogger<TemporaryWorkspaceFactory>.Instance).CreateAsync(1024 * 1024, null, default);
+
+        var findings = await verifier.VerifyAsync(source, outputPath, DolbyVisionProfile.Profile81, workspace, default, level: DoViFixer.Application.Settings.VerificationLevel.FrameCountWithRecount);
+
+        Assert.IsEmpty(findings, string.Join("; ", findings));
+    }
+
+    [TestMethod]
+    [TestCategory("NativeIntegration")]
     [DataRow(false)]
     [DataRow(true)]
     public async Task StreamedFullRpuMatchesDiskEvidenceOnNativeFixture(bool convertToMel)
