@@ -9,6 +9,51 @@ namespace DoViFixer.App.Tests;
 public sealed class SettingsValidationTests
 {
     [TestMethod]
+    public async Task ResetAvailabilityTracksDraftValuesAndDefaultCorrections()
+    {
+        using var runtime = new TestRuntime();
+        var settings = runtime.Container.GetRequiredService<SettingsViewModel>();
+        var notifications = new List<string?>();
+        settings.PropertyChanged += (_, args) => notifications.Add(args.PropertyName);
+        foreach (var (setText, isModified, reset, equivalentDefault, notification) in new (Action<string>, Func<bool>, Action, string, string)[]
+        {
+            (value => settings.ScanSampleCountText = value, () => settings.IsScanSampleCountModified, () => settings.ResetScanSampleCountCommand.Invoke(), "010", nameof(settings.IsScanSampleCountModified)),
+            (value => settings.ScanSampleSecondsText = value, () => settings.IsScanSampleSecondsModified, () => settings.ResetScanSampleSecondsCommand.Invoke(), 1.0.ToString("F1", CultureInfo.CurrentCulture), nameof(settings.IsScanSampleSecondsModified)),
+            (value => settings.MinimumScanCoveragePercentText = value, () => settings.IsMinimumScanCoveragePercentModified, () => settings.ResetMinimumScanCoveragePercentCommand.Invoke(), "0100", nameof(settings.IsMinimumScanCoveragePercentModified)),
+            (value => settings.InspectionPeakPercentileText = value, () => settings.IsInspectionPeakPercentileModified, () => settings.ResetInspectionPeakPercentileCommand.Invoke(), 100.0.ToString("F1", CultureInfo.CurrentCulture), nameof(settings.IsInspectionPeakPercentileModified)),
+            (value => settings.BrightnessMarginText = value, () => settings.IsBrightnessMarginModified, () => settings.ResetBrightnessMarginCommand.Invoke(), "050", nameof(settings.IsBrightnessMarginModified)),
+            (value => settings.AssumedPeakBrightnessText = value, () => settings.IsAssumedPeakBrightnessModified, () => settings.ResetAssumedPeakBrightnessCommand.Invoke(), "01000", nameof(settings.IsAssumedPeakBrightnessModified))
+        })
+        {
+            Assert.IsFalse(isModified(), notification);
+            foreach (string changed in new[] { "2", "", "letters", "NaN" })
+            {
+                notifications.Clear();
+                setText(changed);
+                await settings.SaveTask;
+                Assert.IsTrue(isModified(), changed);
+                CollectionAssert.Contains(notifications, notification);
+                reset();
+                await settings.SaveTask;
+                Assert.IsFalse(isModified(), "Reset must hide after restoring the default.");
+                Assert.IsFalse(settings.HasErrors);
+            }
+            setText(equivalentDefault);
+            await settings.SaveTask;
+            Assert.IsFalse(isModified(), "Numerically equivalent formatting is still the default.");
+            setText("2");
+            setText(equivalentDefault);
+            await settings.SaveTask;
+            Assert.IsFalse(isModified(), "Typing the default also hides Reset.");
+        }
+        settings.BrightnessMarginNits = 75;
+        Assert.IsTrue(settings.IsBrightnessMarginModified, "Slider changes update Reset availability.");
+        settings.BrightnessMarginNits = 50;
+        Assert.IsFalse(settings.IsBrightnessMarginModified);
+        await settings.SaveTask;
+    }
+
+    [TestMethod]
     public async Task SamplingAndPercentileEditsPersistValidateAndReset()
     {
         using var runtime = new TestRuntime();

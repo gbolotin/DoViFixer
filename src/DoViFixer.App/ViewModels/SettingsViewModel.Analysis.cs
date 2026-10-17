@@ -10,7 +10,10 @@ public sealed partial class SettingsViewModel
     partial void OnScanSampleCountChanged(int value) => NumericPreferenceChanged(nameof(ScanSampleCountText));
 
     [ObservableProperty]
+    [NotifyPropertyChangedFor(nameof(IsScanSampleCountModified))]
     public partial string ScanSampleCountText { get; set; } = "10";
+    public bool IsScanSampleCountModified => !int.TryParse(ScanSampleCountText, NumberStyles.Integer, CultureInfo.CurrentCulture, out int value) || value != 10;
+
     partial void OnScanSampleCountTextChanged(string value) => UpdateNumericPreference(() =>
     {
         if (int.TryParse(value, NumberStyles.Integer, CultureInfo.CurrentCulture, out int number))
@@ -28,7 +31,10 @@ public sealed partial class SettingsViewModel
     partial void OnScanSampleSecondsChanged(double value) => NumericPreferenceChanged(nameof(ScanSampleSecondsText));
 
     [ObservableProperty]
+    [NotifyPropertyChangedFor(nameof(IsScanSampleSecondsModified))]
     public partial string ScanSampleSecondsText { get; set; } = "1";
+    public bool IsScanSampleSecondsModified => !double.TryParse(ScanSampleSecondsText, NumberStyles.Float, CultureInfo.CurrentCulture, out double value) || value != 1;
+
     partial void OnScanSampleSecondsTextChanged(string value) => UpdateNumericPreference(() =>
     {
         if (double.TryParse(value, NumberStyles.Float, CultureInfo.CurrentCulture, out double number))
@@ -46,7 +52,10 @@ public sealed partial class SettingsViewModel
     partial void OnMinimumScanCoveragePercentChanged(int value) => NumericPreferenceChanged(nameof(MinimumScanCoveragePercentText));
 
     [ObservableProperty]
+    [NotifyPropertyChangedFor(nameof(IsMinimumScanCoveragePercentModified))]
     public partial string MinimumScanCoveragePercentText { get; set; } = "100";
+    public bool IsMinimumScanCoveragePercentModified => !int.TryParse(MinimumScanCoveragePercentText, NumberStyles.Integer, CultureInfo.CurrentCulture, out int value) || value != 100;
+
     partial void OnMinimumScanCoveragePercentTextChanged(string value) => UpdateNumericPreference(() =>
     {
         if (int.TryParse(value, NumberStyles.Integer, CultureInfo.CurrentCulture, out int number))
@@ -64,7 +73,10 @@ public sealed partial class SettingsViewModel
     partial void OnInspectionPeakPercentileChanged(double value) => NumericPreferenceChanged(nameof(InspectionPeakPercentileText));
 
     [ObservableProperty]
+    [NotifyPropertyChangedFor(nameof(IsInspectionPeakPercentileModified))]
     public partial string InspectionPeakPercentileText { get; set; } = "100";
+    public bool IsInspectionPeakPercentileModified => !double.TryParse(InspectionPeakPercentileText, NumberStyles.Float, CultureInfo.CurrentCulture, out double value) || value != 100;
+
     partial void OnInspectionPeakPercentileTextChanged(string value) => UpdateNumericPreference(() =>
     {
         if (double.TryParse(value, NumberStyles.Float, CultureInfo.CurrentCulture, out double number))

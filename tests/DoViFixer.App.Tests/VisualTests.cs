@@ -1095,6 +1095,25 @@ public sealed class VisualTests
                         Assert.IsFalse(string.IsNullOrEmpty(WpfFoundation.Behaviors.TextBoxAssist.GetSuffix(input)));
                         Assert.IsFalse(string.IsNullOrEmpty(WpfFoundation.Behaviors.TextBoxAssist.GetPlaceholder(input)));
                         Assert.IsFalse(input.Text.Contains(WpfFoundation.Behaviors.TextBoxAssist.GetSuffix(input)!, StringComparison.Ordinal));
+                        var reset = Descendants<Button>(view).Single(button => string.Equals(System.Windows.Automation.AutomationProperties.GetName(button), $"Reset {name}", StringComparison.OrdinalIgnoreCase));
+                        Assert.AreEqual(Visibility.Collapsed, reset.Visibility, "Default values hide Reset.");
+                        Assert.AreEqual("\uE777", reset.Content);
+                        Assert.AreEqual("Reset to default", reset.ToolTip);
+                        var row = (FrameworkElement)input.Parent;
+                        double rowWidth = row.ActualWidth;
+                        double inputX = input.TranslatePoint(new Point(), content).X;
+                        input.Text = "invalid";
+                        await shell.Settings.SaveTask;
+                        await LayoutAsync(window);
+                        Assert.IsTrue(reset.IsVisible, "Invalid drafts must offer Reset.");
+                        Assert.AreEqual(rowWidth, row.ActualWidth, "Showing Reset must not resize the row.");
+                        Assert.AreEqual(inputX, input.TranslatePoint(new Point(), content).X, "Showing Reset must not move the input.");
+                        AssertInside(reset, content);
+                        Invoke(reset);
+                        await shell.Settings.SaveTask;
+                        await LayoutAsync(window);
+                        Assert.AreEqual(Visibility.Collapsed, reset.Visibility);
+                        Assert.IsFalse(Validation.GetHasError(input));
                     }
                     Assert.HasCount(2, Descendants<Slider>(view));
                     var marginInput = Descendants<TextBox>(view).Single(box => System.Windows.Automation.AutomationProperties.GetName(box) == "Brightness margin");
@@ -1127,6 +1146,12 @@ public sealed class VisualTests
                     SaveRender(content, "settings-analysis");
                     break;
                 case PerformanceSettingsSection when firstVisit:
+                    var sectionNavigation = Descendants<ListBox>(overlay).Single();
+                    var performanceItem = (ListBoxItem)sectionNavigation.ItemContainerGenerator.ContainerFromItem(section);
+                    var performanceIcon = Descendants<WpfFoundation.Controls.PathIcon>(performanceItem).Single();
+                    Assert.IsTrue(performanceIcon.IsVisible);
+                    Assert.AreSame(((FrameworkElement)view).FindResource("PerformanceIconGeometry"), performanceIcon.Data);
+                    AssertInside(performanceIcon, content);
                     foreach (string name in new[] { "Simultaneous conversions", "Concurrent scan clips", "Tool process priority", "Video pipe buffer (KiB)" })
                     {
                         Assert.HasCount(1, Descendants<ComboBox>(view).Where(combo => System.Windows.Automation.AutomationProperties.GetName(combo) == name));

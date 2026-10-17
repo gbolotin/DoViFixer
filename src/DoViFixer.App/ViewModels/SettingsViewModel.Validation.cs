@@ -20,7 +20,10 @@ public sealed partial class SettingsViewModel : INotifyDataErrorInfo
     // Keep incomplete edits in the ViewModel: a failed WPF conversion would otherwise leave
     // the last valid number available to autosave and lose the edit when a view is recreated.
     [ObservableProperty]
+    [NotifyPropertyChangedFor(nameof(IsBrightnessMarginModified))]
     public partial string BrightnessMarginText { get; set; } = "50";
+
+    public bool IsBrightnessMarginModified => !int.TryParse(BrightnessMarginText, NumberStyles.Integer, CultureInfo.CurrentCulture, out int value) || value != 50;
 
     partial void OnBrightnessMarginTextChanged(string value) => UpdateNumericPreference(() =>
     {
@@ -31,7 +34,10 @@ public sealed partial class SettingsViewModel : INotifyDataErrorInfo
     });
 
     [ObservableProperty]
+    [NotifyPropertyChangedFor(nameof(IsAssumedPeakBrightnessModified))]
     public partial string AssumedPeakBrightnessText { get; set; } = "1000";
+
+    public bool IsAssumedPeakBrightnessModified => !int.TryParse(AssumedPeakBrightnessText, NumberStyles.Integer, CultureInfo.CurrentCulture, out int value) || value != 1000;
 
     partial void OnAssumedPeakBrightnessTextChanged(string value) => UpdateNumericPreference(() =>
     {

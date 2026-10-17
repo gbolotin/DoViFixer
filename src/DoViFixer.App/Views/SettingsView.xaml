@@ -3,6 +3,7 @@
              xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
              xmlns:viewModels="clr-namespace:DoViFixer.App.ViewModels"
              xmlns:settings="clr-namespace:DoViFixer.App.Views.Settings"
+             xmlns:controls="clr-namespace:WpfFoundation.Controls;assembly=WpfFoundation"
              xmlns:navigation="clr-namespace:WpfFoundation.Navigation;assembly=WpfFoundation"
              xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
              xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
@@ -10,6 +11,8 @@
              d:DataContext="{d:DesignInstance Type=viewModels:SettingsViewModel}">
     <!-- The body of the settings frame: section navigation, the retained section pages, and a footer every section shares. -->
     <UserControl.Resources>
+        <!-- Original speedometer outline, drawn on the PathIcon 16 by 16 grid. -->
+        <StreamGeometry x:Key="PerformanceIconGeometry">F1 M2.37 12.25 A6.5 6.5 0 1 1 13.63 12.25 L12.77 11.75 A5.5 5.5 0 1 0 3.23 11.75 Z M4.101 7.153 L3.105 6.578 L3.455 5.972 L4.451 6.547 Z M5.547 5.451 L4.972 4.455 L5.578 4.105 L6.153 5.101 Z M7.650 4.700 L7.650 3.550 L8.350 3.550 L8.350 4.700 Z M9.847 5.101 L10.422 4.105 L11.028 4.455 L10.453 5.451 Z M11.549 6.547 L12.545 5.972 L12.895 6.578 L11.899 7.153 Z M7.25 8.25 L12.15 5.05 L8.75 9.75 Z M9.15 9 A1.15 1.15 0 1 1 6.85 9 A1.15 1.15 0 1 1 9.15 9 Z</StreamGeometry>
         <Style TargetType="TextBox" BasedOn="{StaticResource WfValidationOutlineTextBoxStyle}" />
         <Style TargetType="ComboBox" BasedOn="{StaticResource WfValidationOutlineComboBoxStyle}" />
         <!-- Every section shows part of the same SettingsViewModel, so each page binds to it rather than to its section. -->
@@ -45,7 +48,33 @@
                  SelectedItem="{Binding Sections.CurrentPage}"
                  IsEnabled="{Binding Sections.CanNavigate}"
                  AutomationProperties.Name="Settings sections"
-                 Style="{StaticResource WfNavigationSidebarStyle}" />
+                 Style="{StaticResource WfNavigationSidebarStyle}">
+            <ListBox.ItemTemplate>
+                <DataTemplate>
+                    <StackPanel Orientation="Horizontal">
+                        <TextBlock x:Name="GlyphIcon"
+                                   Text="{Binding NavigationIcon}"
+                                   FontFamily="{StaticResource SymbolThemeFontFamily}"
+                                   FontSize="{StaticResource DefaultIconFontSize}"
+                                   VerticalAlignment="Center"
+                                   Margin="0,0,8,0" />
+                        <controls:PathIcon x:Name="PerformanceIcon"
+                                           Data="{StaticResource PerformanceIconGeometry}"
+                                           Size="{StaticResource DefaultIconFontSize}"
+                                           Visibility="Collapsed"
+                                           Margin="0,0,8,0" />
+                        <TextBlock Text="{Binding NavigationName}" VerticalAlignment="Center" />
+                    </StackPanel>
+                    <DataTemplate.Triggers>
+                        <!-- Performance supplies a vector in place of a font glyph. -->
+                        <DataTrigger Binding="{Binding NavigationIcon}" Value="{x:Null}">
+                            <Setter TargetName="GlyphIcon" Property="Visibility" Value="Collapsed" />
+                            <Setter TargetName="PerformanceIcon" Property="Visibility" Value="Visible" />
+                        </DataTrigger>
+                    </DataTemplate.Triggers>
+                </DataTemplate>
+            </ListBox.ItemTemplate>
+        </ListBox>
         <navigation:RetainedPageHost Grid.Column="1" Navigation="{Binding Sections}" />
         <!-- The window's status bar is behind the frame, so the frame shows save state, errors and progress itself. -->
         <Border Grid.Row="1"

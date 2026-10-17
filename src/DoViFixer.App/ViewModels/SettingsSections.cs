@@ -16,7 +16,7 @@ public abstract class SettingsSection(SettingsViewModel settings) : INavigationP
 public sealed class GeneralSettingsSection(SettingsViewModel settings) : SettingsSection(settings)
 {
     public override string NavigationName => "General";
-    public override string? NavigationIcon => "";
+    public override string? NavigationIcon => "\uE713";
 }
 
 public sealed class ConversionSettingsSection(SettingsViewModel settings) : SettingsSection(settings)
@@ -40,7 +40,8 @@ public sealed class SafetySettingsSection(SettingsViewModel settings) : Settings
 public sealed class PerformanceSettingsSection(SettingsViewModel settings) : SettingsSection(settings)
 {
     public override string NavigationName => "Performance";
-    public override string? NavigationIcon => "";
+    // The settings view supplies the vector speedometer template.
+    public override string? NavigationIcon => null;
 }
 
 public sealed class NativeToolsSettingsSection(SettingsViewModel settings) : SettingsSection(settings)
