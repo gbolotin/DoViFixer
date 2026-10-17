@@ -20,6 +20,12 @@ public sealed partial class MediaRow(string path) : ObservableObject
     public const string MissingStatus = "File not found";
     public static readonly string MissingNote = $"File not found. It was deleted, moved or renamed outside {ApplicationTitle.Name}. Restore it to this location, or remove it from the list.";
     public string Path { get; } = path;
+    public string? LibraryFingerprint { get; set; }
+
+    [ObservableProperty]
+    [NotifyPropertyChangedFor(nameof(HasLibraryHistory))]
+    public partial string LibraryHistory { get; set; } = "";
+    public bool HasLibraryHistory => !string.IsNullOrWhiteSpace(LibraryHistory);
     public string Name => System.IO.Path.GetFileName(Path);
     public ProgressViewModel Progress { get; } = new();
     public bool IsProfile7 => Analysis?.Media.Profile == Domain.Media.DolbyVisionProfile.Profile7;
@@ -147,7 +153,7 @@ public sealed partial class MediaRow(string path) : ObservableObject
     public bool ShowsResultComparison => CanOpenResult;
 
     [ObservableProperty]
-    [NotifyPropertyChangedFor(nameof(IsProfile7), nameof(CanRestore), nameof(HasIncompleteScan), nameof(CanInspectIncomplete), nameof(Classification), nameof(FilterGroup), nameof(DetailRows), nameof(DetailNotes))]
+    [NotifyPropertyChangedFor(nameof(Format), nameof(IsProfile7), nameof(CanRestore), nameof(HasIncompleteScan), nameof(CanInspectIncomplete), nameof(Classification), nameof(FilterGroup), nameof(DetailRows), nameof(DetailNotes))]
     public partial MediaAnalysis? Analysis { get; set; }
 
     /// <summary>The list filter that shows this file. Files not scanned yet and files whose analysis failed share one group.</summary>
@@ -169,6 +175,8 @@ public sealed partial class MediaRow(string path) : ObservableObject
         AnalysisVerdict.Unknown => HasIncompleteScan ? "Profile 7 · Incomplete scan" : "Unknown",
         _ => ProfileName(Analysis.Media.Profile)
     };
+    public string Format => Analysis is null ? "" : FormatName(Analysis.Media);
+
     public bool HasAnalysisError => AnalysisError is not null;
     /// <summary>
     /// Labeled file details. With <see cref="ShowsResultComparison"/>, <see cref="MediaDetail.Result"/> holds the produced file's value
@@ -197,7 +205,7 @@ public sealed partial class MediaRow(string path) : ObservableObject
                 Compared("Size", FormatSize(a), FormatSize),
                 Compared("Date modified", FormatDate(a), FormatDate),
                 Compared("Length", FormatLength(a), FormatLength),
-                Compared("Profile / Type", Classification, produced => ProfileName(produced.Media.Profile)),
+                Compared("Format", Format, produced => FormatName(produced.Media)),
                 Compared("Resolution", FormatResolution(a), FormatResolution),
                 Compared("Frame rate", FormatFrameRate(a), FormatFrameRate),
                 new("Evidence", EvidenceName(a.Evidence.Method)),
@@ -338,6 +346,15 @@ public sealed partial class MediaRow(string path) : ObservableObject
 
         return "Unknown";
     }
+
+    private static string FormatName(Domain.Media.MediaInfo media) => media.Profile switch
+    {
+        Domain.Media.DolbyVisionProfile.Profile7 => "Dolby Vision Profile 7",
+        Domain.Media.DolbyVisionProfile.Profile81 => "Dolby Vision Profile 8.1",
+        Domain.Media.DolbyVisionProfile.Profile5 => "Dolby Vision Profile 5",
+        Domain.Media.DolbyVisionProfile.None => media.IsHdr switch { true => "HDR", false => "SDR", _ => "Unknown" },
+        _ => media.DolbyVisionProfileNumber is { } number ? $"Dolby Vision Profile {number}" : "Dolby Vision (unknown profile)"
+    };
 
     private static string ProfileName(Domain.Media.DolbyVisionProfile profile) => profile switch
     {

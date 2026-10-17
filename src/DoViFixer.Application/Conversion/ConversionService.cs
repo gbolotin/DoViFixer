@@ -85,7 +85,7 @@ public sealed class ConversionPlanner(IFileDiscovery discovery, IFileOperations 
             try
             {
                 progress?.Report(new(Guid.Empty, "Planning", path));
-                var analysis = await inspection.InspectAsync(path, AnalysisMethod.FullRpu, request.TemporaryDirectory, cancellationToken, progress);
+                var analysis = await inspection.InspectAsync(path, AnalysisMethod.FullRpu, request.TemporaryDirectory, cancellationToken, progress, reuseSavedResults: true);
                 var decision = ConversionPolicy.Evaluate(analysis, request.IncludeSimple, request.ForceComplex);
                 if (!decision.Allowed && approveFel is not null && analysis.Verdict is AnalysisVerdict.SimpleFel or AnalysisVerdict.ComplexFel or AnalysisVerdict.FelUnclassified && ConversionPolicy.Evaluate(analysis, true, true).Allowed && await approveFel(analysis, cancellationToken))
                 {
@@ -268,7 +268,7 @@ public sealed class ConversionService(DependencyService dependencies, IFileOpera
         try
         {
             progress?.Report(new(Guid.Empty, "Inspecting", request.Path));
-            analysis = await inspection.InspectAsync(request.Path, AnalysisMethod.FullRpu, request.TemporaryDirectory, cancellationToken, progress);
+            analysis = await inspection.InspectAsync(request.Path, AnalysisMethod.FullRpu, request.TemporaryDirectory, cancellationToken, progress, reuseSavedResults: true);
         }
         catch (Exception ex) when (ex is not OperationCanceledException and not DependencyNotReadyException)
         {
@@ -437,11 +437,9 @@ public sealed class ConversionService(DependencyService dependencies, IFileOpera
             {
                 Original = approvedPlan.DeleteBackup ? null : backupIdentity.Path, Archive = archive
             };
-            if (!approvedPlan.DeleteBackup)
-            {
-                // Best effort, like the hash cache: the retained original can show this result when it is opened again.
-                await cache.WriteConversionResultAsync(approvedPlan.Analysis.Media.Source, completed, CancellationToken.None);
-            }
+            // Retained originals keep their result; source replacement belongs to the produced content identity.
+            var resultIdentity = approvedPlan.DeleteBackup ? files.Identify(approvedPlan.Output) : approvedPlan.Analysis.Media.Source;
+            await cache.WriteConversionResultAsync(resultIdentity, completed, CancellationToken.None);
 
             return completed;
         }

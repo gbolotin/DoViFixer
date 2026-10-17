@@ -7,6 +7,7 @@ using DoViFixer.Application.Abstractions;
 using DoViFixer.Application.Dependencies;
 using DoViFixer.Application.Operations;
 using DoViFixer.Application.Settings;
+using DoViFixer.Application.Library;
 using DoViFixer.Application.Reports;
 using DoViFixer.Domain.Analysis;
 using DoViFixer.Domain.Conversion;
@@ -15,7 +16,7 @@ using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
 
 namespace DoViFixer.App.Tests;
-internal sealed class TestRuntime : IFileDiscovery, IFileOperations, IMediaProbe, IMediaPreview, ISettingsStore, IDependencyDetector, IDependencyInstaller, ITemporaryWorkspaceFactory, IAnalysisCache, IVideoProcessor, IMediaVerifier, IOutputPublisher, IBackupArchiveStore, IReportWriter, IDialogService, IFileDialogService, IFileExplorer, IThemeService, ISourceFileMonitor, IDisposable
+internal sealed class TestRuntime : IFileDiscovery, IFileOperations, IMediaProbe, IMediaPreview, ISettingsStore, IDependencyDetector, IDependencyInstaller, ITemporaryWorkspaceFactory, IAnalysisCache, IMediaLibrary, IVideoProcessor, IMediaVerifier, IOutputPublisher, IBackupArchiveStore, IReportWriter, IDialogService, IFileDialogService, IFileExplorer, IThemeService, ISourceFileMonitor, IDisposable
 {
     private ServiceProvider? container;
     public IServiceCollection Services { get; } = new ServiceCollection();
@@ -83,7 +84,7 @@ internal sealed class TestRuntime : IFileDiscovery, IFileOperations, IMediaProbe
     public TestRuntime()
     {
         AppComposition.Register(Services, new ConfigurationBuilder().Build(), false);
-        Type[] contracts = [typeof(IFileDiscovery), typeof(IFileOperations), typeof(IMediaProbe), typeof(IMediaPreview), typeof(ISettingsStore), typeof(IDependencyDetector), typeof(IDependencyInstaller), typeof(ITemporaryWorkspaceFactory), typeof(IAnalysisCache), typeof(IVideoProcessor), typeof(IMediaVerifier), typeof(IOutputPublisher), typeof(IBackupArchiveStore), typeof(IReportWriter), typeof(IDialogService), typeof(IFileDialogService), typeof(IFileExplorer), typeof(IThemeService), typeof(ISourceFileMonitor)];
+        Type[] contracts = [typeof(IFileDiscovery), typeof(IFileOperations), typeof(IMediaProbe), typeof(IMediaPreview), typeof(ISettingsStore), typeof(IDependencyDetector), typeof(IDependencyInstaller), typeof(ITemporaryWorkspaceFactory), typeof(IAnalysisCache), typeof(IMediaLibrary), typeof(IVideoProcessor), typeof(IMediaVerifier), typeof(IOutputPublisher), typeof(IBackupArchiveStore), typeof(IReportWriter), typeof(IDialogService), typeof(IFileDialogService), typeof(IFileExplorer), typeof(IThemeService), typeof(ISourceFileMonitor)];
         foreach (var contract in contracts)
         {
             Services.AddSingleton(contract, this);
@@ -107,6 +108,33 @@ internal sealed class TestRuntime : IFileDiscovery, IFileOperations, IMediaProbe
     public Task<byte[]> LoadAsync(string path, CancellationToken cancellationToken) => Preview(path, cancellationToken);
     public int CachedFrames { get; set; }
     public string RootDirectory => @"C:\FixtureData\cache";
+    public string FilePath => Path.Combine(RootDirectory, "library.db");
+    public Dictionary<string, LibraryFile> LibraryFiles { get; } = new(StringComparer.OrdinalIgnoreCase);
+    public Task<LibraryFile?> FindAsync(FileIdentity source, CancellationToken token) => Task.FromResult(LibraryFiles.GetValueOrDefault(source.Path));
+    public Task<LibraryFile> RememberAsync(FileIdentity source, CancellationToken token)
+    {
+        if (!LibraryFiles.TryGetValue(source.Path, out var entry))
+        {
+            entry = new(source.Path, source, null);
+            LibraryFiles[source.Path] = entry;
+        }
+        return Task.FromResult(entry);
+    }
+    public Task<IReadOnlyList<LibraryFile>> ReadAllAsync(CancellationToken token) => Task.FromResult<IReadOnlyList<LibraryFile>>(LibraryFiles.Values.ToArray());
+    public Task<IReadOnlyList<LibraryEvent>> ReadHistoryAsync(string fingerprint, CancellationToken token) => Task.FromResult<IReadOnlyList<LibraryEvent>>(Array.Empty<LibraryEvent>());
+    public Task<int> CleanMissingAsync(CancellationToken token)
+    {
+        string[] paths = LibraryFiles.Keys.Where(MissingFiles.Contains).ToArray();
+        foreach (string path in paths)
+        {
+            LibraryFiles.Remove(path);
+            foreach (var key in cache.Keys.Where(key => string.Equals(key.Item1.Path, path, StringComparison.OrdinalIgnoreCase)).ToArray())
+            {
+                cache.Remove(key);
+            }
+        }
+        return Task.FromResult(paths.Length);
+    }
     public long AnalysisCacheBytes { get; set; }
     public long FrameCacheBytes { get; set; }
     public Task<long> GetSizeAsync(CancellationToken cancellationToken) => Task.FromResult(AnalysisCacheBytes);

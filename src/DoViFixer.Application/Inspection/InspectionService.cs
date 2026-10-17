@@ -8,9 +8,9 @@ using Microsoft.Extensions.Logging;
 namespace DoViFixer.Application.Inspection;
 public sealed class InspectionService(DependencyService dependencies, IMediaProbe probe, ITemporaryWorkspaceFactory workspaces, ISettingsStore settings, IFileOperations files, ILogger<InspectionService> logger, IAnalysisCache cache)
 {
-    public Task<MediaAnalysis> InspectAsync(string path, AnalysisMethod method, string? temporaryDirectory, CancellationToken cancellationToken, IProgress<OperationProgress>? progress = null) => OperationLog.RunAsync(logger, "Inspect", Guid.NewGuid(), path, async () =>
+    public Task<MediaAnalysis> InspectAsync(string path, AnalysisMethod method, string? temporaryDirectory, CancellationToken cancellationToken, IProgress<OperationProgress>? progress = null, bool reuseSavedResults = false) => OperationLog.RunAsync(logger, "Inspect", Guid.NewGuid(), path, async () =>
     {
-        var analysis = await InspectCoreAsync(path, method, temporaryDirectory, cancellationToken, progress);
+        var analysis = await InspectCoreAsync(path, method, temporaryDirectory, cancellationToken, progress, reuseSavedResults);
         logger.LogInformation("Analysis {Profile} {Verdict}; method {Method}; frames {Frames}; {Reason}", analysis.Media.Profile, analysis.Verdict, analysis.Evidence.Method, analysis.Evidence.Frames, analysis.Reason);
         return analysis;
     }, cancellationToken, result => result.Verdict == AnalysisVerdict.AnalysisFailed ? OperationStatus.Failed : OperationStatus.Completed);
@@ -21,7 +21,9 @@ public sealed class InspectionService(DependencyService dependencies, IMediaProb
         var source = files.Identify(path);
         await using var lease = await files.AcquireReadLeaseAsync(source, cancellationToken);
         var media = await probe.ProbeAsync(source.Path, cancellationToken);
-        return MediaClassifier.Classify(media, new(AnalysisMethod.MetadataOnly, EnhancementLayer.Unknown, 0, null, 0, 0));
+        var metadata = MediaClassifier.Classify(media, new(AnalysisMethod.MetadataOnly, EnhancementLayer.Unknown, 0, null, 0, 0));
+        await cache.WriteAsync(metadata, cancellationToken);
+        return metadata;
     }
 
     public async Task<MediaAnalysis?> ReadCachedAsync(string path, AnalysisMethod method, CancellationToken cancellationToken)
@@ -46,7 +48,17 @@ public sealed class InspectionService(DependencyService dependencies, IMediaProb
             cached = await cache.ReadAsync(source, AnalysisMethod.FullRpu, cancellationToken);
         }
 
+        if (cached is not null && NeedsFormatMetadata(cached))
+        {
+            cached = null;
+        }
+
         cached ??= await cache.ReadAsync(source, AnalysisMethod.MetadataOnly, cancellationToken);
+        if (cached is not null && NeedsFormatMetadata(cached))
+        {
+            return null;
+        }
+
         if (cached is not null)
         {
             logger.LogInformation("Using cached {Method} analysis for {Input}", cached.Evidence.Method, source.Path);
@@ -62,25 +74,29 @@ public sealed class InspectionService(DependencyService dependencies, IMediaProb
         return null;
     }
 
-    private async Task<MediaAnalysis> InspectCoreAsync(string path, AnalysisMethod method, string? temporaryDirectory, CancellationToken cancellationToken, IProgress<OperationProgress>? progress)
+    private static bool NeedsFormatMetadata(MediaAnalysis analysis) =>
+        analysis.Media.Profile == DolbyVisionProfile.None && analysis.Media.IsHdr is null;
+
+    private async Task<MediaAnalysis> InspectCoreAsync(string path, AnalysisMethod method, string? temporaryDirectory, CancellationToken cancellationToken, IProgress<OperationProgress>? progress, bool reuseSavedResults)
     {
         cancellationToken.ThrowIfCancellationRequested();
         var snapshot = await settings.ReadAsync(cancellationToken);
         var source = files.Identify(path);
         await using var lease = await files.AcquireReadLeaseAsync(source, cancellationToken);
-        var cached = snapshot.UseCachedResults ? await ReadCachedAsync(source, method, cancellationToken) : null;
+        var reuse = snapshot.UseCachedResults && (method == AnalysisMethod.SampledRpu || reuseSavedResults);
+        var cached = reuse ? await ReadCachedAsync(source, method, cancellationToken) : null;
         if (cached is not null)
         {
             return cached;
         }
 
         await dependencies.RequireAsync(DependencyRequirements.Analysis, cancellationToken);
-        // Sampled evidence cannot authorize conversion, but its probe metadata can be reused.
-        var previous = snapshot.UseCachedResults
+        // Scan and conversion may reuse probe metadata; explicit inspection always reads it again.
+        var previous = reuse
             ? await cache.ReadAsync(source, AnalysisMethod.SampledRpu, cancellationToken) ?? await cache.ReadAsync(source, AnalysisMethod.FullRpu, cancellationToken) ?? await cache.ReadAsync(source, AnalysisMethod.DeepInspection, cancellationToken)
             : null;
         progress?.Report(new(Guid.Empty, "Reading media information", path));
-        var media = previous is null ? await probe.ProbeAsync(source.Path, cancellationToken) : previous.Media with
+        var media = previous is null || NeedsFormatMetadata(previous) ? await probe.ProbeAsync(source.Path, cancellationToken) : previous.Media with
         {
             Source = source
         };

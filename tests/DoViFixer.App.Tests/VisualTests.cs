@@ -416,7 +416,7 @@ public sealed class VisualTests
         var original = media.Files.ToArray();
         var focused = media.Focused;
         Assert.AreSame(list.FindResource("WfSortableColumnHeaderTemplate"), profileHeader.ContentTemplate, "Columns without a header template use the shared sortable header.");
-        Assert.IsTrue(Descendants<TextBlock>(profileHeader).Any(text => text.Text == "Profile / Type"));
+        Assert.IsTrue(Descendants<TextBlock>(profileHeader).Any(text => text.Text == "Format"));
         Assert.IsFalse(Indicator(fileHeader).IsVisible);
 
         fileHeader.RaiseEvent(new RoutedEventArgs(ButtonBase.ClickEvent, fileHeader));
@@ -441,7 +441,7 @@ public sealed class VisualTests
         Assert.IsFalse(Indicator(fileHeader).IsVisible);
         Assert.AreEqual(ascending, Indicator(profileHeader).Text);
         Assert.IsTrue(Indicator(profileHeader).IsVisible, "The shared header template shows the indicator.");
-        AssertIndicatorAboveCenter(profileHeader, "Profile / Type");
+        AssertIndicatorAboveCenter(profileHeader, "Format");
 
         // Leave the list sorted by name ascending, which matches the order the files were added.
         fileHeader.RaiseEvent(new RoutedEventArgs(ButtonBase.ClickEvent, fileHeader));
@@ -1158,13 +1158,13 @@ public sealed class VisualTests
                     Assert.IsGreaterThanOrEqualTo(hardwareSummary.TranslatePoint(new Point(0, hardwareSummary.ActualHeight), content).Y,
                         recommendation.TranslatePoint(new Point(), content).Y, "Hardware recommendations must not overlap the hardware summary.");
                     SaveRender(content, "settings-performance");
-                    var cacheSize = Descendants<TextBlock>(view).Single(text => text.Text == shell.Settings.CacheSizeText);
+                    var cacheSize = Descendants<TextBlock>(view).Single(text => text.Text == shell.Settings.LibrarySizeText);
                     cacheSize.BringIntoView();
                     await LayoutAsync(window);
                     var cacheLocation = Descendants<TextBlock>(view).Single(text => text.Inlines.FirstInline is System.Windows.Documents.Run { Text: "Location: " });
                     var cacheLocationLink = cacheLocation.Inlines.OfType<System.Windows.Documents.Hyperlink>().Single();
-                    Assert.AreEqual(shell.Settings.CacheDirectory, ((System.Windows.Documents.Run)cacheLocationLink.Inlines.FirstInline).Text);
-                    Assert.AreSame(shell.Settings.OpenCacheFolderCommand, cacheLocationLink.Command, "The cache location link must open the cache folder.");
+                    Assert.AreEqual(shell.Settings.LibraryDirectory, ((System.Windows.Documents.Run)cacheLocationLink.Inlines.FirstInline).Text);
+                    Assert.AreSame(shell.Settings.OpenLibraryFolderCommand, cacheLocationLink.Command, "The cache location link must open the cache folder.");
                     Assert.IsTrue(cacheSize.IsVisible);
                     AssertInside(cacheSize, content);
                     AssertInside(cacheLocation, content);

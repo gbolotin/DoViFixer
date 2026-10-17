@@ -22,7 +22,7 @@ public sealed class MediaRowComparer(MediaSortColumn column, ListSortDirection d
 
         int result = column switch
         {
-            MediaSortColumn.Classification => CompareText(x.Classification, y.Classification),
+            MediaSortColumn.Classification => CompareText(x.Format, y.Format),
             MediaSortColumn.Status => CompareText(x.Status, y.Status),
             _ => Direct(Text.Compare(x.Name, y.Name))
         };

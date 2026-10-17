@@ -2,6 +2,7 @@ using DoViFixer.Application.Abstractions;
 using DoViFixer.Application.Updates;
 using DoViFixer.Infrastructure.Archives;
 using DoViFixer.Infrastructure.Configuration;
+using DoViFixer.Infrastructure.Library;
 using DoViFixer.Infrastructure.Dependencies;
 using DoViFixer.Infrastructure.Diagnostics;
 using DoViFixer.Infrastructure.FileSystem;
@@ -24,7 +25,9 @@ public static class DependencyInjection
         services.TryAddSingleton(TimeProvider.System);
         services.AddSingleton<ISettingsStore, SettingsStore>();
         services.AddSingleton<IHardwareInfoProvider, HardwareInfoProvider>();
-        services.AddTransient<IAnalysisCache, AnalysisCache>();
+        services.AddSingleton<MediaLibrary>();
+        services.AddSingleton<IMediaLibrary>(provider => provider.GetRequiredService<MediaLibrary>());
+        services.AddSingleton<IAnalysisCache>(provider => provider.GetRequiredService<MediaLibrary>());
         services.AddTransient<IUserPathRegistration, UserPathRegistration>();
         services.AddSingleton<IToolCatalog, ToolCatalog>();
         services.AddSingleton(_ =>

@@ -63,7 +63,6 @@ public sealed class MediaPreviewTests
 
     [TestMethod]
     [DataRow("files")]
-    [DataRow("cache")]
     [DataRow("shutdown")]
     public async Task ClearingOrClosingCancelsBackgroundPreviews(string action)
     {
@@ -85,10 +84,6 @@ public sealed class MediaPreviewTests
         if (action == "files")
         {
             model.ClearAllCommand.Invoke();
-        }
-        else if (action == "cache")
-        {
-            await shell.Settings.ClearCacheCommand.InvokeAsync().WaitAsync(TimeSpan.FromSeconds(5));
         }
         else
         {

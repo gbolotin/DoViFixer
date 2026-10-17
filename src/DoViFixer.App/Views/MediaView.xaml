@@ -234,12 +234,13 @@
                                 </DataTemplate>
                             </GridViewColumn.CellTemplate>
                         </GridViewColumn>
-                        <GridViewColumn Header="Profile / Type"
+                        <GridViewColumn Header="Format"
                                         Width="180"
                                         wf:GridViewSort.Key="{x:Static viewModels:MediaSortColumn.Classification}">
                             <GridViewColumn.CellTemplate>
                                 <DataTemplate>
-                                    <TextBlock Text="{Binding Classification}"
+                                    <TextBlock Text="{Binding Format}"
+                                               ToolTip="{Binding Classification}"
                                                VerticalAlignment="Center"
                                                TextWrapping="Wrap">
                                         <TextBlock.Style>
@@ -648,6 +649,13 @@
                                 </ItemsControl.ItemTemplate>
                             </ItemsControl>
                         </StackPanel>
+                        <Expander Header="Library history"
+                                  Margin="0,12,0,0"
+                                  Visibility="{Binding Focused.HasLibraryHistory, Converter={StaticResource WfBooleanToVisibilityConverter}, FallbackValue=Collapsed}">
+                            <TextBlock Text="{Binding Focused.LibraryHistory}"
+                                       TextWrapping="Wrap"
+                                       Foreground="{DynamicResource TextFillColorSecondaryBrush}" />
+                        </Expander>
                         <TextBlock Text="{Binding Focused.DetailNotes}"
                                    TextWrapping="Wrap"
                                    Foreground="{DynamicResource TextFillColorSecondaryBrush}"

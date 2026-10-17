@@ -668,6 +668,22 @@ public sealed class InfrastructureTests
         Assert.AreEqual(DolbyVisionProfile.Profile81, MediaMetadataParser.Parse(identity, mkv, p8).Profile);
     }
 
+    [TestMethod]
+    [DataRow("", "BT.709", false)]
+    [DataRow("SMPTE ST 2086", "PQ", true)]
+    [DataRow("", "HLG", true)]
+    public async Task MetadataParserPreservesHdrClassification(string hdrFormat, string transfer, bool expected)
+    {
+        string mkv = await File.ReadAllTextAsync(Path.Combine(AppContext.BaseDirectory, "Fixtures", "mkvmerge.json"));
+        var mi = System.Text.Json.JsonSerializer.Serialize(new
+        {
+            media = new { track = new[] { new Dictionary<string, string> { ["@type"] = "Video", ["Format"] = "HEVC", ["HDR_Format"] = hdrFormat, ["transfer_characteristics"] = transfer } } }
+        });
+        var media = MediaMetadataParser.Parse(new("fixture.mkv", 1000, DateTime.UnixEpoch), mkv, mi);
+        Assert.AreEqual(DolbyVisionProfile.None, media.Profile);
+        Assert.AreEqual(expected, media.IsHdr);
+    }
+
     private static async Task WriteTarAsync(string path, params (string Name, string Content)[] entries)
     {
         await using var file = File.Create(path);

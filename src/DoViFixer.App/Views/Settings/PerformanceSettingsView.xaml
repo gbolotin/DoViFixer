@@ -71,7 +71,7 @@
                                Style="{StaticResource WfSettingNoteTextStyle}" />
                 </StackPanel>
             </Border>
-            <TextBlock Text="Scanning &amp; cache" Style="{StaticResource WfLabelTextStyle}" />
+            <TextBlock Text="Scanning &amp; library" Style="{StaticResource WfLabelTextStyle}" />
             <Border Style="{StaticResource WfCardStyle}">
                 <StackPanel>
                     <CheckBox Content="Automatically scan added files"
@@ -79,32 +79,35 @@
                               IsChecked="{Binding AutomaticallyScanAddedFiles}"
                               Style="{StaticResource WfToggleSwitchStyle}" />
                     <Separator />
-                    <CheckBox Content="Reuse saved scan results"
-                              AutomationProperties.HelpText="When disabled, scans and inspections analyze files again. Successful results are still saved."
+                    <CheckBox Content="Reuse saved results for Scan and Convert"
+                              AutomationProperties.HelpText="Applies to Scan and Convert. Inspect and Deep Inspect always analyze again. Successful results are always saved."
                               IsChecked="{Binding UseCachedResults}"
                               Style="{StaticResource WfToggleSwitchStyle}" />
+                    <TextBlock Text="Inspect and Deep Inspect always analyze again. Successful results are always saved."
+                               Style="{StaticResource WfSettingNoteTextStyle}"
+                               Margin="0,8,0,12" />
                     <Separator />
                     <DockPanel Margin="0,12">
-                        <Button Content="Clear cache"
+                        <Button Content="Clean library"
                                 DockPanel.Dock="Right"
-                                Command="{Binding ClearCacheCommand}"
-                                ToolTip="Delete cached analysis results and movie frame previews."
+                                Command="{Binding CleanLibraryCommand}"
+                                ToolTip="Remove library records for files that no longer exist. Media files, existing records and frame previews are kept."
                                 VerticalAlignment="Center"
                                 Margin="24,0,0,0" />
                         <StackPanel>
-                            <TextBlock Text="Analysis cache" />
-                            <TextBlock Text="{Binding CacheSizeText}"
+                            <TextBlock Text="Media library" />
+                            <TextBlock Text="{Binding LibrarySizeText}"
                                        Style="{StaticResource CaptionTextBlockStyle}"
                                        Foreground="{DynamicResource TextFillColorSecondaryBrush}"
-                                       ToolTip="Total disk space used by cached analysis results and movie frame previews."
+                                       ToolTip="Allocated database space for analysis and history. Cleaning removes missing records but may not shrink the database file."
                                        Margin="0,4,0,0" />
                             <TextBlock TextWrapping="Wrap"
                                        Style="{StaticResource CaptionTextBlockStyle}"
                                        Foreground="{DynamicResource TextFillColorSecondaryBrush}"
-                                       ToolTip="{Binding CacheDirectory}">
-                                <Run Text="Location: " /><Hyperlink Command="{Binding OpenCacheFolderCommand}"
-                                           AutomationProperties.Name="Open cache folder">
-                                    <Run Text="{Binding CacheDirectory, Mode=OneWay}" />
+                                       ToolTip="{Binding LibraryDirectory}">
+                                <Run Text="Location: " /><Hyperlink Command="{Binding OpenLibraryFolderCommand}"
+                                           AutomationProperties.Name="Open library folder">
+                                    <Run Text="{Binding LibraryDirectory, Mode=OneWay}" />
                                 </Hyperlink>
                             </TextBlock>
                         </StackPanel>

@@ -17,6 +17,87 @@ namespace DoViFixer.Application.Tests;
 public sealed class WorkflowTests
 {
     [TestMethod]
+    [DataRow(AnalysisMethod.SampledRpu, false)]
+    [DataRow(AnalysisMethod.SampledRpu, true)]
+    [DataRow(AnalysisMethod.FullRpu, false)]
+    [DataRow(AnalysisMethod.FullRpu, true)]
+    [DataRow(AnalysisMethod.DeepInspection, false)]
+    [DataRow(AnalysisMethod.DeepInspection, true)]
+    public async Task ExplicitInspectionAlwaysRefreshesWhileScanHonorsReuse(AnalysisMethod method, bool reuse)
+    {
+        var runtime = new Runtime { ProbedMedia = Plan("good.mkv").Analysis.Media with { MaxCll = 1000 } };
+        await runtime.UpdateAsync(value => value with { UseCachedResults = reuse }, default);
+        var cache = new MemoryCache();
+        var inspection = new InspectionService(runtime.Dependencies(), runtime, runtime, runtime, runtime,
+            NullLogger<InspectionService>.Instance, cache);
+        await inspection.InspectAsync("good.mkv", method, null, default);
+        runtime.ProbedMedia = runtime.ProbedMedia with { MaxCll = 2000 };
+        var result = await inspection.InspectAsync("good.mkv", method, null, default);
+        bool reused = reuse && method == AnalysisMethod.SampledRpu;
+        Assert.AreEqual(reused ? 1 : 2, runtime.ProbeCalls);
+        Assert.AreEqual(reused ? 1 : 2, runtime.AnalyzeCalls);
+        Assert.AreEqual(reused ? 1000d : 2000d, result.Media.MaxCll);
+        var saved = await cache.ReadAsync(runtime.Identify("good.mkv"), method, default);
+        Assert.AreEqual(result, saved, "Fresh inspection replaces the saved result even when reuse is disabled.");
+    }
+
+    [TestMethod]
+    [DataRow(false)]
+    [DataRow(true)]
+    public async Task ConversionPreparationStillHonorsSavedResultReuse(bool reuse)
+    {
+        var runtime = new Runtime();
+        await runtime.UpdateAsync(value => value with { UseCachedResults = reuse }, default);
+        var cache = new MemoryCache();
+        var inspection = new InspectionService(runtime.Dependencies(), runtime, runtime, runtime, runtime,
+            NullLogger<InspectionService>.Instance, cache);
+        var conversion = runtime.Conversion(inspection, cache);
+        var request = new CandidateConversionRequest("good.mkv", ConversionTarget.Profile81, null, null, false, false, false);
+        Assert.IsInstanceOfType<CandidatePreparationResult.Success>(await conversion.PrepareCandidateAsync(request, null, default));
+        Assert.IsInstanceOfType<CandidatePreparationResult.Success>(await conversion.PrepareCandidateAsync(request, null, default));
+        Assert.AreEqual(reuse ? 1 : 2, runtime.AnalyzeCalls);
+    }
+
+    [TestMethod]
+    [DataRow(false, AnalysisMethod.MetadataOnly)]
+    [DataRow(true, AnalysisMethod.MetadataOnly)]
+    [DataRow(false, AnalysisMethod.SampledRpu)]
+    [DataRow(true, AnalysisMethod.SampledRpu)]
+    public async Task ScanRefreshesLegacyFormatMetadataAndThenReusesTheUpdatedResult(bool isHdr, AnalysisMethod savedMethod)
+    {
+        const string path = "legacy-format.mkv";
+        var oldMedia = Plan(path).Analysis.Media with { Profile = DolbyVisionProfile.None };
+        var runtime = new Runtime { ProbedMedia = oldMedia with { IsHdr = isHdr } };
+        var cache = new MemoryCache();
+        await cache.WriteAsync(MediaClassifier.Classify(oldMedia, new(savedMethod, EnhancementLayer.None, 0, null, 0, 0)), default);
+        var inspection = new InspectionService(runtime.Dependencies(), runtime, runtime, runtime, runtime,
+            NullLogger<InspectionService>.Instance, cache);
+        Assert.IsNull(await inspection.ReadCachedAsync(path, AnalysisMethod.SampledRpu, default));
+        var refreshed = await inspection.InspectAsync(path, AnalysisMethod.SampledRpu, null, default);
+        Assert.AreEqual(isHdr, refreshed.Media.IsHdr);
+        Assert.AreEqual(1, runtime.ProbeCalls);
+        Assert.AreEqual(0, runtime.AnalyzeCalls, "SDR/HDR files do not require RPU analysis.");
+        var reused = await inspection.InspectAsync(path, AnalysisMethod.SampledRpu, null, default);
+        Assert.AreEqual(isHdr, reused.Media.IsHdr);
+        Assert.AreEqual(1, runtime.ProbeCalls, "Current format metadata remains reusable.");
+        Assert.AreEqual(isHdr, (await cache.ReadAsync(runtime.Identify(path), AnalysisMethod.MetadataOnly, default))!.Media.IsHdr);
+    }
+
+    [TestMethod]
+    [DataRow(false)]
+    [DataRow(true)]
+    public async Task ConversionHistoryUsesTheSurvivingContentIdentity(bool replaceOriginal)
+    {
+        var runtime = new Runtime();
+        var cache = new MemoryCache();
+        var plan = Plan("good.mkv") with { DeleteBackup = replaceOriginal };
+        var result = await runtime.Conversion(cache: cache).ExecuteAsync(plan, null, default);
+        Assert.AreEqual(OperationStatus.Completed, result.Status);
+        var identity = replaceOriginal ? runtime.Identify(plan.Output) : plan.Analysis.Media.Source;
+        Assert.AreEqual(result, cache.ConversionResults[identity]);
+    }
+
+    [TestMethod]
     public async Task InspectionUsesSavedAnalysisSettingsForFutureOperations()
     {
         var runtime = new Runtime { PlanningFixtures = true };
@@ -51,7 +132,7 @@ public sealed class WorkflowTests
             reported.Add(item);
             if (item.InitialAnalysis is not null)
             {
-                Assert.AreEqual(5, runtime.ProbeCalls, "All files must be scanned first.");
+                Assert.AreEqual(5 + reported.Count(item => item.InitialAnalysis is not null), runtime.ProbeCalls, "All files are scanned before fresh deep inspections begin.");
             }
         }), enabled);
         Assert.AreEqual(enabled ? 7 : 5, runtime.AnalyzeCalls);
@@ -98,7 +179,7 @@ public sealed class WorkflowTests
         Assert.AreEqual(2, runtime.AnalyzeCalls);
         Assert.AreEqual(2, runtime.ProbeCalls, "Only the initial scan and unreadable file should be probed.");
         runtime.Ready = false;
-        await inspection.InspectAsync("good.mkv", AnalysisMethod.FullRpu, null, default);
+        await inspection.InspectAsync("good.mkv", AnalysisMethod.FullRpu, null, default, reuseSavedResults: true);
         await inspection.InspectAsync("good.mkv", AnalysisMethod.SampledRpu, null, default);
         Assert.AreEqual(2, runtime.AnalyzeCalls);
         await Assert.ThrowsExactlyAsync<DependencyNotReadyException>(() => inspection.InspectAsync("good.mkv", AnalysisMethod.DeepInspection, null, default));
@@ -887,6 +968,7 @@ public sealed class WorkflowTests
 
         public int InstallCalls, ConvertCalls, Published, Disposed, Deleted;
         public int ProbeCalls, AnalyzeCalls;
+        public MediaInfo? ProbedMedia { get; set; }
         public int Restored, Renamed;
         public bool FailRecovery
         {
@@ -969,7 +1051,7 @@ public sealed class WorkflowTests
                 throw new IOException("Unreadable fixture");
             }
 
-            return Task.FromResult(Plan(path).Analysis.Media with
+            return Task.FromResult(ProbedMedia ?? Plan(path).Analysis.Media with
             {
                 MaxCll = 1000
             });

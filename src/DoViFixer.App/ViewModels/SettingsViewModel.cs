@@ -14,8 +14,8 @@ public sealed partial class SettingsViewModel : OperationViewModel
 
     private readonly SettingsService settings;
     private readonly IThemeService themeService;
-    private readonly IAnalysisCache cache;
-    private readonly IMediaPreview mediaPreview;
+    private readonly IMediaLibrary library;
+    private readonly Application.Library.MediaLibraryService libraryService;
     private readonly DependencySetup setup;
     private readonly IFileDialogService files;
     private readonly IFileExplorer explorer;
@@ -41,20 +41,19 @@ public sealed partial class SettingsViewModel : OperationViewModel
     public string? DestinationError => OtherFolder && string.IsNullOrWhiteSpace(Destination) ? "Choose an output folder." : null;
 
     public event Action<UserSettings>? Saved;
-    public event Func<Task>? CacheClearing;
-    public string CacheDirectory => cache.RootDirectory;
+    public string LibraryDirectory => Path.GetDirectoryName(library.FilePath)!;
     [ObservableProperty]
-    public partial string CacheSizeText { get; private set; } = "Cache: …";
+    public partial string LibrarySizeText { get; private set; } = "Library: …";
 
     public DependencyReportViewModel Dependencies { get; }
 
-    public SettingsViewModel(SettingsService settings, DependencySetup setup, DependencyReportViewModel dependencies, IFileDialogService files, IFileExplorer explorer, IAnalysisCache cache, IThemeService themeService, IMediaPreview mediaPreview, DiagnosticsService diagnostics, IOperationFeedback? feedback = null)
+    public SettingsViewModel(SettingsService settings, DependencySetup setup, DependencyReportViewModel dependencies, IFileDialogService files, IFileExplorer explorer, IMediaLibrary library, Application.Library.MediaLibraryService libraryService, IThemeService themeService, DiagnosticsService diagnostics, IOperationFeedback? feedback = null)
         : base(feedback)
     {
         this.settings = settings;
         this.themeService = themeService;
-        this.cache = cache;
-        this.mediaPreview = mediaPreview;
+        this.library = library;
+        this.libraryService = libraryService;
         this.setup = setup;
         this.files = files;
         this.explorer = explorer;
@@ -97,23 +96,23 @@ public sealed partial class SettingsViewModel : OperationViewModel
         }
     }
 
-    private async Task RefreshCacheSizeAsync(CancellationToken token)
+    private async Task RefreshLibrarySizeAsync(CancellationToken token)
     {
-        CacheSizeText = "Cache: …";
+        LibrarySizeText = "Library: …";
         try
         {
-            long bytes = await Task.Run(async () => await cache.GetSizeAsync(token) + await mediaPreview.GetCacheSizeAsync(token), token);
-            CacheSizeText = bytes switch
+            long bytes = await Task.Run(() => library.GetSizeAsync(token), token);
+            LibrarySizeText = bytes switch
             {
-                >= 1073741824 => $"Cache: {bytes / 1073741824d:0.##} GiB",
-                >= 1048576 => $"Cache: {bytes / 1048576d:0.##} MiB",
-                >= 1024 => $"Cache: {bytes / 1024d:0.##} KiB",
-                _ => $"Cache: {bytes} B"
+                >= 1073741824 => $"Library: {bytes / 1073741824d:0.##} GiB",
+                >= 1048576 => $"Library: {bytes / 1048576d:0.##} MiB",
+                >= 1024 => $"Library: {bytes / 1024d:0.##} KiB",
+                _ => $"Library: {bytes} B"
             };
         }
         catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
         {
-            CacheSizeText = "Cache size unavailable";
+            LibrarySizeText = "Library size unavailable";
         }
     }
 
@@ -600,7 +599,7 @@ public sealed partial class SettingsViewModel : OperationViewModel
         await FlushAsync(token);
         lastSavedSettings = await settings.ReadAsync(token);
         ApplyPreferences(lastSavedSettings);
-        await RefreshCacheSizeAsync(token);
+        await RefreshLibrarySizeAsync(token);
         SetStatus(ViewStatus.SettingsLoaded);
     });
 
@@ -608,16 +607,11 @@ public sealed partial class SettingsViewModel : OperationViewModel
     private Task Save() => RunAsync(async (token, _) => await SaveAsync(token));
 
     [RelayCommand(CanExecute = nameof(IsIdle))]
-    private Task ClearCache() => RunAsync(async (token, _) =>
+    private Task CleanLibrary() => RunAsync(async (token, _) =>
     {
-        if (CacheClearing is not null)
-        {
-            await CacheClearing();
-        }
-        int removed = await Task.Run(() => cache.ClearAsync(token), token);
-        int frames = await Task.Run(() => mediaPreview.ClearCacheAsync(token), token);
-        await RefreshCacheSizeAsync(token);
-        SetStatus(ViewStatus.Result, $"Cleared {removed} cached analysis results and {frames} frame previews. They will be recreated when needed.");
+        int removed = await Task.Run(() => libraryService.CleanMissingAsync(token), token);
+        await RefreshLibrarySizeAsync(token);
+        SetStatus(ViewStatus.Result, $"Removed {removed} missing file record{(removed == 1 ? "" : "s")} from the library. Media files and frame previews were not changed.");
     });
 
     [RelayCommand(CanExecute = nameof(IsIdle))]
@@ -662,7 +656,7 @@ public sealed partial class SettingsViewModel : OperationViewModel
     private void BrowseTool() => ToolPath = files.PickFiles("Executables|*.exe", allowMultiple: false).FirstOrDefault() ?? ToolPath;
 
     [RelayCommand]
-    private void OpenCacheFolder() => explorer.OpenFolder(CacheDirectory);
+    private void OpenLibraryFolder() => explorer.OpenFolder(LibraryDirectory);
 
     [RelayCommand]
     private void OpenLogs() => explorer.OpenLogs();
@@ -692,7 +686,7 @@ public sealed partial class SettingsViewModel : OperationViewModel
         LoadCommand?.NotifyCanExecuteChanged();
         SaveCommand?.NotifyCanExecuteChanged();
         DiscardChangesCommand?.NotifyCanExecuteChanged();
-        ClearCacheCommand?.NotifyCanExecuteChanged();
+        CleanLibraryCommand?.NotifyCanExecuteChanged();
         CheckCommand?.NotifyCanExecuteChanged();
         InstallCommand?.NotifyCanExecuteChanged();
         SetToolCommand?.NotifyCanExecuteChanged();

@@ -19,4 +19,8 @@ public enum EnhancementLayer
 
 public sealed record FileIdentity(string Path, long Length, DateTime LastWriteUtc);
 public sealed record MediaTrack(int Id, string Type, string Codec, string Language, string Name, bool Default, bool Forced, string? Uid);
-public sealed record MediaInfo(FileIdentity Source, DolbyVisionProfile Profile, string VideoCodec, int VideoTrackId, int Width, int Height, long? FrameCount, double? FramesPerSecond, double? DurationSeconds, long VideoDelayNanoseconds, double? MaxCll, IReadOnlyList<MediaTrack> Tracks, int AttachmentCount, int ChapterCount, string? Title, string IdentificationJson);
+public sealed record MediaInfo(FileIdentity Source, DolbyVisionProfile Profile, string VideoCodec, int VideoTrackId, int Width, int Height, long? FrameCount, double? FramesPerSecond, double? DurationSeconds, long VideoDelayNanoseconds, double? MaxCll, IReadOnlyList<MediaTrack> Tracks, int AttachmentCount, int ChapterCount, string? Title, string IdentificationJson)
+{
+    public bool? IsHdr { get; init; }
+    public int? DolbyVisionProfileNumber { get; init; }
+}

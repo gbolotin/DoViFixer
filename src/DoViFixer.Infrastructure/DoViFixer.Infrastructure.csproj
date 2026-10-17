@@ -5,6 +5,7 @@
     <ProjectReference Include="../DoViFixer.Domain/DoViFixer.Domain.csproj" />
     <PackageReference Include="Microsoft.Extensions.DependencyInjection.Abstractions" />
     <PackageReference Include="Microsoft.Extensions.Configuration.Abstractions" />
+    <PackageReference Include="Microsoft.Data.Sqlite" />
   </ItemGroup>
   <ItemGroup><InternalsVisibleTo Include="DoViFixer.Infrastructure.Tests" /></ItemGroup>
 </Project>

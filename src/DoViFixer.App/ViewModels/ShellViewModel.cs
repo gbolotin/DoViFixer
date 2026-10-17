@@ -34,7 +34,6 @@ public sealed partial class ShellViewModel : ObservableObject, INavigationGuard,
             }
         };
         settings.Saved += media.UpdateSettingsSummary;
-        settings.CacheClearing += media.CancelPreviewsAsync;
         media.ConversionStarting += settings.FlushAsync;
         dependencyReport.PropertyChanged += DependencyReportChanged;
         dependencyCheck.PropertyChanged += DependencyCheckChanged;
@@ -112,6 +111,7 @@ public sealed partial class ShellViewModel : ObservableObject, INavigationGuard,
         try
         {
             await media.RefreshSettingsSummaryAsync(linked.Token);
+            await media.LoadLibraryAsync(linked.Token);
         }
         catch (OperationCanceledException) when (linked.IsCancellationRequested)
         {

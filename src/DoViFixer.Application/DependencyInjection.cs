@@ -16,6 +16,7 @@ public static class DependencyInjection
     {
         services.AddTransient<DependencyService>();
         services.AddTransient<InspectionService>();
+        services.AddTransient<Library.MediaLibraryService>();
         services.AddTransient<ScanService>();
         services.AddTransient<ConversionPlanner>();
         services.AddTransient<ConversionService>();

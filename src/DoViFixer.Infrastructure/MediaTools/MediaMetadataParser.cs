@@ -52,7 +52,14 @@ internal static class MediaMetadataParser
         }
         : DolbyVisionProfile.Unknown;
         var container = root.GetProperty("container").GetProperty("properties");
-        return new(source, profile, Text(miVideo, "Format", video.Codec), video.Id, (int)(Number(miVideo, "Width") ?? 0), (int)(Number(miVideo, "Height") ?? 0), (long? )Number(miVideo, "FrameCount"), Number(miVideo, "FrameRate"), Number(miVideo, "Duration") ?? Number(container, "duration") / 1_000_000_000d, (long)(Number(properties, "minimum_timestamp") ?? 0), Number(miVideo, "MaxCLL"), Array.AsReadOnly(tracks), root.TryGetProperty("attachments", out var attachments) ? attachments.GetArrayLength() : 0, root.TryGetProperty("chapters", out var chapters) ? chapters.EnumerateArray().Sum(c => (int)(Number(c, "num_entries") ?? 0)) : 0, Text(container, "title"), mkvJson);
+        return new(source, profile, Text(miVideo, "Format", video.Codec), video.Id, (int)(Number(miVideo, "Width") ?? 0), (int)(Number(miVideo, "Height") ?? 0), (long? )Number(miVideo, "FrameCount"), Number(miVideo, "FrameRate"), Number(miVideo, "Duration") ?? Number(container, "duration") / 1_000_000_000d, (long)(Number(properties, "minimum_timestamp") ?? 0), Number(miVideo, "MaxCLL"), Array.AsReadOnly(tracks), root.TryGetProperty("attachments", out var attachments) ? attachments.GetArrayLength() : 0, root.TryGetProperty("chapters", out var chapters) ? chapters.EnumerateArray().Sum(c => (int)(Number(c, "num_entries") ?? 0)) : 0, Text(container, "title"), mkvJson)
+        {
+            IsHdr = !string.IsNullOrWhiteSpace(Text(miVideo, "HDR_Format"))
+                || Text(miVideo, "transfer_characteristics").Contains("PQ", StringComparison.OrdinalIgnoreCase)
+                || Text(miVideo, "transfer_characteristics").Contains("HLG", StringComparison.OrdinalIgnoreCase)
+                || Number(properties, "color_transfer_characteristics") is 16 or 18,
+            DolbyVisionProfileNumber = match.Success ? int.Parse(match.Groups[1].Value, CultureInfo.InvariantCulture) : null
+        };
     }
 
     internal static string Text(JsonElement element, string name, string fallback = "") => element.ValueKind == JsonValueKind.Object && element.TryGetProperty(name, out var value) && value.ValueKind != JsonValueKind.Null ? value.ToString() : fallback;

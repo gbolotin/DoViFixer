@@ -6,6 +6,7 @@ using DoViFixer.App.Presentation.Application;
 using DoViFixer.Application.Abstractions;
 using DoViFixer.Application.Conversion;
 using DoViFixer.Application.Inspection;
+using DoViFixer.Application.Library;
 using DoViFixer.Application.Operations;
 using DoViFixer.Application.Settings;
 using DoViFixer.Application.Restore;
@@ -32,6 +33,9 @@ public sealed partial class MediaViewModel : OperationViewModel, INavigationPage
 
     private readonly IFileDiscovery discovery;
     private readonly InspectionService inspection;
+    private readonly MediaLibraryService library;
+    private bool libraryLoaded;
+    private bool loadingLibraryRows;
     private readonly ConversionService conversion;
     private readonly ConversionDiskBudget diskBudget;
     private readonly RestoreService restore;
@@ -54,13 +58,14 @@ public sealed partial class MediaViewModel : OperationViewModel, INavigationPage
 
     private static string Summary(BatchResult result) => string.Join(" · ", result.Items.GroupBy(r => r.Status).Select(g => $"{g.Count()} {g.Key}"));
     private string TimedSummary(BatchResult result) => $"{Summary(result)}{(result.Status == OperationStatus.Completed ? " in " : " · Finished in ")}{BatchProgress.BatchElapsed}";
-    public MediaViewModel(IFileDiscovery discovery, InspectionService inspection, ConversionService conversion, ConversionDiskBudget diskBudget, ControlledBatchService batch, SettingsService settings, DependencySetup dependencies, IDialogService dialogs, IFileDialogService files, IFileExplorer explorer, ILogger<MediaViewModel> logger, IMediaPreview mediaPreview, RestoreService restore, ISourceFileMonitor sourceFiles, ReportService reports, IOperationFeedback? feedback = null)
+    public MediaViewModel(IFileDiscovery discovery, InspectionService inspection, ConversionService conversion, ConversionDiskBudget diskBudget, ControlledBatchService batch, SettingsService settings, DependencySetup dependencies, IDialogService dialogs, IFileDialogService files, IFileExplorer explorer, ILogger<MediaViewModel> logger, IMediaPreview mediaPreview, RestoreService restore, ISourceFileMonitor sourceFiles, ReportService reports, MediaLibraryService library, IOperationFeedback? feedback = null)
         : base(feedback)
     {
         this.discovery = discovery;
         this.diskBudget = diskBudget;
         this.sourceFiles = sourceFiles;
         this.reports = reports;
+        this.library = library;
         uiContext = SynchronizationContext.Current;
         sourceFiles.Changed += OnSourceFilesChanged;
         this.inspection = inspection;
@@ -86,6 +91,10 @@ public sealed partial class MediaViewModel : OperationViewModel, INavigationPage
         ];
         Files.CollectionChanged += (_, _) =>
         {
+            if (loadingLibraryRows)
+            {
+                return;
+            }
             sourceFiles.Watch(Files.Select(row => row.Path));
             OnPropertyChanged(nameof(IsFileListEmpty));
             OnPropertyChanged(nameof(HasMissingFiles));
@@ -212,7 +221,7 @@ public sealed partial class MediaViewModel : OperationViewModel, INavigationPage
     [NotifyCanExecuteChangedFor(nameof(OpenOutputCommand), nameof(OpenFileLocationCommand))]
     public partial MediaRow? Focused { get; set; }
 
-    partial void OnFocusedChanged(MediaRow? value) => previewCompletion = Task.WhenAll(previewCompletion, LoadPreviewAsync(value));
+    partial void OnFocusedChanged(MediaRow? value) => previewCompletion = Task.WhenAll(previewCompletion, LoadPreviewAsync(value), LoadLibraryHistoryAsync(value));
 
     [ObservableProperty]
     public partial BitmapSource? FramePreview { get; private set; }
@@ -655,7 +664,84 @@ public sealed partial class MediaViewModel : OperationViewModel, INavigationPage
         OnPropertyChanged(nameof(StatusItems));
     }
 
-    public Task OnActivatedAsync(CancellationToken cancellationToken) => RefreshSettingsSummaryAsync(cancellationToken);
+    public async Task OnActivatedAsync(CancellationToken cancellationToken)
+    {
+        await RefreshSettingsSummaryAsync(cancellationToken);
+        await LoadLibraryAsync(cancellationToken);
+    }
+
+    public Task LoadLibraryAsync(CancellationToken cancellationToken = default)
+    {
+        if (libraryLoaded)
+        {
+            return Task.CompletedTask;
+        }
+        return RunAsync("Loading library", async (operationToken, _) =>
+        {
+            using var linked = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken, operationToken);
+            var entries = await Task.Run(() => library.LoadAsync(linked.Token), linked.Token);
+            loadingLibraryRows = true;
+            try
+            {
+                foreach (var entry in entries)
+                {
+                    if (Files.Any(row => row.LibraryFingerprint == entry.Fingerprint || string.Equals(row.Path, entry.Source.Path, StringComparison.OrdinalIgnoreCase)))
+                    {
+                        continue;
+                    }
+                    var row = new MediaRow(entry.Source.Path) { LibraryFingerprint = entry.Fingerprint, IsSelected = false };
+                    if (entry.Analysis is not null)
+                    {
+                        row.Analysis = entry.Analysis;
+                        row.SetScanned();
+                    }
+                    if (sourceFiles.Exists(row.Path) && await Task.Run(() => conversion.ReadPublishedResultAsync(row.Path, linked.Token), linked.Token) is { } published)
+                    {
+                        row.SetConverted(published);
+                    }
+                    row.PropertyChanged += OnRowPropertyChanged;
+                    Files.Add(row);
+                }
+            }
+            finally
+            {
+                loadingLibraryRows = false;
+                sourceFiles.Watch(Files.Select(row => row.Path));
+                OnPropertyChanged(nameof(IsFileListEmpty));
+                OnPropertyChanged(nameof(HasMissingFiles));
+                ShownFilesChanged();
+            }
+            RefreshSourceAvailability();
+            Focused ??= Files.FirstOrDefault();
+            libraryLoaded = true;
+        });
+    }
+
+    private async Task LoadLibraryHistoryAsync(MediaRow? row)
+    {
+        if (row?.LibraryFingerprint is not { } fingerprint)
+        {
+            return;
+        }
+        try
+        {
+            var history = await Task.Run(() => library.ReadHistoryAsync(fingerprint, CancellationToken.None));
+            row.LibraryHistory = string.Join(Environment.NewLine, history.Select(entry => $"{entry.When.ToLocalTime():g} · {LibraryActionText(entry.Action)}: {entry.Detail}"));
+        }
+        catch (Exception ex)
+        {
+            logger.LogWarning(ex, "Could not read library history for {Path}", row.Path);
+        }
+    }
+
+    private static string LibraryActionText(string action) => action switch
+    {
+        nameof(AnalysisMethod.SampledRpu) => "Scanned",
+        nameof(AnalysisMethod.FullRpu) => "Inspected",
+        nameof(AnalysisMethod.DeepInspection) => "Deep inspected",
+        nameof(AnalysisMethod.MetadataOnly) => "Metadata read",
+        _ => action
+    };
 
     public async Task RefreshSettingsSummaryAsync(CancellationToken token = default)
     {
@@ -709,12 +795,28 @@ public sealed partial class MediaViewModel : OperationViewModel, INavigationPage
                 var paths = await Task.Run(() => discovery.Discover(input, preferences.FolderSearchDepth), token);
                 foreach (string path in paths)
                 {
-                    if (Files.Any(f => string.Equals(f.Path, path, StringComparison.OrdinalIgnoreCase)))
+                    var remembered = await Task.Run(() => library.RememberAsync(path, token), token);
+                    var existing = Files.FirstOrDefault(row => row.LibraryFingerprint == remembered.Fingerprint || string.Equals(row.Path, path, StringComparison.OrdinalIgnoreCase));
+                    if (existing is not null && string.Equals(existing.Path, path, StringComparison.OrdinalIgnoreCase))
                     {
+                        existing.IsSelected = true;
                         continue;
                     }
-
-                    var row = new MediaRow(path);
+                    if (existing is not null)
+                    {
+                        existing.PropertyChanged -= OnRowPropertyChanged;
+                        Files.Remove(existing);
+                    }
+                    var row = new MediaRow(path) { LibraryFingerprint = remembered.Fingerprint };
+                    if (remembered.Analysis is not null)
+                    {
+                        row.Analysis = remembered.Analysis;
+                        row.SetScanned();
+                    }
+                    if (existing is not null && ReferenceEquals(Focused, existing))
+                    {
+                        Focused = row;
+                    }
                     row.PropertyChanged += OnRowPropertyChanged;
                     Files.Add(row);
                     added.Add(row);
@@ -726,6 +828,7 @@ public sealed partial class MediaViewModel : OperationViewModel, INavigationPage
             }
         }
 
+        RefreshSourceAvailability();
         Focused ??= Files.FirstOrDefault();
         if (added.Count > 0)
         {
@@ -744,6 +847,11 @@ public sealed partial class MediaViewModel : OperationViewModel, INavigationPage
         if (sender is not MediaRow row)
         {
             return;
+        }
+
+        if (e.PropertyName is nameof(MediaRow.Analysis) or nameof(MediaRow.Result))
+        {
+            previewCompletion = Task.WhenAll(previewCompletion, LoadLibraryHistoryAsync(row));
         }
 
         if (e.PropertyName == nameof(MediaRow.CanOpenResult))
@@ -938,7 +1046,9 @@ public sealed partial class MediaViewModel : OperationViewModel, INavigationPage
                 try
                 {
                     // The previous analysis stays until a new one replaces it, so a failed inspection keeps the file details.
-                    var analysis = await Task.Run(() => inspection.ReadCachedAsync(row.Path, method, itemToken), itemToken);
+                    var analysis = method == AnalysisMethod.SampledRpu
+                        ? await Task.Run(() => inspection.ReadCachedAsync(row.Path, method, itemToken), itemToken)
+                        : null;
                     if (analysis is null)
                     {
                         toolsReady ??= await dependencies.EnsureAsync(jobProgress, itemToken);

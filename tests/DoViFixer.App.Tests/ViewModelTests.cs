@@ -11,6 +11,48 @@ namespace DoViFixer.App.Tests;
 public sealed class ViewModelTests
 {
     [TestMethod]
+    [DataRow(false)]
+    [DataRow(true)]
+    public async Task ExplicitInspectCommandsAlwaysAnalyzeAgain(bool reuse)
+    {
+        using var runtime = new TestRuntime();
+        await runtime.UpdateAsync(value => value with { UseCachedResults = reuse, AutomaticallyScanAddedFiles = false, AutoSelectAfterScan = false }, default);
+        var model = runtime.Container.GetRequiredService<MediaViewModel>();
+        await model.AddAsync([@"C:\Media\Mountain.mkv"]);
+        await model.InspectCommand.InvokeAsync();
+        await model.InspectCommand.InvokeAsync();
+        await model.DeepInspectCommand.InvokeAsync();
+        await model.DeepInspectCommand.InvokeAsync();
+        Assert.AreEqual(4, runtime.Analyses);
+        Assert.AreEqual(4, runtime.Probes);
+    }
+
+    [TestMethod]
+    public async Task FormatShowsDynamicRangeAndProfileWithoutFelVerdict()
+    {
+        using var runtime = new TestRuntime();
+        var model = runtime.Container.GetRequiredService<MediaViewModel>();
+        await model.AddAsync([@"C:\Media\Format.mkv"]);
+        var row = model.Files[0];
+        var analysis = row.Analysis!;
+        foreach (var (profile, hdr, number, expected) in new[]
+        {
+            (DoViFixer.Domain.Media.DolbyVisionProfile.Profile7, (bool?)true, (int?)7, "Dolby Vision Profile 7"),
+            (DoViFixer.Domain.Media.DolbyVisionProfile.Profile81, (bool?)true, (int?)8, "Dolby Vision Profile 8.1"),
+            (DoViFixer.Domain.Media.DolbyVisionProfile.Profile5, (bool?)true, (int?)5, "Dolby Vision Profile 5"),
+            (DoViFixer.Domain.Media.DolbyVisionProfile.Other, (bool?)true, (int?)8, "Dolby Vision Profile 8"),
+            (DoViFixer.Domain.Media.DolbyVisionProfile.None, (bool?)true, (int?)null, "HDR"),
+            (DoViFixer.Domain.Media.DolbyVisionProfile.None, (bool?)false, (int?)null, "SDR"),
+            (DoViFixer.Domain.Media.DolbyVisionProfile.None, (bool?)null, (int?)null, "Unknown")
+        })
+        {
+            row.Analysis = analysis with { Media = analysis.Media with { Profile = profile, IsHdr = hdr, DolbyVisionProfileNumber = number } };
+            Assert.AreEqual(expected, row.Format);
+            Assert.AreEqual(expected, row.DetailRows.Single(detail => detail.Label == "Format").Value);
+        }
+    }
+
+    [TestMethod]
     public async Task AnalysisSettingsPersistResetAndRejectOutOfRangeValues()
     {
         using var runtime = new TestRuntime();
@@ -75,25 +117,25 @@ public sealed class ViewModelTests
     }
 
     [TestMethod]
-    [DataRow(0L, 0L, "Cache: 0 B")]
-    [DataRow(25L, 50L, "Cache: 75 B")]
-    [DataRow(512L, 512L, "Cache: 1 KiB")]
-    [DataRow(1048576L, 1048576L, "Cache: 2 MiB")]
-    [DataRow(536870912L, 536870912L, "Cache: 1 GiB")]
-    public async Task SettingsShowsCombinedCacheSizeAndRefreshesAfterClearing(long analysisBytes, long frameBytes, string expected)
+    [DataRow(0L, 0L, "Library: 0 B")]
+    [DataRow(25L, 50L, "Library: 25 B")]
+    [DataRow(512L, 512L, "Library: 512 B")]
+    [DataRow(1048576L, 1048576L, "Library: 1 MiB")]
+    [DataRow(536870912L, 536870912L, "Library: 512 MiB")]
+    public async Task SettingsShowsLibrarySizeWithoutIncludingPreviewCache(long analysisBytes, long frameBytes, string expected)
     {
         using var runtime = new TestRuntime { AnalysisCacheBytes = analysisBytes, FrameCacheBytes = frameBytes };
         var settings = runtime.Container.GetRequiredService<SettingsViewModel>();
         await settings.LoadCommand.InvokeAsync();
-        Assert.AreEqual(expected, settings.CacheSizeText);
-        Assert.AreEqual(runtime.RootDirectory, settings.CacheDirectory);
-        settings.OpenCacheFolderCommand.Invoke();
+        Assert.AreEqual(expected, settings.LibrarySizeText);
+        Assert.AreEqual(runtime.RootDirectory, settings.LibraryDirectory);
+        settings.OpenLibraryFolderCommand.Invoke();
         Assert.AreEqual(runtime.RootDirectory, runtime.OpenedFolder);
-        await settings.ClearCacheCommand.InvokeAsync();
-        Assert.AreEqual("Cache: 0 B", settings.CacheSizeText);
+        await settings.CleanLibraryCommand.InvokeAsync();
+        Assert.AreEqual(expected, settings.LibrarySizeText, "Cleaning preserves existing records and their allocated space.");
         runtime.FrameCacheBytes = 1024;
         await settings.LoadCommand.InvokeAsync();
-        Assert.AreEqual("Cache: 1 KiB", settings.CacheSizeText);
+        Assert.AreEqual(expected, settings.LibrarySizeText, "Preview cache size is separate from library size.");
     }
 
     [TestMethod]
@@ -217,8 +259,7 @@ public sealed class ViewModelTests
 
         model.Files.Single(row => row.Name == "movie2.mkv").AnalysisError = "Fixture failure.";
         model.FileSort.SortBy(MediaSortColumn.Classification);
-        Assert.AreEqual("movie2.mkv", Names()[0]);
-        CollectionAssert.AreEqual(new[] { "Movie1.mkv", "Movie3.mkv", "Movie10.mkv" }, Names()[1..], "Ties fall back to the file name.");
+        CollectionAssert.AreEqual(new[] { "Movie1.mkv", "movie2.mkv", "Movie3.mkv", "Movie10.mkv" }, Names(), "Format sorting uses the known format even when analysis fails.");
     }
 
     [TestMethod]
@@ -874,11 +915,11 @@ public sealed class ViewModelTests
         await model.ScanCommand.InvokeAsync();
         Assert.AreEqual(2, runtime.Analyses);
         runtime.CachedFrames = 2;
-        await settings.ClearCacheCommand.InvokeAsync();
-        Assert.AreEqual(0, runtime.CachedFrames);
-        StringAssert.Contains(settings.StatusMessage, "2 frame previews");
+        await settings.CleanLibraryCommand.InvokeAsync();
+        Assert.AreEqual(2, runtime.CachedFrames);
+        StringAssert.Contains(settings.StatusMessage, "Removed 0 missing file records");
         await model.ScanCommand.InvokeAsync();
-        Assert.AreEqual(3, runtime.Analyses);
+        Assert.AreEqual(2, runtime.Analyses, "Cleaning must preserve analysis for existing files.");
     }
 
     [TestMethod]
