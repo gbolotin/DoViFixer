@@ -7,8 +7,12 @@ public sealed record UserSettings
 {
     public int BrightnessMarginNits { get; init; } = 50;
     public int AssumedPeakBrightnessNits { get; init; } = 1000;
+    public int ScanSampleCount { get; init; } = 10;
+    public double ScanSampleSeconds { get; init; } = 1;
+    public int MinimumScanCoveragePercent { get; init; } = 100;
+    public double InspectionPeakPercentile { get; init; } = 100;
     [JsonIgnore]
-    public DoViFixer.Domain.Analysis.AnalysisOptions AnalysisOptions => new(BrightnessMarginNits, AssumedPeakBrightnessNits);
+    public DoViFixer.Domain.Analysis.AnalysisOptions AnalysisOptions => new(BrightnessMarginNits, AssumedPeakBrightnessNits, ScanSampleCount, ScanSampleSeconds, MinimumScanCoveragePercent, InspectionPeakPercentile);
     public bool AutomaticallyScanAddedFiles
     {
         get;

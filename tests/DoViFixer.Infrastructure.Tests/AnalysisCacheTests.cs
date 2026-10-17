@@ -26,6 +26,30 @@ public sealed class AnalysisCacheTests
         Assert.IsNull(await cache.ReadAsync(analysis.Media.Source, AnalysisMethod.FullRpu, default));
     }
 
+    [TestMethod]
+    public async Task SamplingAndPercentileSettingsInvalidateCachedEvidenceAndRoundTrip()
+    {
+        var storage = new StorageOptions(directory);
+        var settings = new SettingsStore(storage, NullLogger<SettingsStore>.Instance);
+        var cache = new AnalysisCache(storage, NullLogger<AnalysisCache>.Instance, settings);
+        var original = Analysis();
+        var defaults = await settings.ReadAsync(default);
+        var analysis = MediaClassifier.Classify(original.Media, original.Evidence with { Options = defaults.AnalysisOptions });
+        await cache.WriteAsync(analysis, default);
+        foreach (var changed in new[]
+        {
+            defaults with { ScanSampleCount = 7 }, defaults with { ScanSampleSeconds = 2.5 },
+            defaults with { MinimumScanCoveragePercent = 50 }, defaults with { InspectionPeakPercentile = 99.9 }
+        })
+        {
+            await settings.UpdateAsync(_ => changed, default);
+            Assert.AreEqual(changed, await new SettingsStore(storage, NullLogger<SettingsStore>.Instance).ReadAsync(default));
+            Assert.IsNull(await cache.ReadAsync(original.Media.Source, AnalysisMethod.FullRpu, default));
+        }
+        await File.WriteAllTextAsync(storage.SettingsPath, "{}");
+        Assert.AreEqual(new DoViFixer.Application.Settings.UserSettings(), await settings.ReadAsync(default), "Older settings retain the original defaults.");
+    }
+
     private readonly string directory = Path.Combine(Path.GetTempPath(), "DoViFixer-cache-tests", Guid.NewGuid().ToString("N"));
     private AnalysisCache Cache() => new(new StorageOptions(directory), NullLogger<AnalysisCache>.Instance);
     private MediaAnalysis Analysis() => MediaClassifier.Classify(new MediaInfo(new(Path.Combine(directory, "Movie.mkv"), 1234, DateTime.UnixEpoch), DolbyVisionProfile.Profile7, "HEVC", 0, 1920, 1080, 24, 24, 1, 0, 1000, [], 0, 0, null, "{}"), new(AnalysisMethod.FullRpu, EnhancementLayer.Mel, 24, null, 1, 1));

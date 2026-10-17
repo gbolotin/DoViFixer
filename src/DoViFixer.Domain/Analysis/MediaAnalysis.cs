@@ -24,7 +24,30 @@ public sealed record MetadataFreeTail(long TotalFrames, long RpuFrames, string P
 {
     public long TailFrames => TotalFrames - RpuFrames;
 }
-public sealed record AnalysisOptions(double BrightnessMarginNits = 50, double? AssumedPeakNits = null);
+public sealed record AnalysisOptions(double BrightnessMarginNits = 50, double? AssumedPeakNits = null, int ScanSampleCount = 10, double ScanSampleSeconds = 1, int MinimumScanCoveragePercent = 100, double InspectionPeakPercentile = 100)
+{
+    public int RequiredScanSamples(int requested) => Math.Max(1, (int)Math.Ceiling(requested * MinimumScanCoveragePercent / 100d));
+
+    public void ValidateSampling()
+    {
+        if (ScanSampleCount is < 1 or > 100)
+        {
+            throw new ArgumentOutOfRangeException(nameof(ScanSampleCount));
+        }
+        if (!double.IsFinite(ScanSampleSeconds) || ScanSampleSeconds is < 0.1 or > 60)
+        {
+            throw new ArgumentOutOfRangeException(nameof(ScanSampleSeconds));
+        }
+        if (MinimumScanCoveragePercent is < 1 or > 100)
+        {
+            throw new ArgumentOutOfRangeException(nameof(MinimumScanCoveragePercent));
+        }
+        if (!double.IsFinite(InspectionPeakPercentile) || InspectionPeakPercentile is < 1 or > 100)
+        {
+            throw new ArgumentOutOfRangeException(nameof(InspectionPeakPercentile));
+        }
+    }
+}
 public sealed record RpuEvidence(AnalysisMethod Method, EnhancementLayer Layer, long Frames, double? PeakNits, int SuccessfulSamples, int RequestedSamples, string? Error = null, BrightnessComparison? Brightness = null, string? SampleDiagnostics = null, MetadataFreeTail? MetadataFreeTail = null, AnalysisOptions? Options = null);
 public sealed record BrightnessComparison(long ComparedFrames, long ExpandedFrames, double BaseLayerPeakNits, double MaximumDeltaNits, long MaximumDeltaFrame, double ThresholdNits = 50);
 public sealed record MediaAnalysis(MediaInfo Media, RpuEvidence Evidence, AnalysisVerdict Verdict, string Reason);
@@ -33,6 +56,10 @@ public static class MediaClassifier
     public static MediaAnalysis Classify(MediaInfo media, RpuEvidence evidence)
     {
         var result = ClassifyCore(media, evidence);
+        if (evidence.Method == AnalysisMethod.SampledRpu && evidence.SuccessfulSamples < evidence.RequestedSamples)
+        {
+            result = result with { Reason = result.Reason + $" Scan coverage: {evidence.SuccessfulSamples}/{evidence.RequestedSamples} clips succeeded. Missing clips can hide brightness expansion." };
+        }
         if (HasVerifiedTail(evidence))
         {
             result = result with
@@ -71,7 +98,10 @@ public static class MediaClassifier
             return new(media, evidence, AnalysisVerdict.AnalysisFailed, "Metadata-free ending evidence is invalid or incomplete.");
         }
 
-        if (evidence.Frames <= 0 || evidence.SuccessfulSamples < evidence.RequestedSamples)
+        int requiredSamples = evidence.Method == AnalysisMethod.SampledRpu
+            ? (evidence.Options ?? new AnalysisOptions()).RequiredScanSamples(evidence.RequestedSamples)
+            : evidence.RequestedSamples;
+        if (evidence.Frames <= 0 || evidence.SuccessfulSamples < requiredSamples)
         {
             return new(media, evidence, AnalysisVerdict.Unknown, "RPU evidence is incomplete.");
         }
@@ -108,8 +138,10 @@ public static class MediaClassifier
         }
 
         bool complex = evidence.PeakNits > basePeak + options.BrightnessMarginNits;
+        string peakLabel = evidence.Method == AnalysisMethod.FullRpu && options.InspectionPeakPercentile < 100
+            ? $"L1 {options.InspectionPeakPercentile:0.##}th-percentile brightness" : "L1 peak";
         string peakSource = assumed ? "assumed base-layer peak (MaxCLL unavailable or below 100 nits)" : "MaxCLL";
-        return new(media, evidence, complex ? AnalysisVerdict.ComplexFel : AnalysisVerdict.SimpleFel, $"Metadata heuristic: L1 peak {evidence.PeakNits:F0} nits; {peakSource} {basePeak:F0} nits; margin {options.BrightnessMarginNits:F0} nits. This is not a base-layer frame measurement or a playback guarantee.");
+        return new(media, evidence, complex ? AnalysisVerdict.ComplexFel : AnalysisVerdict.SimpleFel, $"Metadata heuristic: {peakLabel} {evidence.PeakNits:F0} nits; {peakSource} {basePeak:F0} nits; margin {options.BrightnessMarginNits:F0} nits. This is not a base-layer frame measurement or a playback guarantee.");
     }
 
     public static double PqToNits(int value)

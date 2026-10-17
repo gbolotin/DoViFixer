@@ -15,6 +15,36 @@ namespace DoViFixer.Infrastructure.Tests;
 public sealed class StreamedInspectionTests
 {
     [TestMethod]
+    [DataRow(false)]
+    [DataRow(true)]
+    public async Task FullInspectionAppliesPercentileInStreamingAndDiskPaths(bool failPipe)
+    {
+        string directory = Path.Combine(Path.GetTempPath(), "DoViFixer-percentile-" + Guid.NewGuid().ToString("N"));
+        Directory.CreateDirectory(directory);
+        try
+        {
+            var settings = new DoViFixer.Infrastructure.Configuration.SettingsStore(new(directory), NullLogger<DoViFixer.Infrastructure.Configuration.SettingsStore>.Instance);
+            await settings.UpdateAsync(value => value with { InspectionPeakPercentile = 50 }, default);
+            var runner = new InspectionRunner(directory)
+            {
+                FailPipe = failPipe, Packets = 3,
+                ExportJson = "[{\"el_type\":\"FEL\",\"Level1\":{\"max_pq\":2000}},{\"el_type\":\"FEL\",\"Level1\":{\"max_pq\":2000}},{\"el_type\":\"FEL\",\"Level1\":{\"max_pq\":4000}}]"
+            };
+            var probe = new MediaProbe(Tools(), runner, new FileOperations(), NullLogger<MediaProbe>.Instance, settings);
+            var evidence = await probe.AnalyzeAsync(Media(), AnalysisMethod.FullRpu, new Workspace(directory), default);
+            Assert.IsNull(evidence.Error, evidence.Error);
+            Assert.AreEqual(3, evidence.Frames);
+            Assert.AreEqual(MediaClassifier.PqToNits(2000), evidence.PeakNits);
+            Assert.AreEqual(50d, evidence.Options!.InspectionPeakPercentile);
+            Assert.AreEqual(failPipe ? 1 : 0, runner.Extractions);
+        }
+        finally
+        {
+            Directory.Delete(directory, true);
+        }
+    }
+
+    [TestMethod]
     [DataRow(false, false, 1)]
     [DataRow(true, false, 1)]
     [DataRow(false, true, 1)]
@@ -175,6 +205,7 @@ public sealed class StreamedInspectionTests
 
     private sealed class InspectionRunner(string directory) : IProcessRunner
     {
+        public string? ExportJson { get; init; }
         public bool FailPipe { get; init; }
         public bool InvalidStream { get; init; }
         public bool FailDisk { get; init; }
@@ -241,7 +272,14 @@ public sealed class StreamedInspectionTests
                 }
                 else
                 {
-                    File.Copy(Path.Combine(AppContext.BaseDirectory, "Fixtures", "mel-rpu.json"), Path.Combine(directory, "rpu.json"), true);
+                    if (ExportJson is not null)
+                    {
+                        await File.WriteAllTextAsync(Path.Combine(directory, "rpu.json"), ExportJson, token);
+                    }
+                    else
+                    {
+                        File.Copy(Path.Combine(AppContext.BaseDirectory, "Fixtures", "mel-rpu.json"), Path.Combine(directory, "rpu.json"), true);
+                    }
                 }
             }
 

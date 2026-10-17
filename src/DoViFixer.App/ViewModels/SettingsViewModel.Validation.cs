@@ -90,6 +90,22 @@ public sealed partial class SettingsViewModel : INotifyDataErrorInfo
         updatingNumericText = true;
         try
         {
+            if (propertyName is null or nameof(ScanSampleCountText))
+            {
+                ScanSampleCountText = ScanSampleCount.ToString(CultureInfo.CurrentCulture);
+            }
+            if (propertyName is null or nameof(ScanSampleSecondsText))
+            {
+                ScanSampleSecondsText = ScanSampleSeconds.ToString(CultureInfo.CurrentCulture);
+            }
+            if (propertyName is null or nameof(MinimumScanCoveragePercentText))
+            {
+                MinimumScanCoveragePercentText = MinimumScanCoveragePercent.ToString(CultureInfo.CurrentCulture);
+            }
+            if (propertyName is null or nameof(InspectionPeakPercentileText))
+            {
+                InspectionPeakPercentileText = InspectionPeakPercentile.ToString(CultureInfo.CurrentCulture);
+            }
             if (propertyName is null or nameof(BrightnessMarginText))
             {
                 BrightnessMarginText = BrightnessMarginNits.ToString(CultureInfo.CurrentCulture);
@@ -120,6 +136,18 @@ public sealed partial class SettingsViewModel : INotifyDataErrorInfo
         SetValidationError(nameof(FreeSpaceMarginText),
             double.TryParse(FreeSpaceMarginText, NumberStyles.Float | NumberStyles.AllowThousands, CultureInfo.CurrentCulture, out double space) && double.IsFinite(space) && space is >= 0 and <= 200
                 ? null : "Enter a number from 0 to 200 percent.");
+        SetValidationError(nameof(ScanSampleCountText),
+            int.TryParse(ScanSampleCountText, NumberStyles.Integer, CultureInfo.CurrentCulture, out int scanSampleCount) && scanSampleCount is >= 1 and <= 100
+                ? null : "Enter a whole number from 1 to 100.");
+        SetValidationError(nameof(ScanSampleSecondsText),
+            double.TryParse(ScanSampleSecondsText, NumberStyles.Float, CultureInfo.CurrentCulture, out double scanSampleSeconds) && double.IsFinite(scanSampleSeconds) && scanSampleSeconds is >= 0.1 and <= 60
+                ? null : "Enter a number from 0.1 to 60.");
+        SetValidationError(nameof(MinimumScanCoveragePercentText),
+            int.TryParse(MinimumScanCoveragePercentText, NumberStyles.Integer, CultureInfo.CurrentCulture, out int minimumScanCoveragePercent) && minimumScanCoveragePercent is >= 1 and <= 100
+                ? null : "Enter a whole number from 1 to 100.");
+        SetValidationError(nameof(InspectionPeakPercentileText),
+            double.TryParse(InspectionPeakPercentileText, NumberStyles.Float, CultureInfo.CurrentCulture, out double inspectionPeakPercentile) && double.IsFinite(inspectionPeakPercentile) && inspectionPeakPercentile is >= 1 and <= 100
+                ? null : "Enter a number from 1 to 100.");
         SetValidationError(nameof(Destination), DestinationError);
     }
 

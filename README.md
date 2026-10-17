@@ -93,7 +93,7 @@ dotnet run --project src/DoViFixer.Console -- cleanup 'E:\Movies\Movie.dovi' --d
 
 Conversion accepts multiple files/directories and keeps each original at its exact existing path, unchanged. Converted files are published beside their originals as `<stem> - DV P8.1.mkv` (or `<stem> - HDR10.mkv` with `--hdr10`). `--output` selects another output directory while retaining the suffix. No movie subfolders are created and existing outputs are never overwritten. This preserves seeding paths and allows Plex to group matching movies in the same library; suffixes are not displayed as Plex version labels. `--backup` additionally creates an enhancement-layer `.dovi` archive. Explicit `--delete` retains the replacement workflow: rename the original to `<filename>.bak.dovi_convert`, publish using its original filename, and delete only the original backup after verification and publication. Failed/cancelled replacement restores the original path; blocked recovery reports the retained backup. Default conversion never renames or deletes the original. Backup and restore outputs use `.dovi` and `.restored.mkv`. Cleanup remains a separate command with exact approval; unattended cleanup requires `--delete-backups --yes`.
 
-Scan samples ten positions; inspect and conversion planning analyze the full RPU stream. MEL is eligible. Interactive conversion prepares eligible MEL, Simple FEL, and Complex FEL plans and displays output and backup details before asking for approval. Each category receives one execution confirmation covering all its planned files; there is no additional batch confirmation. Answering no skips that category while approved categories continue. FEL confirmations warn that enhancement-layer picture data will be lost. With `--yes`, `--plan`, or redirected input, the existing flag-based selection applies: Simple FEL requires `--include-simple`; detected complex FEL requires `--force`. Unknown/failed analysis remains blocked even with `--force`. Settings → Analysis controls the brightness margin (50 nits by default) and assumed peak brightness (1,000 nits by default). Metadata modes prefer valid MaxCLL of at least 100 nits; missing, invalid, or lower MaxCLL uses the assumed peak and labels the result as assumed. `inspect --deep` uses measured frame luminance and the configured margin instead. Settings changes invalidate cached analysis for future operations; existing displayed results require a new scan or inspection. L1-versus-MaxCLL classification is a metadata heuristic, not a base-layer frame measurement or playback guarantee.
+Scan samples evenly spaced clips (10 by default); inspect and conversion planning analyze the full RPU stream. MEL is eligible. Interactive conversion prepares eligible MEL, Simple FEL, and Complex FEL plans and displays output and backup details before asking for approval. Each category receives one execution confirmation covering all its planned files; there is no additional batch confirmation. Answering no skips that category while approved categories continue. FEL confirmations warn that enhancement-layer picture data will be lost. With `--yes`, `--plan`, or redirected input, the existing flag-based selection applies: Simple FEL requires `--include-simple`; detected complex FEL requires `--force`. Unknown/failed analysis remains blocked even with `--force`. Settings → Analysis controls the brightness margin (50 nits by default) and assumed peak brightness (1,000 nits by default). Metadata modes prefer valid MaxCLL of at least 100 nits; missing, invalid, or lower MaxCLL uses the assumed peak and labels the result as assumed. `inspect --deep` uses measured frame luminance and the configured margin instead. Settings changes invalidate cached analysis for future operations; existing displayed results require a new scan or inspection. L1-versus-MaxCLL classification is a metadata heuristic, not a base-layer frame measurement or playback guarantee.
 
 Conversion streams FFmpeg output directly to dovi_tool by default and retries with disk extraction on streaming or verification failure. `--safe` forces disk extraction. Ordinary full RPU inspection also streams its selected video track into dovi_tool. It uses disk extraction if streaming fails or frame counts differ, so metadata-free tail checks still inspect the raw video. Deep inspection, archive operations and output verification continue to use disk. [Inspection validation](docs/streamed-inspection-validation.md) records native parity and measurements. Streaming does not remove the scratch-space requirement. Workspaces are owned per operation. Estimates are deliberately conservative: full inspection/conversion/backup currently reserve eight input sizes plus 1 GiB, with an additional archive allowance for restoration. Destination capacity is checked independently. This trades additional free-space requirements for room for extraction, RPU JSON, payload verification and publication; actual disk usage is usually lower.
 
@@ -107,9 +107,36 @@ Protection starts when the process is assigned to the job immediately after `.NE
 
 In the WPF app, Settings → Performance → Simultaneous conversions controls how many selected files convert at once (1–16). The recommended value uses physical CPU cores: one worker per four cores, limited to 1–8. Existing saved counts remain selected. Every selected file enters the batch queue, so the worker count does not limit batch size. Pause prevents queued files from starting while active conversions finish. Each active conversion has its own temporary workspace. Concurrent conversions reserve conservative scratch and output disk budgets before execution; a queued worker waits if another active conversion is using the available space.
 
-The same Performance page groups concurrency, system impact, and scanning/cache settings without reset buttons. Parallel scan samples per file runs up to 10 sample probes concurrently inside one file; files and full inspections remain sequential. The recommended scan value uses three workers per four physical cores, limited to 1–10 because each scan has 10 samples. If Windows cannot report physical cores, the page identifies the conservative fallback estimate. CPU recommendations are starting points: lower the counts for mechanical disks, limited temporary storage, or falling throughput.
+The same Performance page groups concurrency, system impact, and scanning/cache settings without reset buttons. Concurrent scan clips runs up to 10 clip probes concurrently inside one video; videos and full inspections remain sequential. Set the total clip count under Analysis. The recommended scan value uses three workers per four physical cores, limited to 1–10. The actual concurrency cannot exceed the selected clip count. If Windows cannot report physical cores, the page identifies the conservative fallback estimate. CPU recommendations are starting points: lower the counts for mechanical disks, limited temporary storage, or falling throughput.
 
 Tool process priority applies to native tools started afterward; Below normal is the default. Video pipe buffer size is shown in KiB (4096 KiB = 4 MiB by default). Transformed pipelines buffer both reads and writes, so larger values consume more memory per active pipeline. Reuse saved scan results uses unchanged files' cached analysis; disabling reuse still saves successful results. All settings save automatically.
+
+### Analysis tuning
+
+Settings → Analysis separates quick-scan sampling from full metadata inspection.
+
+| Setting | Default | Allowed values | Applies to |
+| --- | --- | --- | --- |
+| Clips per video | 10 clips | 1–100, whole numbers | Scan |
+| Clip length | 1 second | 0.1–60 seconds | Scan |
+| Required scan coverage | 100% (all clips) | 1–100%, whole numbers | Scan |
+| Peak-brightness percentile | 100% (maximum) | 1–100%, fractional values allowed | Inspect and conversion planning |
+
+Clips start at the midpoint of each equal-duration segment: ten clips start at 5%, 15%, …, 95%.
+Clip length is the requested FFmpeg stream-copy duration; actual boundaries can differ.
+Required coverage counts successful clips, not the percentage of video frames inspected.
+The minimum count rounds up: 50% of seven clips requires four successful clips.
+Missing clips remain visible in diagnostics and reports even when the selected requirement is met.
+A lower requirement can miss brightness expansion. Scan evidence does not authorize conversion.
+
+The inspection percentile selects the nearest-rank value from per-frame Dolby Vision L1 peak metadata.
+100% uses the maximum. For example, with 1,000 measured frames, 99.9% excludes the single brightest value.
+Small files may still select their maximum. This is a metadata percentile, not a pixel-brightness measurement.
+Scan continues to use clip maxima. Deep Inspection compares every frame without percentile filtering.
+Lower percentiles can hide real brightness expansion. Defaults preserve the previous behavior.
+
+These settings save automatically, have individual Reset buttons, and use native validation outlines.
+Changes invalidate cached analysis for future operations. Existing displayed results are unchanged until analyzed again.
 
 ## AI assistants (MCP)
 

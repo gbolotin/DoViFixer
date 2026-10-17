@@ -5,10 +5,10 @@ using DoViFixer.Domain.Media;
 namespace DoViFixer.Infrastructure.MediaTools.DoviTool;
 internal static class RpuParser
 {
-    internal static async Task<RpuEvidence> ParseAsync(Stream stream, AnalysisMethod method, CancellationToken cancellationToken, Action<long, int?>? framePeak = null)
+    internal static async Task<RpuEvidence> ParseAsync(Stream stream, AnalysisMethod method, CancellationToken cancellationToken, Action<long, int?>? framePeak = null, double peakPercentile = 100)
     {
         long frames = 0;
-        int? maxPq = null;
+        var peakCounts = new long[4096];
         int? frameMaxPq = null;
         var layers = new HashSet<string>(StringComparer.Ordinal);
         bool unknownLayer = false;
@@ -26,12 +26,17 @@ internal static class RpuParser
             frameMaxPq = null;
             Visit(frame, false);
             framePeak?.Invoke(frames - 1, frameMaxPq);
+            if (frameMaxPq is int pq)
+            {
+                peakCounts[pq]++;
+            }
         }
 
         var layer = unknownLayer ? EnhancementLayer.Unknown : layers.SetEquals(new[]
         {
             "MEL"
         }) ? EnhancementLayer.Mel : layers.Contains("FEL") ? EnhancementLayer.Fel : EnhancementLayer.Unknown;
+        int? maxPq = PeakBrightness.SelectPq(peakCounts, peakPercentile);
         return new(method, layer, frames, maxPq is int value ? MediaClassifier.PqToNits(value) : null, 1, 1);
         void Visit(JsonElement node, bool level1)
         {
@@ -52,7 +57,6 @@ internal static class RpuParser
                             throw new InvalidDataException("L1 max_pq is outside its 12-bit range.");
                         }
 
-                        maxPq = Math.Max(maxPq ?? 0, value);
                         frameMaxPq = Math.Max(frameMaxPq ?? 0, value);
                     }
 

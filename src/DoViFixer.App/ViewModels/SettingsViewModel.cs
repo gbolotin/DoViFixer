@@ -128,6 +128,10 @@ public sealed partial class SettingsViewModel : OperationViewModel
             ReplaceOriginal = value.ReplaceOriginal;
             CreateArchive = value.CreateElArchive;
             ConversionWorkers = settings.Hardware.ConversionWorkers(value.ConversionWorkers);
+            ScanSampleCount = value.ScanSampleCount;
+            ScanSampleSeconds = value.ScanSampleSeconds;
+            MinimumScanCoveragePercent = value.MinimumScanCoveragePercent;
+            InspectionPeakPercentile = value.InspectionPeakPercentile;
             BrightnessMarginNits = value.BrightnessMarginNits;
             AssumedPeakBrightnessNits = value.AssumedPeakBrightnessNits;
             AnalysisWorkers = settings.Hardware.AnalysisWorkers(value.AnalysisWorkers);
@@ -501,6 +505,10 @@ public sealed partial class SettingsViewModel : OperationViewModel
             ReplaceOriginal = ReplaceOriginal,
             CreateElArchive = CreateArchive,
             ConversionWorkers = ConversionWorkers,
+            ScanSampleCount = ScanSampleCount,
+            ScanSampleSeconds = ScanSampleSeconds,
+            MinimumScanCoveragePercent = MinimumScanCoveragePercent,
+            InspectionPeakPercentile = InspectionPeakPercentile,
             BrightnessMarginNits = BrightnessMarginNits,
             AssumedPeakBrightnessNits = AssumedPeakBrightnessNits,
             AnalysisWorkers = AnalysisWorkers,
@@ -536,7 +544,11 @@ public sealed partial class SettingsViewModel : OperationViewModel
             freeSpaceMarginPercent: snapshot.FreeSpaceMarginPercent,
             analysisWorkers: snapshot.AnalysisWorkers,
             toolProcessPriority: snapshot.ToolProcessPriority,
-            pipeBufferKiB: snapshot.PipeBufferKiB, brightnessMarginNits: snapshot.BrightnessMarginNits, assumedPeakBrightnessNits: snapshot.AssumedPeakBrightnessNits), token);
+            pipeBufferKiB: snapshot.PipeBufferKiB, brightnessMarginNits: snapshot.BrightnessMarginNits, assumedPeakBrightnessNits: snapshot.AssumedPeakBrightnessNits,
+            scanSampleCount: snapshot.ScanSampleCount,
+            scanSampleSeconds: snapshot.ScanSampleSeconds,
+            minimumScanCoveragePercent: snapshot.MinimumScanCoveragePercent,
+            inspectionPeakPercentile: snapshot.InspectionPeakPercentile), token);
 
         lastSavedSettings = snapshot;
         SetStatus(ViewStatus.SettingsSaved);

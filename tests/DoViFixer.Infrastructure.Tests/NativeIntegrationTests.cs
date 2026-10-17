@@ -128,6 +128,24 @@ public sealed class NativeIntegrationTests
         Assert.AreEqual(streamed.Layer, sampled.Layer);
         Assert.AreEqual(0, Directory.GetFiles(workspace.DirectoryPath, "sample-*").Length);
 
+        await scanSettings.UpdateAsync(value => value with
+        {
+            ScanSampleCount = 7, ScanSampleSeconds = 0.5, MinimumScanCoveragePercent = 50, InspectionPeakPercentile = 99.9
+        }, default);
+        var configured = await parallelProbe.AnalyzeAsync(media with { DurationSeconds = 10.803 }, AnalysisMethod.SampledRpu, workspace, default);
+        Assert.IsNull(configured.Error, configured.Error);
+        Assert.AreEqual(7, configured.RequestedSamples);
+        Assert.IsTrue(configured.SuccessfulSamples >= 4, configured.SampleDiagnostics);
+        Assert.AreEqual(0, Directory.GetFiles(workspace.DirectoryPath, "sample-*").Length);
+        var percentile = await parallelProbe.AnalyzeAsync(media, AnalysisMethod.FullRpu, workspace, default);
+        Assert.IsNull(percentile.Error, percentile.Error);
+        Assert.AreEqual(streamed.Frames, percentile.Frames);
+        Assert.AreEqual(99.9, percentile.Options!.InspectionPeakPercentile);
+        if (streamed.PeakNits is double maximum)
+        {
+            Assert.IsTrue(percentile.PeakNits <= maximum);
+        }
+
         Console.WriteLine($"Native {streamed.Layer} parity: stream {streamingElapsed.TotalMilliseconds:F0} ms, disk {diskElapsed.TotalMilliseconds:F0} ms; scratch {streamingScratch}/{diskScratch} bytes (includes fixture source).");
     }
 

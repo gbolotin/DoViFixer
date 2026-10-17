@@ -9,6 +9,50 @@ namespace DoViFixer.App.Tests;
 public sealed class SettingsValidationTests
 {
     [TestMethod]
+    public async Task SamplingAndPercentileEditsPersistValidateAndReset()
+    {
+        using var runtime = new TestRuntime();
+        var shell = runtime.Container.GetRequiredService<ShellViewModel>();
+        await shell.OpenSettingsCommand.InvokeAsync();
+        var settings = shell.Settings;
+        settings.ScanSampleCountText = "7";
+        settings.ScanSampleSecondsText = 2.5.ToString(CultureInfo.CurrentCulture);
+        settings.MinimumScanCoveragePercentText = "50";
+        settings.InspectionPeakPercentileText = 99.9.ToString(CultureInfo.CurrentCulture);
+        await settings.SaveAsync();
+        Assert.AreEqual(7, runtime.Settings.ScanSampleCount);
+        Assert.AreEqual(2.5, runtime.Settings.ScanSampleSeconds);
+        Assert.AreEqual(50, runtime.Settings.MinimumScanCoveragePercent);
+        Assert.AreEqual(99.9, runtime.Settings.InspectionPeakPercentile);
+        StringAssert.Contains(settings.ScanCoverageSummary, "4 of 7");
+
+        settings.ScanSampleCountText = "101";
+        settings.ScanSampleSecondsText = "NaN";
+        settings.MinimumScanCoveragePercentText = "0";
+        settings.InspectionPeakPercentileText = "letters";
+        await settings.SaveTask;
+        Assert.IsTrue(settings.HasErrors);
+        Assert.AreEqual(7, runtime.Settings.ScanSampleCount);
+        settings.DiscardChangesCommand.Invoke();
+        Assert.IsFalse(settings.HasErrors);
+        Assert.AreEqual("7", settings.ScanSampleCountText);
+
+        settings.ResetScanSampleCountCommand.Invoke();
+        settings.ResetScanSampleSecondsCommand.Invoke();
+        settings.ResetMinimumScanCoveragePercentCommand.Invoke();
+        settings.ResetInspectionPeakPercentileCommand.Invoke();
+        await settings.SaveAsync();
+        Assert.AreEqual(10, runtime.Settings.ScanSampleCount);
+        Assert.AreEqual(1d, runtime.Settings.ScanSampleSeconds);
+        Assert.AreEqual(100, runtime.Settings.MinimumScanCoveragePercent);
+        Assert.AreEqual(100d, runtime.Settings.InspectionPeakPercentile);
+        await shell.CloseSettingsCommand.InvokeAsync();
+        await shell.OpenSettingsCommand.InvokeAsync();
+        Assert.AreEqual("10", settings.ScanSampleCountText);
+        Assert.AreEqual("100", settings.InspectionPeakPercentileText);
+    }
+
+    [TestMethod]
     public async Task InvalidDraftsBlockSavingAndClosingUntilCorrectedOrDiscarded()
     {
         using var runtime = new TestRuntime();

@@ -1086,13 +1086,17 @@ public sealed class VisualTests
                     SaveRender(content, "settings-minimum");
                     break;
                 case AnalysisSettingsSection when firstVisit:
-                    foreach (string name in new[] { "Brightness margin", "Assumed peak brightness" })
+                    foreach (string name in new[] { "Clips per video", "Clip length", "Required scan coverage", "Peak-brightness percentile", "Brightness margin", "Assumed peak brightness" })
                     {
                         var input = Descendants<TextBox>(view).Single(box => System.Windows.Automation.AutomationProperties.GetName(box) == name);
+                        input.BringIntoView();
+                        await LayoutAsync(window);
                         AssertInside(input, content);
                     }
                     Assert.HasCount(2, Descendants<Slider>(view));
                     var marginInput = Descendants<TextBox>(view).Single(box => System.Windows.Automation.AutomationProperties.GetName(box) == "Brightness margin");
+                    marginInput.BringIntoView();
+                    await LayoutAsync(window);
                     string savedMargin = marginInput.Text;
                     marginInput.Text = "not a number";
                     await shell.Settings.SaveTask;
@@ -1120,7 +1124,7 @@ public sealed class VisualTests
                     SaveRender(content, "settings-analysis");
                     break;
                 case PerformanceSettingsSection when firstVisit:
-                    foreach (string name in new[] { "Simultaneous conversions", "Parallel scan samples per file", "Tool process priority", "Video pipe buffer (KiB)" })
+                    foreach (string name in new[] { "Simultaneous conversions", "Concurrent scan clips", "Tool process priority", "Video pipe buffer (KiB)" })
                     {
                         Assert.HasCount(1, Descendants<ComboBox>(view).Where(combo => System.Windows.Automation.AutomationProperties.GetName(combo) == name));
                     }

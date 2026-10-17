@@ -59,25 +59,51 @@ public sealed class ParallelScanTests
         });
     }
 
+    [TestMethod]
+    [DataRow(1)]
+    [DataRow(7)]
+    public async Task ConfiguredClipsUseEvenPositionsAndRequestedDuration(int count)
+    {
+        await WithProbeAsync(async (probe, runner, workspace) =>
+        {
+            runner.FailSample = true;
+            var evidence = await probe.AnalyzeAsync(Media(), AnalysisMethod.SampledRpu, workspace, default);
+            Assert.AreEqual(count, evidence.RequestedSamples);
+            Assert.AreEqual(count == 1 ? 1 : count - 1, evidence.SuccessfulSamples);
+            Assert.AreEqual(50, evidence.Options!.MinimumScanCoveragePercent);
+            Assert.AreEqual(AnalysisVerdict.Mel, MediaClassifier.Classify(Media(), evidence).Verdict);
+            var requests = runner.Requests.Where(request => request.Executable == "ffmpeg").ToArray();
+            Assert.HasCount(count, requests);
+            foreach (var request in requests)
+            {
+                var arguments = request.Arguments.ToList();
+                int index = int.Parse(Path.GetFileNameWithoutExtension(arguments[^1]).Split('-')[1]);
+                double start = double.Parse(arguments[arguments.IndexOf("-ss") + 1], System.Globalization.CultureInfo.InvariantCulture);
+                Assert.AreEqual((index + 0.5) / count * 100, start, 0.001);
+                Assert.AreEqual("2.5", arguments[arguments.IndexOf("-t") + 1]);
+            }
+        }, new UserSettings { AnalysisWorkers = 3, ScanSampleCount = count, ScanSampleSeconds = 2.5, MinimumScanCoveragePercent = 50 });
+    }
+
     private static MediaInfo Media() => new(new("movie.mkv", 1024, DateTime.UnixEpoch), DolbyVisionProfile.Profile7, "HEVC", 0, 1920, 1080, 24, 2400, 100, 0, 1000, [], 0, 0, null, "{}");
 
-    private static async Task WithProbeAsync(Func<MediaProbe, SampleRunner, ITemporaryWorkspace, Task> test)
+    private static async Task WithProbeAsync(Func<MediaProbe, SampleRunner, ITemporaryWorkspace, Task> test, UserSettings? preferences = null)
     {
         var files = new FileOperations();
         var factory = new TemporaryWorkspaceFactory(files, NullLogger<TemporaryWorkspaceFactory>.Instance);
         await using var workspace = await factory.CreateAsync(1024, null, default);
         // Keep settings outside the sample workspace so cleanup assertions only count sample files.
-        var settings = new FixedSettings();
+        var settings = new FixedSettings(preferences ?? new UserSettings { AnalysisWorkers = 3 });
         var tools = new ToolCatalog();
         tools.Refresh([new(NativeTool.FFmpeg, DependencyState.Ready, "ffmpeg", "test", "fixture"), new(NativeTool.DoviTool, DependencyState.Ready, "dovi_tool", "test", "fixture")]);
-        var runner = new SampleRunner();
+        var runner = new SampleRunner { WaveSize = Math.Min(preferences?.ScanSampleCount ?? 10, 3) };
         var probe = new MediaProbe(tools, runner, files, NullLogger<MediaProbe>.Instance, settings);
         await test(probe, runner, workspace);
     }
 
-    private sealed class FixedSettings : ISettingsStore
+    private sealed class FixedSettings(UserSettings value) : ISettingsStore
     {
-        public Task<UserSettings> ReadAsync(CancellationToken cancellationToken) => Task.FromResult(new UserSettings { AnalysisWorkers = 3 });
+        public Task<UserSettings> ReadAsync(CancellationToken cancellationToken) => Task.FromResult(value);
         public Task UpdateAsync(Func<UserSettings, UserSettings> update, CancellationToken cancellationToken) => throw new NotSupportedException();
     }
 
@@ -89,6 +115,8 @@ public sealed class ParallelScanTests
 
     private sealed class SampleRunner : IProcessRunner
     {
+        public ConcurrentBag<ProcessRequest> Requests { get; } = [];
+        public int WaveSize = 3;
         public int Active;
         public int Peak;
         public bool FailSample;
@@ -98,13 +126,14 @@ public sealed class ParallelScanTests
         public ConcurrentDictionary<string, byte> JsonPaths { get; } = new();
         public async Task<ProcessResult> RunAsync(ProcessRequest request, CancellationToken cancellationToken)
         {
+            Requests.Add(request);
             if (request.Executable == "ffmpeg")
             {
                 string raw = request.Arguments[^1];
                 Assert.IsTrue(RawPaths.TryAdd(raw, 0));
                 int active = Interlocked.Increment(ref Active);
                 RecordPeak(active);
-                if (active == 3)
+                if (active == WaveSize)
                 {
                     FirstWave.TrySetResult();
                 }

@@ -29,17 +29,17 @@
                                   AutomationProperties.Name="Simultaneous conversions" />
                     </HeaderedContentControl>
                     <Separator />
-                    <HeaderedContentControl Header="Parallel scan samples per file"
-                                            AutomationProperties.HelpText="Maximum sample probes analyzed together within one file. Each scan checks 10 samples. This does not run full inspections in parallel. The recommended value is based on physical CPU cores."
+                    <HeaderedContentControl Header="Concurrent scan clips"
+                                            AutomationProperties.HelpText="Maximum scan clips analyzed together within one video. Set the total clip count under Analysis. This does not run full inspections in parallel. The recommended value is based on physical CPU cores."
                                             Style="{StaticResource WfSettingRowStyle}">
                         <ComboBox ItemsSource="{Binding AnalysisWorkerChoices}"
                                   DisplayMemberPath="Label"
                                   SelectedValuePath="Value"
                                   SelectedValue="{Binding AnalysisWorkers}"
                                   Width="160"
-                                  AutomationProperties.Name="Parallel scan samples per file" />
+                                  AutomationProperties.Name="Concurrent scan clips" />
                     </HeaderedContentControl>
-                    <TextBlock Text="A scan checks 10 samples. This setting controls samples within one file; files are scanned one at a time."
+                    <TextBlock Text="This controls concurrency, not the total clip count. Set Clips per video under Analysis. Videos are scanned one at a time."
                                Style="{StaticResource WfSettingNoteTextStyle}" />
                 </StackPanel>
             </Border>

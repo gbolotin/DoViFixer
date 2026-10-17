@@ -16,9 +16,107 @@
     <ScrollViewer VerticalScrollBarVisibility="Auto">
         <StackPanel Margin="24,8,24,24">
             <TextBlock Text="Analysis" Style="{StaticResource WfHeadingTextStyle}" />
-            <TextBlock Text="Choose the brightness comparison used to classify Simple and Complex FEL."
+            <TextBlock Text="Choose quick-scan coverage, full-inspection brightness, and FEL classification thresholds."
                        TextWrapping="Wrap"
                        Style="{StaticResource AnalysisNoteTextStyle}" />
+            <TextBlock Text="Quick scan" Style="{StaticResource WfLabelTextStyle}" />
+            <Border Style="{StaticResource WfCardStyle}">
+                <StackPanel>
+                    <HeaderedContentControl Header="Clips per video" Style="{StaticResource WfSettingRowStyle}">
+                        <StackPanel Orientation="Horizontal">
+                            <TextBox Text="{Binding ScanSampleCountText, UpdateSourceTrigger=PropertyChanged, ValidatesOnNotifyDataErrors=True}"
+                                     Width="128"
+                                     VerticalAlignment="Center"
+                                     AutomationProperties.Name="Clips per video"
+                                     AutomationProperties.HelpText="Valid range: 1 to 100 clips." />
+                            <TextBlock Text="clips"
+                                       VerticalAlignment="Center"
+                                       Width="64"
+                                       Margin="8,0,16,0" />
+                            <Button Content="Reset"
+                                    Width="64"
+                                    Command="{Binding ResetScanSampleCountCommand}"
+                                    AutomationProperties.Name="Reset clips per video" />
+                        </StackPanel>
+                    </HeaderedContentControl>
+                    <TextBlock Text="Default: 10. Select 1–100 clips, evenly distributed across the video."
+                               TextWrapping="Wrap"
+                               Style="{StaticResource AnalysisNoteTextStyle}" />
+                    <Separator />
+                    <HeaderedContentControl Header="Clip length" Style="{StaticResource WfSettingRowStyle}">
+                        <StackPanel Orientation="Horizontal">
+                            <TextBox Text="{Binding ScanSampleSecondsText, UpdateSourceTrigger=PropertyChanged, ValidatesOnNotifyDataErrors=True}"
+                                     Width="128"
+                                     VerticalAlignment="Center"
+                                     AutomationProperties.Name="Clip length"
+                                     AutomationProperties.HelpText="Valid range: 0.1 to 60 seconds." />
+                            <TextBlock Text="seconds"
+                                       VerticalAlignment="Center"
+                                       Width="64"
+                                       Margin="8,0,16,0" />
+                            <Button Content="Reset"
+                                    Width="64"
+                                    Command="{Binding ResetScanSampleSecondsCommand}"
+                                    AutomationProperties.Name="Reset clip length" />
+                        </StackPanel>
+                    </HeaderedContentControl>
+                    <TextBlock Text="Default: 1 second. Select 0.1–60 seconds per clip. Stream-copy boundaries can make actual clip lengths differ."
+                               TextWrapping="Wrap"
+                               Style="{StaticResource AnalysisNoteTextStyle}" />
+                    <Separator />
+                    <HeaderedContentControl Header="Required scan coverage" Style="{StaticResource WfSettingRowStyle}">
+                        <StackPanel Orientation="Horizontal">
+                            <TextBox Text="{Binding MinimumScanCoveragePercentText, UpdateSourceTrigger=PropertyChanged, ValidatesOnNotifyDataErrors=True}"
+                                     Width="128"
+                                     VerticalAlignment="Center"
+                                     AutomationProperties.Name="Required scan coverage"
+                                     AutomationProperties.HelpText="Valid range: 1 to 100 %." />
+                            <TextBlock Text="%"
+                                       VerticalAlignment="Center"
+                                       Width="64"
+                                       Margin="8,0,16,0" />
+                            <Button Content="Reset"
+                                    Width="64"
+                                    Command="{Binding ResetMinimumScanCoveragePercentCommand}"
+                                    AutomationProperties.Name="Reset required scan coverage" />
+                        </StackPanel>
+                    </HeaderedContentControl>
+                    <TextBlock Text="Default: 100% (all clips). Select 1–100%. The required number of successful clips is rounded up."
+                               TextWrapping="Wrap"
+                               Style="{StaticResource AnalysisNoteTextStyle}" />
+                    <TextBlock Text="{Binding ScanCoverageSummary}"
+                               TextWrapping="Wrap"
+                               Style="{StaticResource AnalysisNoteTextStyle}" />
+                </StackPanel>
+            </Border>
+            <TextBlock Text="Full metadata inspection" Style="{StaticResource WfLabelTextStyle}" />
+            <Border Style="{StaticResource WfCardStyle}">
+                <StackPanel>
+                    <HeaderedContentControl Header="Peak-brightness percentile" Style="{StaticResource WfSettingRowStyle}">
+                        <StackPanel Orientation="Horizontal">
+                            <TextBox Text="{Binding InspectionPeakPercentileText, UpdateSourceTrigger=PropertyChanged, ValidatesOnNotifyDataErrors=True}"
+                                     Width="128"
+                                     VerticalAlignment="Center"
+                                     AutomationProperties.Name="Peak-brightness percentile"
+                                     AutomationProperties.HelpText="Valid range: 1 to 100 percent. 100 uses the brightest frame." />
+                            <TextBlock Text="%"
+                                       VerticalAlignment="Center"
+                                       Width="64"
+                                       Margin="8,0,16,0" />
+                            <Button Content="Reset"
+                                    Width="64"
+                                    Command="{Binding ResetInspectionPeakPercentileCommand}"
+                                    AutomationProperties.Name="Reset peak-brightness percentile" />
+                        </StackPanel>
+                    </HeaderedContentControl>
+                    <TextBlock Text="Default: 100% (maximum). For example, 99.9% excludes the brightest 0.1% of frame metadata values. Lower values can hide real brightness expansion."
+                               TextWrapping="Wrap"
+                               Style="{StaticResource AnalysisNoteTextStyle}" />
+                    <TextBlock Text="Applies to full metadata inspection, including conversion planning. Scan uses clip maxima; Deep Inspection compares every frame without percentile filtering."
+                               TextWrapping="Wrap"
+                               Style="{StaticResource AnalysisNoteTextStyle}" />
+                </StackPanel>
+            </Border>
             <TextBlock Text="Complex FEL detection" Style="{StaticResource WfLabelTextStyle}" />
             <Border Style="{StaticResource WfCardStyle}">
                 <StackPanel>
@@ -32,8 +130,10 @@
                                      AutomationProperties.HelpText="Brightness difference in nits. Valid range: 0 to 1000." />
                             <TextBlock Text="nits"
                                        VerticalAlignment="Center"
+                                       Width="64"
                                        Margin="8,0,16,0" />
                             <Button Content="Reset"
+                                    Width="64"
                                     Command="{Binding ResetBrightnessMarginCommand}"
                                     AutomationProperties.Name="Reset brightness margin" />
                         </StackPanel>
@@ -59,8 +159,10 @@
                                      AutomationProperties.HelpText="Fallback peak brightness in nits. Valid range: 100 to 10000." />
                             <TextBlock Text="nits"
                                        VerticalAlignment="Center"
+                                       Width="64"
                                        Margin="8,0,16,0" />
                             <Button Content="Reset"
+                                    Width="64"
                                     Command="{Binding ResetAssumedPeakBrightnessCommand}"
                                     AutomationProperties.Name="Reset assumed peak brightness" />
                         </StackPanel>
