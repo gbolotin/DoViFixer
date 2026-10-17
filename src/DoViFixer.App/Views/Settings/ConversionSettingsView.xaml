@@ -1,6 +1,7 @@
 <UserControl x:Class="DoViFixer.App.Views.Settings.ConversionSettingsView"
              xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
              xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:behaviors="clr-namespace:WpfFoundation.Behaviors;assembly=WpfFoundation"
              xmlns:viewModels="clr-namespace:DoViFixer.App.ViewModels"
              xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
              xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
@@ -20,7 +21,9 @@
                                     DockPanel.Dock="Right"
                                     Command="{Binding BrowseTemporaryCommand}"
                                     Margin="8,0,0,0" />
-                            <TextBox Text="{Binding Temporary}" AutomationProperties.Name="Temporary storage folder" />
+                            <TextBox Text="{Binding Temporary}"
+                                     behaviors:TextBoxAssist.Placeholder="Use the Windows temporary folder"
+                                     AutomationProperties.Name="Temporary storage folder" />
                         </DockPanel>
                     </HeaderedContentControl>
                     <Separator />
@@ -37,7 +40,9 @@
                                 DockPanel.Dock="Right"
                                 Command="{Binding BrowseDestinationCommand}"
                                 Margin="8,0,0,0" />
-                        <TextBox Text="{Binding Destination, UpdateSourceTrigger=PropertyChanged, ValidatesOnNotifyDataErrors=True}" AutomationProperties.Name="Output folder path" />
+                        <TextBox Text="{Binding Destination, UpdateSourceTrigger=PropertyChanged, ValidatesOnNotifyDataErrors=True}"
+                                 behaviors:TextBoxAssist.Placeholder="Choose an output folder"
+                                 AutomationProperties.Name="Output folder path" />
                     </DockPanel>
                     <TextBlock Text="{Binding DestinationError}"
                                TextWrapping="Wrap"

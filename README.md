@@ -136,6 +136,8 @@ Scan continues to use clip maxima. Deep Inspection compares every frame without 
 Lower percentiles can hide real brightness expansion. Defaults preserve the previous behavior.
 
 These settings save automatically, have individual Reset buttons, and use native validation outlines.
+Units appear inside numeric inputs as non-editable suffixes. Empty inputs show default-value hints without changing their values.
+Folder and tool-path inputs show placeholders. WpfFoundation's `TextBoxAssist` supplies both behaviors.
 Changes invalidate cached analysis for future operations. Existing displayed results are unchanged until analyzed again.
 
 ## AI assistants (MCP)

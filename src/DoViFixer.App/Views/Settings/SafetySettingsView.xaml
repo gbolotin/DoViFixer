@@ -1,6 +1,7 @@
 <UserControl x:Class="DoViFixer.App.Views.Settings.SafetySettingsView"
              xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
              xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:behaviors="clr-namespace:WpfFoundation.Behaviors;assembly=WpfFoundation"
              xmlns:viewModels="clr-namespace:DoViFixer.App.ViewModels"
              xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
              xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
@@ -76,9 +77,11 @@
                                             Margin="0,12,0,0">
                         <StackPanel Orientation="Horizontal">
                             <TextBox Text="{Binding FreeSpaceMarginText, UpdateSourceTrigger=PropertyChanged, ValidatesOnNotifyDataErrors=True}"
-                                     Width="128"
+                                     Width="160"
+                                     behaviors:TextBoxAssist.Placeholder="20"
+                                     behaviors:TextBoxAssist.Suffix="%"
+                                     AutomationProperties.HelpText="Extra free-space margin in percent. Valid range: 0 to 200."
                                      AutomationProperties.Name="Extra free-space margin" />
-                            <TextBlock Text="%" VerticalAlignment="Center" Margin="8,0,0,0" />
                         </StackPanel>
                     </HeaderedContentControl>
                     <TextBlock Text="This margin is added to DoViFixer’s existing workspace and output estimates."

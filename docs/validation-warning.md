@@ -14,14 +14,14 @@ Filesystem checks and unassigned service failures retain their existing footer h
 
 ## Release order
 
-This integration requires WpfFoundation **1.1.0-preview.10** from the sibling checkout.
+This integration requires WpfFoundation **1.1.0-preview.11** from the sibling checkout.
 Build `DoViFixer.Local.sln` while the package is unpublished.
 Do not ship this integration with the currently pinned **1.1.0-preview.8** packages;
 they do not contain the new resource keys.
 
 1. Publish the WpfFoundation change through its normal CI release.
-2. Update both `WpfFoundation` and `WpfFoundation.Notifications` pins to `1.1.0-preview.10` in `Directory.Packages.props`.
-3. Build and test with `UseLocalWpfFoundation=false` before releasing DoViFixer **0.1.22**.
+2. Update both `WpfFoundation` and `WpfFoundation.Notifications` pins to `1.1.0-preview.11` in `Directory.Packages.props`.
+3. Build and test with `UseLocalWpfFoundation=false` before releasing DoViFixer **0.1.24**.
 
 Publication, pushes, and the post-publication package-pin update were outside this implementation request.
 
@@ -49,3 +49,11 @@ Reference: [Microsoft Fluent TextBox](https://github.com/dotnet/wpf/blob/main/sr
 
 The native outline screenshots are under `artifacts/validation-outline/`: `outline-dark.png`,
 `outline-light.png`, and `outline-high-contrast.png`. All three themes were checked in the running app.
+
+## TextBox decorations
+
+WpfFoundation `TextBoxAssist.Placeholder` and `TextBoxAssist.Suffix` add hints and units through a separate adorner.
+Numeric settings use suffixes in place of adjacent unit labels. Folder and executable inputs use placeholders.
+The editable value, validation, native clear button, and focus underline remain unchanged.
+An empty numeric field still fails validation; its placeholder does not supply a default value.
+The suffix reserves room inside the native content host without changing a TextBox.Padding binding or its source.
