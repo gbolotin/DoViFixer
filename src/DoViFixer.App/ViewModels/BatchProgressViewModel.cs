@@ -8,11 +8,8 @@ public sealed partial class BatchProgressViewModel(TimeProvider time) : Observab
     private static readonly TimeSpan EstimateWarmUp = TimeSpan.FromSeconds(5);
     private readonly object gate = new();
     private ITimer? clock;
-    private DateTimeOffset jobStarted;
     private DateTimeOffset batchStarted;
-    private DateTimeOffset stageStarted;
-    private string stage = "";
-    private double stageStartPercent;
+    private readonly Dictionary<MediaRow, JobTiming> active = new();
     private int revision;
     private int total;
     private int processed;
@@ -25,7 +22,26 @@ public sealed partial class BatchProgressViewModel(TimeProvider time) : Observab
     public int Total => total;
     public int Processed => processed;
     public string Operation => operation;
-    public double Percent => total == 0 ? 0 : (100.0 * processed + (CurrentJob?.Progress.Percent ?? 0)) / total;
+    public double Percent
+    {
+        get
+        {
+            lock (gate)
+            {
+                return total == 0 ? 0 : (100.0 * processed + active.Keys.Sum(row => row.Progress.Percent)) / total;
+            }
+        }
+    }
+    public int ActiveCount
+    {
+        get
+        {
+            lock (gate)
+            {
+                return active.Count;
+            }
+        }
+    }
     public string Summary => $"{processed} of {total} files processed" + (cancelled > 0 ? $" · {cancelled} cancelled" : "");
     [ObservableProperty]
     public partial MediaRow? CurrentJob { get; private set; }
@@ -34,7 +50,16 @@ public sealed partial class BatchProgressViewModel(TimeProvider time) : Observab
     {
     }
 
-    public string CurrentJobElapsed => CurrentJob is null ? "" : Format(time.GetUtcNow() - jobStarted);
+    public string CurrentJobElapsed
+    {
+        get
+        {
+            lock (gate)
+            {
+                return CurrentJob is not null && active.TryGetValue(CurrentJob, out var timing) ? Format(time.GetUtcNow() - timing.Started) : "";
+            }
+        }
+    }
     public string BatchElapsed => FormatCompletedTime(time.GetUtcNow() - batchStarted);
 
     /// <summary>
@@ -58,14 +83,19 @@ public sealed partial class BatchProgressViewModel(TimeProvider time) : Observab
                     return "—";
                 }
 
-                var running = time.GetUtcNow() - stageStarted;
+                if (!active.TryGetValue(job, out var timing))
+                {
+                    return "";
+                }
+
+                var running = time.GetUtcNow() - timing.StageStarted;
                 double done = job.Progress.Percent;
-                if (done <= stageStartPercent || running < EstimateWarmUp)
+                if (done <= timing.StageStartPercent || running < EstimateWarmUp)
                 {
                     return "Estimating…";
                 }
 
-                return Format(running * ((100 - done) / (done - stageStartPercent)));
+                return Format(running * ((100 - done) / (done - timing.StageStartPercent)));
             }
         }
     }
@@ -94,7 +124,11 @@ public sealed partial class BatchProgressViewModel(TimeProvider time) : Observab
         lock (gate)
         {
             revision++;
-            CurrentJob?.Progress.End();
+            foreach (var row in active.Keys)
+            {
+                row.Progress.End();
+            }
+            active.Clear();
             total = fileCount;
             processed = 0;
             cancelled = 0;
@@ -112,19 +146,24 @@ public sealed partial class BatchProgressViewModel(TimeProvider time) : Observab
     public IProgress<OperationProgress> Start(MediaRow row, string initialStage)
     {
         int jobRevision;
+        JobTiming startedTiming;
+        bool startClock;
         lock (gate)
         {
-            jobRevision = ++revision;
-            CurrentJob?.Progress.End();
-            CurrentJob = row;
-            jobStarted = stageStarted = time.GetUtcNow();
-            stage = initialStage;
-            stageStartPercent = 0;
+            jobRevision = revision;
+            startedTiming = new(time.GetUtcNow(), initialStage);
+            active[row] = startedTiming;
+            CurrentJob ??= row;
+            row.Progress.Start(initialStage);
+            row.Progress.Describe([operation]);
+            startClock = active.Count == 1;
         }
 
-        row.Progress.Start(initialStage);
-        row.Progress.Describe([operation]);
-        StartClock();
+        if (startClock)
+        {
+            StartClock();
+        }
+        OnPropertyChanged(nameof(ActiveCount));
         OnPropertyChanged(nameof(Percent));
         NotifyTimes();
         // Each job owns its callback, so late reports cannot update another file or batch.
@@ -132,16 +171,16 @@ public sealed partial class BatchProgressViewModel(TimeProvider time) : Observab
         {
             lock (gate)
             {
-                if (!IsRunning || revision != jobRevision || CurrentJob != row || row.IsCancellationRequested)
+                if (!IsRunning || revision != jobRevision || !active.TryGetValue(row, out var timing) || timing != startedTiming || row.IsCancellationRequested)
                 {
                     return;
                 }
 
-                if (progress.Stage != stage)
+                if (progress.Stage != timing.Stage)
                 {
-                    stage = progress.Stage;
-                    stageStarted = time.GetUtcNow();
-                    stageStartPercent = progress.Percent is { } percent && double.IsFinite(percent) ? Math.Clamp(percent, 0, 100) : 0;
+                    timing.Stage = progress.Stage;
+                    timing.StageStarted = time.GetUtcNow();
+                    timing.StageStartPercent = progress.Percent is { } percent && double.IsFinite(percent) ? Math.Clamp(percent, 0, 100) : 0;
                 }
 
                 row.Progress.Update(progress);
@@ -154,21 +193,46 @@ public sealed partial class BatchProgressViewModel(TimeProvider time) : Observab
         });
     }
 
-    public void Complete(OperationStatus status)
+    public void Describe(MediaRow row, IReadOnlyList<string> details, IEnumerable<JobStep> steps)
     {
         lock (gate)
         {
-            revision++;
+            if (active.ContainsKey(row))
+            {
+                row.Progress.Describe(details, steps);
+            }
+        }
+    }
+
+    public void Complete(OperationStatus status) => Complete(CurrentJob, status);
+
+    public void Complete(MediaRow? row, OperationStatus status)
+    {
+        bool stopClock;
+        lock (gate)
+        {
             processed++;
             if (status == OperationStatus.Cancelled)
             {
                 cancelled++;
             }
-            CurrentJob?.Progress.End();
-            CurrentJob = null;
+            if (row is not null && active.Remove(row))
+            {
+                row.Progress.End();
+            }
+
+            if (CurrentJob == row)
+            {
+                CurrentJob = active.Keys.FirstOrDefault();
+            }
+            stopClock = active.Count == 0;
         }
 
-        StopClock();
+        if (stopClock)
+        {
+            StopClock();
+        }
+        OnPropertyChanged(nameof(ActiveCount));
         NotifyBatchProgress();
         NotifyTimes();
     }
@@ -179,11 +243,16 @@ public sealed partial class BatchProgressViewModel(TimeProvider time) : Observab
         {
             revision++;
             IsRunning = false;
-            CurrentJob?.Progress.End();
+            foreach (var row in active.Keys)
+            {
+                row.Progress.End();
+            }
+            active.Clear();
             CurrentJob = null;
         }
 
         StopClock();
+        OnPropertyChanged(nameof(ActiveCount));
         OnPropertyChanged(nameof(Percent));
         NotifyTimes();
     }
@@ -223,5 +292,13 @@ public sealed partial class BatchProgressViewModel(TimeProvider time) : Observab
         OnPropertyChanged(nameof(Processed));
         OnPropertyChanged(nameof(Percent));
         OnPropertyChanged(nameof(Summary));
+    }
+
+    private sealed class JobTiming(DateTimeOffset started, string stage)
+    {
+        public DateTimeOffset Started { get; } = started;
+        public DateTimeOffset StageStarted { get; set; } = started;
+        public string Stage { get; set; } = stage;
+        public double StageStartPercent { get; set; }
     }
 }

@@ -4,8 +4,7 @@ public sealed class BatchControl : IDisposable
 {
     private readonly object gate = new();
     private readonly HashSet<string> pending;
-    private CancellationTokenSource? current;
-    private string? currentPath;
+    private readonly Dictionary<string, CancellationTokenSource> active = new(StringComparer.OrdinalIgnoreCase);
     private TaskCompletionSource? resume;
     public BatchControl(IEnumerable<string> paths) => pending = new(paths, StringComparer.OrdinalIgnoreCase);
 
@@ -49,12 +48,12 @@ public sealed class BatchControl : IDisposable
     {
         lock (gate)
         {
-            if (!string.Equals(path, currentPath, StringComparison.OrdinalIgnoreCase))
+            if (!active.TryGetValue(path, out var source))
             {
                 return false;
             }
 
-            current?.Cancel();
+            source.Cancel();
             return true;
         }
     }
@@ -74,9 +73,9 @@ public sealed class BatchControl : IDisposable
                         return null;
                     }
 
-                    current = CancellationTokenSource.CreateLinkedTokenSource(batchToken);
-                    currentPath = path;
-                    return current.Token;
+                    var source = CancellationTokenSource.CreateLinkedTokenSource(batchToken);
+                    active.Add(path, source);
+                    return source.Token;
                 }
 
                 resumeTask = resume.Task;
@@ -86,15 +85,27 @@ public sealed class BatchControl : IDisposable
         }
     }
 
-    internal void Finish()
+    internal void Finish(string path)
     {
         lock (gate)
         {
-            currentPath = null;
-            current?.Dispose();
-            current = null;
+            if (active.Remove(path, out var source))
+            {
+                source.Dispose();
+            }
         }
     }
 
-    public void Dispose() => Finish();
+    public void Dispose()
+    {
+        lock (gate)
+        {
+            foreach (var source in active.Values)
+            {
+                source.Dispose();
+            }
+
+            active.Clear();
+        }
+    }
 }

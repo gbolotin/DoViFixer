@@ -4,6 +4,7 @@ using System.Text.Json;
 using System.Xml.Linq;
 using DoViFixer.Application.Abstractions;
 using DoViFixer.Application.Dependencies;
+using DoViFixer.Application.Settings;
 using DoViFixer.Domain.Media;
 using DoViFixer.Infrastructure.MediaTools.Processes;
 using Microsoft.Extensions.Logging;
@@ -11,8 +12,41 @@ using Microsoft.Extensions.Logging;
 namespace DoViFixer.Infrastructure.MediaTools;
 internal sealed class MediaVerifier(MediaProbe probe, VideoProcessor processor, IToolCatalog tools, IProcessRunner processes, ILogger<MediaVerifier> logger) : IMediaVerifier
 {
-    public async Task<IReadOnlyList<VerificationFinding>> VerifyAsync(MediaInfo source, string output, DolbyVisionProfile expectedProfile, ITemporaryWorkspace workspace, CancellationToken cancellationToken, IProgress<OperationProgress>? progress = null, Guid operationId = default)
+    public async Task<IReadOnlyList<VerificationFinding>> VerifyAsync(MediaInfo source, string output, DolbyVisionProfile expectedProfile, ITemporaryWorkspace workspace, CancellationToken cancellationToken, IProgress<OperationProgress>? progress = null, Guid operationId = default, VerificationLevel level = VerificationLevel.FullIntegrity)
     {
+        if (level == VerificationLevel.None)
+        {
+            return [];
+        }
+
+        if (level is VerificationLevel.FrameCount or VerificationLevel.FrameCountWithRecount)
+        {
+            var countedOutput = await probe.ProbeAsync(output, cancellationToken);
+            long? sourceFrames = source.FrameCount;
+            long? targetFrames = countedOutput.FrameCount;
+            if (sourceFrames is null or <= 0 || targetFrames is null or <= 0)
+            {
+                return [new(VerificationArea.VideoStream, "Recorded frame count is unavailable; output cannot be verified at this level.")];
+            }
+
+            if (sourceFrames == targetFrames)
+            {
+                return [];
+            }
+
+            if (level == VerificationLevel.FrameCountWithRecount && await probe.CountFramesAsync(source.Source.Path, cancellationToken) == targetFrames)
+            {
+                return [];
+            }
+
+            return [new(VerificationArea.VideoStream, $"Video frame count changed ({sourceFrames} to {targetFrames}).")];
+        }
+
+        if (level != VerificationLevel.FullIntegrity)
+        {
+            throw new ArgumentOutOfRangeException(nameof(level));
+        }
+
         int completed = 0;
         // Checkpoints represent completed checks, not elapsed time. Reserve completion for the caller.
         const int total = 9;

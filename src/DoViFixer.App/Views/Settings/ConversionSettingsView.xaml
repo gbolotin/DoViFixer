@@ -43,8 +43,17 @@
                                TextWrapping="Wrap"
                                AutomationProperties.LiveSetting="Polite" />
                     <TextBlock Text="File handling and policy" Style="{StaticResource WfLabelTextStyle}" />
+                    <HeaderedContentControl Header="Conversion workers"
+                                            AutomationProperties.HelpText="Maximum files converted at once. Additional files wait in the queue. More workers use more temporary and output disk space."
+                                            Style="{StaticResource WfSettingRowStyle}">
+                        <ComboBox ItemsSource="{Binding ConversionWorkerChoices}"
+                                  SelectedItem="{Binding ConversionWorkers}"
+                                  Width="80"
+                                  AutomationProperties.Name="Conversion workers" />
+                    </HeaderedContentControl>
+                    <Separator />
                     <CheckBox Content="Replace original after verification"
-                              AutomationProperties.HelpText="The converted file replaces the source file once verification succeeds. When off, the original is kept."
+                              AutomationProperties.HelpText="The converted file replaces the source after checks complete. Verification level 1 performs no content check. When off, the original is kept."
                               IsChecked="{Binding ReplaceOriginal}"
                               Style="{StaticResource WfToggleSwitchStyle}" />
                     <Separator />

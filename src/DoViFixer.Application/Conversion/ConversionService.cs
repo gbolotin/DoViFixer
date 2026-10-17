@@ -5,6 +5,7 @@ using DoViFixer.Application.Operations;
 using DoViFixer.Domain.Analysis;
 using DoViFixer.Domain.Conversion;
 using DoViFixer.Domain.Media;
+using DoViFixer.Application.Settings;
 using Microsoft.Extensions.Logging;
 
 namespace DoViFixer.Application.Conversion;
@@ -124,7 +125,7 @@ public sealed class ConversionPlanner(IFileDiscovery discovery, IFileOperations 
     }
 }
 
-public sealed class ConversionService(DependencyService dependencies, IFileOperations files, ITemporaryWorkspaceFactory workspaces, IVideoProcessor processor, IMediaVerifier verifier, IOutputPublisher publisher, IBackupArchiveStore archives, ILogger<ConversionService> logger, IAnalysisCache cache, InspectionService? inspection = null)
+public sealed class ConversionService(DependencyService dependencies, IFileOperations files, ITemporaryWorkspaceFactory workspaces, IVideoProcessor processor, IMediaVerifier verifier, IOutputPublisher publisher, IBackupArchiveStore archives, ILogger<ConversionService> logger, IAnalysisCache cache, InspectionService? inspection = null, ISettingsStore? settings = null)
 {
     /// <summary>The last conversion of the unchanged file at <paramref name="path"/>, while its output still exists; otherwise null.</summary>
     public async Task<OperationItemResult?> ReadPublishedResultAsync(string path, CancellationToken cancellationToken)
@@ -210,16 +211,20 @@ public sealed class ConversionService(DependencyService dependencies, IFileOpera
             return new CandidatePreparationResult.Skipped(ex.Message);
         }
 
-        if (request.ExistingOutputs is not null)
+        string outputDir = Path.GetDirectoryName(output)!;
+        if (request.ExistingOutputs is { } knownOutputs)
         {
-            if (request.ExistingOutputs.Contains(output) || (archive is not null && request.ExistingOutputs.Contains(archive)))
+            lock (knownOutputs)
             {
-                return new CandidatePreparationResult.Skipped("Multiple inputs resolve to the same output path.");
+                if (knownOutputs.Contains(output) || (archive is not null && knownOutputs.Contains(archive)))
+                {
+                    return new CandidatePreparationResult.Skipped("Multiple inputs resolve to the same output path.");
+                }
             }
         }
 
-        string outputDir = Path.GetDirectoryName(output)!;
-        long requiredOutputSpace = checked(source.Length * 2 + (1L << 30));
+        double marginPercent = settings is null ? 20 : (await settings.ReadAsync(cancellationToken)).FreeSpaceMarginPercent;
+        long requiredOutputSpace = ConversionSpaceMargin.OutputBytes(source.Length, marginPercent);
         try
         {
             files.EnsureAvailableSpace(outputDir, requiredOutputSpace);
@@ -275,10 +280,21 @@ public sealed class ConversionService(DependencyService dependencies, IFileOpera
             return new CandidatePreparationResult.Skipped(decision.Reason);
         }
 
-        request.ExistingOutputs?.Add(output);
-        if (archive is not null)
+        if (request.ExistingOutputs is { } existingOutputs)
         {
-            request.ExistingOutputs?.Add(archive);
+            lock (existingOutputs)
+            {
+                if (existingOutputs.Contains(output) || (archive is not null && existingOutputs.Contains(archive)))
+                {
+                    return new CandidatePreparationResult.Skipped("Multiple inputs resolve to the same output path.");
+                }
+
+                existingOutputs.Add(output);
+                if (archive is not null)
+                {
+                    existingOutputs.Add(archive);
+                }
+            }
         }
 
         string? warning = analysis.Verdict is AnalysisVerdict.SimpleFel or AnalysisVerdict.ComplexFel or AnalysisVerdict.FelUnclassified
@@ -310,12 +326,13 @@ public sealed class ConversionService(DependencyService dependencies, IFileOpera
     private async Task<OperationItemResult> ExecuteCoreAsync(ConversionPlan approvedPlan, IProgress<OperationProgress>? progress, CancellationToken cancellationToken)
     {
         var media = approvedPlan.Analysis.Media;
+        var safety = settings is null ? new UserSettings { VerificationLevel = VerificationLevel.FullIntegrity, RecycleDeletedOriginalsAndBackups = false } : await settings.ReadAsync(cancellationToken);
         if (logger.IsEnabled(LogLevel.Information))
         {
             logger.LogInformation("Executing plan {PlanId}: target {Target}; output {Output}; archive {Archive}; scratch {ScratchBytes}; temporary directory {TemporaryDirectory}; {Decision}", approvedPlan.Id, approvedPlan.Target, approvedPlan.Output, approvedPlan.Archive, approvedPlan.ScratchBytes, approvedPlan.TemporaryDirectory, approvedPlan.Decision);
         }
         await dependencies.RequireAsync(DependencyRequirements.All, cancellationToken);
-        files.EnsureAvailableSpace(Path.GetDirectoryName(approvedPlan.Output)!, checked(media.Source.Length * 2 + (1L << 30)));
+        files.EnsureAvailableSpace(Path.GetDirectoryName(approvedPlan.Output)!, ConversionSpaceMargin.OutputBytes(media.Source.Length, safety.FreeSpaceMarginPercent));
         await using var workspace = await workspaces.CreateAsync(approvedPlan.ScratchBytes, approvedPlan.TemporaryDirectory, cancellationToken);
         cancellationToken.ThrowIfCancellationRequested();
         if (!approvedPlan.DeleteBackup && string.Equals(Path.GetFullPath(approvedPlan.Output), media.Source.Path, StringComparison.OrdinalIgnoreCase))
@@ -367,7 +384,7 @@ public sealed class ConversionService(DependencyService dependencies, IFileOpera
                     {
                         await processor.ConvertAsync(media, approvedPlan.Target, workspace, staged.Path, progress, approvedPlan.Id, cancellationToken, safe);
                         progress?.Report(new(approvedPlan.Id, "Verifying", media.Source.Path));
-                        var findings = await verifier.VerifyAsync(media, staged.Path, approvedPlan.Target == ConversionTarget.Profile81 ? DolbyVisionProfile.Profile81 : DolbyVisionProfile.None, workspace, cancellationToken, progress, approvedPlan.Id);
+                        var findings = await verifier.VerifyAsync(media, staged.Path, approvedPlan.Target == ConversionTarget.Profile81 ? DolbyVisionProfile.Profile81 : DolbyVisionProfile.None, workspace, cancellationToken, progress, approvedPlan.Id, safety.VerificationLevel);
                         if (findings.Count > 0)
                         {
                             // Safe mode only changes how the video stream is extracted, so it cannot fix container findings.
@@ -408,11 +425,13 @@ public sealed class ConversionService(DependencyService dependencies, IFileOpera
 
             if (approvedPlan.DeleteBackup)
             {
-                await files.DeleteAsync(backupIdentity, cancellationToken);
+                await files.DeleteAsync(backupIdentity, cancellationToken, safety.RecycleDeletedOriginalsAndBackups);
                 OperationLog.Audit(logger, "DeleteOriginalBackup", backupIdentity.Path, "Completed", approvedPlan.Id);
             }
 
-            var completed = new OperationItemResult(approvedPlan.Analysis.Media.Source.Path, OperationStatus.Completed, approvedPlan.Output, "Verified output published. " + (approvedPlan.DeleteBackup ? "Original backup deleted." : "Original retained.") + archiveNote)
+            string verificationNote = safety.VerificationLevel == VerificationLevel.None ? "Output published without integrity verification. " : $"Output published after {safety.VerificationLevel} verification. ";
+            string originalNote = !approvedPlan.DeleteBackup ? "Original retained." : safety.RecycleDeletedOriginalsAndBackups ? "Original moved to Recycle Bin." : "Original backup deleted.";
+            var completed = new OperationItemResult(approvedPlan.Analysis.Media.Source.Path, OperationStatus.Completed, approvedPlan.Output, verificationNote + originalNote + archiveNote)
             {
                 Original = approvedPlan.DeleteBackup ? null : backupIdentity.Path, Archive = archive
             };
@@ -429,7 +448,8 @@ public sealed class ConversionService(DependencyService dependencies, IFileOpera
             if (published)
             {
                 logger.LogWarning(ex, "Conversion verified and published, but original backup cleanup did not complete: {BackupPath}", backupIdentity.Path);
-                return new(approvedPlan.Analysis.Media.Source.Path, OperationStatus.Partial, approvedPlan.Output, $"Conversion verified and published. Original backup cleanup did not complete: {ex.Message} Original retained." + archiveNote)
+                string publishedNote = safety.VerificationLevel == VerificationLevel.None ? "Conversion published without integrity verification." : "Conversion verified and published.";
+                return new(approvedPlan.Analysis.Media.Source.Path, OperationStatus.Partial, approvedPlan.Output, $"{publishedNote} Original backup cleanup did not complete: {ex.Message} Original retained." + archiveNote)
                 {
                     Original = backupIdentity.Path, Archive = archive
                 };

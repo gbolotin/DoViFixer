@@ -62,7 +62,7 @@ public sealed partial class SettingsViewModel : OperationViewModel
         Dependencies = dependencies;
         var general = new GeneralSettingsSection(this);
         Sections = new NavigationService(
-            [general, new ConversionSettingsSection(this), new ScanningSettingsSection(this), new NativeToolsSettingsSection(this), new AboutSettingsSection(this)],
+            [general, new ConversionSettingsSection(this), new SafetySettingsSection(this), new ScanningSettingsSection(this), new NativeToolsSettingsSection(this), new AboutSettingsSection(this)],
             initialPage: general);
     }
 
@@ -113,6 +113,10 @@ public sealed partial class SettingsViewModel : OperationViewModel
             OtherFolder = value.OutputDirectory is not null;
             ReplaceOriginal = value.ReplaceOriginal;
             CreateArchive = value.CreateElArchive;
+            ConversionWorkers = value.ConversionWorkers;
+            VerificationLevel = (int)value.VerificationLevel;
+            RecycleDeletedOriginalsAndBackups = value.RecycleDeletedOriginalsAndBackups;
+            FreeSpaceMarginPercent = value.FreeSpaceMarginPercent;
             IncludeSimple = value.IncludeSimple;
             ForceComplex = value.ForceComplex;
             AutomaticallyScanAddedFiles = value.AutomaticallyScanAddedFiles;
@@ -250,6 +254,48 @@ public sealed partial class SettingsViewModel : OperationViewModel
     public partial bool CreateArchive { get; set; }
 
     partial void OnCreateArchiveChanged(bool value) => TriggerAutoSave();
+
+    public int[] ConversionWorkerChoices { get; } = [1, 2, 3, 4, 5, 6, 7, 8];
+
+    [ObservableProperty]
+    public partial int ConversionWorkers { get; set; } = 1;
+
+    partial void OnConversionWorkersChanged(int value) => TriggerAutoSave();
+
+    [ObservableProperty]
+    [NotifyPropertyChangedFor(nameof(VerificationTitle))]
+    [NotifyPropertyChangedFor(nameof(VerificationDescription))]
+    public partial int VerificationLevel { get; set; } = 3;
+
+    partial void OnVerificationLevelChanged(int value) => TriggerAutoSave();
+
+    public string VerificationTitle => VerificationLevel switch
+    {
+        1 => "1 · No integrity check",
+        2 => "2 · Frame count",
+        3 => "3 · Frame count + mismatch recount",
+        4 => "4 · Full integrity",
+        _ => "Select a verification level"
+    };
+
+    public string VerificationDescription => VerificationLevel switch
+    {
+        1 => "Publish the conversion without checking its content. Fastest, but an incomplete output can replace the original.",
+        2 => "Compare recorded source and output frame counts. Missing or unequal counts fail verification.",
+        3 => "Compare recorded frame counts. If they differ, recount the original video before deciding. This is the default.",
+        4 => "Check container metadata, retained tracks, frame counts, Dolby Vision metadata, and base-layer video content. Slowest and most thorough.",
+        _ => ""
+    };
+
+    [ObservableProperty]
+    public partial bool RecycleDeletedOriginalsAndBackups { get; set; } = true;
+
+    partial void OnRecycleDeletedOriginalsAndBackupsChanged(bool value) => TriggerAutoSave();
+
+    [ObservableProperty]
+    public partial double FreeSpaceMarginPercent { get; set; } = 20;
+
+    partial void OnFreeSpaceMarginPercentChanged(double value) => TriggerAutoSave();
 
     public bool IncludeSimple
     {
@@ -402,6 +448,10 @@ public sealed partial class SettingsViewModel : OperationViewModel
             OutputDirectory = OtherFolder ? Destination : null,
             ReplaceOriginal = ReplaceOriginal,
             CreateElArchive = CreateArchive,
+            ConversionWorkers = ConversionWorkers,
+            VerificationLevel = (Application.Settings.VerificationLevel)VerificationLevel,
+            RecycleDeletedOriginalsAndBackups = RecycleDeletedOriginalsAndBackups,
+            FreeSpaceMarginPercent = FreeSpaceMarginPercent,
             AutomaticallyScanAddedFiles = AutomaticallyScanAddedFiles,
             UseCachedResults = UseCachedResults,
             AutoSelectAfterScan = AutoSelectAfterScan,
@@ -422,7 +472,11 @@ public sealed partial class SettingsViewModel : OperationViewModel
             snapshot.Theme,
             includeSimple: snapshot.IncludeSimple,
             forceComplex: snapshot.ForceComplex,
-            showCompletionNotifications: snapshot.ShowCompletionNotifications), token);
+            showCompletionNotifications: snapshot.ShowCompletionNotifications,
+            conversionWorkers: snapshot.ConversionWorkers,
+            verificationLevel: snapshot.VerificationLevel,
+            recycleDeletedOriginalsAndBackups: snapshot.RecycleDeletedOriginalsAndBackups,
+            freeSpaceMarginPercent: snapshot.FreeSpaceMarginPercent), token);
 
         lastSavedSettings = snapshot;
         SetStatus(ViewStatus.SettingsSaved);

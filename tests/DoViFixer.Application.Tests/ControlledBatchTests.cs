@@ -1,11 +1,79 @@
 using DoViFixer.Application.Operations;
 using Microsoft.Extensions.Logging.Abstractions;
 using Microsoft.VisualStudio.TestTools.UnitTesting;
+using System.Threading.Channels;
 
 namespace DoViFixer.Application.Tests;
 [TestClass]
 public sealed class ControlledBatchTests
 {
+    [TestMethod]
+    public async Task QueuedBatchRunsAtMostTwoJobsAndDrainsAllFiveFiles()
+    {
+        string[] files = ["a", "b", "c", "d", "e"];
+        using var control = new BatchControl(files);
+        var started = Channel.CreateUnbounded<string>();
+        var releases = files.ToDictionary(file => file, _ => new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously));
+        int active = 0;
+        int peak = 0;
+        var service = new ControlledBatchService(NullLogger<ControlledBatchService>.Instance);
+        var run = service.ExecuteQueuedAsync(files, 2, file => file, async (file, token) =>
+        {
+            int count = Interlocked.Increment(ref active);
+            peak = Math.Max(peak, count);
+            started.Writer.TryWrite(file);
+            await releases[file].Task.WaitAsync(token);
+            Interlocked.Decrement(ref active);
+            return new OperationItemResult(file, OperationStatus.Completed, file + ".out", "Done");
+        }, control, null, CancellationToken.None);
+
+        Assert.AreEqual("a", await started.Reader.ReadAsync().AsTask().WaitAsync(TimeSpan.FromSeconds(5)));
+        Assert.AreEqual("b", await started.Reader.ReadAsync().AsTask().WaitAsync(TimeSpan.FromSeconds(5)));
+        Assert.IsFalse(started.Reader.TryRead(out _));
+        releases["a"].SetResult();
+        Assert.AreEqual("c", await started.Reader.ReadAsync().AsTask().WaitAsync(TimeSpan.FromSeconds(5)));
+        releases["b"].SetResult();
+        releases["c"].SetResult();
+        Assert.AreEqual("d", await started.Reader.ReadAsync().AsTask().WaitAsync(TimeSpan.FromSeconds(5)));
+        Assert.AreEqual("e", await started.Reader.ReadAsync().AsTask().WaitAsync(TimeSpan.FromSeconds(5)));
+        releases["d"].SetResult();
+        releases["e"].SetResult();
+
+        var result = await run.WaitAsync(TimeSpan.FromSeconds(5));
+        Assert.AreEqual(2, peak);
+        CollectionAssert.AreEqual(files, result.Items.Select(item => item.Item).ToArray());
+        Assert.IsTrue(result.Items.All(item => item.Status == OperationStatus.Completed));
+    }
+
+    [TestMethod]
+    public async Task QueuedBatchPauseAndPerFileCancellationKeepOtherJobsRunning()
+    {
+        string[] files = ["a", "b", "c"];
+        using var control = new BatchControl(files);
+        var started = Channel.CreateUnbounded<string>();
+        var release = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+        var service = new ControlledBatchService(NullLogger<ControlledBatchService>.Instance);
+        var run = service.ExecuteQueuedAsync(files, 2, file => file, async (file, token) =>
+        {
+            started.Writer.TryWrite(file);
+            await release.Task.WaitAsync(token);
+            return new OperationItemResult(file, OperationStatus.Completed, null, "Done");
+        }, control, null, CancellationToken.None);
+
+        Assert.AreEqual("a", await started.Reader.ReadAsync().AsTask().WaitAsync(TimeSpan.FromSeconds(5)));
+        Assert.AreEqual("b", await started.Reader.ReadAsync().AsTask().WaitAsync(TimeSpan.FromSeconds(5)));
+        control.Pause();
+        Assert.IsTrue(control.Cancel("a"));
+        await Task.Delay(50);
+        Assert.IsFalse(started.Reader.TryRead(out _));
+        control.Resume();
+        Assert.AreEqual("c", await started.Reader.ReadAsync().AsTask().WaitAsync(TimeSpan.FromSeconds(5)));
+        release.SetResult();
+
+        var result = await run.WaitAsync(TimeSpan.FromSeconds(5));
+        CollectionAssert.AreEqual(new[] { OperationStatus.Cancelled, OperationStatus.Completed, OperationStatus.Completed }, result.Items.Select(item => item.Status).ToArray());
+    }
+
     [TestMethod]
     [DataRow(false)]
     [DataRow(true)]

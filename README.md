@@ -40,7 +40,7 @@ Phase 4 follows the Studio v3 Media mockups and v2 Backup & Restore / Settings d
 - **Approval:** changing selection, target, destination, or file handling invalidates the plan. Use **Review changes**, then **Approve and start** for the displayed paths and warnings. FEL picture loss and replacement of originals are included in that approval. Native-tool installation has its own separate plan and approval.
 - **Cancellation:** row Cancel waits for that file's recovery before continuing. Skip unchecks a pending file. Cancel batch stops subsequent items. Closing the application cancels and awaits active work before disposing its resources.
 - **Backup & Restore:** review archive and restoration plans, or review exact cleanup targets with a typed deletion confirmation.
-- **Settings:** shared temporary storage, output and retention defaults, dependency installation and validated tool paths. Defaults never authorize execution. WPF logs are rolling `app-diagnostic-`, `app-history-` and `app-audit-` JSONL files under `%LOCALAPPDATA%\DoViFixer\Logs`.
+- **Settings:** shared temporary storage, output and retention defaults, dependency installation and validated tool paths. Safety has four verification levels (default: frame count with mismatch recount), a Recycle Bin option for deleted originals and approved backups, and a 20% extra free-space margin. Defaults never authorize execution. WPF logs are rolling `app-diagnostic-`, `app-history-` and `app-audit-` JSONL files under `%LOCALAPPDATA%\DoViFixer\Logs`.
 
 ## Dependencies
 
@@ -104,6 +104,8 @@ Batch failures are reported per file and do not stop subsequent files. Ctrl+C st
 Each native-tool invocation owns a Windows Job Object; both processes in a streaming pipeline share one job. Closing that job terminates its assigned processes and descendants, including when the application crashes or is forcibly closed. Separate invocations have separate jobs. Job creation or assignment failure stops the invocation rather than silently running without protection. This applies to processes launched through the shared runner; services or installers launched independently by another system process are outside its ownership.
 
 Protection starts when the process is assigned to the job immediately after `.NET Process.Start`. A crash, process exit, or child launch in the brief start-to-assignment interval can escape this protection. Eliminating that interval requires a native launcher with atomic job assignment. An abnormal application exit also cannot run managed workspace cleanup, so temporary files may remain. See [Windows Job Objects](https://learn.microsoft.com/windows/win32/procthread/job-objects) for the operating-system behavior.
+
+In the WPF app, Settings → Conversion → Conversion workers controls how many selected files convert at once (1–8; default 1). Every selected file enters the batch queue, so the worker count does not limit batch size. Pause prevents queued files from starting while active conversions finish. Each active conversion has its own temporary workspace. Concurrent conversions reserve conservative scratch and output disk budgets before execution; a queued worker waits if another active conversion is using the available space.
 
 ## AI assistants (MCP)
 

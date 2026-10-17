@@ -49,6 +49,11 @@ public sealed record UserSettings
         get;
         init;
     }
+    /// <summary>Maximum number of files converted at once; additional files wait in the batch queue.</summary>
+    public int ConversionWorkers { get; init; } = 1;
+    public VerificationLevel VerificationLevel { get; init; } = VerificationLevel.FrameCountWithRecount;
+    public bool RecycleDeletedOriginalsAndBackups { get; init; } = true;
+    public double FreeSpaceMarginPercent { get; init; } = 20;
     public bool IncludeSimple
     {
         get;

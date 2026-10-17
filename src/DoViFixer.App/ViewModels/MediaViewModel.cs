@@ -33,6 +33,7 @@ public sealed partial class MediaViewModel : OperationViewModel, INavigationPage
     private readonly IFileDiscovery discovery;
     private readonly InspectionService inspection;
     private readonly ConversionService conversion;
+    private readonly ConversionDiskBudget diskBudget;
     private readonly RestoreService restore;
     private readonly ControlledBatchService batch;
     private readonly SettingsService settings;
@@ -54,10 +55,11 @@ public sealed partial class MediaViewModel : OperationViewModel, INavigationPage
 
     private static string Summary(BatchResult result) => string.Join(" · ", result.Items.GroupBy(r => r.Status).Select(g => $"{g.Count()} {g.Key}"));
     private string TimedSummary(BatchResult result) => $"{Summary(result)}{(result.Status == OperationStatus.Completed ? " in " : " · Finished in ")}{BatchProgress.BatchElapsed}";
-    public MediaViewModel(IFileDiscovery discovery, InspectionService inspection, ConversionService conversion, ControlledBatchService batch, SettingsService settings, DependencySetup dependencies, IDialogService dialogs, IFileDialogService files, IFileExplorer explorer, ILogger<MediaViewModel> logger, IMediaPreview mediaPreview, RestoreService restore, ISourceFileMonitor sourceFiles, ReportService reports, IOperationFeedback? feedback = null)
+    public MediaViewModel(IFileDiscovery discovery, InspectionService inspection, ConversionService conversion, ConversionDiskBudget diskBudget, ControlledBatchService batch, SettingsService settings, DependencySetup dependencies, IDialogService dialogs, IFileDialogService files, IFileExplorer explorer, ILogger<MediaViewModel> logger, IMediaPreview mediaPreview, RestoreService restore, ISourceFileMonitor sourceFiles, ReportService reports, IOperationFeedback? feedback = null)
         : base(feedback)
     {
         this.discovery = discovery;
+        this.diskBudget = diskBudget;
         this.sourceFiles = sourceFiles;
         this.reports = reports;
         uiContext = SynchronizationContext.Current;
@@ -204,7 +206,7 @@ public sealed partial class MediaViewModel : OperationViewModel, INavigationPage
         : Progress.ProgressText;
     public string ActiveProgressSummary => BatchProgress.IsRunning
         ? control?.IsPaused == true
-            ? $"{BatchProgress.Summary} · {(BatchProgress.CurrentJob is null ? "Paused" : "Pausing after current job")}"
+            ? $"{BatchProgress.Summary} · {(BatchProgress.ActiveCount == 0 ? "Paused" : BatchProgress.ActiveCount == 1 ? "Pausing after current job" : "Pausing after active jobs")}"
             : BatchProgress.Summary
         : StatusMessage;
     public string? ActiveProgressToolTip => BatchProgress.IsRunning
@@ -687,7 +689,12 @@ public sealed partial class MediaViewModel : OperationViewModel, INavigationPage
 
         var sb = new System.Text.StringBuilder();
         sb.AppendLine($"Destination: {(string.IsNullOrWhiteSpace(s.OutputDirectory) ? "Same folder as source file" : s.OutputDirectory)}");
-        sb.AppendLine($"Retention: {(s.ReplaceOriginal ? "Replace original after verification (Source file will be replaced!)" : "Keep original (Non-destructive)")}");
+        sb.AppendLine($"Retention: {(s.ReplaceOriginal ? "Replace original after conversion (Source file will be replaced!)" : "Keep original (Non-destructive)")}");
+        sb.AppendLine($"Verification: level {(int)s.VerificationLevel}");
+        if (s.ReplaceOriginal)
+        {
+            sb.AppendLine(s.RecycleDeletedOriginalsAndBackups ? "Original removal: Recycle Bin when available" : "Original removal: permanent deletion");
+        }
         sb.AppendLine(FelSummary);
         if (s.IncludeSimple || s.ForceComplex)
         {
@@ -883,9 +890,9 @@ public sealed partial class MediaViewModel : OperationViewModel, INavigationPage
     };
 
     // A failed file makes the whole batch finish with errors on the taskbar and in the notification.
-    private void CompleteBatchItem(OperationStatus status)
+    private void CompleteBatchItem(MediaRow row, OperationStatus status)
     {
-        BatchProgress.Complete(status);
+        BatchProgress.Complete(row, status);
         if (status == OperationStatus.Failed)
         {
             ReportItemFailed();
@@ -1023,8 +1030,8 @@ public sealed partial class MediaViewModel : OperationViewModel, INavigationPage
                 }
             }, control!, new InlineProgress<OperationItemResult>(result =>
             {
-                CompleteBatchItem(result.Status);
                 var row = rows.First(r => r.Path == result.Item);
+                CompleteBatchItem(row, result.Status);
                 row.Status = result.Status == OperationStatus.Completed ? "" : $"{row.OperationName} {result.Status.ToString().ToLowerInvariant()}";
                 row.CanRetryAnalysis = result.Status is OperationStatus.Failed or OperationStatus.Cancelled;
                 if (result.Status == OperationStatus.Failed)
@@ -1152,7 +1159,7 @@ public sealed partial class MediaViewModel : OperationViewModel, INavigationPage
                 return restored;
             }, control!, new InlineProgress<OperationItemResult>(itemResult =>
             {
-                CompleteBatchItem(itemResult.Status);
+                CompleteBatchItem(row, itemResult.Status);
                 row.Result = itemResult;
                 if (itemResult.Status == OperationStatus.Completed)
                 {
@@ -1281,7 +1288,7 @@ public sealed partial class MediaViewModel : OperationViewModel, INavigationPage
         BeginBatch(rows, opName);
         try
         {
-            var result = await batch.ExecuteAsync(rows, r => r.Path, async (row, itemToken) =>
+            var result = await batch.ExecuteQueuedAsync(rows, Math.Clamp(userSettings.ConversionWorkers, 1, 8), r => r.Path, async (row, itemToken) =>
             {
                 if (!sourceFiles.Exists(row.Path))
                 {
@@ -1296,6 +1303,17 @@ public sealed partial class MediaViewModel : OperationViewModel, INavigationPage
                 try
                 {
                     var req = Request(row);
+                    IDisposable reservation;
+                    try
+                    {
+                        reservation = await diskBudget.ReserveAsync(req, itemToken);
+                    }
+                    catch (IOException ex)
+                    {
+                        return new OperationItemResult(row.Path, OperationStatus.Skipped, null, ex.Message);
+                    }
+
+                    using var heldReservation = reservation;
                     var prep = await Task.Run(() => conversion.PrepareCandidateAsync(req, jobProgress, itemToken), itemToken);
                     itemToken.ThrowIfCancellationRequested();
                     if (prep is CandidatePreparationResult.Skipped skipped)
@@ -1314,7 +1332,7 @@ public sealed partial class MediaViewModel : OperationViewModel, INavigationPage
                     {
                         row.Analysis = success.Plan.Analysis;
                         row.SetPlan(success.Warning);
-                        row.Progress.Describe(ConversionJob.Details(success.Plan), ConversionJob.Steps(success.Plan));
+                        BatchProgress.Describe(row, ConversionJob.Details(success.Plan), ConversionJob.Steps(success.Plan));
                         jobProgress.Report(new(success.Plan.Id, "Converting", row.Path));
                         var converted = await Task.Run(() => conversion.ExecuteAsync(success.Plan, jobProgress, itemToken), itemToken);
                         await ReadResultMetadataAsync(row, converted, itemToken);
@@ -1329,8 +1347,8 @@ public sealed partial class MediaViewModel : OperationViewModel, INavigationPage
                 }
             }, control!, new InlineProgress<OperationItemResult>(itemResult =>
             {
-                CompleteBatchItem(itemResult.Status);
                 var row = rows.First(r => r.Path == itemResult.Item);
+                CompleteBatchItem(row, itemResult.Status);
                 row.CanRetryAnalysis = false;
                 if (itemResult.Status is OperationStatus.Completed or OperationStatus.Partial)
                 {

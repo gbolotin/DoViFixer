@@ -25,6 +25,12 @@ public sealed class ConversionSettingsSection(SettingsViewModel settings) : Sett
     public override string? NavigationIcon => "";
 }
 
+public sealed class SafetySettingsSection(SettingsViewModel settings) : SettingsSection(settings)
+{
+    public override string NavigationName => "Safety";
+    public override string? NavigationIcon => "\uEA18";
+}
+
 public sealed class ScanningSettingsSection(SettingsViewModel settings) : SettingsSection(settings)
 {
     public override string NavigationName => "Scanning & cache";

@@ -375,9 +375,9 @@ public sealed class ViewModelTests
 
         var sections = shell.Settings.Sections;
         CollectionAssert.AreEqual(
-            new[] { typeof(GeneralSettingsSection), typeof(ConversionSettingsSection), typeof(ScanningSettingsSection), typeof(NativeToolsSettingsSection), typeof(AboutSettingsSection) },
+            new[] { typeof(GeneralSettingsSection), typeof(ConversionSettingsSection), typeof(SafetySettingsSection), typeof(ScanningSettingsSection), typeof(NativeToolsSettingsSection), typeof(AboutSettingsSection) },
             sections.Pages.Select(page => page.GetType()).ToArray());
-        CollectionAssert.AreEqual(new[] { "General", "Conversion", "Scanning & cache", "Native tools", "About" }, sections.Pages.Select(page => page.NavigationName).ToArray());
+        CollectionAssert.AreEqual(new[] { "General", "Conversion", "Safety", "Scanning & cache", "Native tools", "About" }, sections.Pages.Select(page => page.NavigationName).ToArray());
         Assert.IsTrue(sections.Pages.All(page => page.NavigationIcon is { Length: 1 }), "Each section has a Segoe Fluent Icons glyph.");
         Assert.IsTrue(sections.Pages.Cast<SettingsSection>().All(section => ReferenceEquals(section.Settings, shell.Settings)), "Every section shows the same settings.");
         Assert.AreSame(sections.Pages[0], sections.CurrentPage);
@@ -1139,6 +1139,8 @@ public sealed class ViewModelTests
         Assert.IsNull(runtime.Settings.TemporaryDirectory);
         Assert.IsNull(runtime.Settings.OutputDirectory);
         Assert.IsFalse(runtime.Settings.ReplaceOriginal);
+        await Assert.ThrowsExactlyAsync<ArgumentOutOfRangeException>(() => settings.SetPreferencesAsync(null, null, false, false, default, verificationLevel: (DoViFixer.Application.Settings.VerificationLevel)5));
+        await Assert.ThrowsExactlyAsync<ArgumentOutOfRangeException>(() => settings.SetPreferencesAsync(null, null, false, false, default, freeSpaceMarginPercent: 201));
     }
 
     [TestMethod]
@@ -1154,6 +1156,7 @@ public sealed class ViewModelTests
         await model.ConvertDv81Command.InvokeAsync();
         Assert.AreEqual(1, runtime.FullAnalyses);
         Assert.AreEqual(1, runtime.Conversions);
+        CollectionAssert.Contains(runtime.VerificationLevels, DoViFixer.Application.Settings.VerificationLevel.FrameCountWithRecount);
         Assert.AreEqual("Converted", model.Files.Single().Status);
         Assert.AreEqual(MediaRowState.Converted, model.Files.Single().State);
         Assert.IsTrue(model.Files.Single().CanOpenResult);
@@ -1216,12 +1219,27 @@ public sealed class ViewModelTests
         if (approve)
         {
             CollectionAssert.AreEqual(new[] { @"C:\Media\Movie.dovi" }, runtime.DeletedFiles);
+            CollectionAssert.AreEqual(runtime.DeletedFiles, runtime.RecycledFiles);
         }
         else
         {
             Assert.IsEmpty(runtime.DeletedFiles);
             Assert.AreEqual(ViewStatus.CleanupNotApproved, model.Status);
         }
+    }
+
+    [TestMethod]
+    public async Task CleanupUsesPermanentDeleteWhenRecycleBinIsDisabled()
+    {
+        using var runtime = new TestRuntime { Approval = true, PickedFolder = @"C:\Media" };
+        await runtime.UpdateAsync(settings => settings with { RecycleDeletedOriginalsAndBackups = false }, default);
+        runtime.Archives.Add(@"C:\Media\Movie.dovi");
+        var model = runtime.Container.GetRequiredService<ArchiveViewModel>();
+
+        await model.CleanupCommand.InvokeAsync();
+
+        CollectionAssert.AreEqual(new[] { @"C:\Media\Movie.dovi" }, runtime.DeletedFiles);
+        Assert.IsEmpty(runtime.RecycledFiles);
     }
 
     [TestMethod]
@@ -1535,6 +1553,100 @@ public sealed class ViewModelTests
     }
 
     [TestMethod]
+    public async Task ConversionWorkersQueueFilesBeyondTheActiveLimit()
+    {
+        using var runtime = new TestRuntime();
+        await runtime.UpdateAsync(settings => settings with { AllowFel = true, ConversionWorkers = 2 }, default);
+        var model = runtime.Container.GetRequiredService<MediaViewModel>();
+        await model.AddAsync([@"C:\Media\Mountain.mkv", @"C:\Media\Ocean.mkv", @"C:\Media\City.mkv"]);
+        model.Files[2].IsSelected = true;
+        var started = System.Threading.Channels.Channel.CreateUnbounded<int>();
+        using var release = new SemaphoreSlim(0);
+        int count = 0;
+        runtime.DuringConversion = async token =>
+        {
+            started.Writer.TryWrite(Interlocked.Increment(ref count));
+            await release.WaitAsync(token);
+        };
+
+        var conversion = model.ConvertDv81Command.InvokeAsync();
+        try
+        {
+            await started.Reader.ReadAsync().AsTask().WaitAsync(TimeSpan.FromSeconds(5));
+            await started.Reader.ReadAsync().AsTask().WaitAsync(TimeSpan.FromSeconds(5));
+            Assert.AreEqual(2, model.BatchProgress.ActiveCount);
+            Assert.AreEqual(1, model.Files.Count(row => row.IsPending));
+            Assert.IsFalse(started.Reader.TryRead(out _));
+
+            release.Release();
+            await started.Reader.ReadAsync().AsTask().WaitAsync(TimeSpan.FromSeconds(5));
+            release.Release(2);
+            await conversion.WaitAsync(TimeSpan.FromSeconds(5));
+
+            Assert.AreEqual(3, model.BatchProgress.Processed);
+            Assert.IsTrue(model.Files.All(row => row.State == MediaRowState.Converted));
+        }
+        finally
+        {
+            model.CancelCommand.Invoke();
+            release.Release(3);
+            await conversion.WaitAsync(TimeSpan.FromSeconds(5));
+        }
+    }
+
+    [TestMethod]
+    public async Task ConversionWorkersWaitForAggregateDiskBudget()
+    {
+        using var runtime = new TestRuntime { AvailableSpaceBytes = 250_000_000_000 };
+        await runtime.UpdateAsync(settings => settings with { AllowFel = true, ConversionWorkers = 2 }, default);
+        var model = runtime.Container.GetRequiredService<MediaViewModel>();
+        await model.AddAsync([@"C:\Media\Mountain.mkv", @"C:\Media\Ocean.mkv"]);
+        var started = System.Threading.Channels.Channel.CreateUnbounded<int>();
+        using var release = new SemaphoreSlim(0);
+        int count = 0;
+        runtime.DuringConversion = async token =>
+        {
+            started.Writer.TryWrite(Interlocked.Increment(ref count));
+            await release.WaitAsync(token);
+        };
+
+        var conversion = model.ConvertDv81Command.InvokeAsync();
+        try
+        {
+            await started.Reader.ReadAsync().AsTask().WaitAsync(TimeSpan.FromSeconds(5));
+            Assert.IsFalse(started.Reader.TryRead(out _));
+            Assert.AreEqual(1, runtime.Conversions);
+            release.Release();
+            await started.Reader.ReadAsync().AsTask().WaitAsync(TimeSpan.FromSeconds(5));
+            release.Release();
+            await conversion.WaitAsync(TimeSpan.FromSeconds(5));
+            Assert.IsTrue(model.Files.All(row => row.State == MediaRowState.Converted));
+        }
+        finally
+        {
+            model.CancelCommand.Invoke();
+            release.Release(2);
+            await conversion.WaitAsync(TimeSpan.FromSeconds(5));
+        }
+    }
+
+    [TestMethod]
+    public async Task ConversionDiskBudgetIncludesConfiguredSafetyMargin()
+    {
+        using var runtime = new TestRuntime { AvailableSpaceBytes = 205_000_000_000 };
+        await runtime.UpdateAsync(settings => settings with { FreeSpaceMarginPercent = 0 }, default);
+        var budget = runtime.Container.GetRequiredService<DoViFixer.Application.Conversion.ConversionDiskBudget>();
+        var request = new DoViFixer.Application.Conversion.CandidateConversionRequest(@"C:\Media\Mountain.mkv", DoViFixer.Domain.Conversion.ConversionTarget.Profile81, null, null, false, false, true, false);
+
+        using (await budget.ReserveAsync(request, default))
+        {
+        }
+
+        await runtime.UpdateAsync(settings => settings with { FreeSpaceMarginPercent = 20 }, default);
+        await Assert.ThrowsExactlyAsync<IOException>(() => budget.ReserveAsync(request, default));
+    }
+
+    [TestMethod]
     public async Task ConvertBatchSupportsPerFileCancellationAndSkip()
     {
         using var runtime = new TestRuntime();
@@ -1831,7 +1943,7 @@ public sealed class ViewModelTests
         Assert.AreEqual(@"Output: C:\Media\CustomOutput (Replace original)", media.OutputSummary);
         Assert.IsTrue(media.IsReplaceOriginalActive);
         StringAssert.Contains(media.OutputSummaryToolTip, @"C:\Media\CustomOutput");
-        StringAssert.Contains(media.OutputSummaryToolTip, "Replace original after verification");
+        StringAssert.Contains(media.OutputSummaryToolTip, "Replace original after conversion");
         CollectionAssert.AreEqual(new[] { media.SelectionSummary, media.StatusText, media.OutputSummary, media.RetentionSummary, media.FelSummary, media.ArchiveSummary }, updatedStatusItems);
         var outputItem = media.StatusItems.Single(item => item.Text == media.OutputSummary);
         Assert.AreSame(media.OpenSettingsCommand, outputItem.Command);
@@ -1898,6 +2010,19 @@ public sealed class ViewModelTests
         using var runtime = new TestRuntime();
         var settings = runtime.Container.GetRequiredService<SettingsViewModel>();
         await settings.LoadCommand.InvokeAsync();
+
+        Assert.AreEqual(3, settings.VerificationLevel);
+        settings.VerificationLevel = 4;
+        await settings.SaveTask;
+        Assert.AreEqual(DoViFixer.Application.Settings.VerificationLevel.FullIntegrity, runtime.Settings.VerificationLevel);
+
+        settings.RecycleDeletedOriginalsAndBackups = false;
+        await settings.SaveTask;
+        Assert.IsFalse(runtime.Settings.RecycleDeletedOriginalsAndBackups);
+
+        settings.FreeSpaceMarginPercent = 35;
+        await settings.SaveTask;
+        Assert.AreEqual(35d, runtime.Settings.FreeSpaceMarginPercent);
 
         Assert.IsFalse(runtime.Settings.IncludeSimple);
         settings.IncludeSimple = true;

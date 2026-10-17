@@ -103,7 +103,7 @@ public sealed class ArchiveTools(BackupService backup, RestoreService restore, C
     }
 
     [McpServerTool(Name = "delete_backups", Title = "Delete backups", ReadOnly = false, Destructive = true, Idempotent = false, OpenWorld = false)]
-    [Description("Permanently delete exactly the files a list_backups plan showed. Only call this when the user explicitly asked to delete those backups; deleted archives cannot restore Profile 7 any more.")]
+    [Description("Remove exactly the files a list_backups plan showed, using the saved Safety Recycle Bin setting. Only call this when the user explicitly asked to remove those backups; removed archives cannot restore Profile 7 any more.")]
     public async Task<string> DeleteBackups([Description("Plan id from list_backups.")] string planId, CancellationToken cancellationToken = default)
     {
         var plan = plans.Take<CleanupPlan>(ToolArguments.PlanIds([planId]))[0];

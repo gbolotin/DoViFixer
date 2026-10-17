@@ -1,16 +1,18 @@
 using DoViFixer.Application.Abstractions;
 using DoViFixer.Application.Operations;
 using DoViFixer.Domain.Media;
+using DoViFixer.Application.Settings;
 using Microsoft.Extensions.Logging;
 
 namespace DoViFixer.Application.Cleanup;
 public sealed record CleanupPlan(Guid Id, IReadOnlyList<FileIdentity> Files);
-public sealed class CleanupService(IFileDiscovery discovery, IFileOperations files, ILogger<CleanupService> logger)
+public sealed class CleanupService(IFileDiscovery discovery, IFileOperations files, ILogger<CleanupService> logger, ISettingsStore? settings = null)
 {
     public CleanupPlan Plan(string input, int recursiveDepth) => new(Guid.NewGuid(), Array.AsReadOnly(discovery.Discover(input, recursiveDepth, cleanup: true).Select(files.Identify).ToArray()));
     public Task<BatchResult> ExecuteAsync(CleanupPlan approvedPlan, CancellationToken cancellationToken) => OperationLog.RunAsync(logger, "Cleanup", approvedPlan.Id, null, () => ExecuteCoreAsync(approvedPlan, cancellationToken), cancellationToken, result => result.Status);
     private async Task<BatchResult> ExecuteCoreAsync(CleanupPlan approvedPlan, CancellationToken cancellationToken)
     {
+        bool recycle = settings is not null && (await settings.ReadAsync(cancellationToken)).RecycleDeletedOriginalsAndBackups;
         var results = new List<OperationItemResult>();
         foreach (var file in approvedPlan.Files)
         {
@@ -18,9 +20,9 @@ public sealed class CleanupService(IFileDiscovery discovery, IFileOperations fil
             try
             {
                 OperationLog.Audit(logger, "DeleteBackup", file.Path, "Started", approvedPlan.Id);
-                await files.DeleteAsync(file, cancellationToken);
+                await files.DeleteAsync(file, cancellationToken, recycle);
                 OperationLog.Audit(logger, "DeleteBackup", file.Path, "Completed", approvedPlan.Id);
-                results.Add(new(file.Path, OperationStatus.Completed, null, "Deleted approved backup."));
+                results.Add(new(file.Path, OperationStatus.Completed, null, recycle ? "Moved approved backup to Recycle Bin." : "Deleted approved backup."));
             }
             catch (OperationCanceledException)
             {
