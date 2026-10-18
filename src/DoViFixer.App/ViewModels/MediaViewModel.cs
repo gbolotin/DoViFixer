@@ -102,6 +102,7 @@ public sealed partial class MediaViewModel : OperationViewModel, INavigationPage
             ShownFilesChanged();
         };
         FileSort = new((column, direction) => new MediaRowComparer((MediaSortColumn)column, direction), () => IsIdle);
+        FileSort.PropertyChanged += OnFileSortChanged;
         BatchProgress.PropertyChanged += (_, e) =>
         {
             NotifyActiveProgress();
@@ -373,6 +374,7 @@ public sealed partial class MediaViewModel : OperationViewModel, INavigationPage
 
     public void Dispose()
     {
+        FileSort.PropertyChanged -= OnFileSortChanged;
         sourceFiles.Changed -= OnSourceFilesChanged;
         CancelPreviews();
     }
@@ -767,7 +769,9 @@ public sealed partial class MediaViewModel : OperationViewModel, INavigationPage
     {
         try
         {
-            UpdateSettingsSummary(await settings.ReadAsync(token));
+            var snapshot = await settings.ReadAsync(token);
+            LoadColumnLayout(snapshot);
+            UpdateSettingsSummary(snapshot);
         }
         catch (Exception ex) when (ex is not OperationCanceledException)
         {
@@ -780,6 +784,7 @@ public sealed partial class MediaViewModel : OperationViewModel, INavigationPage
 
     protected override void CommandsChanged()
     {
+        ResetColumnLayoutCommand?.NotifyCanExecuteChanged();
         OnPropertyChanged(nameof(CanInspect));
         ScanRowCommand?.NotifyCanExecuteChanged();
         RetryAnalysisCommand?.NotifyCanExecuteChanged();

@@ -167,13 +167,21 @@
         <DataTemplate x:Key="MediaListTemplate" DataType="{x:Type viewModels:MediaViewModel}">
             <ListView ItemsSource="{Binding Files}"
                       SelectedItem="{Binding Focused}"
+                      wf:GridViewLayout.IsEnabled="True"
+                      wf:GridViewLayout.State="{Binding ColumnLayout, Mode=TwoWay}"
                       wf:GridViewSizing.LastColumnMinimumWidth="176"
                       wf:GridViewSort.Sort="{Binding FileSort}"
                       wf:ListFilter.Predicate="{Binding ShownFilePredicate}"
                       wf:ListFilter.LiveProperty="FilterGroup">
+                <ListView.ContextMenu>
+                    <ContextMenu>
+                        <MenuItem Header="Reset columns" Command="{Binding ResetColumnLayoutCommand}" />
+                    </ContextMenu>
+                </ListView.ContextMenu>
                 <ListView.View>
                     <GridView ColumnHeaderContainerStyle="{StaticResource WfSortableColumnHeaderContainerStyle}" ColumnHeaderTemplate="{StaticResource WfSortableColumnHeaderTemplate}">
                         <GridViewColumn Header="File"
+                                        wf:GridViewLayout.Id="Name"
                                         Width="150"
                                         wf:GridViewSort.Key="{x:Static viewModels:MediaSortColumn.Name}">
                             <GridViewColumn.HeaderTemplate>
@@ -221,6 +229,7 @@
                             </GridViewColumn.CellTemplate>
                         </GridViewColumn>
                         <GridViewColumn Header="Format"
+                                        wf:GridViewLayout.Id="Format"
                                         Width="120"
                                         wf:GridViewSort.Key="{x:Static viewModels:MediaSortColumn.Classification}">
                             <GridViewColumn.CellTemplate>
@@ -234,6 +243,7 @@
                             </GridViewColumn.CellTemplate>
                         </GridViewColumn>
                         <GridViewColumn Header="Result"
+                                        wf:GridViewLayout.Id="Result"
                                         Width="128"
                                         wf:GridViewSort.Key="{x:Static viewModels:MediaSortColumn.Status}">
                             <GridViewColumn.CellTemplate>
@@ -356,6 +366,7 @@
                             </GridViewColumn.CellTemplate>
                         </GridViewColumn>
                         <GridViewColumn Header="Analysis"
+                                        wf:GridViewLayout.Id="Analysis"
                                         Width="96"
                                         wf:GridViewSort.Key="{x:Static viewModels:MediaSortColumn.Analysis}">
                             <GridViewColumn.CellTemplate>
@@ -366,7 +377,10 @@
                                 </DataTemplate>
                             </GridViewColumn.CellTemplate>
                         </GridViewColumn>
-                        <GridViewColumn Header="Actions" Width="176">
+                        <GridViewColumn Header="Actions"
+                                        Width="176"
+                                        wf:GridViewLayout.Id="Actions"
+                                        wf:GridViewSizing.IsFillColumn="True">
                             <GridViewColumn.CellTemplate>
                                 <DataTemplate>
                                     <Grid VerticalAlignment="Center">

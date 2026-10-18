@@ -257,3 +257,14 @@ These tests execute native conversion, HDR10 removal, backup/restore, and the ve
 See [architecture](docs/architecture.md), [upstream parity and limitations](docs/upstream-parity.md), and [fixture provenance](tests/DoViFixer.Infrastructure.Tests/Fixtures/README.md).
 
 **Delete library** removes all remembered file records, saved analyses and history, including legacy analysis cache entries. The current list is also cleared. Media files and frame previews remain unchanged. Adding files again can populate the library.
+
+### Media column layout
+
+The Media table remembers column widths, column order, and the selected sort column/direction across restarts.
+These values are stored in `MediaListLayout` in `%LOCALAPPDATA%\DoViFixer\settings.json`.
+The Actions column continues to fill available space; resizing the window does not overwrite saved column widths.
+Right-click the table and choose **Reset columns** to restore the default widths/order and clear sorting.
+The original file collection order is unchanged by display sorting.
+
+This integration requires WpfFoundation and WpfFoundation.Notifications `1.1.0-preview.12`.
+Build `DoViFixer.Local.sln` to debug the shared behavior against a sibling WpfFoundation checkout.

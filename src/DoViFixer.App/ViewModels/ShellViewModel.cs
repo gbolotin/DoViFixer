@@ -265,6 +265,7 @@ public sealed partial class ShellViewModel : ObservableObject, INavigationGuard,
         }
         await Task.WhenAll(operations.Select(o => o.Completion).Append(dependencyCheck.Completion));
         await media.CancelPreviewsAsync();
+        await media.FlushColumnLayoutAsync();
         await Settings.FlushAsync();
     }
 

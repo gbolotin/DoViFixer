@@ -5,6 +5,7 @@ using DoViFixer.Application.Dependencies;
 namespace DoViFixer.Application.Settings;
 public sealed record UserSettings
 {
+    public MediaListLayout? MediaListLayout { get; init; }
     public int BrightnessMarginNits { get; init; } = 50;
     public int AssumedPeakBrightnessNits { get; init; } = 1000;
     public int ScanSampleCount { get; init; } = 10;
