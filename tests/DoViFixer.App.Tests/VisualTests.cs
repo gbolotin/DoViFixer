@@ -519,6 +519,18 @@ public sealed class VisualTests
 
         var filterBox = Descendants<TextBox>(window).Single(box => AutomationProperties.GetName(box) == "Filter files");
         Assert.AreEqual("\uE721", TextBoxAssist.GetIcon(filterBox));
+        var filterRow = (Grid)filterBox.Parent;
+        var filterScroll = filterRow.Children.OfType<ScrollViewer>().Single();
+        Assert.IsTrue(filterRow.ColumnDefinitions[0].Width.IsStar, "Search must fill the space before the filter buttons.");
+        Assert.IsTrue(filterRow.ColumnDefinitions[1].Width.IsAuto, "Filter buttons use only their required width.");
+        Assert.AreEqual(HorizontalAlignment.Right, filterScroll.HorizontalAlignment);
+        Assert.AreEqual(1, Grid.GetColumn(filterScroll));
+        Assert.AreEqual(ScrollBarVisibility.Auto, filterScroll.HorizontalScrollBarVisibility);
+        Assert.AreEqual(ScrollBarVisibility.Disabled, filterScroll.VerticalScrollBarVisibility);
+        var visibleChips = chips.Where(chip => chip.IsVisible).ToArray();
+        double firstTop = visibleChips[0].TransformToAncestor(window).Transform(new Point()).Y;
+        Assert.IsTrue(visibleChips.All(chip => Math.Abs(chip.TransformToAncestor(window).Transform(new Point()).Y - firstTop) < 1),
+            "Filter buttons must stay on one line beside the search box.");
         var clearFilterButton = (Button)filterBox.Template.FindName("DeleteButton", filterBox);
         Assert.AreEqual(Visibility.Collapsed, clearFilterButton.Visibility);
         filterBox.Text = sorted[0].Name;
