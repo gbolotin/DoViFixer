@@ -5,5 +5,5 @@ public enum MediaSortColumn
     Name,
     Classification,
     Status,
-    Action
+    Analysis
 }

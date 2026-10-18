@@ -8,8 +8,9 @@ public sealed partial class MediaRow(string path) : ObservableObject
     #region Private fields
 
     private bool selectionEnabled = true;
-    private string status = "Not scanned";
+    private string status = "Not checked";
     private bool canRetryAnalysis;
+    private AnalysisMethod? lastAnalysisMethod = AnalysisMethod.SampledRpu;
     private string? warning;
 
     #endregion
@@ -31,7 +32,7 @@ public sealed partial class MediaRow(string path) : ObservableObject
     public bool IsProfile7 => Analysis?.Media.Profile == Domain.Media.DolbyVisionProfile.Profile7;
     public bool CanRestore => CurrentFileAnalysis?.Media.Profile == Domain.Media.DolbyVisionProfile.Profile81 && RestoreArchive is not null && State != MediaRowState.Restored && !IsMissing;
     [ObservableProperty]
-    [NotifyPropertyChangedFor(nameof(CanRestore), nameof(StatusTone), nameof(ActionText), nameof(ShowsActionText), nameof(DetailRows))]
+    [NotifyPropertyChangedFor(nameof(CanRestore), nameof(StatusTone), nameof(AnalysisText), nameof(ResultRecommendation), nameof(NextStepText), nameof(DetailRows))]
     public partial string? RestoreArchive { get; set; }
     [ObservableProperty]
     public partial bool IsCancellationRequested { get; set; }
@@ -44,32 +45,74 @@ public sealed partial class MediaRow(string path) : ObservableObject
         && Analysis is not null
         && Analysis.Media.Profile == Domain.Media.DolbyVisionProfile.Profile7
         && Analysis.Evidence.Method == AnalysisMethod.SampledRpu
-        && (HasIncompleteScan || Analysis.Verdict is AnalysisVerdict.SimpleFel or AnalysisVerdict.FelUnclassified or AnalysisVerdict.Unknown);
+        && (HasIncompleteScan || Analysis.Verdict is AnalysisVerdict.Mel or AnalysisVerdict.SimpleFel or AnalysisVerdict.FelUnclassified or AnalysisVerdict.Unknown);
     public bool CanInspectIncomplete => NeedsInspection && !CanOpenResult && !IsActive && !IsPending && !IsMissing;
 
     /// <summary>
     /// The source file no longer exists at <see cref="Path"/>. The row keeps its last results so the file can be restored or removed.
     /// </summary>
     [ObservableProperty]
-    [NotifyPropertyChangedFor(nameof(Status), nameof(StatusTone), nameof(StatusToolTip), nameof(ActionText), nameof(ShowsActionText), nameof(SelectionEnabled), nameof(CanRestore), nameof(CanRetryAnalysis), nameof(CanInspectIncomplete), nameof(DetailNotes))]
+    [NotifyPropertyChangedFor(nameof(Status), nameof(StatusTone), nameof(StatusToolTip), nameof(NextStepText), nameof(SelectionEnabled), nameof(CanRestore), nameof(CanRetryAnalysis), nameof(CanInspectIncomplete), nameof(DetailNotes))]
     public partial bool IsMissing { get; set; }
 
     /// <summary>A converted row keeps its result when Replace original moved the source away on purpose.</summary>
     private bool ShowsMissing => IsMissing && State != MediaRowState.Converted;
-    public AnalysisMethod? LastAnalysisMethod { get; set;} = AnalysisMethod.SampledRpu;
+    public AnalysisMethod? LastAnalysisMethod
+    {
+        get => lastAnalysisMethod;
+        set
+        {
+            if (SetProperty(ref lastAnalysisMethod, value))
+            {
+                OnPropertyChanged(nameof(AnalysisText));
+            }
+        }
+    }
+    public string AnalysisText
+    {
+        get
+        {
+            if (Analysis is { } analysis)
+            {
+                return MethodName(analysis.Evidence.Method);
+            }
+
+            return HasAnalysisError && LastAnalysisMethod is { } attempted
+                ? $"{MethodName(attempted)} (failed)"
+                : "—";
+        }
+    }
+    public string ResultRecommendation
+    {
+        get
+        {
+            if (State != MediaRowState.Scanned || Analysis is not { } analysis)
+            {
+                return "";
+            }
+
+            if (analysis.Evidence.Method == AnalysisMethod.SampledRpu && analysis.Verdict is AnalysisVerdict.Mel or AnalysisVerdict.SimpleFel)
+            {
+                return "Inspection recommended";
+            }
+
+            return analysis.Verdict is AnalysisVerdict.Unknown or AnalysisVerdict.FelUnclassified ? "Verification required" : "";
+        }
+    }
     public string? CurrentOperation { get; set; }
     public string OperationName => CurrentOperation ?? (LastAnalysisMethod is null ? "Conversion" : LastAnalysisMethod == AnalysisMethod.SampledRpu ? "Scan" : "Inspection");
     [ObservableProperty]
-    [NotifyPropertyChangedFor(nameof(Format), nameof(CanOpenResult), nameof(CanInspectIncomplete), nameof(ShowsResultComparison), nameof(DetailRows), nameof(ResultFiles), nameof(CanRestore), nameof(Warning), nameof(HasWarning), nameof(Status), nameof(StatusTone), nameof(StatusToolTip), nameof(ActionText), nameof(ShowsActionText), nameof(DetailNotes))]
+    [NotifyPropertyChangedFor(nameof(Format), nameof(CanOpenResult), nameof(CanInspectIncomplete), nameof(ShowsResultComparison), nameof(AnalysisText), nameof(ResultRecommendation), nameof(NextStepText), nameof(DetailRows), nameof(ResultFiles), nameof(CanRestore), nameof(Warning), nameof(HasWarning), nameof(Status), nameof(StatusTone), nameof(StatusToolTip), nameof(DetailNotes))]
     public partial MediaRowState State { get; private set; } = MediaRowState.NotScanned;
     public bool CanRetryAnalysis
     {
         get => canRetryAnalysis && !IsMissing;
         set
         {
-            SetProperty(ref canRetryAnalysis, value);
-            OnPropertyChanged(nameof(ActionText));
-            OnPropertyChanged(nameof(ShowsActionText));
+            if (SetProperty(ref canRetryAnalysis, value))
+            {
+                OnPropertyChanged(nameof(NextStepText));
+            }
         }
     }
     public bool CanOpenResult => Result?.Output is not null && State is MediaRowState.Converted or MediaRowState.Restored;
@@ -93,10 +136,10 @@ public sealed partial class MediaRow(string path) : ObservableObject
         set => SetProperty(ref selectionEnabled, value);
     }
     [ObservableProperty]
-    [NotifyPropertyChangedFor(nameof(CanInspectIncomplete), nameof(ActionText), nameof(ShowsActionText))]
+    [NotifyPropertyChangedFor(nameof(CanInspectIncomplete), nameof(NextStepText))]
     public partial bool IsPending { get; set; }
     [ObservableProperty]
-    [NotifyPropertyChangedFor(nameof(CanInspectIncomplete), nameof(StatusTone), nameof(ActionText), nameof(ShowsActionText))]
+    [NotifyPropertyChangedFor(nameof(CanInspectIncomplete), nameof(StatusTone), nameof(NextStepText))]
     public partial bool IsActive { get; set; }
     public string Status
     {
@@ -108,8 +151,6 @@ public sealed partial class MediaRow(string path) : ObservableObject
             OnPropertyChanged(nameof(ShowsResultComparison));
             OnPropertyChanged(nameof(StatusTone));
             OnPropertyChanged(nameof(StatusToolTip));
-            OnPropertyChanged(nameof(ActionText));
-            OnPropertyChanged(nameof(ShowsActionText));
         }
     }
     public MediaStatusTone StatusTone
@@ -132,25 +173,13 @@ public sealed partial class MediaRow(string path) : ObservableObject
                     ? MediaStatusTone.VerifyRecommended
                     : MediaStatusTone.Safe,
                 MediaRowState.Restored => MediaStatusTone.Safe,
-                MediaRowState.PlanReady => MediaStatusTone.LowRisk,
+                MediaRowState.PlanReady => MediaStatusTone.Neutral,
                 MediaRowState.Cancelled => MediaStatusTone.VerifyRecommended,
                 MediaRowState.Failed => MediaStatusTone.HighRisk,
                 MediaRowState.Skipped => MediaStatusTone.Neutral,
                 MediaRowState.Scanned => Analysis is null ? MediaStatusTone.Neutral : Analysis.Media.Profile switch
                 {
-                    Domain.Media.DolbyVisionProfile.Profile7 => Analysis.Verdict switch
-                    {
-                        AnalysisVerdict.Mel => MediaStatusTone.Safe,
-                        AnalysisVerdict.SimpleFel => Analysis.Evidence.Method switch
-                        {
-                            AnalysisMethod.FullRpu => MediaStatusTone.LowRisk,
-                            AnalysisMethod.DeepInspection => MediaStatusTone.Safe,
-                            _ => MediaStatusTone.VerifyRecommended
-                        },
-                        AnalysisVerdict.ComplexFel or AnalysisVerdict.AnalysisFailed => MediaStatusTone.HighRisk,
-                        AnalysisVerdict.NotApplicable => MediaStatusTone.Neutral,
-                        _ => MediaStatusTone.VerifyRecommended
-                    },
+                    Domain.Media.DolbyVisionProfile.Profile7 => RiskTone(Analysis),
                     Domain.Media.DolbyVisionProfile.Profile81 => CanRestore
                         ? MediaStatusTone.Safe
                         : MediaStatusTone.Neutral,
@@ -160,72 +189,6 @@ public sealed partial class MediaRow(string path) : ObservableObject
             };
         }
     }
-    public string ActionText
-    {
-        get
-        {
-            if (ShowsMissing)
-            {
-                return "";
-            }
-
-            if (IsActive)
-            {
-                return "Cancel";
-            }
-
-            if (IsPending)
-            {
-                return "Skip";
-            }
-
-            if (CanRetryAnalysis)
-            {
-                return "Retry";
-            }
-
-            if (CanInspectIncomplete)
-            {
-                return "Inspect";
-            }
-
-            if (HasAnalysisError)
-            {
-                return "Retry";
-            }
-
-            return State switch
-            {
-                MediaRowState.Converted => CanRestore ? "Restore to DV7" : "No action needed",
-                MediaRowState.Restored => "No action needed",
-                MediaRowState.PlanReady => "Convert",
-                MediaRowState.Skipped => "Review settings",
-                MediaRowState.Cancelled => "Retry",
-                MediaRowState.Failed => "Check details",
-                MediaRowState.Scanned => Analysis is null ? "Scan" : Analysis.Media.Profile switch
-                {
-                    Domain.Media.DolbyVisionProfile.Profile7 => Analysis.Verdict switch
-                    {
-                        AnalysisVerdict.Mel or AnalysisVerdict.SimpleFel => "Convert",
-                        AnalysisVerdict.ComplexFel => "Do not convert",
-                        AnalysisVerdict.AnalysisFailed => "Retry",
-                        _ => Analysis.Evidence.Method == AnalysisMethod.MetadataOnly ? "Scan" : "Do not convert"
-                    },
-                    Domain.Media.DolbyVisionProfile.Profile81 => CanRestore
-                        ? "Restore to DV7"
-                        : "No action needed",
-                    _ => "No action needed"
-                },
-                _ => "Scan"
-            };
-        }
-    }
-    public bool ShowsActionText => !ShowsMissing
-        && !IsActive
-        && !IsPending
-        && !CanRetryAnalysis
-        && !CanInspectIncomplete
-        && !string.IsNullOrWhiteSpace(ActionText);
     [ObservableProperty]
     [NotifyPropertyChangedFor(nameof(Warning), nameof(HasWarning), nameof(DetailNotes), nameof(StatusToolTip))]
     public partial string Notice { get; set; } = "";
@@ -264,16 +227,16 @@ public sealed partial class MediaRow(string path) : ObservableObject
     }
 
     [ObservableProperty]
-    [NotifyPropertyChangedFor(nameof(Classification), nameof(FilterGroup), nameof(HasAnalysisError), nameof(NeedsInspection), nameof(CanInspectIncomplete), nameof(StatusTone), nameof(ActionText), nameof(ShowsActionText), nameof(DetailRows), nameof(DetailNotes), nameof(StatusToolTip))]
+    [NotifyPropertyChangedFor(nameof(Classification), nameof(FilterGroup), nameof(HasAnalysisError), nameof(NeedsInspection), nameof(CanInspectIncomplete), nameof(StatusTone), nameof(AnalysisText), nameof(ResultRecommendation), nameof(NextStepText), nameof(DetailRows), nameof(DetailNotes), nameof(StatusToolTip))]
     public partial string? AnalysisError { get; set; }
 
     [ObservableProperty]
-    [NotifyPropertyChangedFor(nameof(Format), nameof(HasResult), nameof(ResultFiles), nameof(CanOpenResult), nameof(CanInspectIncomplete), nameof(ShowsResultComparison), nameof(StatusTone), nameof(ActionText), nameof(ShowsActionText), nameof(DetailRows), nameof(StatusToolTip))]
+    [NotifyPropertyChangedFor(nameof(Format), nameof(HasResult), nameof(ResultFiles), nameof(CanOpenResult), nameof(CanInspectIncomplete), nameof(ShowsResultComparison), nameof(StatusTone), nameof(AnalysisText), nameof(ResultRecommendation), nameof(NextStepText), nameof(DetailRows), nameof(StatusToolTip))]
     public partial OperationItemResult? Result { get; set; }
 
     /// <summary>Container metadata of the file the last conversion or restoration produced, when it could be read.</summary>
     [ObservableProperty]
-    [NotifyPropertyChangedFor(nameof(Format), nameof(CanRestore), nameof(ActionText), nameof(ShowsActionText), nameof(DetailRows))]
+    [NotifyPropertyChangedFor(nameof(Format), nameof(CanRestore), nameof(AnalysisText), nameof(ResultRecommendation), nameof(NextStepText), nameof(DetailRows))]
     public partial MediaAnalysis? ResultAnalysis { get; set; }
 
     /// <summary>Details compare the original with the produced file side by side.</summary>
@@ -287,7 +250,7 @@ public sealed partial class MediaRow(string path) : ObservableObject
     private MediaAnalysis? CurrentFileAnalysis => ReplacesOriginal && ResultAnalysis is { } result ? result : Analysis;
 
     [ObservableProperty]
-    [NotifyPropertyChangedFor(nameof(Format), nameof(IsProfile7), nameof(CanRestore), nameof(HasIncompleteScan), nameof(NeedsInspection), nameof(CanInspectIncomplete), nameof(Classification), nameof(FilterGroup), nameof(StatusTone), nameof(ActionText), nameof(ShowsActionText), nameof(DetailRows), nameof(DetailNotes))]
+    [NotifyPropertyChangedFor(nameof(Format), nameof(IsProfile7), nameof(CanRestore), nameof(HasIncompleteScan), nameof(NeedsInspection), nameof(CanInspectIncomplete), nameof(Classification), nameof(FilterGroup), nameof(StatusTone), nameof(AnalysisText), nameof(ResultRecommendation), nameof(NextStepText), nameof(DetailRows), nameof(DetailNotes))]
     public partial MediaAnalysis? Analysis { get; set; }
 
     /// <summary>The list filter that shows this file. Files not scanned yet and files whose analysis failed share one group.</summary>
@@ -339,12 +302,14 @@ public sealed partial class MediaRow(string path) : ObservableObject
                 Compared("Size", FormatSize(a), FormatSize),
                 Compared("Date modified", FormatDate(a), FormatDate),
                 Compared("Length", FormatLength(a), FormatLength),
-                Compared("Format", FormatAnalysis(a), FormatAnalysis),
+                Compared("Format", DetailFormat(a), DetailFormat),
+                .. HasDolbyVision(a) || produced is not null && HasDolbyVision(produced)
+                    ? new[] { Compared("Profile", DetailProfile(a), DetailProfile) }
+                    : Array.Empty<MediaDetail>(),
                 Compared("Resolution", FormatResolution(a), FormatResolution),
                 Compared("Frame rate", FormatFrameRate(a), FormatFrameRate),
-                new("Risk", RiskDetailText(a)),
-                new("Evidence", EvidenceName(a.Evidence.Method)),
-                new("Next step", NextStepDetailText(a)),
+                new(compare ? "Original risk" : "Risk", RiskDetailText(a), StatusTone: RiskTone(a)),
+                new("Analysis", EvidenceName(a.Evidence.Method)),
                 new("Frames", a.Evidence.Frames.ToString("N0")),
                 new("Samples", $"{a.Evidence.SuccessfulSamples}/{a.Evidence.RequestedSamples}")
             ];
@@ -357,7 +322,10 @@ public sealed partial class MediaRow(string path) : ObservableObject
         AnalysisError is not null ? $"Analysis failed\n{AnalysisError}" : Analysis?.Reason,
         Analysis?.Evidence.SampleDiagnostics,
         GuidanceNote(),
-        Notice
+        Notice,
+        Analysis?.Media.Profile == Domain.Media.DolbyVisionProfile.Profile7
+            ? "Conversion uses standard inspection or eligible saved scan results. Expert deep checks do not change conversion permission. Simple FEL requires Include Simple FEL; Complex FEL requires explicit approval."
+            : null
     }.Where(text => !string.IsNullOrWhiteSpace(text)));
     public bool HasResult => Result is not null;
     /// <summary>
@@ -380,7 +348,7 @@ public sealed partial class MediaRow(string path) : ObservableObject
             if (value is null)
             {
                 State = MediaRowState.NotScanned;
-                Status = AnalysisError is not null ? $"{OperationName} failed" : "Not scanned";
+                Status = AnalysisError is not null ? $"{OperationName} failed" : "Not checked";
             }
             else
             {
@@ -497,100 +465,114 @@ public sealed partial class MediaRow(string path) : ObservableObject
 
         if (Analysis is not { } analysis)
         {
-            return "Not scanned";
+            return "Not checked";
         }
 
-        string method = MethodStatusText(analysis.Evidence.Method);
-        return analysis.Media.Profile switch
-        {
-            Domain.Media.DolbyVisionProfile.Profile7 => analysis.Verdict switch
-            {
-                AnalysisVerdict.Mel => $"Safe · {method}",
-                AnalysisVerdict.SimpleFel => analysis.Evidence.Method switch
-                {
-                    AnalysisMethod.FullRpu => $"Low risk · {method}",
-                    AnalysisMethod.DeepInspection => $"Safe · {method}",
-                    _ => $"Verify recommended · {method}"
-                },
-                AnalysisVerdict.ComplexFel => $"High risk · {method}",
-                AnalysisVerdict.AnalysisFailed => $"{OperationName} failed",
-                _ => $"Verify recommended · {method}"
-            },
-            Domain.Media.DolbyVisionProfile.Profile81 => CanRestore
-                ? $"Backup paired · {method}"
-                : $"Compatible · {method}",
-            Domain.Media.DolbyVisionProfile.None => $"No Dolby Vision · {method}",
-            _ => $"Compatible · {method}"
-        };
+        return RiskDetailText(analysis);
     }
 
-    private static string MethodStatusText(AnalysisMethod method) => method switch
+    private static string MethodName(AnalysisMethod method) => method switch
     {
-        AnalysisMethod.FullRpu => "Inspected",
-        AnalysisMethod.DeepInspection => "Deep inspected",
-        _ => "Scanned"
+        AnalysisMethod.SampledRpu => "Scan",
+        AnalysisMethod.FullRpu => "Inspection",
+        AnalysisMethod.DeepInspection => "Deep inspection",
+        _ => "Metadata only"
     };
 
     private string RiskDetailText(MediaAnalysis analysis)
     {
         if (AnalysisError is not null || analysis.Verdict == AnalysisVerdict.AnalysisFailed)
         {
-            return "Analysis failed";
+            return "Check failed";
+        }
+
+        if (analysis.Media.Profile != Domain.Media.DolbyVisionProfile.Profile7)
+        {
+            return analysis.Media.Profile switch
+            {
+                Domain.Media.DolbyVisionProfile.Profile81 => "Already compatible",
+                Domain.Media.DolbyVisionProfile.None when analysis.Media.IsHdr is not null => "No conversion needed",
+                Domain.Media.DolbyVisionProfile.Profile5 or Domain.Media.DolbyVisionProfile.Other => "Unsupported profile",
+                _ => "Unknown format"
+            };
+        }
+
+        if (analysis.Evidence.Method == AnalysisMethod.MetadataOnly)
+        {
+            return "Not checked";
         }
 
         return analysis.Media.Profile switch
         {
             Domain.Media.DolbyVisionProfile.Profile7 => analysis.Verdict switch
             {
-                AnalysisVerdict.Mel => "Safe",
-                AnalysisVerdict.SimpleFel => analysis.Evidence.Method switch
-                {
-                    AnalysisMethod.FullRpu => "Low risk",
-                    AnalysisMethod.DeepInspection => "Safe",
-                    _ => "Verify recommended"
-                },
+                AnalysisVerdict.Mel => analysis.Evidence.Method == AnalysisMethod.SampledRpu ? "Likely safe" : "Safe",
+                AnalysisVerdict.SimpleFel => "Low risk",
                 AnalysisVerdict.ComplexFel => "High risk",
-                _ => "Verify recommended"
+                _ => "Risk unknown"
             },
-            Domain.Media.DolbyVisionProfile.Profile81 => CanRestore ? "Safe (backup paired)" : "Compatible",
-            Domain.Media.DolbyVisionProfile.None => "No Dolby Vision",
-            _ => "Compatible"
+            _ => "Not applicable"
         };
     }
 
-    private string NextStepDetailText(MediaAnalysis analysis)
+    private MediaStatusTone RiskTone(MediaAnalysis analysis)
     {
-        if (State == MediaRowState.Converted)
-        {
-            return "Converted";
-        }
-
-        if (State == MediaRowState.Restored)
-        {
-            return "Restored";
-        }
-
         if (AnalysisError is not null || analysis.Verdict == AnalysisVerdict.AnalysisFailed)
         {
-            return "Retry analysis";
+            return MediaStatusTone.HighRisk;
         }
 
-        return analysis.Media.Profile switch
+        if (analysis.Media.Profile != Domain.Media.DolbyVisionProfile.Profile7 || analysis.Evidence.Method == AnalysisMethod.MetadataOnly)
         {
-            Domain.Media.DolbyVisionProfile.Profile7 => analysis.Verdict switch
-            {
-                AnalysisVerdict.Mel => "Convert",
-                AnalysisVerdict.SimpleFel => analysis.Evidence.Method == AnalysisMethod.SampledRpu
-                    ? "Inspect (verify full RPU)"
-                    : "Convert",
-                AnalysisVerdict.ComplexFel => "Do not convert",
-                _ => analysis.Evidence.Method == AnalysisMethod.SampledRpu
-                    ? "Inspect (verify full RPU)"
-                    : "Do not convert"
-            },
-            Domain.Media.DolbyVisionProfile.Profile81 => CanRestore ? "Restore to DV7 (optional)" : "No action needed",
-            _ => "No action needed"
+            return MediaStatusTone.Neutral;
+        }
+
+        return analysis.Verdict switch
+        {
+            AnalysisVerdict.Mel => analysis.Evidence.Method == AnalysisMethod.SampledRpu ? MediaStatusTone.VerifyRecommended : MediaStatusTone.Safe,
+            AnalysisVerdict.SimpleFel => MediaStatusTone.LowRisk,
+            AnalysisVerdict.ComplexFel => MediaStatusTone.HighRisk,
+            AnalysisVerdict.NotApplicable => MediaStatusTone.Neutral,
+            _ => MediaStatusTone.VerifyRecommended
         };
+    }
+
+    public string NextStepText
+    {
+        get
+        {
+            if (IsMissing || IsActive || IsPending)
+            {
+                return "";
+            }
+
+            if (CanOpenResult)
+            {
+                return "Open output";
+            }
+
+            if (CanRestore)
+            {
+                return "Restore to DV7";
+            }
+
+            if (CanRetryAnalysis)
+            {
+                return "Retry analysis";
+            }
+
+            if (Analysis is null || Analysis.Evidence.Method == AnalysisMethod.MetadataOnly && IsProfile7)
+            {
+                return "Scan";
+            }
+
+            if (CanInspectIncomplete)
+            {
+                return "Inspect";
+            }
+
+            return IsProfile7 && Analysis.Verdict is AnalysisVerdict.Mel or AnalysisVerdict.SimpleFel ? "Convert" : "";
+        }
     }
 
     private string? GuidanceNote()
@@ -612,16 +594,18 @@ public sealed partial class MediaRow(string path) : ObservableObject
 
         return analysis.Verdict switch
         {
-            AnalysisVerdict.Mel => "Safe to convert. Minimal Enhancement Layer (MEL) carries no extra picture data, so converting to Profile 8.1 is lossless.",
+            AnalysisVerdict.Mel => analysis.Evidence.Method == AnalysisMethod.SampledRpu
+                ? "Likely safe. Sampled metadata indicates MEL. Inspection is recommended to check the complete metadata stream. Output verification still applies."
+                : "Safe: MEL carries no enhancement-layer picture data. Output verification still applies; playback compatibility is not guaranteed.",
             AnalysisVerdict.SimpleFel => analysis.Evidence.Method switch
             {
-                AnalysisMethod.SampledRpu => "Suggested action: Inspect. Quick scan sampled 10 snippets and found Simple FEL. Run standard Inspect to verify the full RPU stream before converting.",
-                AnalysisMethod.FullRpu => "Low risk. Full RPU inspection confirmed Simple FEL within base-layer brightness limits. Enable 'Include Simple FEL' in Settings to convert. (Deep Inspect is a slow frame-by-frame check only needed by experts.)",
-                AnalysisMethod.DeepInspection => "Safe to convert. Expert deep inspection verified frames across the movie. Enable 'Include Simple FEL' in Settings to convert.",
+                AnalysisMethod.SampledRpu => "Suggested action: Inspect. Sampled metadata indicates Simple FEL. Run standard Inspect to verify the full RPU stream before converting.",
+                AnalysisMethod.FullRpu => "Low risk. Complete metadata suggests limited brightness expansion. This is an estimate, not proof that FEL removal preserves the picture. Enable 'Include Simple FEL' in Settings to convert. Keep the original if picture preservation matters.",
+                AnalysisMethod.DeepInspection => "Low risk. Expert frame analysis found no brightness expansion above its threshold. This does not prove safe FEL removal. Picture differences remain possible. Enable 'Include Simple FEL' in Settings to convert.",
                 _ => null
             },
-            AnalysisVerdict.ComplexFel => "High risk — do not convert. Full Enhancement Layer (FEL) expands brightness beyond the base layer; converting discards that picture data.",
-            AnalysisVerdict.FelUnclassified or AnalysisVerdict.Unknown => "Verify recommended. RPU metadata did not provide brightness limits to classify FEL safety. Standard Inspect checks the full RPU stream; Deep Inspect decodes video frames (slow, for experts only).",
+            AnalysisVerdict.ComplexFel => "High risk. Analysis indicates possible brightness expansion. FEL removal discards enhancement-layer picture data. Keep the original; conversion requires explicit approval.",
+            AnalysisVerdict.FelUnclassified or AnalysisVerdict.Unknown => "Risk unknown. Available evidence cannot establish the risk of FEL removal. Keep the original. Inspection can check the complete metadata stream, but missing proof may remain.",
             _ => null
         };
     }
@@ -645,6 +629,31 @@ public sealed partial class MediaRow(string path) : ObservableObject
 
         return "Unknown";
     }
+
+    private static bool HasDolbyVision(MediaAnalysis analysis) => analysis.Media.Profile is
+        Domain.Media.DolbyVisionProfile.Profile7 or Domain.Media.DolbyVisionProfile.Profile81 or
+        Domain.Media.DolbyVisionProfile.Profile5 or Domain.Media.DolbyVisionProfile.Other
+        || analysis.Media.DolbyVisionProfileNumber is not null;
+
+    private static string DetailFormat(MediaAnalysis analysis) => HasDolbyVision(analysis) ? "Dolby Vision" : FormatName(analysis.Media);
+
+    private static string DetailProfile(MediaAnalysis analysis) => analysis.Media.Profile switch
+    {
+        Domain.Media.DolbyVisionProfile.Profile7 => analysis.Verdict switch
+        {
+            AnalysisVerdict.SimpleFel => "7 · Simple FEL",
+            AnalysisVerdict.ComplexFel => "7 · Complex FEL",
+            _ => analysis.Evidence.Layer switch
+            {
+                Domain.Media.EnhancementLayer.Mel => "7 · MEL",
+                Domain.Media.EnhancementLayer.Fel => "7 · FEL (unclassified)",
+                _ => "7"
+            }
+        },
+        Domain.Media.DolbyVisionProfile.Profile81 => "8.1",
+        Domain.Media.DolbyVisionProfile.Profile5 => "5",
+        _ => HasDolbyVision(analysis) ? analysis.Media.DolbyVisionProfileNumber?.ToString() ?? "Unknown" : ""
+    };
 
     private static string FormatAnalysis(MediaAnalysis analysis) => analysis.Media.Profile == Domain.Media.DolbyVisionProfile.Profile7
         ? analysis.Evidence.Layer switch
@@ -685,4 +694,4 @@ public sealed partial class MediaRow(string path) : ObservableObject
 public sealed record ResultFile(string Label, string Path);
 
 /// <summary>One labeled detail; <see cref="Result"/> is empty unless the details compare an original with its produced file.</summary>
-public sealed record MediaDetail(string Label, string Value, string Result = "");
+public sealed record MediaDetail(string Label, string Value, string Result = "", MediaStatusTone StatusTone = MediaStatusTone.None);

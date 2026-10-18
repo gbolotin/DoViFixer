@@ -18,6 +18,7 @@ public sealed class InspectionService(DependencyService dependencies, IMediaProb
     /// <summary>Reads container metadata only, without RPU analysis, for describing a produced output file.</summary>
     public async Task<MediaAnalysis> ReadMetadataAsync(string path, CancellationToken cancellationToken)
     {
+        await dependencies.RequireAsync(DependencyRequirements.Probe, cancellationToken);
         var source = files.Identify(path);
         await using var lease = await files.AcquireReadLeaseAsync(source, cancellationToken);
         var media = await probe.ProbeAsync(source.Path, cancellationToken);

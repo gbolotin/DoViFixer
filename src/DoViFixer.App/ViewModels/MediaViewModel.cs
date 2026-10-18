@@ -598,6 +598,11 @@ public sealed partial class MediaViewModel : OperationViewModel, INavigationPage
     [RelayCommand(CanExecute = nameof(CanRetryAnalysis))]
     private Task RetryAnalysis(MediaRow? row) => RunAsync(AnalysisTitle(row!.LastAnalysisMethod!.Value), (token, _) => AnalyzeRowsAsync([row!], row!.LastAnalysisMethod!.Value, token));
 
+    private bool CanScanRow(MediaRow? row) => row is not null && IsIdle && Files.Contains(row) && !row.IsMissing;
+
+    [RelayCommand(CanExecute = nameof(CanScanRow))]
+    private Task ScanRow(MediaRow? row) => RunAsync(AnalysisTitle(AnalysisMethod.SampledRpu), (token, _) => AnalyzeRowsAsync([row!], AnalysisMethod.SampledRpu, token));
+
     private bool CanInspectIncomplete(MediaRow? row) => row is not null && IsIdle && Files.Contains(row) && row.CanInspectIncomplete;
 
     [RelayCommand(CanExecute = nameof(CanInspectIncomplete))]
@@ -711,6 +716,7 @@ public sealed partial class MediaViewModel : OperationViewModel, INavigationPage
                     }
                     if (sourceFiles.Exists(row.Path) && await Task.Run(() => conversion.ReadPublishedResultAsync(row.Path, linked.Token), linked.Token) is { } published)
                     {
+                        await ReadResultMetadataAsync(row, published, linked.Token);
                         row.SetConverted(published);
                     }
                     row.PropertyChanged += OnRowPropertyChanged;
@@ -775,6 +781,7 @@ public sealed partial class MediaViewModel : OperationViewModel, INavigationPage
     protected override void CommandsChanged()
     {
         OnPropertyChanged(nameof(CanInspect));
+        ScanRowCommand?.NotifyCanExecuteChanged();
         RetryAnalysisCommand?.NotifyCanExecuteChanged();
         InspectIncompleteCommand?.NotifyCanExecuteChanged();
         ToggleSelectAllCommand?.NotifyCanExecuteChanged();
@@ -870,6 +877,11 @@ public sealed partial class MediaViewModel : OperationViewModel, INavigationPage
         if (e.PropertyName == nameof(MediaRow.CanOpenResult))
         {
             OpenOutputCommand.NotifyCanExecuteChanged();
+        }
+
+        if (e.PropertyName == nameof(MediaRow.IsMissing))
+        {
+            ScanRowCommand.NotifyCanExecuteChanged();
         }
 
         if (e.PropertyName == nameof(MediaRow.IsProfile7))
@@ -1234,10 +1246,20 @@ public sealed partial class MediaViewModel : OperationViewModel, INavigationPage
             outputRow.SetScanned();
         }
 
+        int sourceIndex = Files.IndexOf(sourceRow);
         if (added)
         {
             outputRow.PropertyChanged += OnRowPropertyChanged;
-            Files.Add(outputRow);
+            Files.Insert(sourceIndex < 0 ? Files.Count : sourceIndex + 1, outputRow);
+        }
+        else if (sourceIndex >= 0)
+        {
+            int outputIndex = Files.IndexOf(outputRow);
+            int destinationIndex = sourceIndex + (outputIndex > sourceIndex ? 1 : 0);
+            if (outputIndex != destinationIndex)
+            {
+                Files.Move(outputIndex, destinationIndex);
+            }
         }
     }
 

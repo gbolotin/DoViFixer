@@ -112,7 +112,8 @@ public sealed class MediaLibraryTests
         using var runtime = new TestRuntime();
         string path = @"C:\Media\Mountain.mkv";
         var source = runtime.Identify(path);
-        runtime.LibraryFiles[path] = new("converted", source, null);
+        var analysis = MediaClassifier.Classify(await runtime.ProbeAsync(path, default), new(AnalysisMethod.FullRpu, EnhancementLayer.Mel, 24, null, 1, 1));
+        runtime.LibraryFiles[path] = new("converted", source, analysis);
         var result = new DoViFixer.Application.Operations.OperationItemResult(path,
             DoViFixer.Application.Operations.OperationStatus.Completed, @"C:\Media\Output.mkv");
         runtime.ConversionResults[source] = result;
@@ -120,6 +121,11 @@ public sealed class MediaLibraryTests
         await model.LoadLibraryAsync();
         Assert.AreEqual(MediaRowState.Converted, model.Files.Single().State);
         Assert.AreEqual(result, model.Files.Single().Result);
+        Assert.IsNotNull(model.Files.Single().ResultAnalysis, "Reloading a conversion must also load its output metadata.");
+        foreach (string label in new[] { "Size", "Date modified", "Length", "Format", "Profile", "Resolution", "Frame rate" })
+        {
+            Assert.AreNotEqual("Unknown", model.Files.Single().DetailRows.Single(detail => detail.Label == label).Result, label);
+        }
         Assert.AreEqual(0, runtime.Analyses);
     }
 

@@ -20,8 +20,9 @@ public sealed class RowRestoreTests
         runtime.Archives.Add(archive);
         var model = runtime.Container.GetRequiredService<MediaViewModel>();
         await model.AddAsync([input, @"C:\Media\Mountain.mkv"]);
-        var row = model.Files[0];
-        model.Focused = model.Files[1];
+        var originalRows = model.Files.ToArray();
+        var row = originalRows[0];
+        model.Focused = originalRows[1];
         Assert.IsTrue(row.CanRestore);
         Assert.IsFalse(row.IsSelected);
         Assert.IsTrue(model.RestoreRowCommand.CanExecute(row));
@@ -31,7 +32,7 @@ public sealed class RowRestoreTests
             Assert.IsTrue(row.IsActive);
             Assert.AreSame(row, model.BatchProgress.CurrentJob);
             Assert.IsFalse(model.RestoreRowCommand.CanExecute(row));
-            Assert.IsFalse(model.ConvertRowCommand.CanExecute(model.Files[1]));
+            Assert.IsFalse(model.ConvertRowCommand.CanExecute(originalRows[1]));
             return Task.CompletedTask;
         };
 
@@ -44,17 +45,14 @@ public sealed class RowRestoreTests
         StringAssert.Contains(runtime.Reviews[0], archive);
         Assert.AreEqual(MediaRowState.Restored, row.State);
         Assert.IsTrue(row.CanOpenResult);
-        Assert.AreEqual("No action needed", row.ActionText);
-        Assert.IsTrue(row.ShowsActionText);
         Assert.AreEqual(Path.ChangeExtension(input, ".restored.mkv"), row.Result!.Output);
         var restoredRow = model.Files.Single(r => r.Path == row.Result.Output);
         Assert.AreEqual("Dolby Vision Profile 7", restoredRow.Format);
-        Assert.AreEqual("Scan", restoredRow.ActionText);
         Assert.IsFalse(restoredRow.IsSelected);
-        Assert.IsNull(model.Files[1].Result);
-        Assert.AreSame(model.Files[1], model.Focused);
+        Assert.IsNull(originalRows[1].Result);
+        Assert.AreSame(originalRows[1], model.Focused);
         Assert.IsFalse(row.IsSelected);
-        Assert.IsTrue(model.Files[1].IsSelected);
+        Assert.IsTrue(originalRows[1].IsSelected);
         Assert.AreEqual(1, model.BatchProgress.Total);
         Assert.AreEqual(new string('A', 64), await runtime.ReadBaseLayerHashAsync(runtime.Identify(input), default), "A verified restore records the file's base-layer hash.");
         Assert.IsFalse(row.CanRestore, "A restored row must not offer restoration again.");

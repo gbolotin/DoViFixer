@@ -23,8 +23,8 @@ public sealed class MediaRowComparer(MediaSortColumn column, ListSortDirection d
         int result = column switch
         {
             MediaSortColumn.Classification => CompareText(x.Format, y.Format),
+            MediaSortColumn.Analysis => CompareText(x.AnalysisText, y.AnalysisText),
             MediaSortColumn.Status => CompareText(x.Status, y.Status),
-            MediaSortColumn.Action => CompareText(x.ActionText, y.ActionText),
             _ => Direct(Text.Compare(x.Name, y.Name))
         };
 

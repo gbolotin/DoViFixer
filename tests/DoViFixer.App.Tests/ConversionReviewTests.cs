@@ -14,14 +14,15 @@ public sealed class ConversionReviewTests
         using var runtime = new TestRuntime();
         var model = runtime.Container.GetRequiredService<MediaViewModel>();
         await model.AddAsync([@"C:\Media\Mountain.mkv", @"C:\Media\Mountain2.mkv", @"C:\Media\P81.mkv", @"C:\Media\Sdr.mkv"]);
-        var row = model.Files[0];
+        var originalRows = model.Files.ToArray();
+        var row = originalRows[0];
         row.IsSelected = false;
-        model.Focused = model.Files[1];
+        model.Focused = originalRows[1];
         bool[] selections = model.Files.Select(file => file.IsSelected).ToArray();
         var command = model.ConvertRowCommand;
         Assert.IsTrue(command.CanExecute(row));
-        Assert.IsFalse(command.CanExecute(model.Files[2]));
-        Assert.IsFalse(command.CanExecute(model.Files[3]));
+        Assert.IsFalse(command.CanExecute(originalRows[2]));
+        Assert.IsFalse(command.CanExecute(originalRows[3]));
         Assert.IsFalse(command.CanExecute(new MediaRow(row.Path) { Analysis = row.Analysis }));
         var analysis = row.Analysis;
         row.Analysis = null;
@@ -31,7 +32,7 @@ public sealed class ConversionReviewTests
         model.ConversionStarting += _ =>
         {
             startingCalled = true;
-            Assert.IsFalse(command.CanExecute(model.Files[1]), "Other row conversions must be disabled while busy.");
+            Assert.IsFalse(command.CanExecute(originalRows[1]), "Other row conversions must be disabled while busy.");
             return Task.CompletedTask;
         };
 
@@ -41,12 +42,13 @@ public sealed class ConversionReviewTests
         Assert.AreEqual(1, runtime.Conversions);
         Assert.AreEqual(MediaRowState.Converted, row.State);
         Assert.IsTrue(row.Result!.Output!.EndsWith(" - DV P8.1.mkv"));
-        Assert.IsNull(model.Files[1].Result);
-        Assert.AreSame(model.Files[1], model.Focused);
-        CollectionAssert.AreEqual((bool[])[.. selections, false], model.Files.Select(file => file.IsSelected).ToArray());
-        Assert.AreEqual(row.Result.Output, model.Files[^1].Path);
+        Assert.IsNull(originalRows[1].Result);
+        Assert.AreSame(originalRows[1], model.Focused);
+        CollectionAssert.AreEqual(selections, originalRows.Select(file => file.IsSelected).ToArray());
+        Assert.IsFalse(model.Files[1].IsSelected);
+        Assert.AreEqual(row.Result.Output, model.Files[1].Path);
         Assert.AreEqual(1, model.BatchProgress.Total);
-        Assert.IsTrue(command.CanExecute(model.Files[1]));
+        Assert.IsTrue(command.CanExecute(originalRows[1]));
     }
 
     [TestMethod]
@@ -227,23 +229,24 @@ public sealed class ConversionReviewTests
         using var runtime = new TestRuntime();
         var model = runtime.Container.GetRequiredService<MediaViewModel>();
         await model.AddAsync([@"C:\Media\Mountain.mkv", @"C:\Media\Ocean.mkv"]);
-        model.Files[1].IsSelected = true;
+        var originalRows = model.Files.ToArray();
+        originalRows[1].IsSelected = true;
 
         await model.ConvertCommand.InvokeAsync();
 
         Assert.AreEqual(1, runtime.Conversions);
-        Assert.AreEqual("Converted", model.Files[0].Status);
-        Assert.AreEqual(MediaRowState.Converted, model.Files[0].State);
-        Assert.IsTrue(model.Files[0].CanOpenResult);
+        Assert.AreEqual("Converted", originalRows[0].Status);
+        Assert.AreEqual(MediaRowState.Converted, originalRows[0].State);
+        Assert.IsTrue(originalRows[0].CanOpenResult);
 
-        Assert.AreEqual("Conversion skipped", model.Files[1].Status);
-        Assert.AreEqual(MediaRowState.Skipped, model.Files[1].State);
-        StringAssert.Contains(model.Files[1].Notice, "Simple FEL conversion requires enabling 'Include Simple FEL' in Settings.");
-        Assert.IsTrue(model.Files[1].HasWarning);
-        Assert.AreEqual(model.Files[1].Notice, model.Files[1].Warning);
-        model.Files[1].IsSelected = true;
-        Assert.IsTrue(model.Files[1].HasWarning, "Reselecting a skipped file must retain its skip reason until retry.");
-        Assert.AreEqual(model.Files[1].Notice, model.Files[1].Warning);
+        Assert.AreEqual("Conversion skipped", originalRows[1].Status);
+        Assert.AreEqual(MediaRowState.Skipped, originalRows[1].State);
+        StringAssert.Contains(originalRows[1].Notice, "Simple FEL conversion requires enabling 'Include Simple FEL' in Settings.");
+        Assert.IsTrue(originalRows[1].HasWarning);
+        Assert.AreEqual(originalRows[1].Notice, originalRows[1].Warning);
+        originalRows[1].IsSelected = true;
+        Assert.IsTrue(originalRows[1].HasWarning, "Reselecting a skipped file must retain its skip reason until retry.");
+        Assert.AreEqual(originalRows[1].Notice, originalRows[1].Warning);
     }
 
     [TestMethod]
@@ -253,20 +256,21 @@ public sealed class ConversionReviewTests
         await runtime.UpdateAsync(settings => settings with { IncludeSimple = true }, default);
         var model = runtime.Container.GetRequiredService<MediaViewModel>();
         await model.AddAsync([@"C:\Media\Ocean.mkv", @"C:\Media\City.mkv"]);
-        model.Files[1].IsSelected = true;
+        var originalRows = model.Files.ToArray();
+        originalRows[1].IsSelected = true;
 
         await model.ConvertCommand.InvokeAsync();
 
         Assert.AreEqual(1, runtime.Conversions);
-        Assert.AreEqual("Converted", model.Files[0].Status);
-        Assert.IsFalse(model.Files[0].HasWarning);
-        Assert.AreEqual(MediaRowState.Converted, model.Files[0].State);
+        Assert.AreEqual("Converted", originalRows[0].Status);
+        Assert.IsFalse(originalRows[0].HasWarning);
+        Assert.AreEqual(MediaRowState.Converted, originalRows[0].State);
 
-        Assert.AreEqual("Conversion skipped", model.Files[1].Status);
-        Assert.AreEqual(MediaRowState.Skipped, model.Files[1].State);
-        StringAssert.Contains(model.Files[1].Notice, "Complex FEL conversion requires enabling 'Allow Complex FEL conversion' in Settings.");
-        Assert.IsTrue(model.Files[1].HasWarning);
-        Assert.AreEqual(model.Files[1].Notice, model.Files[1].Warning);
+        Assert.AreEqual("Conversion skipped", originalRows[1].Status);
+        Assert.AreEqual(MediaRowState.Skipped, originalRows[1].State);
+        StringAssert.Contains(originalRows[1].Notice, "Complex FEL conversion requires enabling 'Allow Complex FEL conversion' in Settings.");
+        Assert.IsTrue(originalRows[1].HasWarning);
+        Assert.AreEqual(originalRows[1].Notice, originalRows[1].Warning);
     }
 
     [TestMethod]

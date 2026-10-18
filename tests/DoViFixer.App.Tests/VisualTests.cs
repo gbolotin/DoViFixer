@@ -222,8 +222,17 @@ public sealed class VisualTests
             Assert.IsTrue(frame.IsVisible);
             Assert.IsTrue(frame.ActualHeight <= 240);
             var detailValues = Descendants<TextBlock>(mediaView)
-                .Where(text => text.DataContext is MediaDetail && Grid.GetColumn(text) == 1 && text.IsVisible).ToArray();
+                .Where(text => text.DataContext is MediaDetail && text.IsVisible
+                    && (Grid.GetColumn(text) == 1 || text.Parent is DockPanel panel && Grid.GetColumn(panel) == 1)).ToArray();
             Assert.AreEqual(media.Focused!.DetailRows.Count, detailValues.Length);
+            var riskDot = Descendants<System.Windows.Shapes.Ellipse>(mediaView)
+                .Single(dot => dot.IsVisible && dot.DataContext is MediaDetail);
+            Assert.AreEqual("Risk", ((MediaDetail)riskDot.DataContext).Label);
+            var nextStep = Descendants<Button>(mediaView).Single(button => AutomationProperties.GetName(button) == "Next step");
+            Assert.AreEqual(media.Focused.NextStepText, nextStep.Content);
+            Assert.IsTrue(nextStep.IsVisible);
+            Assert.AreSame(media.InspectIncompleteCommand, nextStep.Command);
+            Assert.AreSame(media.Focused, nextStep.CommandParameter);
             foreach (var value in detailValues)
             {
                 Assert.AreEqual(TextAlignment.Right, value.TextAlignment);
@@ -360,6 +369,7 @@ public sealed class VisualTests
         var text = (TextBlock)((GridView)list.View).Columns[1].CellTemplate.LoadContent();
         var statusCell = (FrameworkElement)((GridView)list.View).Columns[2].CellTemplate.LoadContent();
         var dot = Descendants<System.Windows.Shapes.Ellipse>(statusCell).Single();
+        var recommendation = Descendants<TextBlock>(statusCell).Single(text => text.GetBindingExpression(TextBlock.TextProperty)?.ParentBinding.Path.Path == nameof(MediaRow.ResultRecommendation));
         text.DataContext = row;
         statusCell.DataContext = row;
         var media = await runtime.ProbeAsync(row.Path, default);
@@ -374,11 +384,11 @@ public sealed class VisualTests
         await AssertColorAsync("TextFillColorTertiaryBrush");
         foreach (var (verdict, method, color) in new[]
         {
-            (AnalysisVerdict.Mel, AnalysisMethod.SampledRpu, "SystemFillColorSuccessBrush"),
+            (AnalysisVerdict.Mel, AnalysisMethod.SampledRpu, "SystemFillColorCautionBrush"),
             (AnalysisVerdict.Mel, AnalysisMethod.FullRpu, "SystemFillColorSuccessBrush"),
             (AnalysisVerdict.SimpleFel, AnalysisMethod.SampledRpu, "SystemFillColorCautionBrush"),
-            (AnalysisVerdict.SimpleFel, AnalysisMethod.FullRpu, "AccentFillColorDefaultBrush"),
-            (AnalysisVerdict.SimpleFel, AnalysisMethod.DeepInspection, "SystemFillColorSuccessBrush"),
+            (AnalysisVerdict.SimpleFel, AnalysisMethod.FullRpu, "SystemFillColorCautionBrush"),
+            (AnalysisVerdict.SimpleFel, AnalysisMethod.DeepInspection, "SystemFillColorCautionBrush"),
             (AnalysisVerdict.ComplexFel, AnalysisMethod.FullRpu, "SystemFillColorCriticalBrush"),
             (AnalysisVerdict.AnalysisFailed, AnalysisMethod.FullRpu, "SystemFillColorCriticalBrush"),
             (AnalysisVerdict.Unknown, AnalysisMethod.SampledRpu, "SystemFillColorCautionBrush"),
@@ -390,6 +400,8 @@ public sealed class VisualTests
             var evidence = new RpuEvidence(method, layer, 1000, null, 1, 1);
             row.Analysis = new MediaAnalysis(media, evidence, verdict, "Test classification");
             await AssertColorAsync(color);
+            Assert.AreEqual(string.IsNullOrEmpty(row.ResultRecommendation) ? Visibility.Collapsed : Visibility.Visible,
+                recommendation.Visibility, "An empty recommendation must not reserve a second line in the result cell.");
             row.AnalysisError = "";
             await AssertColorAsync("SystemFillColorCriticalBrush");
             row.AnalysisError = null;
@@ -428,8 +440,8 @@ public sealed class VisualTests
         var focused = media.Focused;
         Assert.AreSame(list.FindResource("WfSortableColumnHeaderTemplate"), profileHeader.ContentTemplate, "Columns without a header template use the shared sortable header.");
         Assert.IsTrue(Descendants<TextBlock>(profileHeader).Any(text => text.Text == "Format"));
-        Assert.IsTrue(Descendants<TextBlock>(statusHeader).Any(text => text.Text == "Status"));
-        Assert.IsTrue(Descendants<TextBlock>(actionHeader).Any(text => text.Text == "Action"));
+        Assert.IsTrue(Descendants<TextBlock>(statusHeader).Any(text => text.Text == "Result"));
+        Assert.IsTrue(Descendants<TextBlock>(actionHeader).Any(text => text.Text == "Analysis"));
         Assert.IsFalse(Indicator(fileHeader).IsVisible);
 
         fileHeader.RaiseEvent(new RoutedEventArgs(ButtonBase.ClickEvent, fileHeader));
@@ -458,8 +470,8 @@ public sealed class VisualTests
 
         actionHeader.RaiseEvent(new RoutedEventArgs(ButtonBase.ClickEvent, actionHeader));
         await LayoutAsync(window);
-        Assert.AreEqual(MediaSortColumn.Action, media.FileSort.Column);
-        AssertIndicatorAboveCenter(actionHeader, "Action");
+        Assert.AreEqual(MediaSortColumn.Analysis, media.FileSort.Column);
+        AssertIndicatorAboveCenter(actionHeader, "Analysis");
 
         // Leave the list sorted by name ascending, which matches the order the files were added.
         fileHeader.RaiseEvent(new RoutedEventArgs(ButtonBase.ClickEvent, fileHeader));
@@ -534,7 +546,7 @@ public sealed class VisualTests
         var originalScrollVisibility = scroll.VerticalScrollBarVisibility;
         window.Width = 1800;
         await LayoutAsync(window);
-        Assert.IsTrue(grid.Columns[^1].Width > 255, "The last column must expand into spare space.");
+        Assert.IsTrue(grid.Columns[^1].Width > 176, "The last column must expand into spare space.");
         Assert.AreEqual(0, scroll.ScrollableWidth, 0.1, "Filling must not introduce horizontal overflow.");
 
         double wideWidth = grid.Columns[^1].Width;
@@ -564,7 +576,7 @@ public sealed class VisualTests
 
         grid.Columns[0].Width = 2000;
         await LayoutAsync(window);
-        Assert.AreEqual(255, grid.Columns[^1].Width, 0.1, "Keep actions usable when there is insufficient space.");
+        Assert.AreEqual(176, grid.Columns[^1].Width, 0.1, "Keep actions usable when there is insufficient space.");
         Assert.IsTrue(scroll.ScrollableWidth > 0, "Narrow layouts must remain horizontally scrollable.");
 
         grid.Columns[0].Width = originalColumnWidth;
@@ -841,16 +853,17 @@ public sealed class VisualTests
         Assert.AreSame(media.ConvertRowCommand, convert.Command);
         Assert.AreSame(row, convert.CommandParameter);
         Assert.AreEqual("Convert", System.Windows.Automation.AutomationProperties.GetName(convert));
-        Assert.AreEqual("\uE8AB", convert.Content);
+        Assert.AreEqual("Convert", convert.Content);
+        Assert.AreEqual("\uE8AB", convert.Tag);
         var actions = (StackPanel)remove.Parent;
-        Assert.AreSame(convert, actions.Children[actions.Children.IndexOf(remove) - 1]);
-        Assert.AreSame(restore, actions.Children[actions.Children.IndexOf(convert) - 1]);
-        Assert.AreEqual(Visibility.Hidden, convert.Visibility);
+        Assert.AreSame(restore, actions.Children[actions.Children.IndexOf(remove) - 1]);
+        Assert.IsFalse(actions.Children.Contains(convert), "Convert belongs in the primary slot, not the hover actions.");
+        Assert.AreEqual(Visibility.Collapsed, convert.Visibility);
         var originalAnalysis = row.Analysis!;
         row.Analysis = originalAnalysis with { Media = originalAnalysis.Media with { Profile = DolbyVisionProfile.Profile81 } };
         await LayoutAsync(window);
         AssertStableActionSlots(list, slots, "Profile 8.1");
-        Assert.AreEqual(Visibility.Hidden, convert.Visibility);
+        Assert.AreEqual(Visibility.Collapsed, convert.Visibility);
         Assert.AreEqual(Visibility.Hidden, restore.Visibility);
         row.RestoreArchive = Path.ChangeExtension(row.Path, ".dovi");
         await LayoutAsync(window);
@@ -860,12 +873,12 @@ public sealed class VisualTests
         row.Analysis = null;
         await LayoutAsync(window);
         AssertStableActionSlots(list, slots, "no analysis");
-        Assert.AreEqual(Visibility.Hidden, convert.Visibility);
+        Assert.AreEqual(Visibility.Collapsed, convert.Visibility);
         Assert.AreEqual(Visibility.Hidden, restore.Visibility);
         row.Analysis = originalAnalysis;
         await LayoutAsync(window);
         AssertStableActionSlots(list, slots, "Profile 7 again");
-        Assert.AreEqual(Visibility.Hidden, convert.Visibility);
+        Assert.AreEqual(Visibility.Collapsed, convert.Visibility);
         Assert.AreEqual(Visibility.Hidden, restore.Visibility);
         row.RestoreArchive = null;
         Assert.AreSame(media.RemoveFileCommand, remove.Command);
@@ -920,6 +933,13 @@ public sealed class VisualTests
         await media.Completion;
         Assert.AreEqual(fullAnalyses + 1, runtime.FullAnalyses);
         Assert.IsFalse(row.CanInspectIncomplete);
+        await LayoutAsync(window);
+        Assert.AreEqual("Convert", row.NextStepText);
+        container = (ListViewItem)list.ItemContainerGenerator.ContainerFromItem(row);
+        convert = Button(container, "Convert");
+        Assert.IsTrue(convert.IsVisible, "Recommended conversion must be available without hovering.");
+        Assert.IsTrue(convert.IsEnabled);
+        AssertStableActionSlots(list, slots, "conversion recommended");
 
         media.Files[1].IsSelected = true;
         var started = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
@@ -945,8 +965,10 @@ public sealed class VisualTests
             await LayoutAsync(window);
             AssertStableActionSlots(list, slots, "conversion running");
             Assert.IsFalse(navigation.IsEnabled);
+            container = (ListViewItem)list.ItemContainerGenerator.ContainerFromItem(row);
+            convert = Button(container, "Convert");
             Assert.IsFalse(convert.IsEnabled);
-            Assert.AreEqual(Visibility.Hidden, convert.Visibility, "A disabled Profile 7 convert action keeps its space.");
+            Assert.AreEqual(Visibility.Collapsed, convert.Visibility, "Cancel replaces Convert in the primary slot during conversion.");
             Assert.AreSame(row, media.BatchProgress.CurrentJob);
             Assert.AreEqual(45, row.Progress.StagePercent);
             var pending = (ListViewItem)list.ItemContainerGenerator.ContainerFromItem(media.Files[1]);
@@ -977,12 +999,14 @@ public sealed class VisualTests
         await media.ConvertCommand.InvokeAsync();
         await LayoutAsync(window);
         AssertStableActionSlots(list, slots, "converted");
-        Assert.AreEqual("No action needed", row.ActionText);
-        Assert.IsTrue(row.ShowsActionText);
         Assert.IsTrue(media.Files.Any(file => file.Path == row.Result!.Output));
         var rowDot = ResultDot(list.ItemContainerGenerator.ContainerFromItem(row), row);
-        Assert.IsTrue(rowDot.IsVisible, "A converted row shows a result dot before its status.");
-        Assert.AreEqual(window.FindResource("SystemFillColorSuccessBrush"), rowDot.Fill);
+        Assert.IsFalse(rowDot.IsVisible, "A successful conversion uses a check mark instead of the risk circle.");
+        var convertedCheck = Descendants<TextBlock>(list.ItemContainerGenerator.ContainerFromItem(row))
+            .Single(text => AutomationProperties.GetName(text) == "Conversion completed");
+        Assert.IsTrue(convertedCheck.IsVisible);
+        Assert.AreEqual("\uE73E", convertedCheck.Text);
+        Assert.AreEqual(window.FindResource("SystemFillColorSuccessBrush"), convertedCheck.Foreground);
         media.Focused = row;
         await LayoutAsync(window);
         var resultDot = ResultDot(mediaView, row.Result);
@@ -1349,7 +1373,7 @@ public sealed class VisualTests
     /// </summary>
     private static void AssertStableActionSlots(ListView list, Dictionary<string, Rect> slots, string checkpoint)
     {
-        string[] primaryActions = ["Cancel", "Skip", "Retry", "Inspect"];
+        string[] primaryActions = ["Cancel", "Skip", "Retry", "Inspect", "Convert"];
         foreach (var item in list.Items)
         {
             var container = (ListViewItem)list.ItemContainerGenerator.ContainerFromItem(item);

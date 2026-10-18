@@ -17,6 +17,36 @@ namespace DoViFixer.Application.Tests;
 public sealed class WorkflowTests
 {
     [TestMethod]
+    public async Task MetadataReadValidatesProbeToolsBeforeUsingThem()
+    {
+        var runtime = new Runtime();
+        var inspection = new InspectionService(runtime.Dependencies(), runtime, runtime, runtime, runtime,
+            NullLogger<InspectionService>.Instance, new MemoryCache());
+
+        var result = await inspection.ReadMetadataAsync("good.mkv", default);
+
+        Assert.AreEqual("ready-MkvMerge", runtime.GetPath(NativeTool.MkvMerge));
+        Assert.AreEqual("ready-MediaInfo", runtime.GetPath(NativeTool.MediaInfo));
+        Assert.AreEqual(AnalysisMethod.MetadataOnly, result.Evidence.Method);
+        Assert.AreEqual(1, runtime.ProbeCalls);
+        Assert.AreEqual(0, runtime.AnalyzeCalls);
+        Assert.AreEqual(0, runtime.InstallCalls);
+    }
+
+    [TestMethod]
+    public async Task MetadataReadWithMissingProbeToolsStopsBeforeReadingMedia()
+    {
+        var runtime = new Runtime { Ready = false };
+        var inspection = new InspectionService(runtime.Dependencies(), runtime, runtime, runtime, runtime,
+            NullLogger<InspectionService>.Instance, new MemoryCache());
+
+        await Assert.ThrowsExactlyAsync<DependencyNotReadyException>(() => inspection.ReadMetadataAsync("good.mkv", default));
+
+        Assert.AreEqual(0, runtime.ProbeCalls);
+        Assert.AreEqual(0, runtime.InstallCalls);
+    }
+
+    [TestMethod]
     [DataRow(AnalysisMethod.SampledRpu, false)]
     [DataRow(AnalysisMethod.SampledRpu, true)]
     [DataRow(AnalysisMethod.FullRpu, false)]
