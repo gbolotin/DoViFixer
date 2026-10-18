@@ -44,7 +44,13 @@ public sealed class RowRestoreTests
         StringAssert.Contains(runtime.Reviews[0], archive);
         Assert.AreEqual(MediaRowState.Restored, row.State);
         Assert.IsTrue(row.CanOpenResult);
+        Assert.AreEqual("No action needed", row.ActionText);
+        Assert.IsTrue(row.ShowsActionText);
         Assert.AreEqual(Path.ChangeExtension(input, ".restored.mkv"), row.Result!.Output);
+        var restoredRow = model.Files.Single(r => r.Path == row.Result.Output);
+        Assert.AreEqual("Dolby Vision Profile 7", restoredRow.Format);
+        Assert.AreEqual("Scan", restoredRow.ActionText);
+        Assert.IsFalse(restoredRow.IsSelected);
         Assert.IsNull(model.Files[1].Result);
         Assert.AreSame(model.Files[1], model.Focused);
         Assert.IsFalse(row.IsSelected);

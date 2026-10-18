@@ -35,18 +35,24 @@ public sealed class ViewModelTests
         await model.AddAsync([@"C:\Media\Format.mkv"]);
         var row = model.Files[0];
         var analysis = row.Analysis!;
-        foreach (var (profile, hdr, number, expected) in new[]
+        foreach (var (profile, layer, hdr, number, expected) in new[]
         {
-            (DoViFixer.Domain.Media.DolbyVisionProfile.Profile7, (bool?)true, (int?)7, "Dolby Vision Profile 7"),
-            (DoViFixer.Domain.Media.DolbyVisionProfile.Profile81, (bool?)true, (int?)8, "Dolby Vision Profile 8.1"),
-            (DoViFixer.Domain.Media.DolbyVisionProfile.Profile5, (bool?)true, (int?)5, "Dolby Vision Profile 5"),
-            (DoViFixer.Domain.Media.DolbyVisionProfile.Other, (bool?)true, (int?)8, "Dolby Vision Profile 8"),
-            (DoViFixer.Domain.Media.DolbyVisionProfile.None, (bool?)true, (int?)null, "HDR"),
-            (DoViFixer.Domain.Media.DolbyVisionProfile.None, (bool?)false, (int?)null, "SDR"),
-            (DoViFixer.Domain.Media.DolbyVisionProfile.None, (bool?)null, (int?)null, "Unknown")
+            (DoViFixer.Domain.Media.DolbyVisionProfile.Profile7, DoViFixer.Domain.Media.EnhancementLayer.Mel, (bool?)true, (int?)7, "Dolby Vision Profile 7 · MEL"),
+            (DoViFixer.Domain.Media.DolbyVisionProfile.Profile7, DoViFixer.Domain.Media.EnhancementLayer.Fel, (bool?)true, (int?)7, "Dolby Vision Profile 7 · FEL"),
+            (DoViFixer.Domain.Media.DolbyVisionProfile.Profile7, DoViFixer.Domain.Media.EnhancementLayer.Unknown, (bool?)true, (int?)7, "Dolby Vision Profile 7"),
+            (DoViFixer.Domain.Media.DolbyVisionProfile.Profile81, DoViFixer.Domain.Media.EnhancementLayer.None, (bool?)true, (int?)8, "Dolby Vision Profile 8.1"),
+            (DoViFixer.Domain.Media.DolbyVisionProfile.Profile5, DoViFixer.Domain.Media.EnhancementLayer.None, (bool?)true, (int?)5, "Dolby Vision Profile 5"),
+            (DoViFixer.Domain.Media.DolbyVisionProfile.Other, DoViFixer.Domain.Media.EnhancementLayer.None, (bool?)true, (int?)8, "Dolby Vision Profile 8"),
+            (DoViFixer.Domain.Media.DolbyVisionProfile.None, DoViFixer.Domain.Media.EnhancementLayer.None, (bool?)true, (int?)null, "HDR"),
+            (DoViFixer.Domain.Media.DolbyVisionProfile.None, DoViFixer.Domain.Media.EnhancementLayer.None, (bool?)false, (int?)null, "SDR"),
+            (DoViFixer.Domain.Media.DolbyVisionProfile.None, DoViFixer.Domain.Media.EnhancementLayer.None, (bool?)null, (int?)null, "Unknown")
         })
         {
-            row.Analysis = analysis with { Media = analysis.Media with { Profile = profile, IsHdr = hdr, DolbyVisionProfileNumber = number } };
+            row.Analysis = analysis with
+            {
+                Media = analysis.Media with { Profile = profile, IsHdr = hdr, DolbyVisionProfileNumber = number },
+                Evidence = analysis.Evidence with { Layer = layer }
+            };
             Assert.AreEqual(expected, row.Format);
             Assert.AreEqual(expected, row.DetailRows.Single(detail => detail.Label == "Format").Value);
         }
@@ -301,6 +307,8 @@ public sealed class ViewModelTests
         model.FileSort.SortBy(MediaSortColumn.Status);
         var sortedOrder = model.FileSort.Comparer;
         model.Files.Single(row => row.Name == "Movie1.mkv").Status = "Needs attention";
+        model.Files.Single(row => row.Name == "movie2.mkv").Status = "";
+        model.Files.Single(row => row.Name == "Movie10.mkv").Status = "";
         processed.Clear();
         await model.ScanCommand.InvokeAsync();
         Assert.AreNotSame(sortedOrder, model.FileSort.Comparer,"Starting a batch re-applies the sort so the screen matches the processing order.");
@@ -629,7 +637,7 @@ public sealed class ViewModelTests
         Assert.AreEqual(1, runtime.FullAnalyses);
         Assert.AreEqual(DoViFixer.Domain.Analysis.AnalysisMethod.FullRpu, row.Analysis!.Evidence.Method);
         Assert.IsFalse(row.CanInspectIncomplete);
-        Assert.AreEqual("", row.Status);
+        Assert.AreEqual("Safe · Inspected", row.Status);
         Assert.AreEqual(0, runtime.Conversions);
     }
 
@@ -681,7 +689,12 @@ public sealed class ViewModelTests
         await model.RetryAnalysisCommand.InvokeAsync(row);
         Assert.AreEqual(analyses + 1, runtime.Analyses);
         Assert.AreEqual(method, row.Analysis!.Evidence.Method);
-        Assert.AreEqual("", row.Status);
+        Assert.AreEqual(method switch
+        {
+            DoViFixer.Domain.Analysis.AnalysisMethod.SampledRpu => "Safe · Scanned",
+            DoViFixer.Domain.Analysis.AnalysisMethod.FullRpu => "Safe · Inspected",
+            _ => "Verify recommended · Deep inspected"
+        }, row.Status);
         Assert.IsFalse(row.CanRetryAnalysis);
         Assert.IsFalse(model.RetryAnalysisCommand.CanExecute(row));
         Assert.AreEqual(0, runtime.Conversions);
@@ -721,16 +734,21 @@ public sealed class ViewModelTests
         Assert.AreEqual("3840 × 2160", model.Files[0].DetailRows.Single(detail => detail.Label == "Resolution").Result);
         Assert.IsFalse(model.Files[0].DetailRows.Any(detail => detail.Label == "Type"), "Every file is Matroska, so the type is not shown.");
         Assert.AreEqual(0, model.Files[0].ResultFiles.Count, "The comparison already links the output and the unchanged original.");
-        model.Focused = model.Files[1];
-        model.OpenRowOutputCommand.Invoke(model.Files[0]);
-        Assert.AreEqual(output, runtime.ShownFile, "The row link uses the clicked row rather than the focused row.");
+        Assert.AreEqual("No action needed", model.Files[0].ActionText);
+        Assert.IsTrue(model.Files[0].ShowsActionText);
+        var outputRow = model.Files.Single(row => row.Path == output);
+        Assert.AreEqual("Dolby Vision Profile 8.1", outputRow.Format);
+        Assert.AreEqual("Compatible · Scanned", outputRow.Status);
+        Assert.AreEqual("No action needed", outputRow.ActionText);
+        Assert.IsTrue(outputRow.ShowsActionText);
+        Assert.IsFalse(outputRow.IsSelected);
         model.Focused = model.Files[0];
         model.OpenOutputCommand.Invoke();
         Assert.AreEqual(output, runtime.ShownFile);
         Assert.AreEqual(model.Files[0].Path, model.Files[0].Result!.Original, "The default conversion keeps the original in place.");
         Assert.AreEqual("Converted", model.Files[0].Status);
         await model.ScanCommand.InvokeAsync();
-        Assert.AreEqual("", model.Files[0].Status);
+        Assert.AreEqual("Safe · Scanned", model.Files[0].Status);
         Assert.IsFalse(model.Files[0].CanOpenResult);
         Assert.IsFalse(model.Files[0].ShowsResultComparison, "Without a converted file the comparison is hidden.");
         Assert.AreEqual(model.Files[0].Path, model.Files[0].DetailRows.Single(detail => detail.Label == MediaRow.FileLocationLabel).Value);
@@ -755,9 +773,9 @@ public sealed class ViewModelTests
         runtime.ExistingOutputFiles.Add(existing);
         var model = runtime.Container.GetRequiredService<MediaViewModel>();
         await model.AddAsync([@"C:\Media\One\Mountain.mkv"]);
+        var row = model.Files.Single();
         int conversions = runtime.Conversions;
         await model.ConvertCommand.InvokeAsync();
-        var row = model.Files.Single();
         CollectionAssert.AreEqual(new[] { existing }, runtime.ExistingOutputQuestions);
         if (expectedOutput is null)
         {
@@ -769,6 +787,7 @@ public sealed class ViewModelTests
 
         Assert.AreEqual(MediaRowState.Converted, row.State);
         Assert.AreEqual(expectedOutput, row.Result!.Output);
+        Assert.IsTrue(model.Files.Any(r => r.Path == expectedOutput));
         Assert.AreEqual((expectedOutput, answer == ExistingOutputHandling.Replace), runtime.StagedOutputs.Single(staged => staged.Path == expectedOutput));
     }
 
@@ -864,7 +883,7 @@ public sealed class ViewModelTests
         Assert.AreEqual("Scan cancelled", model.Files[0].Status);
         Assert.IsTrue(model.Files[0].IsSelected, "Cancelling a scan must preserve its checkbox selection.");
         Assert.AreEqual(MediaRowState.Cancelled, model.Files[0].State, "The row cancelled mid-scan must show the cancelled result dot.");
-        Assert.AreEqual(cancelAll ? "Scan cancelled" : "", model.Files[1].Status);
+        Assert.AreEqual(cancelAll ? "Scan cancelled" : "Verify recommended · Scanned", model.Files[1].Status);
         Assert.AreEqual(cancelAll ? MediaRowState.Cancelled : MediaRowState.Scanned, model.Files[1].State);
         Assert.IsTrue(model.Files[0].CanRetryAnalysis);
         Assert.AreEqual(cancelAll ? 1 : 2, runtime.Analyses);
@@ -886,7 +905,7 @@ public sealed class ViewModelTests
         model = runtime.Container.GetRequiredService<MediaViewModel>();
         runtime.Ready = false;
         await model.AddAsync([@"C:\Media\Mountain.mkv"]);
-        Assert.AreEqual("", model.Files.Single().Status);
+        Assert.AreEqual("Safe · Scanned", model.Files.Single().Status);
         Assert.AreEqual(2, runtime.Analyses);
         Assert.HasCount(0, runtime.Reviews);
     }
@@ -1223,6 +1242,7 @@ public sealed class ViewModelTests
         await runtime.UpdateAsync(s => s with { AllowFel = true }, default);
         var model = runtime.Container.GetRequiredService<MediaViewModel>();
         await model.AddAsync([@"C:\Media\Ocean.mkv"]);
+        var row = model.Files.Single();
         Assert.AreEqual(0, runtime.FullAnalyses);
         Assert.AreEqual(0, runtime.Conversions);
 
@@ -1230,16 +1250,18 @@ public sealed class ViewModelTests
         Assert.AreEqual(1, runtime.FullAnalyses);
         Assert.AreEqual(1, runtime.Conversions);
         CollectionAssert.Contains(runtime.VerificationLevels, DoViFixer.Application.Settings.VerificationLevel.FrameCountWithRecount);
-        Assert.AreEqual("Converted", model.Files.Single().Status);
-        Assert.AreEqual(MediaRowState.Converted, model.Files.Single().State);
-        Assert.IsTrue(model.Files.Single().CanOpenResult);
-        Assert.IsTrue(model.Files.Single().Result!.Output!.EndsWith(" - DV P8.1.mkv"));
+        Assert.AreEqual("Converted", row.Status);
+        Assert.AreEqual(MediaRowState.Converted, row.State);
+        Assert.IsTrue(row.CanOpenResult);
+        Assert.IsTrue(row.Result!.Output!.EndsWith(" - DV P8.1.mkv"));
+        Assert.IsTrue(model.Files.Any(r => r.Path == row.Result.Output));
 
-        model.Files.Single().IsSelected = true;
+        row.IsSelected = true;
         await runtime.UpdateAsync(s => s with { RemoveDolbyVision = true }, default);
         await model.ConvertCommand.InvokeAsync();
-        Assert.AreEqual("Converted", model.Files.Single().Status);
-        Assert.IsTrue(model.Files.Single().Result!.Output!.EndsWith(" - HDR10.mkv"));
+        Assert.AreEqual("Converted", row.Status);
+        Assert.IsTrue(row.Result!.Output!.EndsWith(" - HDR10.mkv"));
+        Assert.IsTrue(model.Files.Any(r => r.Path == row.Result.Output));
     }
 
     [TestMethod]
@@ -1659,7 +1681,8 @@ public sealed class ViewModelTests
         await runtime.UpdateAsync(settings => settings with { AllowFel = true, ConversionWorkers = configuredWorkers }, default);
         var model = runtime.Container.GetRequiredService<MediaViewModel>();
         await model.AddAsync([@"C:\Media\Mountain.mkv", @"C:\Media\Ocean.mkv", @"C:\Media\City.mkv"]);
-        model.Files[2].IsSelected = true;
+        var sources = model.Files.ToArray();
+        sources[2].IsSelected = true;
         var started = System.Threading.Channels.Channel.CreateUnbounded<int>();
         using var release = new SemaphoreSlim(0);
         int count = 0;
@@ -1684,7 +1707,8 @@ public sealed class ViewModelTests
             await conversion.WaitAsync(TimeSpan.FromSeconds(5));
 
             Assert.AreEqual(3, model.BatchProgress.Processed);
-            Assert.IsTrue(model.Files.All(row => row.State == MediaRowState.Converted));
+            Assert.IsTrue(sources.All(row => row.State == MediaRowState.Converted));
+            Assert.HasCount(6, model.Files);
         }
         finally
         {
@@ -1701,6 +1725,7 @@ public sealed class ViewModelTests
         await runtime.UpdateAsync(settings => settings with { AllowFel = true, ConversionWorkers = 2 }, default);
         var model = runtime.Container.GetRequiredService<MediaViewModel>();
         await model.AddAsync([@"C:\Media\Mountain.mkv", @"C:\Media\Ocean.mkv"]);
+        var sources = model.Files.ToArray();
         var started = System.Threading.Channels.Channel.CreateUnbounded<int>();
         using var release = new SemaphoreSlim(0);
         int count = 0;
@@ -1720,7 +1745,8 @@ public sealed class ViewModelTests
             await started.Reader.ReadAsync().AsTask().WaitAsync(TimeSpan.FromSeconds(5));
             release.Release();
             await conversion.WaitAsync(TimeSpan.FromSeconds(5));
-            Assert.IsTrue(model.Files.All(row => row.State == MediaRowState.Converted));
+            Assert.IsTrue(sources.All(row => row.State == MediaRowState.Converted));
+            Assert.HasCount(4, model.Files);
         }
         finally
         {
@@ -2211,5 +2237,137 @@ public sealed class ViewModelTests
 
         Assert.AreEqual(ViewStatus.SettingsSaved, settings.Status);
         Assert.AreEqual(@"C:\Media\Chosen", runtime.Settings.OutputDirectory);
+    }
+
+    [TestMethod]
+    public async Task MediaRow_StatusAndActionColumns_ReflectRiskMethodAndRecommendedNextStep()
+    {
+        using var runtime = new TestRuntime();
+        var row = new MediaRow(@"C:\Media\Ocean.mkv");
+        Assert.AreEqual("Not scanned", row.Status);
+        Assert.AreEqual(MediaStatusTone.Neutral, row.StatusTone);
+        Assert.AreEqual("Scan", row.ActionText);
+        Assert.IsTrue(row.ShowsActionText);
+
+        var media = await runtime.ProbeAsync(row.Path, default);
+
+        // Profile 7 MEL (Scanned) -> Safe · Scanned, Action: Convert
+        row.Analysis = DoViFixer.Domain.Analysis.MediaClassifier.Classify(
+            media,
+            new(DoViFixer.Domain.Analysis.AnalysisMethod.SampledRpu, DoViFixer.Domain.Media.EnhancementLayer.Mel, 1000, 1000, 10, 10));
+        Assert.AreEqual("Dolby Vision Profile 7 · MEL", row.Format);
+        Assert.AreEqual("Safe · Scanned", row.Status);
+        Assert.AreEqual(MediaStatusTone.Safe, row.StatusTone);
+        Assert.AreEqual("Convert", row.ActionText);
+        Assert.IsTrue(row.ShowsActionText);
+        Assert.IsFalse(row.CanInspectIncomplete);
+        Assert.AreEqual("Safe", row.DetailRows.Single(d => d.Label == "Risk").Value);
+        Assert.AreEqual("Convert", row.DetailRows.Single(d => d.Label == "Next step").Value);
+        StringAssert.Contains(row.DetailNotes, "Safe to convert.");
+
+        // Profile 7 Simple FEL (Scanned) -> Verify recommended · Scanned, primary action button Inspect
+        row.Analysis = DoViFixer.Domain.Analysis.MediaClassifier.Classify(
+            media,
+            new(DoViFixer.Domain.Analysis.AnalysisMethod.SampledRpu, DoViFixer.Domain.Media.EnhancementLayer.Fel, 1000, 900, 10, 10));
+        Assert.AreEqual("Dolby Vision Profile 7 · FEL", row.Format);
+        Assert.AreEqual("Verify recommended · Scanned", row.Status);
+        Assert.AreEqual(MediaStatusTone.VerifyRecommended, row.StatusTone);
+        Assert.IsTrue(row.CanInspectIncomplete);
+        Assert.AreEqual("Inspect", row.ActionText);
+        Assert.IsFalse(row.ShowsActionText, "Primary Inspect button replaces plain ActionText.");
+        Assert.AreEqual("Verify recommended", row.DetailRows.Single(d => d.Label == "Risk").Value);
+        Assert.AreEqual("Inspect (verify full RPU)", row.DetailRows.Single(d => d.Label == "Next step").Value);
+        StringAssert.Contains(row.DetailNotes, "Suggested action: Inspect.");
+
+        // Profile 7 Simple FEL (Inspected) -> Low risk · Inspected, Action: Convert
+        row.Analysis = DoViFixer.Domain.Analysis.MediaClassifier.Classify(
+            media,
+            new(DoViFixer.Domain.Analysis.AnalysisMethod.FullRpu, DoViFixer.Domain.Media.EnhancementLayer.Fel, 1000, 900, 1, 1));
+        Assert.AreEqual("Low risk · Inspected", row.Status);
+        Assert.AreEqual(MediaStatusTone.LowRisk, row.StatusTone);
+        Assert.IsFalse(row.CanInspectIncomplete);
+        Assert.AreEqual("Convert", row.ActionText);
+        Assert.IsTrue(row.ShowsActionText);
+        Assert.AreEqual("Low risk", row.DetailRows.Single(d => d.Label == "Risk").Value);
+        Assert.AreEqual("Standard inspection (full RPU)", row.DetailRows.Single(d => d.Label == "Evidence").Value);
+        Assert.AreEqual("Convert", row.DetailRows.Single(d => d.Label == "Next step").Value);
+        StringAssert.Contains(row.DetailNotes, "Deep Inspect is a slow frame-by-frame check only needed by experts.");
+
+        // Profile 7 Simple FEL (Deep inspected) -> Safe · Deep inspected, Action: Convert
+        row.Analysis = DoViFixer.Domain.Analysis.MediaClassifier.Classify(
+            media,
+            new(DoViFixer.Domain.Analysis.AnalysisMethod.DeepInspection, DoViFixer.Domain.Media.EnhancementLayer.Fel, 1000, 900, 1, 1,
+                Brightness: new(1000, 0, 1000, 0, 0)));
+        Assert.AreEqual("Safe · Deep inspected", row.Status);
+        Assert.AreEqual(MediaStatusTone.Safe, row.StatusTone);
+        Assert.AreEqual("Convert", row.ActionText);
+        Assert.IsTrue(row.ShowsActionText);
+        Assert.AreEqual("Safe", row.DetailRows.Single(d => d.Label == "Risk").Value);
+        Assert.AreEqual("Deep inspection (expert frame check)", row.DetailRows.Single(d => d.Label == "Evidence").Value);
+        Assert.AreEqual("Convert", row.DetailRows.Single(d => d.Label == "Next step").Value);
+        StringAssert.Contains(row.DetailNotes, "Expert deep inspection verified frames across the movie.");
+
+        // Profile 7 Complex FEL -> High risk · Inspected, Action: Do not convert
+        row.Analysis = DoViFixer.Domain.Analysis.MediaClassifier.Classify(
+            media,
+            new(DoViFixer.Domain.Analysis.AnalysisMethod.FullRpu, DoViFixer.Domain.Media.EnhancementLayer.Fel, 1000, 1400, 1, 1));
+        Assert.AreEqual("High risk · Inspected", row.Status);
+        Assert.AreEqual(MediaStatusTone.HighRisk, row.StatusTone);
+        Assert.AreEqual("Do not convert", row.ActionText);
+        Assert.IsTrue(row.ShowsActionText);
+        Assert.AreEqual("High risk", row.DetailRows.Single(d => d.Label == "Risk").Value);
+        Assert.AreEqual("Do not convert", row.DetailRows.Single(d => d.Label == "Next step").Value);
+        StringAssert.Contains(row.DetailNotes, "High risk — do not convert.");
+
+        // Profile 8.1 without and with backup
+        row.Analysis = DoViFixer.Domain.Analysis.MediaClassifier.Classify(
+            media with { Profile = DoViFixer.Domain.Media.DolbyVisionProfile.Profile81 },
+            new(DoViFixer.Domain.Analysis.AnalysisMethod.SampledRpu, DoViFixer.Domain.Media.EnhancementLayer.None, 0, null, 0, 0));
+        Assert.AreEqual("Compatible · Scanned", row.Status);
+        Assert.AreEqual(MediaStatusTone.Neutral, row.StatusTone);
+        Assert.AreEqual("No action needed", row.ActionText);
+        row.RestoreArchive = @"C:\Media\Ocean.dovi";
+        Assert.AreEqual("Backup paired · Scanned", row.Status);
+        Assert.AreEqual(MediaStatusTone.Safe, row.StatusTone);
+        Assert.AreEqual("Restore to DV7", row.ActionText);
+    }
+
+    [TestMethod]
+    [DataRow(false, false, "Dolby Vision Profile 7 · MEL", "Dolby Vision Profile 8.1")]
+    [DataRow(true, false, "Dolby Vision Profile 8.1", "Dolby Vision Profile 8.1")]
+    [DataRow(true, true, "HDR", "HDR")]
+    public async Task ConvertUpdatesFormatColumnToResultAnalysisOnlyWhenOriginalIsReplaced(
+        bool replaceOriginal,
+        bool removeDolbyVision,
+        string expectedRowFormat,
+        string expectedResultDetailFormat)
+    {
+        using var runtime = new TestRuntime();
+        await runtime.UpdateAsync(s => s with { ReplaceOriginal = replaceOriginal, RemoveDolbyVision = removeDolbyVision }, default);
+        var model = runtime.Container.GetRequiredService<MediaViewModel>();
+        await model.AddAsync([@"C:\Media\Mountain.mkv"]);
+        var row = model.Files.Single();
+        Assert.AreEqual("Dolby Vision Profile 7 · MEL", row.Format);
+
+        var changedProperties = new List<string?>();
+        row.PropertyChanged += (_, e) => changedProperties.Add(e.PropertyName);
+
+        await model.ConvertCommand.InvokeAsync();
+
+        Assert.AreEqual(MediaRowState.Converted, row.State);
+        Assert.AreEqual(expectedRowFormat, row.Format);
+        Assert.AreEqual("No action needed", row.ActionText);
+        Assert.IsTrue(row.ShowsActionText);
+        Assert.HasCount(replaceOriginal ? 1 : 2, model.Files);
+        if (!replaceOriginal)
+        {
+            Assert.AreEqual(expectedResultDetailFormat, model.Files[1].Format);
+            Assert.AreEqual("No action needed", model.Files[1].ActionText);
+        }
+        CollectionAssert.Contains(changedProperties, nameof(MediaRow.Format));
+
+        var formatDetail = row.DetailRows.Single(d => d.Label == "Format");
+        Assert.AreEqual("Dolby Vision Profile 7 · MEL", formatDetail.Value, "Comparison table keeps the original format on the left.");
+        Assert.AreEqual(expectedResultDetailFormat, formatDetail.Result, "Comparison table shows the produced format on the right.");
     }
 }

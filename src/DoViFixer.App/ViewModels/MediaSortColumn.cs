@@ -4,5 +4,6 @@ public enum MediaSortColumn
 {
     Name,
     Classification,
-    Status
+    Status,
+    Action
 }

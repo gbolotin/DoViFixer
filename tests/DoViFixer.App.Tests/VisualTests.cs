@@ -1,6 +1,7 @@
 using System.Diagnostics;
 using System.Text;
 using System.Windows;
+using System.Windows.Automation;
 using System.Windows.Automation.Peers;
 using System.Windows.Automation.Provider;
 using System.Windows.Controls;
@@ -357,28 +358,36 @@ public sealed class VisualTests
     {
         var row = new MediaRow(@"C:\Media\Classification.mkv");
         var text = (TextBlock)((GridView)list.View).Columns[1].CellTemplate.LoadContent();
+        var statusCell = (FrameworkElement)((GridView)list.View).Columns[2].CellTemplate.LoadContent();
+        var dot = Descendants<System.Windows.Shapes.Ellipse>(statusCell).Single();
         text.DataContext = row;
+        statusCell.DataContext = row;
         var media = await runtime.ProbeAsync(row.Path, default);
-        var evidence = new RpuEvidence(AnalysisMethod.FullRpu, EnhancementLayer.Mel, 1000, null, 1, 1);
 
         async Task AssertColorAsync(string brushKey)
         {
             await Dispatcher.Yield(DispatcherPriority.ApplicationIdle);
-            Assert.AreEqual(((SolidColorBrush)list.FindResource(brushKey)).Color, ((SolidColorBrush)text.Foreground).Color, brushKey);
+            Assert.AreEqual(((SolidColorBrush)list.FindResource("TextFillColorSecondaryBrush")).Color, ((SolidColorBrush)text.Foreground).Color, "Format column text must stay neutral.");
+            Assert.AreEqual(((SolidColorBrush)list.FindResource(brushKey)).Color, ((SolidColorBrush)dot.Fill).Color, brushKey);
         }
 
-        await AssertColorAsync("TextFillColorSecondaryBrush");
-        foreach (var (verdict, color) in new[]
+        await AssertColorAsync("TextFillColorTertiaryBrush");
+        foreach (var (verdict, method, color) in new[]
         {
-            (AnalysisVerdict.Mel, "SystemFillColorSuccessBrush"),
-            (AnalysisVerdict.SimpleFel, "AccentTextFillColorPrimaryBrush"),
-            (AnalysisVerdict.ComplexFel, "SystemFillColorCriticalBrush"),
-            (AnalysisVerdict.AnalysisFailed, "SystemFillColorCriticalBrush"),
-            (AnalysisVerdict.Unknown, "SystemFillColorCautionBrush"),
-            (AnalysisVerdict.FelUnclassified, "SystemFillColorCautionBrush"),
-            (AnalysisVerdict.NotApplicable, "TextFillColorSecondaryBrush")
+            (AnalysisVerdict.Mel, AnalysisMethod.SampledRpu, "SystemFillColorSuccessBrush"),
+            (AnalysisVerdict.Mel, AnalysisMethod.FullRpu, "SystemFillColorSuccessBrush"),
+            (AnalysisVerdict.SimpleFel, AnalysisMethod.SampledRpu, "SystemFillColorCautionBrush"),
+            (AnalysisVerdict.SimpleFel, AnalysisMethod.FullRpu, "AccentFillColorDefaultBrush"),
+            (AnalysisVerdict.SimpleFel, AnalysisMethod.DeepInspection, "SystemFillColorSuccessBrush"),
+            (AnalysisVerdict.ComplexFel, AnalysisMethod.FullRpu, "SystemFillColorCriticalBrush"),
+            (AnalysisVerdict.AnalysisFailed, AnalysisMethod.FullRpu, "SystemFillColorCriticalBrush"),
+            (AnalysisVerdict.Unknown, AnalysisMethod.SampledRpu, "SystemFillColorCautionBrush"),
+            (AnalysisVerdict.FelUnclassified, AnalysisMethod.FullRpu, "SystemFillColorCautionBrush"),
+            (AnalysisVerdict.NotApplicable, AnalysisMethod.FullRpu, "TextFillColorTertiaryBrush")
         })
         {
+            var layer = verdict == AnalysisVerdict.Mel ? EnhancementLayer.Mel : EnhancementLayer.Fel;
+            var evidence = new RpuEvidence(method, layer, 1000, null, 1, 1);
             row.Analysis = new MediaAnalysis(media, evidence, verdict, "Test classification");
             await AssertColorAsync(color);
             row.AnalysisError = "";
@@ -387,7 +396,7 @@ public sealed class VisualTests
             await AssertColorAsync(color);
         }
         row.Analysis = null;
-        await AssertColorAsync("TextFillColorSecondaryBrush");
+        await AssertColorAsync("TextFillColorTertiaryBrush");
         row.AnalysisError = "Analysis failed";
         await AssertColorAsync("SystemFillColorCriticalBrush");
     }
@@ -412,11 +421,15 @@ public sealed class VisualTests
         }
         var fileHeader = Header(0);
         var profileHeader = Header(1);
+        var statusHeader = Header(2);
+        var actionHeader = Header(3);
         var selectAll = Descendants<CheckBox>(fileHeader).Single();
         var original = media.Files.ToArray();
         var focused = media.Focused;
         Assert.AreSame(list.FindResource("WfSortableColumnHeaderTemplate"), profileHeader.ContentTemplate, "Columns without a header template use the shared sortable header.");
         Assert.IsTrue(Descendants<TextBlock>(profileHeader).Any(text => text.Text == "Format"));
+        Assert.IsTrue(Descendants<TextBlock>(statusHeader).Any(text => text.Text == "Status"));
+        Assert.IsTrue(Descendants<TextBlock>(actionHeader).Any(text => text.Text == "Action"));
         Assert.IsFalse(Indicator(fileHeader).IsVisible);
 
         fileHeader.RaiseEvent(new RoutedEventArgs(ButtonBase.ClickEvent, fileHeader));
@@ -442,6 +455,11 @@ public sealed class VisualTests
         Assert.AreEqual(ascending, Indicator(profileHeader).Text);
         Assert.IsTrue(Indicator(profileHeader).IsVisible, "The shared header template shows the indicator.");
         AssertIndicatorAboveCenter(profileHeader, "Format");
+
+        actionHeader.RaiseEvent(new RoutedEventArgs(ButtonBase.ClickEvent, actionHeader));
+        await LayoutAsync(window);
+        Assert.AreEqual(MediaSortColumn.Action, media.FileSort.Column);
+        AssertIndicatorAboveCenter(actionHeader, "Action");
 
         // Leave the list sorted by name ascending, which matches the order the files were added.
         fileHeader.RaiseEvent(new RoutedEventArgs(ButtonBase.ClickEvent, fileHeader));
@@ -486,6 +504,22 @@ public sealed class VisualTests
         await LayoutAsync(window);
         CollectionAssert.AreEqual(sorted, list.Items.Cast<MediaRow>().ToArray(), "Showing all files restores the full sorted list.");
         Assert.IsFalse(NoMatches().IsVisible);
+
+        var filterBox = Descendants<TextBox>(window).Single(box => AutomationProperties.GetName(box) == "Filter files");
+        Assert.AreEqual("\uE721", TextBoxAssist.GetIcon(filterBox));
+        var clearFilterButton = (Button)filterBox.Template.FindName("DeleteButton", filterBox);
+        Assert.AreEqual(Visibility.Collapsed, clearFilterButton.Visibility);
+        filterBox.Text = sorted[0].Name;
+        await LayoutAsync(window);
+        Assert.AreEqual(sorted[0].Name, media.FilterText);
+        Assert.AreEqual(Visibility.Visible, clearFilterButton.Visibility);
+        AssertShows("Typing in the filter box filters the list immediately.");
+        Invoke(clearFilterButton);
+        await LayoutAsync(window);
+        Assert.AreEqual(string.Empty, filterBox.Text);
+        Assert.AreEqual(Visibility.Collapsed, clearFilterButton.Visibility);
+        CollectionAssert.AreEqual(sorted, list.Items.Cast<MediaRow>().ToArray(), "Clearing the filter box restores the full sorted list.");
+
         media.Focused = focused;
         await LayoutAsync(window);
     }
@@ -859,8 +893,6 @@ public sealed class VisualTests
             Assert.AreSame(command, button.Command, caption + " must resolve through the actual page template.");
             Assert.AreSame(row, button.CommandParameter);
         }
-        Assert.AreSame(media.OpenRowOutputCommand, ConvertedFileLink(container).Command, "The converted file link must resolve through the actual page template.");
-        Assert.AreSame(row, ConvertedFileLink(container).CommandParameter);
 
         // A failed analysis must be retryable from the row even when another row is focused.
         await runtime.ClearAsync(default);
@@ -945,11 +977,9 @@ public sealed class VisualTests
         await media.ConvertCommand.InvokeAsync();
         await LayoutAsync(window);
         AssertStableActionSlots(list, slots, "converted");
-        var convertedFile = ConvertedFileLink(container);
-        convertedFile.Command.Invoke(convertedFile.CommandParameter);
-        await LayoutAsync(window);
-        AssertStableActionSlots(list, slots, "converted file shown");
-        Assert.AreEqual(row.Result!.Output, runtime.ShownFile);
+        Assert.AreEqual("No action needed", row.ActionText);
+        Assert.IsTrue(row.ShowsActionText);
+        Assert.IsTrue(media.Files.Any(file => file.Path == row.Result!.Output));
         var rowDot = ResultDot(list.ItemContainerGenerator.ContainerFromItem(row), row);
         Assert.IsTrue(rowDot.IsVisible, "A converted row shows a result dot before its status.");
         Assert.AreEqual(window.FindResource("SystemFillColorSuccessBrush"), rowDot.Fill);
@@ -1323,7 +1353,7 @@ public sealed class VisualTests
         foreach (var item in list.Items)
         {
             var container = (ListViewItem)list.ItemContainerGenerator.ContainerFromItem(item);
-            int shownPrimaryActions = ((TextBlock)ConvertedFileLink(container).Parent).Visibility == Visibility.Collapsed ? 0 : 1;
+            int shownPrimaryActions = 0;
             foreach (var button in Descendants<Button>(container))
             {
                 string name = System.Windows.Automation.AutomationProperties.GetName(button) is { Length: > 0 } automationName
@@ -1348,10 +1378,6 @@ public sealed class VisualTests
             Assert.IsTrue(shownPrimaryActions <= 1, $"Primary actions share one slot ({checkpoint}).");
         }
     }
-
-    private static System.Windows.Documents.Hyperlink ConvertedFileLink(DependencyObject row) => Descendants<TextBlock>(row)
-        .SelectMany(text => text.Inlines.OfType<System.Windows.Documents.Hyperlink>())
-        .Single(link => System.Windows.Automation.AutomationProperties.GetName(link) == "Show converted file");
 
     /// <summary>The result dot placed by the page template, not an ellipse inside a control's own template.</summary>
     private static System.Windows.Shapes.Ellipse ResultDot(DependencyObject parent, object? context)

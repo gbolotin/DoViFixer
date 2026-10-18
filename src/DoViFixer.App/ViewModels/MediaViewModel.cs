@@ -1,3 +1,4 @@
+using System.Collections.Concurrent;
 using System.Collections.ObjectModel;
 using System.ComponentModel;
 using System.Windows.Media.Imaging;
@@ -135,6 +136,9 @@ public sealed partial class MediaViewModel : OperationViewModel, INavigationPage
     [ObservableProperty]
     public partial MediaFileFilter FileFilter { get; set; } = MediaFileFilter.All;
 
+    [ObservableProperty]
+    public partial string FilterText { get; set; } = "";
+
     partial void OnFileFilterChanged(MediaFileFilter value)
     {
         foreach (var option in FilterOptions)
@@ -142,8 +146,17 @@ public sealed partial class MediaViewModel : OperationViewModel, INavigationPage
             option.IsSelected = option.Filter == value;
         }
 
-        // Each filter gets its own predicate instance, so the list sees a new value and filters again.
-        ShownFilePredicate = item => item is MediaRow row && Shows(value, row);
+        ApplyFilter();
+    }
+
+    partial void OnFilterTextChanged(string value) => ApplyFilter();
+
+    private void ApplyFilter()
+    {
+        var filter = FileFilter;
+        var text = FilterText.Trim();
+        // Each filter change gets its own predicate instance, so the list sees a new value and filters again.
+        ShownFilePredicate = item => item is MediaRow row && Shows(filter, text, row);
         OnPropertyChanged(nameof(ShownFilePredicate));
         if (Focused is null || !IsShown(Focused))
         {
@@ -159,18 +172,24 @@ public sealed partial class MediaViewModel : OperationViewModel, INavigationPage
     /// <summary>Files exist, but the chosen filter shows none of them.</summary>
     public bool HasNoShownFiles => Files.Count > 0 && !Files.Any(IsShown);
 
-    private static bool Shows(MediaFileFilter filter, MediaRow row) => filter == MediaFileFilter.All || row.FilterGroup == filter;
+    private static bool MatchesText(string text, MediaRow row) =>
+        string.IsNullOrWhiteSpace(text) || row.Name.Contains(text, StringComparison.OrdinalIgnoreCase);
 
-    private bool IsShown(MediaRow row) => Shows(FileFilter, row);
+    private static bool Shows(MediaFileFilter filter, string text, MediaRow row) =>
+        (filter == MediaFileFilter.All || row.FilterGroup == filter) && MatchesText(text, row);
+
+    private bool IsShown(MediaRow row) => Shows(FileFilter, FilterText.Trim(), row);
 
     private IEnumerable<MediaRow> ShownFiles => Files.Where(IsShown);
 
     private void ShownFilesChanged()
     {
-        var groups = Files.CountBy(row => row.FilterGroup).ToDictionary();
+        var text = FilterText.Trim();
+        var matching = Files.Where(row => MatchesText(text, row)).ToArray();
+        var groups = matching.CountBy(row => row.FilterGroup).ToDictionary();
         foreach (var option in FilterOptions)
         {
-            option.Count = option.Filter == MediaFileFilter.All ? Files.Count : groups.GetValueOrDefault(option.Filter);
+            option.Count = option.Filter == MediaFileFilter.All ? matching.Length : groups.GetValueOrDefault(option.Filter);
         }
 
         OnPropertyChanged(nameof(HasNoShownFiles));
@@ -452,7 +471,7 @@ public sealed partial class MediaViewModel : OperationViewModel, INavigationPage
         {
             var total = Files.Count;
             var selected = ShownFiles.Count(f => f.IsSelected);
-            var totalText = FileFilter == MediaFileFilter.All
+            var totalText = FileFilter == MediaFileFilter.All && string.IsNullOrWhiteSpace(FilterText)
                 ? $"{total} {(total == 1 ? "item" : "items")}"
                 : $"{ShownFiles.Count()} of {total} {(total == 1 ? "item" : "items")} shown";
             if (selected == 0)
@@ -583,11 +602,6 @@ public sealed partial class MediaViewModel : OperationViewModel, INavigationPage
 
     [RelayCommand(CanExecute = nameof(CanInspectIncomplete))]
     private Task InspectIncomplete(MediaRow? row) => RunAsync(AnalysisTitle(AnalysisMethod.FullRpu), (token, _) => AnalyzeRowsAsync([row!], AnalysisMethod.FullRpu, token));
-
-    private static bool CanOpenRowOutput(MediaRow? row) => row is not null && row.CanOpenResult;
-
-    [RelayCommand(CanExecute = nameof(CanOpenRowOutput))]
-    private void OpenRowOutput(MediaRow? row) => explorer.ShowInFolder(row!.Result!.Output!);
 
     [RelayCommand(CanExecute = nameof(IsIdle))]
     private void OpenSettings() => RequestOpenSettings?.Invoke();
@@ -763,7 +777,6 @@ public sealed partial class MediaViewModel : OperationViewModel, INavigationPage
         OnPropertyChanged(nameof(CanInspect));
         RetryAnalysisCommand?.NotifyCanExecuteChanged();
         InspectIncompleteCommand?.NotifyCanExecuteChanged();
-        OpenRowOutputCommand?.NotifyCanExecuteChanged();
         ToggleSelectAllCommand?.NotifyCanExecuteChanged();
         ClearAllCommand?.NotifyCanExecuteChanged();
         RemoveFileCommand?.NotifyCanExecuteChanged();
@@ -883,7 +896,6 @@ public sealed partial class MediaViewModel : OperationViewModel, INavigationPage
         {
             InspectIncompleteCommand.NotifyCanExecuteChanged();
             RetryAnalysisCommand.NotifyCanExecuteChanged();
-            OpenRowOutputCommand.NotifyCanExecuteChanged();
         }
 
         if (e.PropertyName != nameof(MediaRow.IsSelected))
@@ -1079,7 +1091,10 @@ public sealed partial class MediaViewModel : OperationViewModel, INavigationPage
             {
                 var row = rows.First(r => r.Path == result.Item);
                 CompleteBatchItem(row, result.Status);
-                row.Status = result.Status == OperationStatus.Completed ? "" : $"{row.OperationName} {result.Status.ToString().ToLowerInvariant()}";
+                if (result.Status != OperationStatus.Completed)
+                {
+                    row.Status = $"{row.OperationName} {result.Status.ToString().ToLowerInvariant()}";
+                }
                 row.CanRetryAnalysis = result.Status is OperationStatus.Failed or OperationStatus.Cancelled;
                 if (result.Status == OperationStatus.Failed)
                 {
@@ -1134,6 +1149,95 @@ public sealed partial class MediaViewModel : OperationViewModel, INavigationPage
         catch (Exception ex)
         {
             logger.LogWarning(ex, "Could not read metadata of produced file {Output}", output);
+        }
+    }
+
+    private async Task<LibraryFile?> RememberProducedFileAsync(OperationItemResult result, CancellationToken token)
+    {
+        if (result.Status is not (OperationStatus.Completed or OperationStatus.Partial) || result.Output is not { } output)
+        {
+            return null;
+        }
+
+        try
+        {
+            return await Task.Run(() => library.RememberAsync(output, token), token);
+        }
+        catch (Exception ex) when (ex is not OperationCanceledException)
+        {
+            logger.LogWarning(ex, "Could not remember produced file {Output}", output);
+            return null;
+        }
+    }
+
+    private void AddOrUpdateProducedRow(MediaRow sourceRow, OperationItemResult itemResult, LibraryFile? remembered)
+    {
+        if (itemResult.Output is not { } output)
+        {
+            return;
+        }
+
+        if (string.Equals(output, sourceRow.Path, StringComparison.OrdinalIgnoreCase))
+        {
+            if (remembered is not null)
+            {
+                sourceRow.LibraryFingerprint = remembered.Fingerprint;
+            }
+
+            if (itemResult.Archive is not null)
+            {
+                sourceRow.RestoreArchive = itemResult.Archive;
+            }
+
+            return;
+        }
+
+        var outputRow = Files.FirstOrDefault(existing =>
+            (remembered is not null && existing.LibraryFingerprint == remembered.Fingerprint && !ReferenceEquals(existing, sourceRow))
+            || string.Equals(existing.Path, output, StringComparison.OrdinalIgnoreCase));
+        bool added = outputRow is null;
+        if (outputRow is null)
+        {
+            outputRow = new MediaRow(output)
+            {
+                IsSelected = false,
+                SelectionEnabled = IsIdle
+            };
+        }
+        else if (!string.Equals(outputRow.Path, output, StringComparison.OrdinalIgnoreCase))
+        {
+            bool wasFocused = ReferenceEquals(Focused, outputRow);
+            outputRow.PropertyChanged -= OnRowPropertyChanged;
+            Files.Remove(outputRow);
+            outputRow = new MediaRow(output)
+            {
+                IsSelected = false,
+                SelectionEnabled = IsIdle
+            };
+            if (wasFocused)
+            {
+                Focused = outputRow;
+            }
+
+            added = true;
+        }
+
+        outputRow.LibraryFingerprint = remembered?.Fingerprint ?? outputRow.LibraryFingerprint;
+        outputRow.RestoreArchive = itemResult.Archive ?? outputRow.RestoreArchive;
+        outputRow.AnalysisError = null;
+        outputRow.Warning = null;
+        outputRow.Notice = "";
+        var analysis = sourceRow.ResultAnalysis ?? remembered?.Analysis;
+        if (analysis is not null)
+        {
+            outputRow.Analysis = analysis;
+            outputRow.SetScanned();
+        }
+
+        if (added)
+        {
+            outputRow.PropertyChanged += OnRowPropertyChanged;
+            Files.Add(outputRow);
         }
     }
 
@@ -1196,6 +1300,7 @@ public sealed partial class MediaViewModel : OperationViewModel, INavigationPage
         row.LastAnalysisMethod = null;
         BeginBatch([row], "Restoration");
         row.CurrentOperation = "Restoration";
+        LibraryFile? rememberedOutput = null;
         try
         {
             var result = await batch.ExecuteAsync(new[] { row }, item => item.Path, async (item, itemToken) =>
@@ -1203,6 +1308,7 @@ public sealed partial class MediaViewModel : OperationViewModel, INavigationPage
                 var jobProgress = Activate(item, "Restoring Profile 7");
                 var restored = await Task.Run(() => restore.ExecuteAsync(plan, jobProgress, itemToken), itemToken);
                 await ReadResultMetadataAsync(item, restored, itemToken);
+                rememberedOutput = await RememberProducedFileAsync(restored, itemToken);
                 return restored;
             }, control!, new InlineProgress<OperationItemResult>(itemResult =>
             {
@@ -1211,6 +1317,7 @@ public sealed partial class MediaViewModel : OperationViewModel, INavigationPage
                 if (itemResult.Status == OperationStatus.Completed)
                 {
                     row.SetRestored(itemResult);
+                    AddOrUpdateProducedRow(row, itemResult, rememberedOutput);
                 }
                 else if (itemResult.Status == OperationStatus.Cancelled)
                 {
@@ -1328,6 +1435,7 @@ public sealed partial class MediaViewModel : OperationViewModel, INavigationPage
             row.Notice = "";
         }
 
+        var rememberedOutputs = new ConcurrentDictionary<MediaRow, LibraryFile?>();
         BeginBatch(rows, opName);
         try
         {
@@ -1379,6 +1487,7 @@ public sealed partial class MediaViewModel : OperationViewModel, INavigationPage
                         jobProgress.Report(new(success.Plan.Id, "Converting", row.Path));
                         var converted = await Task.Run(() => conversion.ExecuteAsync(success.Plan, jobProgress, itemToken), itemToken);
                         await ReadResultMetadataAsync(row, converted, itemToken);
+                        rememberedOutputs[row] = await RememberProducedFileAsync(converted, itemToken);
                         return converted;
                     }
 
@@ -1396,6 +1505,8 @@ public sealed partial class MediaViewModel : OperationViewModel, INavigationPage
                 if (itemResult.Status is OperationStatus.Completed or OperationStatus.Partial)
                 {
                     row.SetConverted(itemResult);
+                    rememberedOutputs.TryRemove(row, out var remembered);
+                    AddOrUpdateProducedRow(row, itemResult, remembered);
                 }
                 else
                 {

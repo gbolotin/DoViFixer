@@ -131,4 +131,36 @@ public sealed class MediaFilterTests
         Assert.AreEqual("Profile 7 (2)", Option(model, MediaFileFilter.Profile7).Label);
         Assert.IsTrue(model.HasNoShownFiles, "Scanned files leave the unscanned filter.");
     }
+
+    [TestMethod]
+    public async Task FilterTextFiltersByFileNameAndUpdatesFilterCounts()
+    {
+        using var runtime = new TestRuntime();
+        var model = await CreateAsync(runtime);
+
+        model.FilterText = "ocean";
+        CollectionAssert.AreEqual(new[] { Profile7, Profile81, NoDolbyVision }, Shown(model));
+        Assert.AreEqual("All (3)", Option(model, MediaFileFilter.All).Label);
+        Assert.AreEqual("Profile 7 (1)", Option(model, MediaFileFilter.Profile7).Label);
+        Assert.AreEqual("Profile 8.1 (1)", Option(model, MediaFileFilter.Profile81).Label);
+        Assert.AreEqual("No Dolby Vision (1)", Option(model, MediaFileFilter.NoDolbyVision).Label);
+        Assert.AreEqual("Not scanned / failed (0)", Option(model, MediaFileFilter.NotScanned).Label);
+        Assert.AreEqual("3 of 4 items shown", model.SelectionSummary);
+
+        model.FilterText = "media";
+        Assert.IsEmpty(Shown(model), "Directory names in the full path do not match the file name filter.");
+        Assert.IsTrue(model.HasNoShownFiles);
+        Assert.AreEqual("All (0)", Option(model, MediaFileFilter.All).Label);
+
+        model.FilterText = "city";
+        CollectionAssert.AreEqual(new[] { Unscanned }, Shown(model));
+        Assert.AreEqual(Unscanned, model.Focused?.Path);
+        Assert.AreEqual("All (1)", Option(model, MediaFileFilter.All).Label);
+        Assert.AreEqual("Not scanned / failed (1)", Option(model, MediaFileFilter.NotScanned).Label);
+
+        model.FilterText = "";
+        CollectionAssert.AreEqual(new[] { Profile7, Profile81, NoDolbyVision, Unscanned }, Shown(model));
+        Assert.AreEqual("All (4)", Option(model, MediaFileFilter.All).Label);
+        Assert.AreEqual("4 items | 1 item selected", model.SelectionSummary);
+    }
 }

@@ -12,3 +12,13 @@ public enum MediaRowState
     Skipped,
     Restored
 }
+
+public enum MediaStatusTone
+{
+    None,
+    Neutral,
+    Safe,
+    LowRisk,
+    VerifyRecommended,
+    HighRisk
+}

@@ -43,7 +43,8 @@ public sealed class ConversionReviewTests
         Assert.IsTrue(row.Result!.Output!.EndsWith(" - DV P8.1.mkv"));
         Assert.IsNull(model.Files[1].Result);
         Assert.AreSame(model.Files[1], model.Focused);
-        CollectionAssert.AreEqual(selections, model.Files.Select(file => file.IsSelected).ToArray());
+        CollectionAssert.AreEqual((bool[])[.. selections, false], model.Files.Select(file => file.IsSelected).ToArray());
+        Assert.AreEqual(row.Result.Output, model.Files[^1].Path);
         Assert.AreEqual(1, model.BatchProgress.Total);
         Assert.IsTrue(command.CanExecute(model.Files[1]));
     }
@@ -280,9 +281,10 @@ public sealed class ConversionReviewTests
         await model.ConvertCommand.InvokeAsync();
 
         Assert.AreEqual(1, runtime.Conversions);
-        Assert.AreEqual("Converted", model.Files.Single().Status);
-        Assert.IsFalse(model.Files.Single().HasWarning);
-        Assert.AreEqual(MediaRowState.Converted, model.Files.Single().State);
+        Assert.AreEqual("Converted", model.Files[0].Status);
+        Assert.IsFalse(model.Files[0].HasWarning);
+        Assert.AreEqual(MediaRowState.Converted, model.Files[0].State);
+        Assert.AreEqual(model.Files[0].Result!.Output, model.Files[1].Path);
     }
 
     [TestMethod]
@@ -296,10 +298,12 @@ public sealed class ConversionReviewTests
         await model.ConvertCommand.InvokeAsync();
 
         Assert.AreEqual(1, runtime.Conversions);
-        Assert.AreEqual("Converted", model.Files.Single().Status);
-        Assert.AreEqual(MediaRowState.Converted, model.Files.Single().State);
-        Assert.IsTrue(model.Files.Single().CanOpenResult);
-        Assert.IsTrue(model.Files.Single().Result!.Output!.EndsWith(" - HDR10.mkv"));
+        Assert.AreEqual("Converted", model.Files[0].Status);
+        Assert.AreEqual(MediaRowState.Converted, model.Files[0].State);
+        Assert.IsTrue(model.Files[0].CanOpenResult);
+        Assert.IsTrue(model.Files[0].Result!.Output!.EndsWith(" - HDR10.mkv"));
+        Assert.AreEqual(model.Files[0].Result!.Output, model.Files[1].Path);
+        Assert.AreEqual("HDR", model.Files[1].Format);
     }
 
     [TestMethod]

@@ -294,6 +294,7 @@ internal sealed class TestRuntime : IFileDiscovery, IFileOperations, IMediaProbe
         get;
         set;
     }
+    private readonly Dictionary<string, ConversionTarget> convertedOutputs = new(StringComparer.OrdinalIgnoreCase);
     public async Task<MediaInfo> ProbeAsync(string path, CancellationToken cancellationToken)
     {
         Probes++;
@@ -302,7 +303,18 @@ internal sealed class TestRuntime : IFileDiscovery, IFileOperations, IMediaProbe
             await DuringProbe(cancellationToken);
         }
 
-        var profile = path.Contains("P81") ? DolbyVisionProfile.Profile81 : path.Contains("Sdr") ? DolbyVisionProfile.None : DolbyVisionProfile.Profile7;
+        if (convertedOutputs.TryGetValue(path, out var convertedTarget))
+        {
+            var convertedProfile = convertedTarget == ConversionTarget.Profile81 ? DolbyVisionProfile.Profile81 : DolbyVisionProfile.None;
+            return new MediaInfo(Identify(path), convertedProfile, "HEVC", 0, 3840, 2160, 1000, 23.976, 5772, 0, 1000, [], 0, 1, null, "{}")
+            {
+                IsHdr = true
+            };
+        }
+
+        var profile = path.EndsWith(".restored.mkv", StringComparison.OrdinalIgnoreCase)
+            ? DolbyVisionProfile.Profile7
+            : path.Contains("P81") ? DolbyVisionProfile.Profile81 : path.Contains("Sdr") ? DolbyVisionProfile.None : DolbyVisionProfile.Profile7;
         return new MediaInfo(Identify(path), profile, "HEVC", 0, 3840, 2160, 1000, 23.976, 5772, 0, 1000, [], 0, 1, null, "{}");
     }
 
@@ -410,6 +422,8 @@ internal sealed class TestRuntime : IFileDiscovery, IFileOperations, IMediaProbe
         {
             await DuringConversion(cancellationToken);
         }
+
+        convertedOutputs[stagedOutput] = target;
     }
 
     public Task<ArchiveManifest> ExtractBackupAsync(MediaInfo media, ITemporaryWorkspace workspace, CancellationToken cancellationToken, IProgress<OperationProgress>? progress = null, Guid operationId = default, string stage = "") => throw new NotSupportedException();
