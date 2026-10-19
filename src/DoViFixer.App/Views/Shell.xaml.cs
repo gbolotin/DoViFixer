@@ -20,6 +20,8 @@ public partial class Shell : Window
         Activated += (_, _) => model.WindowActivated();
     }
 
+    private void OnExitClick(object sender, RoutedEventArgs e) => Close();
+
     private async void OnClosing(object? sender, CancelEventArgs e)
     {
         if (closing)

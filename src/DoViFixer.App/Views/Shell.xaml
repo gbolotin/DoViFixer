@@ -8,6 +8,7 @@
         xmlns:navigation="clr-namespace:WpfFoundation.Navigation;assembly=WpfFoundation"
         xmlns:wf="clr-namespace:WpfFoundation.Controls;assembly=WpfFoundation"
         Title="{x:Static updates:ApplicationTitle.Name}"
+        Icon="pack://application:,,,/DoViFixer.App;component/dovifixer.ico"
         MinWidth="800"
         MinHeight="600"
         WindowStartupLocation="CenterScreen">
@@ -32,87 +33,143 @@
             </DataTemplate>
 
             <DataTemplate DataType="{x:Type viewModels:ShellViewModel}">
-                <Grid Background="{DynamicResource ApplicationBackgroundBrush}"
-                      TextElement.Foreground="{DynamicResource TextFillColorPrimaryBrush}">
-                    <!-- While the settings frame is open, the pages behind it take no keyboard, access key or screen reader focus. -->
-                    <DockPanel IsEnabled="{Binding IsSettingsOpen, Converter={StaticResource WfInverseBooleanConverter}}">
-                        <StatusBar ItemsSource="{Binding StatusItems}"
-                                   DockPanel.Dock="Bottom"
-                                   Style="{StaticResource WfStatusBarStyle}"
-                                   AutomationProperties.Name="Page status">
-                            <StatusBar.Resources>
-                                <DataTemplate DataType="{x:Type p:DependencyReportViewModel}">
-                                    <StackPanel Orientation="Horizontal"
-                                                ToolTip="{Binding WarningDetails}"
-                                                AutomationProperties.Name="Dependency warning"
-                                                AutomationProperties.LiveSetting="Polite">
-                                        <TextBlock Text="&#xE7BA;"
-                                                   FontFamily="{StaticResource SymbolThemeFontFamily}"
-                                                   FontWeight="SemiBold"
-                                                   Foreground="{DynamicResource SystemFillColorCautionBrush}"
-                                                   VerticalAlignment="Center"
-                                                   Margin="0,0,8,0" />
-                                        <TextBlock Text="{Binding WarningText}" VerticalAlignment="Center" />
-                                    </StackPanel>
+                <DockPanel>
+                    <!-- The menu sits in the title bar on the Fluent backdrop, or below the system title bar in high contrast.
+                         Like the pages, it takes no input while the settings frame is open. -->
+                    <wf:TitleBar DockPanel.Dock="Top">
+                        <Menu IsEnabled="{Binding IsSettingsOpen, Converter={StaticResource WfInverseBooleanConverter}}">
+                            <Menu.Resources>
+                                <CollectionViewSource x:Key="PageItems" Source="{Binding Pages}" />
+                            </Menu.Resources>
+                            <MenuItem Header="_File">
+                                <MenuItem Header="_Add files…" Command="{Binding AddFilesCommand}" />
+                                <MenuItem Header="Add _folder…" Command="{Binding AddFolderCommand}" />
+                                <Separator />
+                                <MenuItem Header="_Export visible results…" Command="{Binding ExportResultsCommand}" />
+                                <Separator />
+                                <MenuItem Header="E_xit"
+                                          InputGestureText="Alt+F4"
+                                          Click="OnExitClick" />
+                            </MenuItem>
+                            <MenuItem Header="_View">
+                                <MenuItem.ItemsSource>
+                                    <CompositeCollection>
+                                        <CollectionContainer Collection="{Binding Source={StaticResource PageItems}}" />
+                                        <!-- Their own styles keep the page item style below off these items. -->
+                                        <Separator Style="{StaticResource {x:Static MenuItem.SeparatorStyleKey}}" />
+                                        <MenuItem Header="_Reset media columns"
+                                                  Command="{Binding Media.ResetColumnLayoutCommand}"
+                                                  Style="{StaticResource {x:Type MenuItem}}" />
+                                    </CompositeCollection>
+                                </MenuItem.ItemsSource>
+                                <MenuItem.ItemContainerStyle>
+                                    <Style TargetType="MenuItem" BasedOn="{StaticResource {x:Type MenuItem}}">
+                                        <Setter Property="Header" Value="{Binding NavigationName}" />
+                                        <Setter Property="Command" Value="{Binding DataContext.ShowPageCommand, RelativeSource={RelativeSource AncestorType=Menu}}" />
+                                        <Setter Property="CommandParameter" Value="{Binding}" />
+                                    </Style>
+                                </MenuItem.ItemContainerStyle>
+                            </MenuItem>
+                            <MenuItem Header="_Tools">
+                                <MenuItem Header="_Settings"
+                                          Command="{Binding OpenSettingsCommand}"
+                                          InputGestureText="Ctrl+," />
+                                <Separator />
+                                <MenuItem Header="_Check dependencies" Command="{Binding CheckDependenciesCommand}" />
+                                <MenuItem Header="C_lean library" Command="{Binding CleanLibraryCommand}" />
+                            </MenuItem>
+                            <MenuItem Header="_Help">
+                                <MenuItem Header="Open _logs" Command="{Binding Settings.OpenLogsCommand}" />
+                                <MenuItem Header="_Export diagnostics…" Command="{Binding ExportDiagnosticsCommand}" />
+                                <Separator />
+                                <MenuItem Header="{x:Static updates:ApplicationTitle.Name}"
+                                          HeaderStringFormat="About {0}"
+                                          Command="{Binding ShowAboutCommand}" />
+                            </MenuItem>
+                        </Menu>
+                    </wf:TitleBar>
+                    <Grid Background="{DynamicResource ApplicationBackgroundBrush}"
+                          TextElement.Foreground="{DynamicResource TextFillColorPrimaryBrush}">
+                        <!-- While the settings frame is open, the pages behind it take no keyboard, access key or screen reader focus. -->
+                        <DockPanel IsEnabled="{Binding IsSettingsOpen, Converter={StaticResource WfInverseBooleanConverter}}">
+                            <StatusBar ItemsSource="{Binding StatusItems}"
+                                       DockPanel.Dock="Bottom"
+                                       Style="{StaticResource WfStatusBarStyle}"
+                                       AutomationProperties.Name="Page status">
+                                <StatusBar.Resources>
+                                    <DataTemplate DataType="{x:Type p:DependencyReportViewModel}">
+                                        <StackPanel Orientation="Horizontal"
+                                                    ToolTip="{Binding WarningDetails}"
+                                                    AutomationProperties.Name="Dependency warning"
+                                                    AutomationProperties.LiveSetting="Polite">
+                                            <TextBlock Text="&#xE7BA;"
+                                                       FontFamily="{StaticResource SymbolThemeFontFamily}"
+                                                       FontWeight="SemiBold"
+                                                       Foreground="{DynamicResource SystemFillColorCautionBrush}"
+                                                       VerticalAlignment="Center"
+                                                       Margin="0,0,8,0" />
+                                            <TextBlock Text="{Binding WarningText}" VerticalAlignment="Center" />
+                                        </StackPanel>
+                                    </DataTemplate>
+                                    <DataTemplate DataType="{x:Type viewModels:StartupDependencyCheckViewModel}">
+                                        <StackPanel Orientation="Horizontal" AutomationProperties.Name="Dependency operation">
+                                            <TextBlock Text="{Binding StatusText}"
+                                                       MaxWidth="320"
+                                                       TextTrimming="CharacterEllipsis"
+                                                       ToolTip="{Binding StatusText}"
+                                                       VerticalAlignment="Center" />
+                                            <Button Content="Cancel"
+                                                    Command="{Binding CancelCommand}"
+                                                    AutomationProperties.Name="Cancel dependency operation"
+                                                    Padding="8,0"
+                                                    Margin="8,0,0,0" />
+                                        </StackPanel>
+                                    </DataTemplate>
+                                </StatusBar.Resources>
+                            </StatusBar>
+                            <!-- The sidebar background covers the pages and the Settings button below them. -->
+                            <Border DockPanel.Dock="Left"
+                                    Background="{DynamicResource ListBoxBackground}"
+                                    BorderBrush="{DynamicResource DividerStrokeColorDefaultBrush}"
+                                    BorderThickness="0,0,1,0">
+                                <DockPanel>
+                                    <Button Content="Settings"
+                                            Tag="&#xE713;"
+                                            Command="{Binding OpenSettingsCommand}"
+                                            ToolTip="Settings (Ctrl+,)"
+                                            AutomationProperties.AcceleratorKey="Ctrl+,"
+                                            DockPanel.Dock="Bottom"
+                                            Margin="8"
+                                            Style="{StaticResource WfNavigationButtonStyle}" />
+                                    <ListBox ItemsSource="{Binding Pages}"
+                                             SelectedItem="{Binding CurrentPage}"
+                                             IsEnabled="{Binding CanNavigate}"
+                                             Background="Transparent"
+                                             BorderThickness="0"
+                                             Style="{StaticResource WfNavigationSidebarStyle}" />
+                                </DockPanel>
+                            </Border>
+                            <navigation:RetainedPageHost Navigation="{Binding Navigation}" Margin="8,0,8,0" />
+                        </DockPanel>
+                        <!-- The title sits on the section list's background, as a small label above the sections. -->
+                        <wf:ContentOverlay Header="Settings"
+                                           Content="{Binding Settings}"
+                                           IsOpen="{Binding IsSettingsOpen, Mode=OneWay}"
+                                           CloseCommand="{Binding CloseSettingsCommand}"
+                                           HeaderBackground="{DynamicResource ListBoxBackground}"
+                                           CardMaxWidth="1040"
+                                           CardMaxHeight="760"
+                                           Padding="32">
+                            <wf:ContentOverlay.HeaderTemplate>
+                                <DataTemplate>
+                                    <TextBlock Text="{Binding}"
+                                               Style="{StaticResource CaptionTextBlockStyle}"
+                                               Foreground="{DynamicResource TextFillColorSecondaryBrush}" />
                                 </DataTemplate>
-                                <DataTemplate DataType="{x:Type viewModels:StartupDependencyCheckViewModel}">
-                                    <StackPanel Orientation="Horizontal" AutomationProperties.Name="Dependency operation">
-                                        <TextBlock Text="{Binding StatusText}"
-                                                   MaxWidth="320"
-                                                   TextTrimming="CharacterEllipsis"
-                                                   ToolTip="{Binding StatusText}"
-                                                   VerticalAlignment="Center" />
-                                        <Button Content="Cancel"
-                                                Command="{Binding CancelCommand}"
-                                                AutomationProperties.Name="Cancel dependency operation"
-                                                Padding="8,0"
-                                                Margin="8,0,0,0" />
-                                    </StackPanel>
-                                </DataTemplate>
-                            </StatusBar.Resources>
-                        </StatusBar>
-                        <!-- The sidebar background covers the pages and the Settings button below them. -->
-                        <Border DockPanel.Dock="Left"
-                                Background="{DynamicResource ListBoxBackground}"
-                                BorderBrush="{DynamicResource DividerStrokeColorDefaultBrush}"
-                                BorderThickness="0,0,1,0">
-                            <DockPanel>
-                                <Button Content="Settings"
-                                        Tag="&#xE713;"
-                                        Command="{Binding OpenSettingsCommand}"
-                                        ToolTip="Settings (Ctrl+,)"
-                                        AutomationProperties.AcceleratorKey="Ctrl+,"
-                                        DockPanel.Dock="Bottom"
-                                        Margin="8"
-                                        Style="{StaticResource WfNavigationButtonStyle}" />
-                                <ListBox ItemsSource="{Binding Pages}"
-                                         SelectedItem="{Binding CurrentPage}"
-                                         IsEnabled="{Binding CanNavigate}"
-                                         Background="Transparent"
-                                         BorderThickness="0"
-                                         Style="{StaticResource WfNavigationSidebarStyle}" />
-                            </DockPanel>
-                        </Border>
-                        <navigation:RetainedPageHost Navigation="{Binding Navigation}" Margin="8,0,8,0" />
-                    </DockPanel>
-                    <!-- The title sits on the section list's background, as a small label above the sections. -->
-                    <wf:ContentOverlay Header="Settings"
-                                       Content="{Binding Settings}"
-                                       IsOpen="{Binding IsSettingsOpen, Mode=OneWay}"
-                                       CloseCommand="{Binding CloseSettingsCommand}"
-                                       HeaderBackground="{DynamicResource ListBoxBackground}"
-                                       CardMaxWidth="1040"
-                                       CardMaxHeight="760"
-                                       Padding="32">
-                        <wf:ContentOverlay.HeaderTemplate>
-                            <DataTemplate>
-                                <TextBlock Text="{Binding}"
-                                           Style="{StaticResource CaptionTextBlockStyle}"
-                                           Foreground="{DynamicResource TextFillColorSecondaryBrush}" />
-                            </DataTemplate>
-                        </wf:ContentOverlay.HeaderTemplate>
-                    </wf:ContentOverlay>
-                </Grid>
+                            </wf:ContentOverlay.HeaderTemplate>
+                        </wf:ContentOverlay>
+                    </Grid>
+                </DockPanel>
             </DataTemplate>
 
         </ResourceDictionary>

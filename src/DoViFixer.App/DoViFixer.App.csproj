@@ -27,5 +27,7 @@
   <ItemGroup>
     <!-- The icon Windows shows on DoViFixer's notifications. -->
     <None Include="dovifixer.ico" CopyToOutputDirectory="PreserveNewest" />
+    <!-- The window icon the title bar shows. -->
+    <Resource Include="dovifixer.ico" />
   </ItemGroup>
 </Project>
