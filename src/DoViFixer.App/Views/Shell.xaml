@@ -7,7 +7,6 @@
         xmlns:updates="clr-namespace:DoViFixer.Application.Updates;assembly=DoViFixer.Application"
         xmlns:navigation="clr-namespace:WpfFoundation.Navigation;assembly=WpfFoundation"
         xmlns:wf="clr-namespace:WpfFoundation.Controls;assembly=WpfFoundation"
-        Title="{x:Static updates:ApplicationTitle.Name}"
         Icon="pack://application:,,,/DoViFixer.App;component/dovifixer.ico"
         MinWidth="800"
         MinHeight="600"
