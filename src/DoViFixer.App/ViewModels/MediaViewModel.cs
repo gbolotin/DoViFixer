@@ -96,7 +96,7 @@ public sealed partial class MediaViewModel : OperationViewModel, INavigationPage
             {
                 return;
             }
-            sourceFiles.Watch(Files.Select(row => row.Path));
+            WatchFiles();
             OnPropertyChanged(nameof(IsFileListEmpty));
             OnPropertyChanged(nameof(HasMissingFiles));
             ShownFilesChanged();
@@ -389,9 +389,12 @@ public sealed partial class MediaViewModel : OperationViewModel, INavigationPage
     /// </summary>
     public void CheckSourceFiles()
     {
-        sourceFiles.Watch(Files.Select(row => row.Path));
+        WatchFiles();
         RefreshSourceAvailability();
     }
+
+    // Archives usually sit beside their media, but an output folder can hold them elsewhere.
+    private void WatchFiles() => sourceFiles.Watch(Files.Select(row => row.Path).Concat(Files.Select(row => row.RestoreArchive).OfType<string>()));
 
     private void OnSourceFilesChanged(object? sender, EventArgs e)
     {
@@ -426,6 +429,13 @@ public sealed partial class MediaViewModel : OperationViewModel, INavigationPage
             if (row.IsActive)
             {
                 continue;
+            }
+
+            // A deleted or moved archive can no longer restore the row; a rescan pairs it again.
+            if (row.RestoreArchive is { } archive && !sourceFiles.Exists(archive))
+            {
+                row.RestoreArchive = null;
+                changed = true;
             }
 
             bool missing = !sourceFiles.Exists(row.Path);
@@ -725,7 +735,7 @@ public sealed partial class MediaViewModel : OperationViewModel, INavigationPage
             finally
             {
                 loadingLibraryRows = false;
-                sourceFiles.Watch(Files.Select(row => row.Path));
+                WatchFiles();
                 OnPropertyChanged(nameof(IsFileListEmpty));
                 OnPropertyChanged(nameof(HasMissingFiles));
                 ShownFilesChanged();
@@ -893,6 +903,11 @@ public sealed partial class MediaViewModel : OperationViewModel, INavigationPage
         if (e.PropertyName == nameof(MediaRow.CanRestore))
         {
             RestoreRowCommand.NotifyCanExecuteChanged();
+        }
+
+        if (e.PropertyName == nameof(MediaRow.RestoreArchive) && !loadingLibraryRows)
+        {
+            WatchFiles();
         }
 
         if (e.PropertyName is nameof(MediaRow.IsActive) or nameof(MediaRow.IsCancellationRequested))

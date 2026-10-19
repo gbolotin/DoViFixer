@@ -213,7 +213,7 @@ internal sealed class TestRuntime : IFileDiscovery, IFileOperations, IMediaProbe
     public IReadOnlyList<string> WatchedPaths { get; private set; } = [];
     public event EventHandler? Changed;
     public void Watch(IEnumerable<string> paths) => WatchedPaths = [.. paths];
-    public bool Exists(string path) => !MissingFiles.Contains(path);
+    public bool Exists(string path) => !MissingFiles.Contains(path) && (!path.EndsWith(".dovi", StringComparison.OrdinalIgnoreCase) || Archives.Contains(path));
     public void RaiseSourceFilesChanged() => Changed?.Invoke(this, EventArgs.Empty);
     public FileIdentity Identify(string path)
     {

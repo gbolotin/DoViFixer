@@ -93,6 +93,29 @@ public sealed class RowRestoreTests
     }
 
     [TestMethod]
+    public async Task DeletingTheArchiveRemovesRestoreUntilRescan()
+    {
+        using var runtime = new TestRuntime();
+        const string archive = @"D:\Archives\P81.dovi";
+        runtime.Archives.Add(archive);
+        var model = runtime.Container.GetRequiredService<MediaViewModel>();
+        await model.AddAsync([@"C:\Media\P81.mkv"]);
+        var row = model.Files.Single();
+        row.RestoreArchive = archive;
+        Assert.IsTrue(row.CanRestore);
+        CollectionAssert.Contains(runtime.WatchedPaths.ToArray(), archive, "The archive's folder is watched, even beside no listed media.");
+
+        runtime.Archives.Remove(archive);
+        runtime.RaiseSourceFilesChanged();
+
+        Assert.IsNull(row.RestoreArchive);
+        Assert.IsFalse(row.CanRestore);
+        Assert.IsFalse(model.RestoreRowCommand.CanExecute(row));
+        CollectionAssert.DoesNotContain(runtime.WatchedPaths.ToArray(), archive);
+        Assert.IsFalse(row.IsMissing, "The media itself is still there.");
+    }
+
+    [TestMethod]
     [DataRow(false)]
     [DataRow(true)]
     public async Task RestoreHonorsReviewAndArchiveValidation(bool approve)
