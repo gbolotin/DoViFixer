@@ -111,12 +111,6 @@
                             <TextBlock Text="{Binding Source={x:Static updates:ApplicationTitle.Name}, StringFormat='Remove files that were deleted, moved or renamed outside {0} from the list.'}" />
                         </Button.ToolTip>
                     </Button>
-                    <Button Content="Export selected results"
-                            Command="{Binding ExportSelectedResultsCommand}"
-                            Margin="0,0,8,0" />
-                    <Button Content="Export visible results"
-                            Command="{Binding ExportVisibleResultsCommand}"
-                            Margin="0,0,8,0" />
                     <Button Content="&#xE72C;"
                             FontFamily="{StaticResource SymbolThemeFontFamily}"
                             Padding="8"

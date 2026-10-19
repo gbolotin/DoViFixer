@@ -23,8 +23,13 @@ public sealed class TitleBarMenuTests
         await shell.AddFilesCommand.InvokeAsync();
 
         Assert.AreSame(shell.Media, shell.CurrentPage, "The menu shows Media, where the added files are.");
-        Assert.AreEqual(@"C:\Media\Mountain.mkv", shell.Media.Files.Single().Path);
-        Assert.IsTrue(shell.ExportResultsCommand.CanExecute(null), "The added file can be exported.");
+        var added = shell.Media.Files.Single();
+        Assert.AreEqual(@"C:\Media\Mountain.mkv", added.Path);
+
+        added.IsSelected = false;
+        Assert.IsFalse(shell.ExportResultsCommand.CanExecute(null), "Export results needs a checked file.");
+        added.IsSelected = true;
+        Assert.IsTrue(shell.ExportResultsCommand.CanExecute(null), "The checked file can be exported.");
     }
 
     [TestMethod]

@@ -41,7 +41,7 @@ public sealed partial class ShellViewModel : ObservableObject, INavigationGuard,
         media.ConversionStarting += settings.FlushAsync;
         dependencyReport.PropertyChanged += DependencyReportChanged;
         dependencyCheck.PropertyChanged += DependencyCheckChanged;
-        media.ExportVisibleResultsCommand.CanExecuteChanged += MediaCommandsChanged;
+        media.ExportResultsCommand.CanExecuteChanged += MediaCommandsChanged;
 
         foreach (var operation in operations)
         {
@@ -194,9 +194,9 @@ public sealed partial class ShellViewModel : ObservableObject, INavigationGuard,
     private bool CanAddMedia() => CanUseMedia() && media.AddFilesCommand.CanExecute(null);
 
     [RelayCommand(CanExecute = nameof(CanExportResults))]
-    private Task ExportResults() => RunOnMediaAsync(media.ExportVisibleResultsCommand);
+    private Task ExportResults() => RunOnMediaAsync(media.ExportResultsCommand);
 
-    private bool CanExportResults() => CanUseMedia() && media.ExportVisibleResultsCommand.CanExecute(null);
+    private bool CanExportResults() => CanUseMedia() && media.ExportResultsCommand.CanExecute(null);
 
     private async Task RunOnMediaAsync(IAsyncRelayCommand command)
     {
@@ -367,7 +367,7 @@ public sealed partial class ShellViewModel : ObservableObject, INavigationGuard,
         Settings.LibraryDeleted -= media.ClearDeletedLibrary;
         dependencyReport.PropertyChanged -= DependencyReportChanged;
         dependencyCheck.PropertyChanged -= DependencyCheckChanged;
-        media.ExportVisibleResultsCommand.CanExecuteChanged -= MediaCommandsChanged;
+        media.ExportResultsCommand.CanExecuteChanged -= MediaCommandsChanged;
         Navigation.PropertyChanged -= NavigationChanged;
         Navigation.Dispose();
         startupCancellation.Dispose();

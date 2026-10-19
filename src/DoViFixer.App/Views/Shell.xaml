@@ -45,7 +45,7 @@
                                 <MenuItem Header="_Add files…" Command="{Binding AddFilesCommand}" />
                                 <MenuItem Header="Add _folder…" Command="{Binding AddFolderCommand}" />
                                 <Separator />
-                                <MenuItem Header="_Export visible results…" Command="{Binding ExportResultsCommand}" />
+                                <MenuItem Header="_Export results…" Command="{Binding ExportResultsCommand}" />
                                 <Separator />
                                 <MenuItem Header="E_xit"
                                           InputGestureText="Alt+F4"

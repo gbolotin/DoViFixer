@@ -500,16 +500,13 @@ public sealed partial class MediaViewModel : OperationViewModel, INavigationPage
     [RelayCommand(CanExecute = nameof(IsIdle))]
     private Task AddFolder() => AddAsync(files.PickFolder() is { } folder ? [folder] : []);
 
-    private bool CanExportSelectedResults() => IsIdle && ShownFiles.Any(row => row.IsSelected);
-    private bool CanExportVisibleResults() => IsIdle && ShownFiles.Any();
+    private bool CanExportResults() => IsIdle && ShownFiles.Any(row => row.IsSelected);
 
-    [RelayCommand(CanExecute = nameof(CanExportSelectedResults))]
-    private Task ExportSelectedResults() => ExportResults(ShownFiles.Where(row => row.IsSelected));
+    /// <summary>Exports the checked files the current filter shows.</summary>
+    [RelayCommand(CanExecute = nameof(CanExportResults))]
+    private Task ExportResults() => ExportRows(ShownFiles.Where(row => row.IsSelected));
 
-    [RelayCommand(CanExecute = nameof(CanExportVisibleResults))]
-    private Task ExportVisibleResults() => ExportResults(ShownFiles);
-
-    private Task ExportResults(IEnumerable<MediaRow> rows)
+    private Task ExportRows(IEnumerable<MediaRow> rows)
     {
         string? destination = files.PickSaveFile("CSV report|*.csv|JSON report|*.json|Text report|*.txt", "media-report.csv");
         if (destination is null)
@@ -796,8 +793,7 @@ public sealed partial class MediaViewModel : OperationViewModel, INavigationPage
         OpenSettingsCommand?.NotifyCanExecuteChanged();
         AddFilesCommand?.NotifyCanExecuteChanged();
         AddFolderCommand?.NotifyCanExecuteChanged();
-        ExportSelectedResultsCommand?.NotifyCanExecuteChanged();
-        ExportVisibleResultsCommand?.NotifyCanExecuteChanged();
+        ExportResultsCommand?.NotifyCanExecuteChanged();
         AddDroppedPathsCommand?.NotifyCanExecuteChanged();
         ScanCommand?.NotifyCanExecuteChanged();
         InspectCommand?.NotifyCanExecuteChanged();
