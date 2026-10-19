@@ -140,6 +140,30 @@ public sealed class MediaLibraryTests
     }
 
     [TestMethod]
+    public async Task RememberedProfile81FilesOfferRestoreWhenTheirArchiveExists()
+    {
+        using var runtime = new TestRuntime();
+        string withArchive = @"C:\Media\P81 - DV P8.1.mkv";
+        string withoutArchive = @"C:\Media\Other P81 - DV P8.1.mkv";
+        foreach (string path in new[] { withArchive, withoutArchive })
+        {
+            var analysis = MediaClassifier.Classify(await runtime.ProbeAsync(path, default), new(AnalysisMethod.MetadataOnly, EnhancementLayer.None, 0, null, 0, 0));
+            runtime.LibraryFiles[path] = new(path, runtime.Identify(path), analysis);
+        }
+        runtime.Archives.Add(@"C:\Media\P81.dovi");
+        var model = runtime.Container.GetRequiredService<MediaViewModel>();
+
+        await model.LoadLibraryAsync();
+
+        var restorable = model.Files.Single(row => row.Path == withArchive);
+        Assert.AreEqual(@"C:\Media\P81.dovi", restorable.RestoreArchive);
+        Assert.IsTrue(model.RestoreRowCommand.CanExecute(restorable));
+        Assert.IsNull(model.Files.Single(row => row.Path == withoutArchive).RestoreArchive, "An archive is offered to one file only.");
+        Assert.AreEqual(0, runtime.Analyses, "Pairing must not analyze the video.");
+        await model.CancelPreviewsAsync();
+    }
+
+    [TestMethod]
     public async Task RememberedFilesReturnWithoutScanningAndMissingPresentationIsUnchanged()
     {
         using var runtime = new TestRuntime();

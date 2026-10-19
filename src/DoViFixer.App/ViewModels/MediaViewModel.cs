@@ -708,6 +708,8 @@ public sealed partial class MediaViewModel : OperationViewModel, INavigationPage
         {
             using var linked = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken, operationToken);
             var entries = await Task.Run(() => library.LoadAsync(linked.Token), linked.Token);
+            // Remembered Profile 8.1 files offer Restore again; pairing reads only cached hashes and archive manifests.
+            var pairing = BeginArchivePairing();
             loadingLibraryRows = true;
             try
             {
@@ -723,10 +725,14 @@ public sealed partial class MediaViewModel : OperationViewModel, INavigationPage
                         row.Analysis = entry.Analysis;
                         row.SetScanned();
                     }
-                    if (sourceFiles.Exists(row.Path) && await Task.Run(() => conversion.ReadPublishedResultAsync(row.Path, linked.Token), linked.Token) is { } published)
+                    if (sourceFiles.Exists(row.Path))
                     {
-                        await ReadResultMetadataAsync(row, published, linked.Token);
-                        row.SetConverted(published);
+                        await RefreshRestoreArchiveAsync(row, pairing, linked.Token);
+                        if (await Task.Run(() => conversion.ReadPublishedResultAsync(row.Path, linked.Token), linked.Token) is { } published)
+                        {
+                            await ReadResultMetadataAsync(row, published, linked.Token);
+                            row.SetConverted(published);
+                        }
                     }
                     row.PropertyChanged += OnRowPropertyChanged;
                     Files.Add(row);
