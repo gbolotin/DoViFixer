@@ -787,7 +787,7 @@ public sealed partial class MediaViewModel : OperationViewModel, INavigationPage
         RetryAnalysisCommand?.NotifyCanExecuteChanged();
         InspectIncompleteCommand?.NotifyCanExecuteChanged();
         ToggleSelectAllCommand?.NotifyCanExecuteChanged();
-        ClearAllCommand?.NotifyCanExecuteChanged();
+        RemoveSelectedCommand?.NotifyCanExecuteChanged();
         RemoveFileCommand?.NotifyCanExecuteChanged();
         RemoveMissingCommand?.NotifyCanExecuteChanged();
         OpenSettingsCommand?.NotifyCanExecuteChanged();
@@ -1563,10 +1563,8 @@ public sealed partial class MediaViewModel : OperationViewModel, INavigationPage
     [RelayCommand(CanExecute = nameof(CanRemoveMissing))]
     private Task RemoveMissing() => RemoveRowsAsync(Files.Where(row => row.IsMissing).ToArray());
 
-    private bool CanClearAll() => IsIdle && Files.Count > 0;
-
-    [RelayCommand(CanExecute = nameof(CanClearAll))]
-    private Task ClearAll() => RemoveRowsAsync(Files.ToArray());
+    [RelayCommand(CanExecute = nameof(CanOperate))]
+    private Task RemoveSelected() => RemoveRowsAsync(ShownFiles.Where(row => row.IsSelected).ToArray());
 
     private Task RemoveRowsAsync(MediaRow[] rows) => RunAsync(async (token, _) =>
     {

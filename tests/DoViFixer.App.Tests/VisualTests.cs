@@ -665,7 +665,7 @@ public sealed class VisualTests
         finally
         {
             runtime.DiscoverFiles = null;
-            media.ClearAllCommand.Invoke();
+            ClearFiles(media);
             await LayoutAsync(window);
         }
     }
@@ -815,7 +815,8 @@ public sealed class VisualTests
         double originalWidth = fileColumn.Width;
         fileColumn.Width = 400;
 
-        Invoke(Button(mediaView, "Clear all"));
+        media.Files.Single().IsSelected = true;
+        Invoke(Button(mediaView, "Remove"));
         await LayoutAsync(window);
         Assert.IsEmpty(media.Files);
         Assert.IsTrue(panel.IsVisible);
@@ -840,7 +841,7 @@ public sealed class VisualTests
         Assert.AreSame(list, Descendants<ListView>(mediaView).Single());
         Assert.AreEqual(400, fileColumn.Width, "Clearing and adding must retain column widths.");
         fileColumn.Width = originalWidth;
-        media.ClearAllCommand.Invoke();
+        ClearFiles(media);
         runtime.PickedFiles = [];
         runtime.PickedFolder = null;
         window.Width = 1400;
@@ -1362,6 +1363,15 @@ public sealed class VisualTests
         splitter.RaiseEvent(new DragStartedEventArgs(0, 0) { RoutedEvent = Thumb.DragStartedEvent });
         splitter.RaiseEvent(new DragDeltaEventArgs(horizontalChange, 0) { RoutedEvent = Thumb.DragDeltaEvent });
         splitter.RaiseEvent(new DragCompletedEventArgs(horizontalChange, 0, false) { RoutedEvent = Thumb.DragCompletedEvent });
+    }
+
+    private static void ClearFiles(MediaViewModel media)
+    {
+        foreach (var row in media.Files)
+        {
+            row.IsSelected = true;
+        }
+        media.RemoveSelectedCommand.Invoke();
     }
 
     private static Button Button(DependencyObject parent, string caption) => Descendants<Button>(parent).Single(button => Equals(button.Content, caption));

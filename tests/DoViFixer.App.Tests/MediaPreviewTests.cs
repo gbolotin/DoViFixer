@@ -48,7 +48,7 @@ public sealed class MediaPreviewTests
             Assert.IsFalse(model.IsBusy, "Preview generation must not extend the scan/add busy state.");
             Assert.IsTrue(shell.CanNavigate);
             Assert.IsTrue(model.AddFilesCommand.CanExecute(null));
-            Assert.IsTrue(model.ClearAllCommand.CanExecute(null));
+            Assert.IsTrue(model.RemoveFileCommand.CanExecute(model.Files[0]));
             Assert.IsTrue(model.ScanCommand.CanExecute(null));
             release.SetResult();
             await finished.Task.WaitAsync(TimeSpan.FromSeconds(5));
@@ -83,7 +83,11 @@ public sealed class MediaPreviewTests
         await started.Task.WaitAsync(TimeSpan.FromSeconds(5));
         if (action == "files")
         {
-            model.ClearAllCommand.Invoke();
+            foreach (var row in model.Files)
+            {
+                row.IsSelected = true;
+            }
+            model.RemoveSelectedCommand.Invoke();
         }
         else
         {

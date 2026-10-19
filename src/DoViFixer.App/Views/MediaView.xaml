@@ -96,10 +96,11 @@
                             ContentTemplate="{StaticResource WfIconContentTemplate}"
                             Command="{Binding AddFolderCommand}"
                             Margin="0,0,8,0" />
-                    <Button Content="Clear all"
-                            Tag="&#xEA99;"
+                    <Button Content="Remove"
+                            Tag="&#xE74D;"
                             ContentTemplate="{StaticResource WfIconContentTemplate}"
-                            Command="{Binding ClearAllCommand}"
+                            Command="{Binding RemoveSelectedCommand}"
+                            ToolTip="Remove the selected files from the list."
                             Margin="0,0,8,0" />
                     <Button Content="Remove missing"
                             Tag="&#xE74D;"

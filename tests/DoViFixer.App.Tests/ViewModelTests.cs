@@ -454,8 +454,8 @@ public sealed class ViewModelTests
         Assert.IsTrue(model.IsFileListEmpty);
         model.Files.Add(new MediaRow(@"C:\Media\Mountain.mkv"));
         model.Files.RemoveAt(0);
-        model.Files.Add(new MediaRow(@"C:\Media\Ocean.mkv"));
-        model.ClearAllCommand.Invoke();
+        model.Files.Add(new MediaRow(@"C:\Media\Ocean.mkv") { IsSelected = true });
+        model.RemoveSelectedCommand.Invoke();
 
         CollectionAssert.AreEqual(new[] { false, true, false, true }, states);
         Assert.IsTrue(model.IsFileListEmpty);
@@ -1043,7 +1043,8 @@ public sealed class ViewModelTests
         var model = runtime.Container.GetRequiredService<MediaViewModel>();
         await model.AddAsync([@"C:\Media\Mountain.mkv"]);
         var removedRow = model.Files.Single();
-        model.ClearAllCommand.Invoke();
+        removedRow.IsSelected = true;
+        model.RemoveSelectedCommand.Invoke();
         Assert.HasCount(0, model.Files);
         Assert.IsNull(model.Focused);
 
