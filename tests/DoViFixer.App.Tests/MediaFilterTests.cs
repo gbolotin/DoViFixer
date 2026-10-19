@@ -145,7 +145,7 @@ public sealed class MediaFilterTests
         Assert.AreEqual("Profile 8.1 (1)", Option(model, MediaFileFilter.Profile81).Label);
         Assert.AreEqual("No Dolby Vision (1)", Option(model, MediaFileFilter.NoDolbyVision).Label);
         Assert.AreEqual("Not scanned / failed (0)", Option(model, MediaFileFilter.NotScanned).Label);
-        Assert.AreEqual("3 of 4 items shown", model.SelectionSummary);
+        Assert.AreEqual("3 of 4 items shown | 3 items selected", model.SelectionSummary);
 
         model.FilterText = "media";
         Assert.IsEmpty(Shown(model), "Directory names in the full path do not match the file name filter.");
@@ -161,6 +161,6 @@ public sealed class MediaFilterTests
         model.FilterText = "";
         CollectionAssert.AreEqual(new[] { Profile7, Profile81, NoDolbyVision, Unscanned }, Shown(model));
         Assert.AreEqual("All (4)", Option(model, MediaFileFilter.All).Label);
-        Assert.AreEqual("4 items | 1 item selected", model.SelectionSummary);
+        Assert.AreEqual("4 items | 4 items selected", model.SelectionSummary);
     }
 }

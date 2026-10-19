@@ -9,7 +9,7 @@ namespace DoViFixer.Application.Diagnostics;
 // Explicit fields prevent future settings (including credentials) from entering exports automatically.
 public sealed record DiagnosticSettings(string? TemporaryDirectory, string? OutputDirectory, bool ReplaceOriginal,
     bool CreateElArchive, bool IncludeSimple, bool ForceComplex, bool AutomaticallyScanAddedFiles,
-    bool UseCachedResults, bool AutoSelectAfterScan, bool ShowCompletionNotifications, AppTheme Theme,
+    bool UseCachedResults, bool ShowCompletionNotifications, AppTheme Theme,
     IReadOnlyDictionary<NativeTool, string> ToolPaths);
 
 public sealed record DiagnosticSnapshot(DateTimeOffset CreatedAt, string ApplicationName, string ApplicationVersion,
@@ -40,7 +40,7 @@ public sealed class DiagnosticsService(ISettingsStore settings, IToolCatalog too
             var value = await settings.ReadAsync(cancellationToken);
             snapshot = new(value.TemporaryDirectory, value.OutputDirectory, value.ReplaceOriginal, value.CreateElArchive,
                 value.IncludeSimple, value.ForceComplex, value.AutomaticallyScanAddedFiles, value.UseCachedResults,
-                value.AutoSelectAfterScan, value.ShowCompletionNotifications, value.Theme, value.ToolPaths);
+                value.ShowCompletionNotifications, value.Theme, value.ToolPaths);
         }
         catch (Exception ex) when (ex is IOException or UnauthorizedAccessException or System.Text.Json.JsonException)
         {

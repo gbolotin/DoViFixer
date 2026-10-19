@@ -147,7 +147,6 @@ public sealed partial class SettingsViewModel : OperationViewModel
             ForceComplex = value.ForceComplex;
             AutomaticallyScanAddedFiles = value.AutomaticallyScanAddedFiles;
             UseCachedResults = value.UseCachedResults;
-            AutoSelectAfterScan = value.AutoSelectAfterScan;
             ShowCompletionNotifications = value.ShowCompletionNotifications;
             selectedTheme = value.Theme;
             OnPropertyChanged(nameof(SelectedTheme));
@@ -244,11 +243,6 @@ public sealed partial class SettingsViewModel : OperationViewModel
     public partial bool UseCachedResults { get; set; } = true;
 
     partial void OnUseCachedResultsChanged(bool value) => TriggerAutoSave();
-
-    [ObservableProperty]
-    public partial bool AutoSelectAfterScan { get; set; } = true;
-
-    partial void OnAutoSelectAfterScanChanged(bool value) => TriggerAutoSave();
 
     /// <summary>Whether a finished operation also shows a Windows notification while the window is not active.</summary>
     [ObservableProperty]
@@ -543,7 +537,6 @@ public sealed partial class SettingsViewModel : OperationViewModel
             FreeSpaceMarginPercent = FreeSpaceMarginPercent,
             AutomaticallyScanAddedFiles = AutomaticallyScanAddedFiles,
             UseCachedResults = UseCachedResults,
-            AutoSelectAfterScan = AutoSelectAfterScan,
             ShowCompletionNotifications = ShowCompletionNotifications,
             Theme = SelectedTheme,
             IncludeSimple = IncludeSimple,
@@ -557,7 +550,6 @@ public sealed partial class SettingsViewModel : OperationViewModel
             token,
             snapshot.AutomaticallyScanAddedFiles,
             snapshot.UseCachedResults,
-            snapshot.AutoSelectAfterScan,
             snapshot.Theme,
             includeSimple: snapshot.IncludeSimple,
             forceComplex: snapshot.ForceComplex,

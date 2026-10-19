@@ -31,16 +31,6 @@ public static class ConversionPolicy
         };
     }
 
-    public static bool ShouldAutoSelectAfterAnalysis(MediaAnalysis? analysis, bool includeSimple = false, bool forceComplex = false)
-    {
-        if (analysis is null)
-        {
-            return false;
-        }
-
-        return Evaluate(analysis, includeSimple, forceComplex).Allowed;
-    }
-
     /// <summary>
     /// Scratch space a conversion, backup or restore needs. At most three video-sized files exist at once:
     /// the enhancement-layer backup plus an extracted track and its processed copy, or during verification

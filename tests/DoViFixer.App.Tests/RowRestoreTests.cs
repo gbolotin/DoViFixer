@@ -23,8 +23,8 @@ public sealed class RowRestoreTests
         var originalRows = model.Files.ToArray();
         var row = originalRows[0];
         model.Focused = originalRows[1];
+        row.IsSelected = false;
         Assert.IsTrue(row.CanRestore);
-        Assert.IsFalse(row.IsSelected);
         Assert.IsTrue(model.RestoreRowCommand.CanExecute(row));
         Assert.IsFalse(model.RestoreRowCommand.CanExecute(new MediaRow(input) { Analysis = row.Analysis, RestoreArchive = archive }));
         runtime.DuringRestore = _ =>

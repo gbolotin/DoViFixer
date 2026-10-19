@@ -118,11 +118,6 @@
                             </TextBlock>
                         </StackPanel>
                     </DockPanel>
-                    <Separator />
-                    <CheckBox Content="Automatically select convertible files after scan"
-                              AutomationProperties.HelpText="When a scan finishes, selects the files that can be converted with the current FEL settings."
-                              IsChecked="{Binding AutoSelectAfterScan}"
-                              Style="{StaticResource WfToggleSwitchStyle}" />
                 </StackPanel>
             </Border>
         </StackPanel>

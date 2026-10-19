@@ -1048,7 +1048,6 @@ public sealed partial class MediaViewModel : OperationViewModel, INavigationPage
     {
         InvalidatePlan();
         var userSettings = await settings.ReadAsync(token);
-        bool autoSelect = userSettings.AutoSelectAfterScan;
         bool? toolsReady = null;
         var pairing = BeginArchivePairing();
         // Conversions published in an earlier session, shown once the analysis of their unchanged source completes.
@@ -1127,11 +1126,6 @@ public sealed partial class MediaViewModel : OperationViewModel, INavigationPage
                 if (result.Status == OperationStatus.Completed)
                 {
                     row.SetScanned();
-                    if (autoSelect)
-                    {
-                        row.IsSelected = ConversionPolicy.ShouldAutoSelectAfterAnalysis(row.Analysis, userSettings.IncludeSimple, userSettings.ForceComplex);
-                    }
-
                     if (publishedResults.Remove(row, out var published))
                     {
                         row.SetConverted(published);

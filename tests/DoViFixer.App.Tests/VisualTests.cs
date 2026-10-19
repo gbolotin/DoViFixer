@@ -953,6 +953,7 @@ public sealed class VisualTests
         Assert.IsTrue(convert.IsEnabled);
         AssertStableActionSlots(list, slots, "conversion recommended");
 
+        row.IsSelected = true;
         media.Files[1].IsSelected = true;
         var started = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
         var recovering = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);

@@ -17,7 +17,7 @@ public sealed class ViewModelTests
     public async Task ExplicitInspectCommandsAlwaysAnalyzeAgain(bool reuse)
     {
         using var runtime = new TestRuntime();
-        await runtime.UpdateAsync(value => value with { UseCachedResults = reuse, AutomaticallyScanAddedFiles = false, AutoSelectAfterScan = false }, default);
+        await runtime.UpdateAsync(value => value with { UseCachedResults = reuse, AutomaticallyScanAddedFiles = false }, default);
         var model = runtime.Container.GetRequiredService<MediaViewModel>();
         await model.AddAsync([@"C:\Media\Mountain.mkv"]);
         await model.InspectCommand.InvokeAsync();
@@ -736,7 +736,7 @@ public sealed class ViewModelTests
     public async Task DetailNextStepScansAndInspectsOnlyItsFileWithoutChangingSelection()
     {
         using var runtime = new TestRuntime();
-        await runtime.UpdateAsync(settings => settings with { AutomaticallyScanAddedFiles = false, AutoSelectAfterScan = false }, default);
+        await runtime.UpdateAsync(settings => settings with { AutomaticallyScanAddedFiles = false }, default);
         var model = runtime.Container.GetRequiredService<MediaViewModel>();
         await model.AddAsync([@"C:\Media\Mountain.mkv", @"C:\Media\Mountain2.mkv"]);
         var row = model.Files[0];
@@ -1412,63 +1412,17 @@ public sealed class ViewModelTests
     }
 
     [TestMethod]
-    public async Task ScanAutoSelectsMelOnlyWithDefaultSettings()
+    public async Task ScanLeavesRowSelectionUnchanged()
     {
         using var runtime = new TestRuntime();
         var model = runtime.Container.GetRequiredService<MediaViewModel>();
-        await model.AddAsync([
-            @"C:\Media\Mountain.mkv",
-            @"C:\Media\Ocean.mkv",
-            @"C:\Media\City.mkv",
-            @"C:\Media\P81.mkv",
-            @"C:\Media\Sdr.mkv"
-        ]);
+        await model.AddAsync([@"C:\Media\Mountain.mkv", @"C:\Media\Ocean.mkv", @"C:\Media\City.mkv"]);
+        Assert.IsTrue(model.Files.All(row => row.IsSelected), "Scanning must not change which rows are selected.");
 
-        Assert.HasCount(5, model.Files);
-        Assert.IsTrue(model.Files[0].IsSelected, "Mountain (MEL) must be selected.");
-        Assert.IsFalse(model.Files[1].IsSelected, "Ocean (Simple FEL) must be deselected by default.");
-        Assert.IsFalse(model.Files[2].IsSelected, "City (Complex FEL) must be deselected by default.");
-        Assert.IsFalse(model.Files[3].IsSelected, "P81 (Profile 8.1) must be deselected.");
-        Assert.IsFalse(model.Files[4].IsSelected, "Sdr (No DV) must be deselected.");
-
-        Assert.AreEqual("5 items | 1 item selected", model.SelectionSummary);
-        Assert.IsNull(model.AllFilesSelected);
-    }
-
-    [TestMethod]
-    public async Task ScanAutoSelectsSimpleFelWhenIncludeSimpleEnabled()
-    {
-        using var runtime = new TestRuntime();
-        await runtime.UpdateAsync(s => s with { IncludeSimple = true }, default);
-        var model = runtime.Container.GetRequiredService<MediaViewModel>();
-        await model.AddAsync([
-            @"C:\Media\Mountain.mkv",
-            @"C:\Media\Ocean.mkv",
-            @"C:\Media\City.mkv"
-        ]);
-
-        Assert.IsTrue(model.Files[0].IsSelected, "Mountain (MEL) must be selected.");
-        Assert.IsTrue(model.Files[1].IsSelected, "Ocean (Simple FEL) must be selected when IncludeSimple is true.");
-        Assert.IsFalse(model.Files[2].IsSelected, "City (Complex FEL) must be deselected when ForceComplex is false.");
-        Assert.AreEqual("3 items | 2 items selected", model.SelectionSummary);
-    }
-
-    [TestMethod]
-    public async Task ScanAutoSelectsComplexFelWhenForceComplexEnabled()
-    {
-        using var runtime = new TestRuntime();
-        await runtime.UpdateAsync(s => s with { ForceComplex = true }, default);
-        var model = runtime.Container.GetRequiredService<MediaViewModel>();
-        await model.AddAsync([
-            @"C:\Media\Mountain.mkv",
-            @"C:\Media\Ocean.mkv",
-            @"C:\Media\City.mkv"
-        ]);
-
-        Assert.IsTrue(model.Files[0].IsSelected, "Mountain (MEL) must be selected.");
-        Assert.IsFalse(model.Files[1].IsSelected, "Ocean (Simple FEL) must be deselected when IncludeSimple is false.");
-        Assert.IsTrue(model.Files[2].IsSelected, "City (Complex FEL) must be selected when ForceComplex is true.");
-        Assert.AreEqual("3 items | 2 items selected", model.SelectionSummary);
+        model.Files[0].IsSelected = false;
+        await model.ScanCommand.InvokeAsync();
+        Assert.IsFalse(model.Files[0].IsSelected, "Scanning must keep a row the user cleared unselected.");
+        Assert.IsTrue(model.Files[2].IsSelected, "Scanning must keep complex FEL rows selected.");
     }
 
     [TestMethod]
@@ -1482,26 +1436,20 @@ public sealed class ViewModelTests
             @"C:\Media\City.mkv"
         ]);
 
-        // Default: Mountain is selected, Ocean and City are deselected
-        Assert.IsTrue(model.Files[0].IsSelected);
-        Assert.IsFalse(model.Files[1].IsSelected);
-        Assert.IsFalse(model.Files[2].IsSelected);
-
-        // Explicitly deselect all files
-        model.Files[0].IsSelected = false;
-        Assert.IsFalse(model.Files.Any(f => f.IsSelected));
+        foreach (var row in model.Files)
+        {
+            row.IsSelected = false;
+        }
 
         // ScanCommand is executable even with 0 files selected!
         Assert.IsTrue(model.ScanCommand.CanExecute(null));
 
-        // Turn on IncludeSimple and execute ScanCommand
-        await runtime.UpdateAsync(s => s with { IncludeSimple = true }, default);
+        await runtime.UpdateAsync(s => s with { UseCachedResults = false }, default);
+        int analysesBefore = runtime.Analyses;
         await model.ScanCommand.InvokeAsync();
 
-        // All files were processed by ScanCommand:
-        Assert.IsTrue(model.Files[0].IsSelected, "Mountain (MEL) must be auto-selected.");
-        Assert.IsTrue(model.Files[1].IsSelected, "Ocean (Simple FEL) must be auto-selected.");
-        Assert.IsFalse(model.Files[2].IsSelected, "City (Complex FEL) must be deselected.");
+        Assert.AreEqual(analysesBefore + 3, runtime.Analyses, "Scan must analyze every file.");
+        Assert.IsFalse(model.Files.Any(f => f.IsSelected), "Scan must not select files.");
     }
 
     [TestMethod]
@@ -1519,10 +1467,8 @@ public sealed class ViewModelTests
             @"C:\Media\City.mkv"
         ]);
 
-        // Initial default: Mountain is selected, Ocean and City are deselected
-        Assert.IsTrue(media.Files[0].IsSelected);
-        Assert.IsFalse(media.Files[1].IsSelected);
-        Assert.IsFalse(media.Files[2].IsSelected);
+        media.Files[1].IsSelected = false;
+        media.Files[2].IsSelected = false;
 
         await runtime.UpdateAsync(s => s with { UseCachedResults = false }, default);
         int analysesBefore = runtime.Analyses;
@@ -1539,9 +1485,10 @@ public sealed class ViewModelTests
         Assert.IsFalse(media.Files[2].IsSelected);
 
         await media.ScanCommand.InvokeAsync();
+        Assert.AreEqual(analysesBefore + 3, runtime.Analyses);
         Assert.IsTrue(media.Files[0].IsSelected);
-        Assert.IsTrue(media.Files[1].IsSelected);
-        Assert.IsTrue(media.Files[2].IsSelected);
+        Assert.IsFalse(media.Files[1].IsSelected);
+        Assert.IsFalse(media.Files[2].IsSelected);
     }
 
     [TestMethod]
@@ -1588,7 +1535,7 @@ public sealed class ViewModelTests
     }
 
     [TestMethod]
-    public async Task InspectIncompletePromotesRowToSelectedWhenMel()
+    public async Task InspectIncompleteKeepsRowSelection()
     {
         using var runtime = new TestRuntime();
         var model = runtime.Container.GetRequiredService<MediaViewModel>();
@@ -1609,45 +1556,8 @@ public sealed class ViewModelTests
         await model.InspectIncompleteCommand.InvokeAsync(row);
 
         Assert.AreEqual(DoViFixer.Domain.Analysis.AnalysisVerdict.Mel, row.Analysis!.Verdict);
-        Assert.IsTrue(row.IsSelected, "Promoting incomplete scan to MEL via inspection must select the row.");
-        Assert.AreEqual("1 item | 1 item selected", model.SelectionSummary);
-    }
-
-    [TestMethod]
-    public async Task CachedScanResultsApplyIdenticalAutoSelection()
-    {
-        using var runtime = new TestRuntime();
-        var model = runtime.Container.GetRequiredService<MediaViewModel>();
-        await model.AddAsync([@"C:\Media\Mountain.mkv", @"C:\Media\City.mkv"]);
-        Assert.IsTrue(model.Files[0].IsSelected);
-        Assert.IsFalse(model.Files[1].IsSelected);
-
-        model.Dispose();
-        model = runtime.Container.GetRequiredService<MediaViewModel>();
-        runtime.Ready = false;
-
-        await model.AddAsync([@"C:\Media\Mountain.mkv", @"C:\Media\City.mkv"]);
-        Assert.IsTrue(model.Files[0].IsSelected, "Cached MEL must be selected.");
-        Assert.IsFalse(model.Files[1].IsSelected, "Cached Complex FEL must be deselected.");
-    }
-
-    [TestMethod]
-    public async Task DisabledAutoSelectPreservesInitialSelection()
-    {
-        using var runtime = new TestRuntime();
-        var settings = runtime.Container.GetRequiredService<SettingsViewModel>();
-        await settings.LoadCommand.InvokeAsync();
-        Assert.IsTrue(settings.AutoSelectAfterScan);
-        settings.AutoSelectAfterScan = false;
-        await settings.SaveCommand.InvokeAsync();
-        Assert.IsFalse(runtime.Settings.AutoSelectAfterScan);
-
-        var model = runtime.Container.GetRequiredService<MediaViewModel>();
-        await model.AddAsync([@"C:\Media\Mountain.mkv", @"C:\Media\City.mkv"]);
-        Assert.IsTrue(model.Files[0].IsSelected, "Mountain must remain selected when auto-select is disabled.");
-        Assert.IsTrue(model.Files[1].IsSelected, "City must remain selected when auto-select is disabled.");
-        Assert.AreEqual("2 items | 2 items selected", model.SelectionSummary);
-        Assert.IsTrue(model.AllFilesSelected);
+        Assert.IsFalse(row.IsSelected, "Inspection must not select the row.");
+        Assert.AreEqual("1 item", model.SelectionSummary);
     }
 
     [TestMethod]
@@ -1666,7 +1576,7 @@ public sealed class ViewModelTests
         Assert.HasCount(3, model.Files);
         Assert.IsFalse(model.Files[0].IsSelected, "Existing Mountain row selection must not change.");
         Assert.IsTrue(model.Files[1].IsSelected, "Existing Ocean row selection must not change.");
-        Assert.IsFalse(model.Files[2].IsSelected, "New City row must be deselected based on scan result.");
+        Assert.IsTrue(model.Files[2].IsSelected, "New City row must start selected.");
         Assert.AreSame(model.Files[0], model.Focused, "Focused row must remain unchanged when adding files.");
     }
 
@@ -1984,7 +1894,12 @@ public sealed class ViewModelTests
         Assert.AreEqual("1 item | 1 item selected", model.SelectionSummary);
 
         await model.AddAsync([@"C:\Media\Ocean.mkv", @"C:\Media\City.mkv", @"C:\Media\P81.mkv", @"C:\Media\Sdr.mkv"]);
-        // 5 total: Mountain(selected), Ocean(selected), City(deselected), P81(deselected), Sdr(deselected)
+        Assert.AreEqual("5 items | 5 items selected", model.SelectionSummary);
+
+        foreach (var row in model.Files.Skip(2))
+        {
+            row.IsSelected = false;
+        }
         Assert.AreEqual("5 items | 2 items selected", model.SelectionSummary);
 
         model.Files[1].IsSelected = false;
@@ -2261,11 +2176,6 @@ public sealed class ViewModelTests
         settings.UseCachedResults = false;
         await settings.SaveTask;
         Assert.IsFalse(runtime.Settings.UseCachedResults);
-
-        Assert.IsTrue(runtime.Settings.AutoSelectAfterScan);
-        settings.AutoSelectAfterScan = false;
-        await settings.SaveTask;
-        Assert.IsFalse(runtime.Settings.AutoSelectAfterScan);
 
         settings.Destination = @"C:\Media\AutoSaveOutput";
         settings.OtherFolder = true;
