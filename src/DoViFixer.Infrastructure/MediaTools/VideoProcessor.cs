@@ -191,11 +191,12 @@ internal sealed class VideoProcessor(IToolCatalog tools, IProcessRunner processe
             simple.Remove();
         }
 
-        // Microsecond timecodes avoid millisecond rounding of high-rate TrueHD packets.
+        // Microsecond timecodes avoid millisecond rounding of high-rate TrueHD packets. mkvmerge writes fresh
+        // statistics tags counted from the muxed packets: without NUMBER_OF_FRAMES, MediaInfo estimates the
+        // output's frame count from the duration, which can be one frame off and fail frame-count verification.
         var arguments = new List<string>
         {
             "--gui-mode",
-            "--disable-track-statistics-tags",
             "--timestamp-scale",
             "1000",
             "-o",
