@@ -273,11 +273,18 @@ public sealed class ProcessLifetimeTests
         while (true)
         {
             timeout.Token.ThrowIfCancellationRequested();
-            if (File.Exists(path) && int.TryParse(await File.ReadAllTextAsync(path, timeout.Token), out int id))
+            try
             {
-                var process = Process.GetProcessById(id);
-                owned.Add(process);
-                return process;
+                if (File.Exists(path) && int.TryParse(await File.ReadAllTextAsync(path, timeout.Token), out int id))
+                {
+                    var process = Process.GetProcessById(id);
+                    owned.Add(process);
+                    return process;
+                }
+            }
+            catch (IOException)
+            {
+                // The child may still have the file open while it writes its id; read it on the next pass.
             }
 
             await Task.Delay(20, timeout.Token);
