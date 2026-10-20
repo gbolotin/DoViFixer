@@ -415,7 +415,7 @@
                                                         </Style>
                                                     </Button.Style>
                                                 </Button>
-                                                <!-- Convert shows when conversion is the file's recommended next step. -->
+                                                <!-- Convert shows when the file is convertible, also while inspection is still recommended. -->
                                                 <Button Padding="4"
                                                         Margin="0"
                                                         VerticalAlignment="Center"
@@ -432,7 +432,7 @@
                                                                 <MultiDataTrigger>
                                                                     <MultiDataTrigger.Conditions>
                                                                         <Condition Binding="{Binding IsMouseOver, RelativeSource={RelativeSource AncestorType=ListViewItem}}" Value="True" />
-                                                                        <Condition Binding="{Binding NextStepText}" Value="Convert" />
+                                                                        <Condition Binding="{Binding OffersConversion}" Value="True" />
                                                                     </MultiDataTrigger.Conditions>
                                                                     <Setter Property="Visibility" Value="Visible" />
                                                                 </MultiDataTrigger>

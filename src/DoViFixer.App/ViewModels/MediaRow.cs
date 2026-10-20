@@ -576,6 +576,39 @@ public sealed partial class MediaRow(string path) : ObservableObject
         }
     }
 
+    /// <summary>Settings → Conversion allows Simple FEL; the Media page keeps it current.</summary>
+    [ObservableProperty]
+    [NotifyPropertyChangedFor(nameof(OffersConversion))]
+    public partial bool ConvertsSimpleFel { get; set; }
+
+    /// <summary>Settings → Conversion allows Complex FEL; the Media page keeps it current.</summary>
+    [ObservableProperty]
+    [NotifyPropertyChangedFor(nameof(OffersConversion))]
+    public partial bool ConvertsComplexFel { get; set; }
+
+    /// <summary>
+    /// The row offers Convert when converting would not just skip it: an analyzed Profile 7 file whose verdict the FEL
+    /// settings allow, as conversion decides. A scan that recommends inspection still qualifies, because conversion
+    /// planning inspects the file in full first.
+    /// </summary>
+    public bool OffersConversion => NextStepText is "Convert" or "Inspect" or "" && !IsMissing && !IsActive && !IsPending
+        && IsProfile7 && AnalysisError is null && Analysis!.Verdict switch
+        {
+            AnalysisVerdict.Mel => true,
+            AnalysisVerdict.SimpleFel => ConvertsSimpleFel,
+            AnalysisVerdict.ComplexFel or AnalysisVerdict.FelUnclassified => ConvertsComplexFel,
+            _ => false
+        };
+
+    protected override void OnPropertyChanged(System.ComponentModel.PropertyChangedEventArgs e)
+    {
+        base.OnPropertyChanged(e);
+        if (e.PropertyName == nameof(NextStepText))
+        {
+            base.OnPropertyChanged(new System.ComponentModel.PropertyChangedEventArgs(nameof(OffersConversion)));
+        }
+    }
+
     private string? GuidanceNote()
     {
         if (AnalysisError is not null || Analysis is not { } analysis)

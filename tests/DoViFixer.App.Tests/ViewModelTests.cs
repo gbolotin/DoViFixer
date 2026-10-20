@@ -732,18 +732,25 @@ public sealed class ViewModelTests
         var row = model.Files[0];
         row.IsSelected = false;
         Assert.AreEqual("Scan", row.NextStepText);
+        Assert.IsFalse(row.OffersConversion, "An unscanned file is not offered for conversion.");
         Assert.IsFalse(model.ScanRowCommand.CanExecute(new MediaRow(row.Path)));
+        var changed = new List<string?>();
+        row.PropertyChanged += (_, e) => changed.Add(e.PropertyName);
         await model.ScanRowCommand.InvokeAsync(row);
         Assert.IsNotNull(row.Analysis);
         Assert.IsNull(model.Files[1].Analysis);
         Assert.AreEqual("Inspect", row.NextStepText);
+        Assert.IsTrue(row.OffersConversion, "A scanned MEL file offers Convert while inspection is still recommended.");
+        CollectionAssert.Contains(changed, nameof(MediaRow.OffersConversion));
         await model.InspectIncompleteCommand.InvokeAsync(row);
         Assert.AreEqual(DoViFixer.Domain.Analysis.AnalysisMethod.FullRpu, row.Analysis.Evidence.Method);
         Assert.AreEqual("Convert", row.NextStepText);
+        Assert.IsTrue(row.OffersConversion);
         Assert.IsFalse(row.IsSelected);
         Assert.IsFalse(row.DetailRows.Any(detail => detail.Label == "Next step"));
         row.SetConverted(new(row.Path, OperationStatus.Completed, @"C:\Media\Mountain-P81.mkv"));
         Assert.AreEqual("Open output", row.NextStepText);
+        Assert.IsFalse(row.OffersConversion, "A converted file offers its output instead.");
         row.IsMissing = true;
         Assert.AreEqual("", row.NextStepText);
     }

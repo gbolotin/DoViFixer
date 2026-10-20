@@ -93,8 +93,13 @@ public sealed partial class MediaViewModel : OperationViewModel, INavigationPage
             new(MediaFileFilter.OtherProfiles, "Other profiles", filter => FileFilter = filter),
             new(MediaFileFilter.NotScanned, "Not scanned / failed", filter => FileFilter = filter)
         ];
-        Files.CollectionChanged += (_, _) =>
+        Files.CollectionChanged += (_, e) =>
         {
+            foreach (var row in e.NewItems?.OfType<MediaRow>() ?? [])
+            {
+                ApplyFelSettings(row);
+            }
+
             if (loadingLibraryRows)
             {
                 return;
@@ -695,8 +700,25 @@ public sealed partial class MediaViewModel : OperationViewModel, INavigationPage
     [ObservableProperty]
     public partial string ArchiveSummary { get; private set; } = "EL archive: Off";
 
+    // The FEL settings, so rows offer Convert only where conversion would not skip them.
+    private bool convertsSimpleFel;
+    private bool convertsComplexFel;
+
+    private void ApplyFelSettings(MediaRow row)
+    {
+        row.ConvertsSimpleFel = convertsSimpleFel;
+        row.ConvertsComplexFel = convertsComplexFel;
+    }
+
     public void UpdateSettingsSummary(UserSettings s)
     {
+        convertsSimpleFel = s.IncludeSimple;
+        convertsComplexFel = s.ForceComplex;
+        foreach (var row in Files)
+        {
+            ApplyFelSettings(row);
+        }
+
         IsReplaceOriginalActive = s.ReplaceOriginal;
         RetentionSummary = s.ReplaceOriginal ? "⚠ Replace originals" : "Keep originals";
         FelSummary = (s.IncludeSimple, s.ForceComplex) switch

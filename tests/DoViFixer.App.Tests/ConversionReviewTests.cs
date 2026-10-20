@@ -250,6 +250,31 @@ public sealed class ConversionReviewTests
     }
 
     [TestMethod]
+    public async Task RowsOfferConvertOnlyWhereTheFelSettingsAllowIt()
+    {
+        using var runtime = new TestRuntime();
+        var model = runtime.Container.GetRequiredService<MediaViewModel>();
+        await model.AddAsync([@"C:\Media\Mountain.mkv", @"C:\Media\Ocean.mkv", @"C:\Media\City.mkv"]);
+        var (mel, simple, complex) = (model.Files[0], model.Files[1], model.Files[2]);
+        Assert.AreEqual("Inspect", simple.NextStepText, "The scan recommends inspecting the Simple FEL file.");
+
+        model.UpdateSettingsSummary(new DoViFixer.Application.Settings.UserSettings());
+        Assert.IsTrue(mel.OffersConversion, "MEL always converts.");
+        Assert.IsFalse(simple.OffersConversion, "Convert would only skip Simple FEL while Settings skip it.");
+        Assert.IsFalse(complex.OffersConversion);
+
+        model.UpdateSettingsSummary(new DoViFixer.Application.Settings.UserSettings { IncludeSimple = true });
+        Assert.IsTrue(simple.OffersConversion, "Converting inspects the Simple FEL file in full first.");
+        Assert.IsFalse(complex.OffersConversion);
+
+        model.UpdateSettingsSummary(new DoViFixer.Application.Settings.UserSettings { IncludeSimple = true, ForceComplex = true });
+        Assert.IsTrue(complex.OffersConversion);
+        var added = new MediaRow(@"C:\Media\Added.mkv");
+        model.Files.Add(added);
+        Assert.IsTrue(added.ConvertsSimpleFel && added.ConvertsComplexFel, "Rows added later follow the current settings.");
+    }
+
+    [TestMethod]
     public async Task ConvertDv81WithIncludeSimpleConvertsSimpleFelAndSkipsComplexFel()
     {
         using var runtime = new TestRuntime();

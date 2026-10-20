@@ -902,6 +902,7 @@ public sealed class VisualTests
         row.Analysis = DoViFixer.Domain.Analysis.MediaClassifier.Classify(analysis.Media, analysis.Evidence with { SuccessfulSamples = 9 });
         await LayoutAsync(window);
         AssertStableActionSlots(list, slots, "incomplete scan");
+        Assert.IsFalse(row.OffersConversion, "An incomplete scan offers Inspect but not Convert.");
         int fullAnalyses = runtime.FullAnalyses;
         await media.InspectIncompleteCommand.InvokeAsync(row);
         await LayoutAsync(window);
