@@ -7,4 +7,12 @@
                    TextWrapping="Wrap"
                    MaxWidth="544" />
     </DataTemplate>
+
+    <!-- A Segoe Fluent Icons glyph for a menu item, the same as the toolbar or row button that does the same. -->
+    <Style x:Key="MenuGlyphIconStyle" TargetType="TextBlock">
+        <Setter Property="FontFamily" Value="{DynamicResource SymbolThemeFontFamily}" />
+        <Setter Property="FontSize" Value="{DynamicResource DefaultIconFontSize}" />
+        <Setter Property="HorizontalAlignment" Value="Center" />
+        <Setter Property="VerticalAlignment" Value="Center" />
+    </Style>
 </ResourceDictionary>

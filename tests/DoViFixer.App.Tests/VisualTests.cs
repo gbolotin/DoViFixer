@@ -867,6 +867,7 @@ public sealed class VisualTests
         await LayoutAsync(window);
         AssertStableActionSlots(list, slots, "other row focused");
         Assert.IsFalse(remove.IsVisible, "An unselected row without hover must hide delete.");
+        await VerifyRowContextMenuAsync(media, container, row, window);
         foreach (var (caption, command) in new (string, object)[]
         {
             ("Cancel", media.CancelFileCommand), ("Retry", media.RetryAnalysisCommand), ("Skip", media.SkipCommand)
@@ -1366,6 +1367,52 @@ public sealed class VisualTests
     /// Each row action occupies the same place in every row and state, so showing or hiding one action never
     /// moves another: hover actions always keep their space, and a row shows at most one primary action.
     /// </summary>
+    private static async Task VerifyRowContextMenuAsync(MediaViewModel media, ListViewItem container, MediaRow row, Window window)
+    {
+        var menu = container.ContextMenu;
+        Assert.IsNotNull(menu, "Rows have a right-click menu.");
+        // Rows share one menu; opening it on a row makes that row its DataContext.
+        var other = media.Files.First(file => !ReferenceEquals(file, row));
+        var otherContainer = (ListViewItem)ItemsControl.ItemsControlFromItemContainer(container).ItemContainerGenerator.ContainerFromItem(other);
+        menu.PlacementTarget = otherContainer;
+        menu.IsOpen = true;
+        await LayoutAsync(window);
+        Assert.AreSame(other, menu.DataContext);
+        Assert.AreSame(other, menu.Items.OfType<MenuItem>().First().CommandParameter);
+        menu.IsOpen = false;
+        menu.PlacementTarget = container;
+        menu.IsOpen = true;
+        try
+        {
+            await LayoutAsync(window);
+            Assert.AreSame(row, menu.DataContext);
+            var items = menu.Items.OfType<MenuItem>().ToDictionary(item => (string)item.Header);
+            foreach (var (header, command) in new (string, object)[]
+            {
+                ("_Scan", media.ScanRowCommand), ("_Inspect", media.InspectRowCommand), ("_Deep Inspect", media.DeepInspectRowCommand),
+                ("Re_try analysis", media.RetryAnalysisCommand), ("_Convert", media.ConvertRowCommand), ("Rest_ore to DV7…", media.RestoreRowCommand),
+                ("S_kip", media.SkipCommand), ("C_ancel", media.CancelFileCommand), ("_Remove from list", media.RemoveFileCommand)
+            })
+            {
+                Assert.AreSame(command, items[header].Command, header + " must resolve through the row menu.");
+                Assert.AreSame(row, items[header].CommandParameter);
+            }
+
+            Assert.AreSame(media.ShowResultFileCommand, items["Show in _folder"].Command);
+            Assert.AreEqual(row.Path, items["Show in _folder"].CommandParameter);
+            Assert.AreEqual(row.OffersConversion ? Visibility.Visible : Visibility.Collapsed, items["_Convert"].Visibility, "Convert shows only where conversion would not skip.");
+            Assert.AreEqual(Visibility.Collapsed, items["Rest_ore to DV7…"].Visibility);
+            Assert.AreEqual(Visibility.Collapsed, items["S_kip"].Visibility);
+            Assert.AreEqual(Visibility.Collapsed, items["C_ancel"].Visibility);
+            Assert.AreEqual(Visibility.Collapsed, items["Show _output in folder"].Visibility);
+            Assert.IsTrue(items["_Inspect"].IsEnabled && items["_Remove from list"].IsEnabled);
+        }
+        finally
+        {
+            menu.IsOpen = false;
+        }
+    }
+
     private static void AssertStableActionSlots(ListView list, Dictionary<string, Rect> slots, string checkpoint)
     {
         string[] primaryActions = ["Cancel", "Skip", "Retry"];

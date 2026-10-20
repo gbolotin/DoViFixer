@@ -555,7 +555,7 @@ public sealed partial class MediaViewModel : OperationViewModel, INavigationPage
     /// Sorting is blocked while busy because a running batch keeps the order it started with.
     /// </summary>
     public ColumnSort<MediaRow> FileSort { get; }
-    public bool CanInspect => CanOperate();
+    public bool CanInspect => CanInspectChecked();
 
     [RelayCommand(CanExecute = nameof(IsIdle))]
     private Task AddFiles() => AddAsync(files.PickFiles("Matroska media|*.mkv"));
@@ -594,10 +594,10 @@ public sealed partial class MediaViewModel : OperationViewModel, INavigationPage
     [RelayCommand(CanExecute = nameof(CanScan))]
     private Task Scan() => ScanAllAsync();
 
-    [RelayCommand(CanExecute = nameof(CanOperate))]
+    [RelayCommand(CanExecute = nameof(CanInspectChecked))]
     private Task Inspect() => AnalyzeAsync(AnalysisMethod.FullRpu);
 
-    [RelayCommand(CanExecute = nameof(CanOperate))]
+    [RelayCommand(CanExecute = nameof(CanInspectChecked))]
     private Task DeepInspect() => AnalyzeAsync(AnalysisMethod.DeepInspection);
 
     [RelayCommand(CanExecute = nameof(CanOperate))]
@@ -626,10 +626,10 @@ public sealed partial class MediaViewModel : OperationViewModel, INavigationPage
     [ObservableProperty]
     public partial bool IsDeepInspectionChosen { get; set; }
 
-    [RelayCommand(CanExecute = nameof(CanOperate))]
+    [RelayCommand(CanExecute = nameof(CanInspectChecked))]
     private Task ChooseInspect() => ChooseAndInspectAsync(deep: false);
 
-    [RelayCommand(CanExecute = nameof(CanOperate))]
+    [RelayCommand(CanExecute = nameof(CanInspectChecked))]
     private Task ChooseDeepInspect() => ChooseAndInspectAsync(deep: true);
 
     private static bool CanCancelFile(MediaRow? row) => row is not null && row.IsActive && !row.IsCancellationRequested;
@@ -670,6 +670,15 @@ public sealed partial class MediaViewModel : OperationViewModel, INavigationPage
 
     [RelayCommand(CanExecute = nameof(CanScanRow))]
     private Task ScanRow(MediaRow? row) => RunAsync(AnalysisTitle(AnalysisMethod.SampledRpu), (token, _) => AnalyzeRowsAsync([row!], AnalysisMethod.SampledRpu, token));
+
+    private bool CanInspectRow(MediaRow? row) => CanScanRow(row) && IsInspectable(row!);
+
+    // The row context menu inspects one file whatever its scan found, like Scan does for one file.
+    [RelayCommand(CanExecute = nameof(CanInspectRow))]
+    private Task InspectRow(MediaRow? row) => RunAsync(AnalysisTitle(AnalysisMethod.FullRpu), (token, _) => AnalyzeRowsAsync([row!], AnalysisMethod.FullRpu, token));
+
+    [RelayCommand(CanExecute = nameof(CanInspectRow))]
+    private Task DeepInspectRow(MediaRow? row) => RunAsync(AnalysisTitle(AnalysisMethod.DeepInspection), (token, _) => AnalyzeRowsAsync([row!], AnalysisMethod.DeepInspection, token));
 
     private bool CanInspectIncomplete(MediaRow? row) => row is not null && IsIdle && Files.Contains(row) && row.CanInspectIncomplete;
 
@@ -871,11 +880,33 @@ public sealed partial class MediaViewModel : OperationViewModel, INavigationPage
     private bool CanScan() => IsIdle && ShownFiles.Any(row => !row.IsMissing);
     private bool CanOperate() => IsIdle && ShownFiles.Any(f => f.IsSelected);
 
+    /// <summary>
+    /// Inspection reads the RPU stream of Profile 7 files only; for any other file it repeats the metadata read. A file
+    /// not analyzed yet may still be Profile 7.
+    /// </summary>
+    private static bool IsInspectable(MediaRow row) => !row.IsMissing && (row.Analysis is null || row.IsProfile7);
+
+    private bool CanInspectChecked() => IsIdle && ShownFiles.Any(row => row.IsSelected && IsInspectable(row));
+
+    // A row's profile or presence decides whether it can be inspected.
+    private void InspectCommandsChanged()
+    {
+        OnPropertyChanged(nameof(CanInspect));
+        InspectCommand.NotifyCanExecuteChanged();
+        DeepInspectCommand.NotifyCanExecuteChanged();
+        ChooseInspectCommand.NotifyCanExecuteChanged();
+        ChooseDeepInspectCommand.NotifyCanExecuteChanged();
+        InspectRowCommand.NotifyCanExecuteChanged();
+        DeepInspectRowCommand.NotifyCanExecuteChanged();
+    }
+
     protected override void CommandsChanged()
     {
         ResetColumnLayoutCommand?.NotifyCanExecuteChanged();
         OnPropertyChanged(nameof(CanInspect));
         ScanRowCommand?.NotifyCanExecuteChanged();
+        InspectRowCommand?.NotifyCanExecuteChanged();
+        DeepInspectRowCommand?.NotifyCanExecuteChanged();
         RetryAnalysisCommand?.NotifyCanExecuteChanged();
         InspectIncompleteCommand?.NotifyCanExecuteChanged();
         ToggleSelectAllCommand?.NotifyCanExecuteChanged();
@@ -981,6 +1012,11 @@ public sealed partial class MediaViewModel : OperationViewModel, INavigationPage
         if (e.PropertyName == nameof(MediaRow.IsProfile7))
         {
             ConvertRowCommand.NotifyCanExecuteChanged();
+        }
+
+        if (e.PropertyName is nameof(MediaRow.IsProfile7) or nameof(MediaRow.IsMissing))
+        {
+            InspectCommandsChanged();
         }
 
         if (e.PropertyName == nameof(MediaRow.CanRestore))
@@ -1136,8 +1172,9 @@ public sealed partial class MediaViewModel : OperationViewModel, INavigationPage
 
     private Task AnalyzeAsync(AnalysisMethod method) => RunAsync(AnalysisTitle(method), async (token, _) =>
     {
-        // A missing file keeps its check mark, which only the user changes, but there is nothing to analyze.
-        await AnalyzeRowsAsync(InDisplayOrder(ShownFiles.Where(r => r.IsSelected && !r.IsMissing)), method, token);
+        // Checked files that are missing or not Profile 7 keep their check marks, which only the user changes, but
+        // inspection has nothing to add for them.
+        await AnalyzeRowsAsync(InDisplayOrder(ShownFiles.Where(r => r.IsSelected && IsInspectable(r))), method, token);
     });
 
     private async Task AnalyzeRowsAsync(MediaRow[] rows, AnalysisMethod method, CancellationToken token)

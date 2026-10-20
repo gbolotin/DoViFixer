@@ -723,6 +723,36 @@ public sealed class ViewModelTests
     }
 
     [TestMethod]
+    public async Task InspectionLeavesOutFilesThatAreNotProfile7()
+    {
+        using var runtime = new TestRuntime();
+        var model = runtime.Container.GetRequiredService<MediaViewModel>();
+        await model.AddAsync([@"C:\Media\P81.mkv", @"C:\Media\Mountain.mkv"]);
+        var (p81, p7) = (model.Files[0], model.Files[1]);
+        Assert.IsFalse(p81.IsProfile7);
+        Assert.IsFalse(model.InspectRowCommand.CanExecute(p81), "Inspection has nothing to add for a file that is not Profile 7.");
+        Assert.IsFalse(model.DeepInspectRowCommand.CanExecute(p81));
+        Assert.IsTrue(model.ScanRowCommand.CanExecute(p81), "Scan still reads the file again.");
+        Assert.IsTrue(model.InspectRowCommand.CanExecute(p7));
+        Assert.IsTrue(model.InspectRowCommand.CanExecute(model.Files.Single(row => row.Analysis is not null && row.IsProfile7)));
+
+        p7.IsSelected = false;
+        Assert.IsTrue(p81.IsSelected);
+        Assert.IsFalse(model.InspectCommand.CanExecute(null), "Only a file that is not Profile 7 is checked.");
+        Assert.IsFalse(model.DeepInspectCommand.CanExecute(null));
+
+        p7.IsSelected = true;
+        int fullAnalyses = runtime.FullAnalyses;
+        await model.InspectCommand.InvokeAsync();
+        Assert.AreEqual(fullAnalyses + 1, runtime.FullAnalyses, "Only the Profile 7 file is inspected.");
+        Assert.IsTrue(p81.IsSelected, "The skipped file keeps its check mark.");
+
+        await runtime.UpdateAsync(settings => settings with { AutomaticallyScanAddedFiles = false }, default);
+        await model.AddAsync([@"C:\Media\Ocean.mkv"]);
+        Assert.IsTrue(model.InspectRowCommand.CanExecute(model.Files.Single(row => row.Path == @"C:\Media\Ocean.mkv")), "A file not analyzed yet may be Profile 7.");
+    }
+
+    [TestMethod]
     public async Task DetailNextStepScansAndInspectsOnlyItsFileWithoutChangingSelection()
     {
         using var runtime = new TestRuntime();

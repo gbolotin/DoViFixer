@@ -117,6 +117,89 @@
                           wf:GridViewSort.Sort="{Binding FileSort}"
                           wf:ListFilter.Predicate="{Binding ShownFilePredicate}"
                           wf:ListFilter.LiveProperty="FilterGroup">
+                    <ListView.Resources>
+                        <!-- The right-clicked row's actions. Rows share one menu, whose DataContext follows the row it opens on;
+                             the commands come from the page, which each row container carries in its Tag. Actions that
+                             only apply to some files show only on those, as on the row's hover buttons. -->
+                        <ContextMenu x:Key="MediaRowContextMenu"
+                                     DataContext="{Binding PlacementTarget.DataContext, RelativeSource={RelativeSource Self}}">
+                            <MenuItem Header="_Scan"
+                                      Command="{Binding PlacementTarget.Tag.ScanRowCommand, RelativeSource={RelativeSource AncestorType=ContextMenu}}"
+                                      CommandParameter="{Binding}">
+                                <MenuItem.Icon>
+                                    <TextBlock Text="&#xE72C;" Style="{StaticResource MenuGlyphIconStyle}" />
+                                </MenuItem.Icon>
+                            </MenuItem>
+                            <MenuItem Header="_Inspect"
+                                      Command="{Binding PlacementTarget.Tag.InspectRowCommand, RelativeSource={RelativeSource AncestorType=ContextMenu}}"
+                                      CommandParameter="{Binding}">
+                                <MenuItem.Icon>
+                                    <TextBlock Text="&#xE721;" Style="{StaticResource MenuGlyphIconStyle}" />
+                                </MenuItem.Icon>
+                            </MenuItem>
+                            <MenuItem Header="_Deep Inspect"
+                                      Command="{Binding PlacementTarget.Tag.DeepInspectRowCommand, RelativeSource={RelativeSource AncestorType=ContextMenu}}"
+                                      CommandParameter="{Binding}">
+                                <MenuItem.Icon>
+                                    <TextBlock Text="&#xE9D9;" Style="{StaticResource MenuGlyphIconStyle}" />
+                                </MenuItem.Icon>
+                            </MenuItem>
+                            <MenuItem Header="Re_try analysis"
+                                      Visibility="{Binding CanRetryAnalysis, Converter={StaticResource WfBooleanToVisibilityConverter}}"
+                                      Command="{Binding PlacementTarget.Tag.RetryAnalysisCommand, RelativeSource={RelativeSource AncestorType=ContextMenu}}"
+                                      CommandParameter="{Binding}" />
+                            <MenuItem Header="_Convert"
+                                      Visibility="{Binding OffersConversion, Converter={StaticResource WfBooleanToVisibilityConverter}}"
+                                      Command="{Binding PlacementTarget.Tag.ConvertRowCommand, RelativeSource={RelativeSource AncestorType=ContextMenu}}"
+                                      CommandParameter="{Binding}">
+                                <MenuItem.Icon>
+                                    <TextBlock Text="&#xE8AB;" Style="{StaticResource MenuGlyphIconStyle}" />
+                                </MenuItem.Icon>
+                            </MenuItem>
+                            <MenuItem Header="Rest_ore to DV7…"
+                                      Visibility="{Binding CanRestore, Converter={StaticResource WfBooleanToVisibilityConverter}}"
+                                      Command="{Binding PlacementTarget.Tag.RestoreRowCommand, RelativeSource={RelativeSource AncestorType=ContextMenu}}"
+                                      CommandParameter="{Binding}">
+                                <MenuItem.Icon>
+                                    <TextBlock Text="&#xE7A7;" Style="{StaticResource MenuGlyphIconStyle}" />
+                                </MenuItem.Icon>
+                            </MenuItem>
+                            <MenuItem Header="S_kip"
+                                      Visibility="{Binding IsPending, Converter={StaticResource WfBooleanToVisibilityConverter}}"
+                                      Command="{Binding PlacementTarget.Tag.SkipCommand, RelativeSource={RelativeSource AncestorType=ContextMenu}}"
+                                      CommandParameter="{Binding}" />
+                            <MenuItem Header="C_ancel"
+                                      Visibility="{Binding IsActive, Converter={StaticResource WfBooleanToVisibilityConverter}}"
+                                      Command="{Binding PlacementTarget.Tag.CancelFileCommand, RelativeSource={RelativeSource AncestorType=ContextMenu}}"
+                                      CommandParameter="{Binding}" />
+                            <Separator />
+                            <MenuItem Header="Show in _folder"
+                                      Command="{Binding PlacementTarget.Tag.ShowResultFileCommand, RelativeSource={RelativeSource AncestorType=ContextMenu}}"
+                                      CommandParameter="{Binding Path}">
+                                <MenuItem.Icon>
+                                    <TextBlock Text="&#xE838;" Style="{StaticResource MenuGlyphIconStyle}" />
+                                </MenuItem.Icon>
+                            </MenuItem>
+                            <MenuItem Header="Show _output in folder"
+                                      Visibility="{Binding CanOpenResult, Converter={StaticResource WfBooleanToVisibilityConverter}}"
+                                      Command="{Binding PlacementTarget.Tag.ShowResultFileCommand, RelativeSource={RelativeSource AncestorType=ContextMenu}}"
+                                      CommandParameter="{Binding Result.Output}" />
+                            <Separator />
+                            <MenuItem Header="_Remove from list"
+                                      Command="{Binding PlacementTarget.Tag.RemoveFileCommand, RelativeSource={RelativeSource AncestorType=ContextMenu}}"
+                                      CommandParameter="{Binding}">
+                                <MenuItem.Icon>
+                                    <TextBlock Text="&#xE74D;" Style="{StaticResource MenuGlyphIconStyle}" />
+                                </MenuItem.Icon>
+                            </MenuItem>
+                        </ContextMenu>
+                    </ListView.Resources>
+                    <ListView.ItemContainerStyle>
+                        <Style TargetType="ListViewItem" BasedOn="{StaticResource {x:Static GridView.GridViewItemContainerStyleKey}}">
+                            <Setter Property="Tag" Value="{Binding DataContext, RelativeSource={RelativeSource AncestorType=ListView}}" />
+                            <Setter Property="ContextMenu" Value="{StaticResource MediaRowContextMenu}" />
+                        </Style>
+                    </ListView.ItemContainerStyle>
                     <ListView.ContextMenu>
                         <ContextMenu>
                             <MenuItem Header="Reset columns" Command="{Binding ResetColumnLayoutCommand}" />
