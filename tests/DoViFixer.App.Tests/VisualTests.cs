@@ -509,6 +509,10 @@ public sealed class VisualTests
         double originalColumnWidth = grid.Columns[0].Width;
         var originalPadding = list.Padding;
         var originalScrollVisibility = scroll.VerticalScrollBarVisibility;
+        var actionsHeader = Descendants<GridViewColumnHeader>(list).Single(header => ReferenceEquals(header.Column, grid.Columns[^1]));
+        Assert.IsNull(grid.Columns[^1].Header, "The Actions column has no title.");
+        Assert.IsFalse(actionsHeader.IsHitTestVisible, "The Actions header takes no clicks.");
+        Assert.IsFalse(Descendants<System.Windows.Controls.Primitives.Thumb>(actionsHeader).Any(), "The Actions header has no resize gripper.");
         window.Width = 1800;
         await LayoutAsync(window);
         Assert.IsTrue(grid.Columns[^1].Width > 72, "The last column must expand into spare space.");

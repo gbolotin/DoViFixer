@@ -358,10 +358,25 @@
                                     </DataTemplate>
                                 </GridViewColumn.CellTemplate>
                             </GridViewColumn>
-                            <GridViewColumn Header="Actions"
-                                            Width="72"
+                            <GridViewColumn Width="72"
                                             wf:GridViewLayout.Id="Actions"
                                             wf:GridViewSizing.IsFillColumn="True">
+                                <!-- The hover actions need no title: a blank header that takes no clicks, with no
+                                     resize gripper or separator, since the column only fills the remaining width. -->
+                                <GridViewColumn.HeaderContainerStyle>
+                                    <Style TargetType="GridViewColumnHeader" BasedOn="{StaticResource WfSortableColumnHeaderContainerStyle}">
+                                        <Setter Property="IsHitTestVisible" Value="False" />
+                                        <Setter Property="Focusable" Value="False" />
+                                        <Setter Property="AutomationProperties.Name" Value="Actions" />
+                                        <Setter Property="Template">
+                                            <Setter.Value>
+                                                <ControlTemplate TargetType="GridViewColumnHeader">
+                                                    <Border Background="{TemplateBinding Background}" />
+                                                </ControlTemplate>
+                                            </Setter.Value>
+                                        </Setter>
+                                    </Style>
+                                </GridViewColumn.HeaderContainerStyle>
                                 <GridViewColumn.CellTemplate>
                                     <DataTemplate>
                                         <Grid VerticalAlignment="Center">
