@@ -6,9 +6,10 @@
 
 src/DoViFixer.App/Views/MediaView.xaml | spacing | Margin="1,0,0,0" | Same 1 px header nudge as WpfFoundation's sortable column header template.
 src/DoViFixer.App/Views/MediaView.xaml | typography | FontWeight="SemiBold" | Warning glyphs next to text are drawn SemiBold.
+src/DoViFixer.App/Views/MediaDetails.xaml | typography | FontWeight="SemiBold" | Warning glyphs next to text are drawn SemiBold.
 src/DoViFixer.App/Views/MediaView.xaml | spacing | Padding="7,6" | Open audit finding: row action buttons, Fluent ButtonPadding or a shared compact style.
-src/DoViFixer.App/Views/MediaView.xaml | color | Background="Black" | Video frame letterbox.
-src/DoViFixer.App/Views/MediaView.xaml | color | Foreground="White" | Text on the black video letterbox.
+src/DoViFixer.App/Views/MediaDetails.xaml | color | Background="Black" | Video frame letterbox.
+src/DoViFixer.App/Views/MediaDetails.xaml | color | Foreground="White" | Text on the black video letterbox.
 src/DoViFixer.App/Views/MediaView.xaml | typography | FontSize="16" | Open audit finding: progress card title and percent, Body 14 or Subtitle 20.
 src/DoViFixer.App/Views/SettingsView.xaml | typography | FontWeight="SemiBold" | Save error heading; BodyStrongTextBlockStyle would fit it.
 src/DoViFixer.App/Views/Settings/NativeToolsSettingsView.xaml | typography | FontSize="12" | Settings state icon; CaptionTextBlockFontSize has the same value.

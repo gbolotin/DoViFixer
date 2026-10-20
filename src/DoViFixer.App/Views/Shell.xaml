@@ -36,7 +36,7 @@
                         <wf:TitleBar.RightHeader>
                             <Button Content="&#xE713;"
                                     FontFamily="{StaticResource SymbolThemeFontFamily}"
-                                    Padding="10,4"
+                                    Padding="12,4"
                                     Command="{Binding OpenSettingsCommand}"
                                     ToolTip="Settings (Ctrl+,)"
                                     AutomationProperties.Name="Settings"
