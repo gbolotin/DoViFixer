@@ -2053,6 +2053,7 @@ public sealed class ViewModelTests
         settings.Destination = @"C:\Media\CustomOutput";
         settings.OtherFolder = true;
         settings.ReplaceOriginal = true;
+        settings.ForceComplex = true;
         await settings.SaveCommand.InvokeAsync();
 
         Assert.AreEqual(@"Output: C:\Media\CustomOutput (Replace original)", media.OutputSummary);
@@ -2064,6 +2065,10 @@ public sealed class ViewModelTests
         Assert.AreSame(media.OpenSettingsCommand, outputItem.Command);
         Assert.AreEqual(media.OutputSummaryToolTip, outputItem.ToolTipText);
         Assert.IsTrue(media.StatusItems.Single(item => item.Text == media.RetentionSummary).IsEmphasized);
+        var felItem = media.StatusItems.Single(item => item.Text == media.FelSummary);
+        StringAssert.StartsWith(media.FelSummary, "⚠ FEL:");
+        Assert.IsTrue(felItem.IsEmphasized, "Allowing Complex FEL conversion is marked as a warning.");
+        StringAssert.Contains(felItem.ToolTipText, "permanently lost");
     }
 
     [TestMethod]

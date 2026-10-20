@@ -29,7 +29,7 @@ public sealed partial class MediaViewModel : OperationViewModel, INavigationPage
         new(StatusText),
         new(OutputSummary, OutputSummaryToolTip, Command: OpenSettingsCommand),
         new(RetentionSummary, IsEmphasized: IsReplaceOriginalActive),
-        new(FelSummary),
+        new(FelSummary, convertsComplexFel ? ComplexFelWarning : null, IsEmphasized: convertsComplexFel),
         new(ArchiveSummary)
     ];
 
@@ -709,6 +709,8 @@ public sealed partial class MediaViewModel : OperationViewModel, INavigationPage
     [ObservableProperty]
     public partial string ArchiveSummary { get; private set; } = "EL archive: Off";
 
+    private const string ComplexFelWarning = "Complex FEL conversion is allowed: enhancement-layer picture data that expands dynamic range will be permanently lost.";
+
     // The FEL settings, so rows offer Convert only where conversion would not skip them.
     private bool convertsSimpleFel;
     private bool convertsComplexFel;
@@ -732,9 +734,9 @@ public sealed partial class MediaViewModel : OperationViewModel, INavigationPage
         RetentionSummary = s.ReplaceOriginal ? "⚠ Replace originals" : "Keep originals";
         FelSummary = (s.IncludeSimple, s.ForceComplex) switch
         {
-            (true, true) => "FEL: Simple + Complex",
+            (true, true) => "⚠ FEL: Simple + Complex",
             (true, false) => "FEL: Simple only",
-            (false, true) => "FEL: Complex only",
+            (false, true) => "⚠ FEL: Complex only",
             _ => "FEL: Skip"
         };
         ArchiveSummary = s.CreateElArchive ? "EL archive: On" : "EL archive: Off";
