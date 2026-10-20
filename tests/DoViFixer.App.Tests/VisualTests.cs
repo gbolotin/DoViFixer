@@ -1013,6 +1013,19 @@ public sealed class VisualTests
         Assert.AreEqual(Key.OemComma, shortcut.Key);
         Assert.AreEqual(ModifierKeys.Control, shortcut.Modifiers, "Ctrl+comma opens Settings.");
         Assert.AreEqual("Settings (Ctrl+,)", open.ToolTip);
+        Assert.AreEqual(Key.F4, window.InputBindings.OfType<KeyBinding>().Single(binding => ReferenceEquals(binding.Command, shell.InspectCommand)).Key);
+        Assert.AreEqual(Key.F5, window.InputBindings.OfType<KeyBinding>().Single(binding => ReferenceEquals(binding.Command, shell.ConvertCommand)).Key);
+        var fileMenu = Descendants<Menu>(titleBar).Single().Items.OfType<MenuItem>().First();
+        var fileItems = fileMenu.Items.OfType<MenuItem>().ToDictionary(item => (string)item.Header);
+        Assert.AreEqual("F4", fileItems["_Inspect"].InputGestureText);
+        Assert.AreEqual("F5", fileItems["_Convert"].InputGestureText);
+        foreach (var (header, glyph) in new[] { ("Re_scan all files", ""), ("_Inspect", ""), ("_Deep Inspect", ""),
+            ("_Convert", ""), ("Rest_ore to DV7…", ""), ("_Remove", "") })
+        {
+            Assert.AreEqual(glyph, ((TextBlock)fileItems[header].Icon).Text, header + " shows its toolbar icon.");
+        }
+        Assert.IsInstanceOfType<WpfFoundation.Controls.PathIcon>(fileItems["_Add files…"].Icon);
+        Assert.IsInstanceOfType<WpfFoundation.Controls.PathIcon>(fileItems["Add _folder…"].Icon);
         Assert.AreEqual(Visibility.Collapsed, overlay.Visibility);
         AssertInside(open, content);
         runtime.AnalysisCacheBytes = 262144;

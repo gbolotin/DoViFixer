@@ -65,11 +65,16 @@
                                     <Setter Property="Content" Value="Inspect" />
                                     <Setter Property="Icon" Value="&#xE721;" />
                                     <Setter Property="Command" Value="{Binding InspectCommand}" />
+                                    <!-- F4 always runs Inspect (the window's key binding), so only that choice names it. -->
+                                    <Setter Property="ToolTip" Value="Inspect (F4)" />
+                                    <Setter Property="AutomationProperties.AcceleratorKey" Value="F4" />
                                     <Style.Triggers>
                                         <DataTrigger Binding="{Binding IsDeepInspectionChosen}" Value="True">
                                             <Setter Property="Content" Value="Deep Inspect" />
                                             <Setter Property="Icon" Value="&#xE9D9;" />
                                             <Setter Property="Command" Value="{Binding DeepInspectCommand}" />
+                                            <Setter Property="ToolTip" Value="Deep Inspect" />
+                                            <Setter Property="AutomationProperties.AcceleratorKey" Value="" />
                                         </DataTrigger>
                                     </Style.Triggers>
                                 </Style>
@@ -89,9 +94,16 @@
                         </wfc:SplitButton>
                         <Button Content="Convert"
                                 Command="{Binding ConvertCommand}"
-                                ToolTip="{Binding OutputSummaryToolTip}"
+                                AutomationProperties.AcceleratorKey="F5"
                                 Tag="&#xE8AB;"
-                                ContentTemplate="{StaticResource WfIconContentTemplate}" />
+                                ContentTemplate="{StaticResource WfIconContentTemplate}">
+                            <Button.ToolTip>
+                                <StackPanel>
+                                    <TextBlock Text="Convert (F5)" FontWeight="SemiBold" />
+                                    <TextBlock Text="{Binding OutputSummaryToolTip}" />
+                                </StackPanel>
+                            </Button.ToolTip>
+                        </Button>
                     </WrapPanel>
                 </Border>
             </DataTemplate>
