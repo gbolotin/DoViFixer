@@ -314,8 +314,11 @@ internal sealed class TestRuntime : IFileDiscovery, IFileOperations, IMediaProbe
 
         var profile = path.EndsWith(".restored.mkv", StringComparison.OrdinalIgnoreCase)
             ? DolbyVisionProfile.Profile7
-            : path.Contains("P81") ? DolbyVisionProfile.Profile81 : path.Contains("Sdr") ? DolbyVisionProfile.None : DolbyVisionProfile.Profile7;
-        return new MediaInfo(Identify(path), profile, "HEVC", 0, 3840, 2160, 1000, 23.976, 5772, 0, 1000, [], 0, 1, null, "{}");
+            : path.Contains("P81") ? DolbyVisionProfile.Profile81 : path.Contains("Sdr") || path.Contains("HDR10") ? DolbyVisionProfile.None : DolbyVisionProfile.Profile7;
+        return new MediaInfo(Identify(path), profile, "HEVC", 0, 3840, 2160, 1000, 23.976, 5772, 0, 1000, [], 0, 1, null, "{}")
+        {
+            IsHdr = path.Contains("HDR10") ? true : null
+        };
     }
 
     public Func<CancellationToken, Task>? DuringAnalysis

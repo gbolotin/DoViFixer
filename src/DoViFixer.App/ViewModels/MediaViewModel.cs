@@ -5,6 +5,7 @@ using System.Windows.Media.Imaging;
 using DoViFixer.App.Dialogs;
 using DoViFixer.App.Presentation.Application;
 using DoViFixer.Application.Abstractions;
+using DoViFixer.Application.Cleanup;
 using DoViFixer.Application.Conversion;
 using DoViFixer.Application.Inspection;
 using DoViFixer.Application.Library;
@@ -40,6 +41,7 @@ public sealed partial class MediaViewModel : OperationViewModel, INavigationPage
     private readonly ConversionService conversion;
     private readonly ConversionDiskBudget diskBudget;
     private readonly RestoreService restore;
+    private readonly CleanupService cleanup;
     private readonly ControlledBatchService batch;
     private readonly SettingsService settings;
     private readonly DependencySetup dependencies;
@@ -59,7 +61,7 @@ public sealed partial class MediaViewModel : OperationViewModel, INavigationPage
 
     private static string Summary(BatchResult result) => string.Join(" · ", result.Items.GroupBy(r => r.Status).Select(g => $"{g.Count()} {g.Key}"));
     private string TimedSummary(BatchResult result) => $"{Summary(result)}{(result.Status == OperationStatus.Completed ? " in " : " · Finished in ")}{BatchProgress.BatchElapsed}";
-    public MediaViewModel(IFileDiscovery discovery, InspectionService inspection, ConversionService conversion, ConversionDiskBudget diskBudget, ControlledBatchService batch, SettingsService settings, DependencySetup dependencies, IDialogService dialogs, IFileDialogService files, IFileExplorer explorer, ILogger<MediaViewModel> logger, IMediaPreview mediaPreview, RestoreService restore, ISourceFileMonitor sourceFiles, ReportService reports, MediaLibraryService library, IOperationFeedback? feedback = null)
+    public MediaViewModel(IFileDiscovery discovery, InspectionService inspection, ConversionService conversion, ConversionDiskBudget diskBudget, ControlledBatchService batch, SettingsService settings, DependencySetup dependencies, IDialogService dialogs, IFileDialogService files, IFileExplorer explorer, ILogger<MediaViewModel> logger, IMediaPreview mediaPreview, RestoreService restore, ISourceFileMonitor sourceFiles, ReportService reports, MediaLibraryService library, CleanupService cleanup, IOperationFeedback? feedback = null)
         : base(feedback)
     {
         this.discovery = discovery;
@@ -72,6 +74,7 @@ public sealed partial class MediaViewModel : OperationViewModel, INavigationPage
         this.inspection = inspection;
         this.conversion = conversion;
         this.restore = restore;
+        this.cleanup = cleanup;
         this.batch = batch;
         this.settings = settings;
         this.dependencies = dependencies;
@@ -506,7 +509,7 @@ public sealed partial class MediaViewModel : OperationViewModel, INavigationPage
         }
 
         var rows = Files.Where(row => row.RestoreArchive is null && !row.IsMissing && !row.IsActive
-            && row.Analysis?.Media.Profile == Domain.Media.DolbyVisionProfile.Profile81).ToArray();
+            && row.Analysis?.Media is { } media && RestoreService.IsRestoreBase(media)).ToArray();
         if (rows.Length == 0)
         {
             return;
@@ -855,6 +858,7 @@ public sealed partial class MediaViewModel : OperationViewModel, INavigationPage
         RemoveSelectedCommand?.NotifyCanExecuteChanged();
         RemoveFileCommand?.NotifyCanExecuteChanged();
         RemoveMissingCommand?.NotifyCanExecuteChanged();
+        CleanupBackupsCommand?.NotifyCanExecuteChanged();
         OpenSettingsCommand?.NotifyCanExecuteChanged();
         AddFilesCommand?.NotifyCanExecuteChanged();
         AddFolderCommand?.NotifyCanExecuteChanged();
@@ -1635,6 +1639,45 @@ public sealed partial class MediaViewModel : OperationViewModel, INavigationPage
 
     [RelayCommand(CanExecute = nameof(CanOperate))]
     private Task RemoveSelected() => RemoveRowsAsync(ShownFiles.Where(row => row.IsSelected).ToArray());
+
+    /// <summary>
+    /// Finds .dovi archives and .bak.dovi_convert originals in a folder and its subfolders, and deletes exactly the
+    /// reviewed files. Rows whose archive goes lose Restore through the folder watcher.
+    /// </summary>
+    [RelayCommand(CanExecute = nameof(IsIdle))]
+    private Task CleanupBackups() => RunAsync("Cleanup", async (token, _) =>
+    {
+        string? folder = files.PickFolder();
+        if (folder is null)
+        {
+            return;
+        }
+
+        var plan = await Task.Run(() => cleanup.Plan(folder, 100), token);
+        if (plan.Files.Count == 0)
+        {
+            SetStatus(ViewStatus.NoBackupsFound);
+            return;
+        }
+
+        string review = "Remove exactly these retained backup files (Recycle Bin if enabled in Safety settings; otherwise permanent deletion):\n\n" + string.Join("\n", plan.Files.Select(f => $"{f.Path} ({f.Length:N0} bytes)"));
+        if (!await dialogs.ReviewAsync("Review cleanup", review, "Delete"))
+        {
+            SetStatus(ViewStatus.CleanupNotApproved);
+            return;
+        }
+
+        OperationLog.Audit(logger, "ApproveCleanup", review, "ApprovedByConfirmation", plan.Id);
+        var result = await Task.Run(() => cleanup.ExecuteAsync(plan, token), token);
+        var failed = result.Items.Where(item => item.Status == OperationStatus.Failed).ToArray();
+        if (failed.Length > 0)
+        {
+            ReportItemFailed();
+        }
+
+        SetStatus(failed.Length > 0 ? ViewStatus.Error : ViewStatus.Result,
+            string.Join("\n", failed.Select(item => $"{item.Item}: {item.Message}").Prepend($"Cleanup: {Summary(result)}")));
+    });
 
     private Task RemoveRowsAsync(MediaRow[] rows) => RunAsync(async (token, _) =>
     {

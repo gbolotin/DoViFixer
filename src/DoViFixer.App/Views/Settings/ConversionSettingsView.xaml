@@ -79,7 +79,7 @@
                               Style="{StaticResource WfToggleSwitchStyle}" />
                     <Separator />
                     <CheckBox Content="Back up enhancement layer"
-                              AutomationProperties.HelpText="Saves the enhancement layer in an archive so the original file can be restored from Backup &amp; Restore."
+                              AutomationProperties.HelpText="Saves the enhancement layer in a .dovi archive beside the output, so Restore on the converted file's row can rebuild the Profile 7 original."
                               IsChecked="{Binding CreateArchive}"
                               Style="{StaticResource WfToggleSwitchStyle}" />
                 </StackPanel>

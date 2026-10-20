@@ -5,7 +5,7 @@ using DoViFixer.App.Presentation.Application;
 namespace DoViFixer.App.ViewModels;
 public sealed partial class ShellViewModel : ObservableObject, INavigationGuard, IDisposable
 {
-    /// <param name="pages">The sidebar pages in display order. They must include the Media page, which the shell wires to Settings.</param>
+    /// <param name="pages">The pages: the Media page, which the shell wires to Settings and the title bar menu.</param>
     /// <param name="settings">Settings, shown in a frame over the pages rather than as a page.</param>
     public ShellViewModel(IEnumerable<INavigationPage> pages, SettingsViewModel settings, StartupDependencyCheckViewModel dependencyCheck, DependencyReportViewModel dependencyReport)
     {
@@ -42,6 +42,7 @@ public sealed partial class ShellViewModel : ObservableObject, INavigationGuard,
         dependencyReport.PropertyChanged += DependencyReportChanged;
         dependencyCheck.PropertyChanged += DependencyCheckChanged;
         media.ExportResultsCommand.CanExecuteChanged += MediaCommandsChanged;
+        media.CleanupBackupsCommand.CanExecuteChanged += MediaCommandsChanged;
 
         foreach (var operation in operations)
         {
@@ -64,7 +65,7 @@ public sealed partial class ShellViewModel : ObservableObject, INavigationGuard,
     /// <summary>The Media page, whose commands the title bar menu also offers.</summary>
     public MediaViewModel Media => media;
 
-    /// <summary>Page navigation: the sidebar and the retained page host bind to it.</summary>
+    /// <summary>Page navigation: the retained page host binds to it.</summary>
     public NavigationService Navigation { get; }
 
     public Task NavigationTask { get; private set; } = Task.CompletedTask;
@@ -212,15 +213,10 @@ public sealed partial class ShellViewModel : ObservableObject, INavigationGuard,
         }
     }
 
-    private bool CanShowPage(INavigationPage? page) => page is not null && !IsSettingsOpen && CanNavigate && !ReferenceEquals(CurrentPage, page);
+    [RelayCommand(CanExecute = nameof(CanCleanupBackups))]
+    private Task CleanupBackups() => RunOnMediaAsync(media.CleanupBackupsCommand);
 
-    /// <summary>Shows a sidebar page, as selecting it in the sidebar does.</summary>
-    [RelayCommand(CanExecute = nameof(CanShowPage))]
-    private Task ShowPage(INavigationPage? page)
-    {
-        NavigationTask = Navigation.NavigateAsync(page!);
-        return NavigationTask;
-    }
+    private bool CanCleanupBackups() => CanUseMedia() && media.CleanupBackupsCommand.CanExecute(null);
 
     private bool CanOpenSettingsSection() => CanOpenSettings(null);
 
@@ -246,14 +242,18 @@ public sealed partial class ShellViewModel : ObservableObject, INavigationGuard,
         }
     }
 
-    private void MediaCommandsChanged(object? sender, EventArgs e) => ExportResultsCommand.NotifyCanExecuteChanged();
+    private void MediaCommandsChanged(object? sender, EventArgs e)
+    {
+        ExportResultsCommand.NotifyCanExecuteChanged();
+        CleanupBackupsCommand.NotifyCanExecuteChanged();
+    }
 
     private void NotifyMenuCommands()
     {
         AddFilesCommand.NotifyCanExecuteChanged();
         AddFolderCommand.NotifyCanExecuteChanged();
         ExportResultsCommand.NotifyCanExecuteChanged();
-        ShowPageCommand.NotifyCanExecuteChanged();
+        CleanupBackupsCommand.NotifyCanExecuteChanged();
         CheckDependenciesCommand.NotifyCanExecuteChanged();
         CleanLibraryCommand.NotifyCanExecuteChanged();
         ExportDiagnosticsCommand.NotifyCanExecuteChanged();
@@ -369,6 +369,7 @@ public sealed partial class ShellViewModel : ObservableObject, INavigationGuard,
         dependencyReport.PropertyChanged -= DependencyReportChanged;
         dependencyCheck.PropertyChanged -= DependencyCheckChanged;
         media.ExportResultsCommand.CanExecuteChanged -= MediaCommandsChanged;
+        media.CleanupBackupsCommand.CanExecuteChanged -= MediaCommandsChanged;
         Navigation.PropertyChanged -= NavigationChanged;
         Navigation.Dispose();
         startupCancellation.Dispose();

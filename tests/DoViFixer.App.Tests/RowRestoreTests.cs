@@ -93,6 +93,20 @@ public sealed class RowRestoreTests
     }
 
     [TestMethod]
+    public async Task Hdr10OutputsPairWithTheirArchiveButPlainSdrFilesDoNot()
+    {
+        using var runtime = new TestRuntime();
+        runtime.Archives.UnionWith([@"C:\Media\Movie.dovi", @"C:\Media\Sdr.dovi"]);
+        var model = runtime.Container.GetRequiredService<MediaViewModel>();
+        await model.AddAsync([@"C:\Media\Movie - HDR10.mkv", @"C:\Media\Sdr.mkv"]);
+
+        var hdr10 = model.Files.Single(row => row.Path.EndsWith("HDR10.mkv"));
+        Assert.AreEqual(@"C:\Media\Movie.dovi", hdr10.RestoreArchive, "An HDR10 output finds the archive named after its source.");
+        Assert.IsTrue(model.RestoreRowCommand.CanExecute(hdr10));
+        Assert.IsFalse(model.Files.Single(row => row.Path.EndsWith("Sdr.mkv")).CanRestore, "A non-HDR file is never a restoration base.");
+    }
+
+    [TestMethod]
     public async Task DeletingTheArchiveRemovesRestoreUntilRescan()
     {
         using var runtime = new TestRuntime();

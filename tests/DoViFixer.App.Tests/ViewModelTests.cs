@@ -462,11 +462,11 @@ public sealed class ViewModelTests
     }
 
     [TestMethod]
-    public void ShellShowsRegisteredPagesInOrderAndSettingsSectionsInTheFrame()
+    public void ShellShowsMediaAndSettingsSectionsInTheFrame()
     {
         using var runtime = new TestRuntime();
         var shell = runtime.Container.GetRequiredService<ShellViewModel>();
-        CollectionAssert.AreEqual(new[] { typeof(MediaViewModel), typeof(ArchiveViewModel) }, shell.Pages.Select(page => page.GetType()).ToArray());
+        CollectionAssert.AreEqual(new[] { typeof(MediaViewModel) }, shell.Pages.Select(page => page.GetType()).ToArray());
         Assert.AreSame(shell.Pages[0], shell.CurrentPage);
         Assert.IsFalse(shell.IsSettingsOpen);
 
@@ -482,18 +482,16 @@ public sealed class ViewModelTests
     }
 
     [TestMethod]
-    public async Task ShellNavigationLoadsSettingsAndRetainsPageState()
+    public async Task OpeningSettingsFromMediaLoadsThemAndKeepsTheFileList()
     {
         using var runtime = new TestRuntime();
         await runtime.UpdateAsync(value => value with { IncludeSimple = true }, default);
         var shell = runtime.Container.GetRequiredService<ShellViewModel>();
         var media = shell.Pages.OfType<MediaViewModel>().Single();
-        var archive = shell.Pages.OfType<ArchiveViewModel>().Single();
         Assert.AreSame(media, shell.CurrentPage);
         await media.AddAsync([@"C:\Media\Mountain.mkv"]);
         var row = media.Files.Single();
         row.IsSelected = false;
-        archive.Input = row.Path;
 
         media.OpenSettingsCommand.Invoke();
         await (shell.OpenSettingsCommand.ExecutionTask ?? Task.CompletedTask);
@@ -503,9 +501,6 @@ public sealed class ViewModelTests
         Assert.IsTrue(shell.Settings.IncludeSimple);
         await shell.CloseSettingsCommand.InvokeAsync();
         Assert.IsFalse(shell.IsSettingsOpen);
-        shell.CurrentPage = archive;
-        Assert.AreEqual(row.Path, archive.Input);
-        shell.CurrentPage = media;
         Assert.AreSame(row, media.Files.Single());
         Assert.AreSame(row, media.Focused);
         Assert.IsFalse(row.IsSelected);
@@ -518,13 +513,11 @@ public sealed class ViewModelTests
         using var runtime = new TestRuntime();
         var shell = runtime.Container.GetRequiredService<ShellViewModel>();
         var media = shell.CurrentPage;
-        var archive = shell.Pages.OfType<ArchiveViewModel>().Single();
         runtime.DuringDependencyCheck = token => Task.Delay(Timeout.Infinite, token);
         var checking = shell.Settings.CheckCommand.InvokeAsync();
         try
         {
             Assert.IsFalse(shell.CanNavigate);
-            shell.CurrentPage = archive;
             Assert.AreSame(media, shell.CurrentPage);
             Assert.IsFalse(shell.OpenSettingsCommand.CanExecute(null), "Settings must not open while an operation runs.");
         }
@@ -554,7 +547,6 @@ public sealed class ViewModelTests
         Assert.IsFalse(shell.CloseSettingsCommand.CanExecute(null), "A save error keeps the frame open for recovery.");
         await shell.CloseSettingsCommand.InvokeAsync();
         Assert.IsTrue(shell.IsSettingsOpen);
-        shell.CurrentPage = archive;
         Assert.AreSame(media, shell.CurrentPage);
         Assert.IsFalse(shell.CanNavigate);
 
@@ -563,9 +555,7 @@ public sealed class ViewModelTests
         await shell.CloseSettingsCommand.InvokeAsync();
         Assert.IsFalse(shell.IsSettingsOpen);
         Assert.IsTrue(shell.OpenSettingsCommand.CanExecute(null));
-        shell.CurrentPage = archive;
-        await shell.NavigationTask;
-        Assert.AreSame(archive, shell.CurrentPage);
+        Assert.AreSame(media, shell.CurrentPage);
         Assert.IsTrue(shell.CanNavigate);
     }
 
@@ -1114,7 +1104,7 @@ public sealed class ViewModelTests
     }
 
     [TestMethod]
-    public async Task MissingDependencyWarningPersistsAcrossPagesAndClearsAfterOperationInstallsTools()
+    public async Task MissingDependencyWarningPersistsAndClearsAfterOperationInstallsTools()
     {
         using var runtime = new TestRuntime();
         runtime.MissingTools.Add(DoViFixer.Application.Dependencies.NativeTool.FFmpeg);
@@ -1122,14 +1112,9 @@ public sealed class ViewModelTests
         await shell.InitializeAsync();
         StringAssert.Contains(runtime.Reviews.Single(), "FFprobe: Installed and ready");
         StringAssert.Contains(runtime.Reviews.Single(), "FFmpeg: Missing");
-        shell.CurrentPage = shell.Pages.OfType<ArchiveViewModel>().Single();
-        await shell.NavigationTask;
-        Assert.IsTrue(shell.StatusItems.Contains(shell.Settings.Dependencies));
-        shell.CurrentPage = shell.Pages.OfType<MediaViewModel>().Single();
-        await shell.NavigationTask;
         Assert.IsTrue(shell.StatusItems.Contains(shell.Settings.Dependencies));
         runtime.Approval = true;
-        await ((MediaViewModel)shell.CurrentPage).AddAsync([@"C:\Media\Mountain.mkv"]);
+        await shell.Media.AddAsync([@"C:\Media\Mountain.mkv"]);
         Assert.AreEqual(1, runtime.Installations);
         Assert.IsFalse(shell.Settings.Dependencies.HasWarning);
         Assert.IsFalse(shell.StatusItems.Contains(shell.Settings.Dependencies));
@@ -1367,9 +1352,9 @@ public sealed class ViewModelTests
     {
         using var runtime = new TestRuntime { Approval = approve, PickedFolder = @"C:\Media" };
         runtime.Archives.UnionWith([@"C:\Media\Movie.dovi", @"C:\Other\Keep.dovi"]);
-        var model = runtime.Container.GetRequiredService<ArchiveViewModel>();
+        var model = runtime.Container.GetRequiredService<MediaViewModel>();
 
-        await model.CleanupCommand.InvokeAsync();
+        await model.CleanupBackupsCommand.InvokeAsync();
 
         Assert.AreEqual("Delete", runtime.LastApproveLabel);
         Assert.HasCount(1, runtime.Reviews);
@@ -1392,24 +1377,12 @@ public sealed class ViewModelTests
         using var runtime = new TestRuntime { Approval = true, PickedFolder = @"C:\Media" };
         await runtime.UpdateAsync(settings => settings with { RecycleDeletedOriginalsAndBackups = false }, default);
         runtime.Archives.Add(@"C:\Media\Movie.dovi");
-        var model = runtime.Container.GetRequiredService<ArchiveViewModel>();
+        var model = runtime.Container.GetRequiredService<MediaViewModel>();
 
-        await model.CleanupCommand.InvokeAsync();
+        await model.CleanupBackupsCommand.InvokeAsync();
 
         CollectionAssert.AreEqual(new[] { @"C:\Media\Movie.dovi" }, runtime.DeletedFiles);
         Assert.IsEmpty(runtime.RecycledFiles);
-    }
-
-    [TestMethod]
-    public async Task ArchivePreparationCannotExecuteWithoutDisplayedPlanApproval()
-    {
-        using var runtime = new TestRuntime();
-        var model = runtime.Container.GetRequiredService<ArchiveViewModel>();
-        model.Input = @"C:\Media\Mountain.mkv";
-        await model.BackupCommand.InvokeAsync();
-        Assert.HasCount(1, runtime.Reviews);
-        Assert.IsTrue(runtime.Reviews[0].Contains(@"C:\Media\Mountain.dovi"));
-        Assert.AreEqual(ViewStatus.BackupNotApproved, model.Status);
     }
 
     [TestMethod]
@@ -1459,8 +1432,7 @@ public sealed class ViewModelTests
         using var runtime = new TestRuntime();
         var media = runtime.Container.GetRequiredService<MediaViewModel>();
         var settings = runtime.Container.GetRequiredService<SettingsViewModel>();
-        var archive = runtime.Container.GetRequiredService<ArchiveViewModel>();
-        var shell = new ShellViewModel([media, archive], settings, runtime.Container.GetRequiredService<StartupDependencyCheckViewModel>(), runtime.Container.GetRequiredService<DependencyReportViewModel>());
+        var shell = new ShellViewModel([media], settings, runtime.Container.GetRequiredService<StartupDependencyCheckViewModel>(), runtime.Container.GetRequiredService<DependencyReportViewModel>());
 
         await media.AddAsync([
             @"C:\Media\Mountain.mkv",
@@ -2025,8 +1997,7 @@ public sealed class ViewModelTests
         using var runtime = new TestRuntime();
         var media = runtime.Container.GetRequiredService<MediaViewModel>();
         var settings = runtime.Container.GetRequiredService<SettingsViewModel>();
-        var archive = runtime.Container.GetRequiredService<ArchiveViewModel>();
-        var shell = new ShellViewModel([media, archive], settings, runtime.Container.GetRequiredService<StartupDependencyCheckViewModel>(), runtime.Container.GetRequiredService<DependencyReportViewModel>());
+        var shell = new ShellViewModel([media], settings, runtime.Container.GetRequiredService<StartupDependencyCheckViewModel>(), runtime.Container.GetRequiredService<DependencyReportViewModel>());
 
         await media.RefreshSettingsSummaryAsync();
         Assert.AreEqual("Output: Same folder", media.OutputSummary);

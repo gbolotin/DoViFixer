@@ -11,7 +11,6 @@ public abstract partial class OperationViewModel : ObservableObject
         [ViewStatus.FileListCleared] = "File list cleared.",
         [ViewStatus.Cancelled] = "Cancelled; cleanup finished.",
         [ViewStatus.ToolsUnavailable] = "Required tools are unavailable.",
-        [ViewStatus.BackupNotApproved] = "Backup not approved.",
         [ViewStatus.RestoreNotApproved] = "Restore not approved.",
         [ViewStatus.ConversionNotStarted] = "Conversion cancelled; the existing file was kept.",
         [ViewStatus.CleanupNotApproved] = "Cleanup not approved.",
@@ -150,7 +149,7 @@ public abstract partial class OperationViewModel : ObservableObject
     // Statuses an operation ends with when it stopped before doing its work.
     private static OperationOutcome OutcomeOf(ViewStatus status) => status switch
     {
-        ViewStatus.ConversionNotStarted or ViewStatus.BackupNotApproved or ViewStatus.RestoreNotApproved or ViewStatus.CleanupNotApproved => OperationOutcome.Cancelled,
+        ViewStatus.ConversionNotStarted or ViewStatus.RestoreNotApproved or ViewStatus.CleanupNotApproved => OperationOutcome.Cancelled,
         ViewStatus.Error or ViewStatus.ToolsUnavailable or ViewStatus.DependencySetupIncomplete => OperationOutcome.Failed,
         _ => OperationOutcome.Succeeded
     };

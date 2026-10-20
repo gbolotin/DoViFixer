@@ -9,7 +9,6 @@ public enum ViewStatus
     Error,
     Cancelled,
     ToolsUnavailable,
-    BackupNotApproved,
     RestoreNotApproved,
     ConversionNotStarted,
     CleanupNotApproved,

@@ -20,8 +20,8 @@ public sealed class RestoreService(DependencyService dependencies, IMediaProbe p
         cancellationToken.ThrowIfCancellationRequested();
         string input = media.Source.Path;
         string stem = Path.Combine(Path.GetDirectoryName(input)!, Path.GetFileNameWithoutExtension(input));
-        const string convertedSuffix = " - DV P8.1";
-        string[] preferred = stem.EndsWith(convertedSuffix, StringComparison.OrdinalIgnoreCase)
+        string? convertedSuffix = ConvertedSuffixes.FirstOrDefault(suffix => stem.EndsWith(suffix, StringComparison.OrdinalIgnoreCase));
+        string[] preferred = convertedSuffix is not null
             ? [stem + ".dovi", stem[..^convertedSuffix.Length] + ".dovi"]
             : [stem + ".dovi"];
         var snapshot = await settings.ReadAsync(cancellationToken);
@@ -55,6 +55,14 @@ public sealed class RestoreService(DependencyService dependencies, IMediaProbe p
 
         return null;
     }
+
+    // The names conversion gives its outputs, so "Movie - HDR10.mkv" also looks for "Movie.dovi".
+    private static readonly string[] ConvertedSuffixes = [" - DV P8.1", " - HDR10"];
+
+    /// <summary>Whether <paramref name="media"/> can be the base file of a restoration: HEVC Profile 8.1, or HEVC HDR10 without Dolby Vision.</summary>
+    public static bool IsRestoreBase(MediaInfo media) =>
+        media.VideoCodec.Contains("HEVC", StringComparison.OrdinalIgnoreCase)
+        && (media.Profile == DolbyVisionProfile.Profile81 || (media.Profile == DolbyVisionProfile.None && media.IsHdr == true));
 
     // Without a verified hash, reject an archive whose recorded frame count clearly differs. MediaInfo may estimate
     // counts from duration, so a small tolerance keeps the right archive from being hidden.
@@ -127,7 +135,7 @@ public sealed class RestoreService(DependencyService dependencies, IMediaProbe p
     }
 }
 
-// Pairs Profile 8.1 files with restore archives so that each archive belongs to at most one file.
+// Pairs Profile 8.1 and HDR10 base files with restore archives so that each archive belongs to at most one file.
 // Existing pairings stay claimed until their input is paired again, so inputs a batch never reaches keep theirs.
 // Not thread-safe: use one instance per sequential batch.
 public sealed class RestoreArchivePairing
@@ -153,7 +161,7 @@ public sealed class RestoreArchivePairing
             owners.Remove(released);
         }
 
-        if (media.Profile != DolbyVisionProfile.Profile81)
+        if (!RestoreService.IsRestoreBase(media))
         {
             return null;
         }

@@ -19,13 +19,10 @@
     </Window.InputBindings>
     <Window.Resources>
         <ResourceDictionary>
-            <!-- Each page ViewModel shows its own UserControl; the navigation host creates it on the first visit and keeps it.
-                 Settings shows in the frame over the pages. -->
+            <!-- The Media page shows its UserControl; the navigation host creates it once and keeps it.
+                 Settings shows in the frame over the page. -->
             <DataTemplate DataType="{x:Type viewModels:MediaViewModel}">
                 <views:MediaView />
-            </DataTemplate>
-            <DataTemplate DataType="{x:Type viewModels:ArchiveViewModel}">
-                <views:ArchiveView />
             </DataTemplate>
             <DataTemplate DataType="{x:Type viewModels:SettingsViewModel}">
                 <views:SettingsView />
@@ -34,12 +31,19 @@
             <DataTemplate DataType="{x:Type viewModels:ShellViewModel}">
                 <DockPanel>
                     <!-- The menu sits in the title bar on the Fluent backdrop, or below the system title bar in high contrast.
-                         Like the pages, it takes no input while the settings frame is open. -->
+                         Like the page, it takes no input while the settings frame is open. -->
                     <wf:TitleBar DockPanel.Dock="Top">
+                        <wf:TitleBar.RightHeader>
+                            <Button Content="&#xE713;"
+                                    FontFamily="{StaticResource SymbolThemeFontFamily}"
+                                    Padding="10,4"
+                                    Command="{Binding OpenSettingsCommand}"
+                                    ToolTip="Settings (Ctrl+,)"
+                                    AutomationProperties.Name="Settings"
+                                    AutomationProperties.AcceleratorKey="Ctrl+,"
+                                    Style="{StaticResource WfSubtleButtonStyle}" />
+                        </wf:TitleBar.RightHeader>
                         <Menu IsEnabled="{Binding IsSettingsOpen, Converter={StaticResource WfInverseBooleanConverter}}">
-                            <Menu.Resources>
-                                <CollectionViewSource x:Key="PageItems" Source="{Binding Pages}" />
-                            </Menu.Resources>
                             <MenuItem Header="_File">
                                 <MenuItem Header="_Add files…" Command="{Binding AddFilesCommand}" />
                                 <MenuItem Header="Add _folder…" Command="{Binding AddFolderCommand}" />
@@ -51,23 +55,7 @@
                                           Click="OnExitClick" />
                             </MenuItem>
                             <MenuItem Header="_View">
-                                <MenuItem.ItemsSource>
-                                    <CompositeCollection>
-                                        <CollectionContainer Collection="{Binding Source={StaticResource PageItems}}" />
-                                        <!-- Their own styles keep the page item style below off these items. -->
-                                        <Separator Style="{StaticResource {x:Static MenuItem.SeparatorStyleKey}}" />
-                                        <MenuItem Header="_Reset media columns"
-                                                  Command="{Binding Media.ResetColumnLayoutCommand}"
-                                                  Style="{StaticResource {x:Type MenuItem}}" />
-                                    </CompositeCollection>
-                                </MenuItem.ItemsSource>
-                                <MenuItem.ItemContainerStyle>
-                                    <Style TargetType="MenuItem" BasedOn="{StaticResource {x:Type MenuItem}}">
-                                        <Setter Property="Header" Value="{Binding NavigationName}" />
-                                        <Setter Property="Command" Value="{Binding DataContext.ShowPageCommand, RelativeSource={RelativeSource AncestorType=Menu}}" />
-                                        <Setter Property="CommandParameter" Value="{Binding}" />
-                                    </Style>
-                                </MenuItem.ItemContainerStyle>
+                                <MenuItem Header="_Reset media columns" Command="{Binding Media.ResetColumnLayoutCommand}" />
                             </MenuItem>
                             <MenuItem Header="_Tools">
                                 <MenuItem Header="_Settings"
@@ -76,6 +64,7 @@
                                 <Separator />
                                 <MenuItem Header="_Check dependencies" Command="{Binding CheckDependenciesCommand}" />
                                 <MenuItem Header="C_lean library" Command="{Binding CleanLibraryCommand}" />
+                                <MenuItem Header="Clean up _backups…" Command="{Binding CleanupBackupsCommand}" />
                             </MenuItem>
                             <MenuItem Header="_Help">
                                 <MenuItem Header="Open _logs" Command="{Binding Settings.OpenLogsCommand}" />
@@ -126,28 +115,6 @@
                                     </DataTemplate>
                                 </StatusBar.Resources>
                             </StatusBar>
-                            <!-- The sidebar background covers the pages and the Settings button below them. -->
-                            <Border DockPanel.Dock="Left"
-                                    Background="{DynamicResource ListBoxBackground}"
-                                    BorderBrush="{DynamicResource DividerStrokeColorDefaultBrush}"
-                                    BorderThickness="0,0,1,0">
-                                <DockPanel>
-                                    <Button Content="Settings"
-                                            Tag="&#xE713;"
-                                            Command="{Binding OpenSettingsCommand}"
-                                            ToolTip="Settings (Ctrl+,)"
-                                            AutomationProperties.AcceleratorKey="Ctrl+,"
-                                            DockPanel.Dock="Bottom"
-                                            Margin="8"
-                                            Style="{StaticResource WfNavigationButtonStyle}" />
-                                    <ListBox ItemsSource="{Binding Pages}"
-                                             SelectedItem="{Binding CurrentPage}"
-                                             IsEnabled="{Binding CanNavigate}"
-                                             Background="Transparent"
-                                             BorderThickness="0"
-                                             Style="{StaticResource WfNavigationSidebarStyle}" />
-                                </DockPanel>
-                            </Border>
                             <navigation:RetainedPageHost Navigation="{Binding Navigation}" Margin="8,0,8,0" />
                         </DockPanel>
                         <!-- The title sits on the section list's background, as a small label above the sections. -->

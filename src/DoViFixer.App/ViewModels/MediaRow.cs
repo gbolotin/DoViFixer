@@ -1,4 +1,5 @@
 using DoViFixer.Application.Operations;
+using DoViFixer.Application.Restore;
 using DoViFixer.Application.Updates;
 using DoViFixer.Domain.Analysis;
 
@@ -30,7 +31,7 @@ public sealed partial class MediaRow(string path) : ObservableObject
     public string Name => System.IO.Path.GetFileName(Path);
     public ProgressViewModel Progress { get; } = new();
     public bool IsProfile7 => Analysis?.Media.Profile == Domain.Media.DolbyVisionProfile.Profile7;
-    public bool CanRestore => CurrentFileAnalysis?.Media.Profile == Domain.Media.DolbyVisionProfile.Profile81 && RestoreArchive is not null && State != MediaRowState.Restored && !IsMissing;
+    public bool CanRestore => CurrentFileAnalysis?.Media is { } media && RestoreService.IsRestoreBase(media) && RestoreArchive is not null && State != MediaRowState.Restored && !IsMissing;
     [ObservableProperty]
     [NotifyPropertyChangedFor(nameof(CanRestore), nameof(StatusTone), nameof(AnalysisText), nameof(ResultRecommendation), nameof(NextStepText), nameof(DetailRows))]
     public partial string? RestoreArchive { get; set; }
