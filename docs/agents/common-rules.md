@@ -94,6 +94,12 @@
 - Use inline DataTemplates only for small item, cell and dialog-body templates.
 - Keep code-behind empty unless it holds purely visual logic, such as moving focus or scrolling.
 
+## Windows desktop apps
+
+- Give every native Windows GUI app (WPF, WinForms) an `app.manifest`, referenced by `<ApplicationManifest>` in its project, that declares per-monitor DPI awareness: `<dpiAwareness>PerMonitorV2, PerMonitor</dpiAwareness>` with `<dpiAware>true/pm</dpiAware>` as the fallback for older Windows versions.
+- Without it, Windows runs the app at the primary screen's DPI. On a screen with a different scale, Windows stretches the window: the app looks blurry, and custom title bars misplace content next to the caption buttons.
+- After you change window chrome or layout, move the window between screens with different scales and check it there.
+
 ## UI design
 
 - Follow Microsoft's Windows app design guidance (https://learn.microsoft.com/windows/apps/design/) for layout, typography, color, icons, controls, and wording.
@@ -112,6 +118,8 @@
 - Do not add abstractions only for tests unless they also improve design.
 - Verify container registrations, service lifetimes, and disposal without running real external workflows.
 - Keep tests that require native tools or external fixtures separate from fast unit tests.
+- When a change needs testing in the running app, open a Remote Control session on the user's Windows PC and run the app there. Do not ask first.
+- Drive the app UI with Windows UI Automation from that session. Do not use computer-use app-access prompts; they need approval at the PC.
 
 ## Refactoring
 
