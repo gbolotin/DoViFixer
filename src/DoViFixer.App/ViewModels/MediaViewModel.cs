@@ -431,7 +431,7 @@ public sealed partial class MediaViewModel : OperationViewModel, INavigationPage
                 continue;
             }
 
-            // A deleted or moved archive can no longer restore the row; a rescan pairs it again.
+            // A deleted or moved archive can no longer restore the row; PairRestoreArchives pairs it again when it returns.
             if (row.RestoreArchive is { } archive && !sourceFiles.Exists(archive))
             {
                 row.RestoreArchive = null;
@@ -472,6 +472,55 @@ public sealed partial class MediaViewModel : OperationViewModel, INavigationPage
             OnPropertyChanged(nameof(HasMissingFiles));
             ConvertRowCommand.NotifyCanExecuteChanged();
             CommandsChanged();
+        }
+
+        PairRestoreArchives();
+    }
+
+    /// <summary>Completes when the background pairing of restored or newly added .dovi archives finishes.</summary>
+    public Task ArchivePairing { get; private set; } = Task.CompletedTask;
+
+    private bool archivePairingQueued;
+
+    // A .dovi archive that returns, for example from the Recycle Bin, offers Restore again without a rescan.
+    // Runs one pass at a time; a change during a pass queues one more.
+    private void PairRestoreArchives()
+    {
+        if (archivePairingQueued)
+        {
+            return;
+        }
+
+        archivePairingQueued = true;
+        ArchivePairing = PairRestoreArchivesAfterAsync(ArchivePairing);
+    }
+
+    private async Task PairRestoreArchivesAfterAsync(Task previous)
+    {
+        await previous;
+        archivePairingQueued = false;
+        // Operations pair the rows they analyze or produce; the next change retries what this pass skipped.
+        if (!IsIdle)
+        {
+            return;
+        }
+
+        var rows = Files.Where(row => row.RestoreArchive is null && !row.IsMissing && !row.IsActive
+            && row.Analysis?.Media.Profile == Domain.Media.DolbyVisionProfile.Profile81).ToArray();
+        if (rows.Length == 0)
+        {
+            return;
+        }
+
+        var pairing = BeginArchivePairing();
+        foreach (var row in rows)
+        {
+            if (!IsIdle || !Files.Contains(row) || row.RestoreArchive is not null)
+            {
+                continue;
+            }
+
+            await RefreshRestoreArchiveAsync(row, pairing, CancellationToken.None);
         }
     }
 

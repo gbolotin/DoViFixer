@@ -116,6 +116,34 @@ public sealed class RowRestoreTests
     }
 
     [TestMethod]
+    public async Task ArchiveRestoredFromRecycleBinOffersRestoreAgain()
+    {
+        using var runtime = new TestRuntime();
+        const string archive = @"C:\Media\P81.dovi";
+        runtime.Archives.Add(archive);
+        var model = runtime.Container.GetRequiredService<MediaViewModel>();
+        await model.AddAsync([@"C:\Media\P81.mkv", @"C:\Media\Other P81.mkv"]);
+        var row = model.Files.Single(r => r.Path == @"C:\Media\P81.mkv");
+        var other = model.Files.Single(r => r.Path == @"C:\Media\Other P81.mkv");
+        Assert.AreEqual(archive, row.RestoreArchive);
+        int analyses = runtime.Analyses;
+
+        runtime.Archives.Remove(archive);
+        runtime.RaiseSourceFilesChanged();
+        await model.ArchivePairing;
+        Assert.IsFalse(row.CanRestore);
+
+        runtime.Archives.Add(archive);
+        runtime.RaiseSourceFilesChanged();
+        await model.ArchivePairing;
+
+        Assert.AreEqual(archive, row.RestoreArchive);
+        Assert.IsTrue(model.RestoreRowCommand.CanExecute(row));
+        Assert.IsNull(other.RestoreArchive, "The returned archive is offered to its own file only.");
+        Assert.AreEqual(analyses, runtime.Analyses, "Pairing again must not analyze the video.");
+    }
+
+    [TestMethod]
     [DataRow(false)]
     [DataRow(true)]
     public async Task RestoreHonorsReviewAndArchiveValidation(bool approve)
