@@ -48,6 +48,15 @@
                                 <MenuItem Header="_Add files…" Command="{Binding AddFilesCommand}" />
                                 <MenuItem Header="Add _folder…" Command="{Binding AddFolderCommand}" />
                                 <Separator />
+                                <MenuItem Header="Re_scan all files" Command="{Binding RescanCommand}" />
+                                <Separator />
+                                <!-- These act on the selected (checked) files, like the Media toolbar. -->
+                                <MenuItem Header="_Inspect selected" Command="{Binding InspectCommand}" />
+                                <MenuItem Header="_Deep Inspect selected" Command="{Binding DeepInspectCommand}" />
+                                <MenuItem Header="_Convert selected" Command="{Binding ConvertCommand}" />
+                                <MenuItem Header="Rest_ore selected to DV7…" Command="{Binding RestoreSelectedCommand}" />
+                                <MenuItem Header="_Remove selected from list" Command="{Binding RemoveSelectedCommand}" />
+                                <Separator />
                                 <MenuItem Header="_Export results…" Command="{Binding ExportResultsCommand}" />
                                 <Separator />
                                 <MenuItem Header="E_xit"

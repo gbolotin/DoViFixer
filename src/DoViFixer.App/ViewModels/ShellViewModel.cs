@@ -41,8 +41,12 @@ public sealed partial class ShellViewModel : ObservableObject, INavigationGuard,
         media.ConversionStarting += settings.FlushAsync;
         dependencyReport.PropertyChanged += DependencyReportChanged;
         dependencyCheck.PropertyChanged += DependencyCheckChanged;
-        media.ExportResultsCommand.CanExecuteChanged += MediaCommandsChanged;
-        media.CleanupBackupsCommand.CanExecuteChanged += MediaCommandsChanged;
+        menuMediaCommands = [media.ExportResultsCommand, media.CleanupBackupsCommand, media.ScanCommand, media.InspectCommand, media.DeepInspectCommand,
+            media.ConvertCommand, media.RestoreSelectedCommand, media.RemoveSelectedCommand];
+        foreach (var command in menuMediaCommands)
+        {
+            command.CanExecuteChanged += MediaCommandsChanged;
+        }
 
         foreach (var operation in operations)
         {
@@ -54,6 +58,8 @@ public sealed partial class ShellViewModel : ObservableObject, INavigationGuard,
     private readonly CancellationTokenSource startupCancellation = new();
     private Task? initializationTask;
     private readonly MediaViewModel media;
+    // The Media commands the title bar menu forwards; their availability changes refresh the menu's commands.
+    private readonly IAsyncRelayCommand[] menuMediaCommands;
     private readonly NativeToolsSettingsSection nativeTools;
     private readonly PerformanceSettingsSection performance;
     private readonly AboutSettingsSection about;
@@ -199,6 +205,36 @@ public sealed partial class ShellViewModel : ObservableObject, INavigationGuard,
 
     private bool CanExportResults() => CanUseMedia() && media.ExportResultsCommand.CanExecute(null);
 
+    [RelayCommand(CanExecute = nameof(CanRescan))]
+    private Task Rescan() => RunOnMediaAsync(media.ScanCommand);
+
+    private bool CanRescan() => CanUseMedia() && media.ScanCommand.CanExecute(null);
+
+    [RelayCommand(CanExecute = nameof(CanInspect))]
+    private Task Inspect() => RunOnMediaAsync(media.InspectCommand);
+
+    private bool CanInspect() => CanUseMedia() && media.InspectCommand.CanExecute(null);
+
+    [RelayCommand(CanExecute = nameof(CanDeepInspect))]
+    private Task DeepInspect() => RunOnMediaAsync(media.DeepInspectCommand);
+
+    private bool CanDeepInspect() => CanUseMedia() && media.DeepInspectCommand.CanExecute(null);
+
+    [RelayCommand(CanExecute = nameof(CanConvert))]
+    private Task Convert() => RunOnMediaAsync(media.ConvertCommand);
+
+    private bool CanConvert() => CanUseMedia() && media.ConvertCommand.CanExecute(null);
+
+    [RelayCommand(CanExecute = nameof(CanRestoreSelected))]
+    private Task RestoreSelected() => RunOnMediaAsync(media.RestoreSelectedCommand);
+
+    private bool CanRestoreSelected() => CanUseMedia() && media.RestoreSelectedCommand.CanExecute(null);
+
+    [RelayCommand(CanExecute = nameof(CanRemoveSelected))]
+    private Task RemoveSelected() => RunOnMediaAsync(media.RemoveSelectedCommand);
+
+    private bool CanRemoveSelected() => CanUseMedia() && media.RemoveSelectedCommand.CanExecute(null);
+
     private async Task RunOnMediaAsync(IAsyncRelayCommand command)
     {
         if (!ReferenceEquals(CurrentPage, media))
@@ -242,18 +278,25 @@ public sealed partial class ShellViewModel : ObservableObject, INavigationGuard,
         }
     }
 
-    private void MediaCommandsChanged(object? sender, EventArgs e)
+    private void MediaCommandsChanged(object? sender, EventArgs e) => NotifyMediaMenuCommands();
+
+    private void NotifyMediaMenuCommands()
     {
         ExportResultsCommand.NotifyCanExecuteChanged();
         CleanupBackupsCommand.NotifyCanExecuteChanged();
+        RescanCommand.NotifyCanExecuteChanged();
+        InspectCommand.NotifyCanExecuteChanged();
+        DeepInspectCommand.NotifyCanExecuteChanged();
+        ConvertCommand.NotifyCanExecuteChanged();
+        RestoreSelectedCommand.NotifyCanExecuteChanged();
+        RemoveSelectedCommand.NotifyCanExecuteChanged();
     }
 
     private void NotifyMenuCommands()
     {
         AddFilesCommand.NotifyCanExecuteChanged();
         AddFolderCommand.NotifyCanExecuteChanged();
-        ExportResultsCommand.NotifyCanExecuteChanged();
-        CleanupBackupsCommand.NotifyCanExecuteChanged();
+        NotifyMediaMenuCommands();
         CheckDependenciesCommand.NotifyCanExecuteChanged();
         CleanLibraryCommand.NotifyCanExecuteChanged();
         ExportDiagnosticsCommand.NotifyCanExecuteChanged();
@@ -368,8 +411,10 @@ public sealed partial class ShellViewModel : ObservableObject, INavigationGuard,
         Settings.LibraryDeleted -= media.ClearDeletedLibrary;
         dependencyReport.PropertyChanged -= DependencyReportChanged;
         dependencyCheck.PropertyChanged -= DependencyCheckChanged;
-        media.ExportResultsCommand.CanExecuteChanged -= MediaCommandsChanged;
-        media.CleanupBackupsCommand.CanExecuteChanged -= MediaCommandsChanged;
+        foreach (var command in menuMediaCommands)
+        {
+            command.CanExecuteChanged -= MediaCommandsChanged;
+        }
         Navigation.PropertyChanged -= NavigationChanged;
         Navigation.Dispose();
         startupCancellation.Dispose();

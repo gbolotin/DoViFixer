@@ -29,9 +29,11 @@ public sealed class MissingSourceFileTests
         Assert.AreEqual(MediaRow.MissingNote, row.StatusToolTip);
         StringAssert.Contains(row.DetailNotes, MediaRow.MissingNote);
         Assert.IsNotNull(row.Analysis, "The last scan result stays visible.");
-        Assert.IsFalse(row.IsSelected);
-        Assert.IsFalse(row.SelectionEnabled);
+        Assert.IsTrue(row.IsSelected, "Only the user changes the check mark.");
+        Assert.IsTrue(row.SelectionEnabled, "The user can still clear it.");
         Assert.IsFalse(model.ConvertRowCommand.CanExecute(row));
+        await model.InspectCommand.InvokeAsync();
+        Assert.AreEqual(MediaRow.MissingStatus, row.Status, "Inspecting the checked files leaves the missing one alone.");
         Assert.AreEqual("File not found.", model.PreviewStatus);
         Assert.IsTrue(model.HasMissingFiles);
 

@@ -1743,8 +1743,9 @@ public sealed class ViewModelTests
 
         model.SkipCommand.Invoke(originalRows[2]);
         Assert.AreEqual("Conversion skipped", originalRows[2].Status);
-        Assert.IsTrue(originalRows[2].HasWarning);
-        Assert.AreEqual("Deselected before starting.", originalRows[2].Warning);
+        Assert.IsFalse(originalRows[2].HasWarning, "A skip reason is not a conversion warning.");
+        Assert.AreEqual("Skipped before starting.", originalRows[2].StatusToolTip);
+        Assert.IsTrue(originalRows[2].IsSelected, "Skip leaves the check mark to the user.");
 
         model.CancelFileCommand.Invoke(originalRows[0]);
         release.SetResult();
@@ -1769,8 +1770,8 @@ public sealed class ViewModelTests
         Assert.AreEqual("Converted", originalRows[0].Status);
         Assert.AreEqual("Conversion skipped", originalRows[1].Status);
         StringAssert.Contains(originalRows[1].Notice, "Multiple inputs resolve to the same output path");
-        Assert.IsTrue(originalRows[1].HasWarning);
-        Assert.AreEqual(originalRows[1].Notice, originalRows[1].Warning);
+        Assert.IsFalse(originalRows[1].HasWarning, "A skip reason is not a conversion warning.");
+        Assert.AreEqual(originalRows[1].Notice, originalRows[1].StatusToolTip);
     }
 
     [TestMethod]

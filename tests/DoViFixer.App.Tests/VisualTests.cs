@@ -982,7 +982,7 @@ public sealed class VisualTests
         Assert.AreEqual(window.FindResource("SystemFillColorCautionBrush"), missingStatus.Foreground);
         Assert.IsFalse(ResultDot(missingContainer, missing).IsVisible, "A missing file shows no result dot.");
         Assert.AreEqual(TextDecorationLocation.Strikethrough, Descendants<TextBlock>(missingContainer).Single(text => text.Text == missing.Name).TextDecorations.Single().Location);
-        Assert.IsFalse(Descendants<CheckBox>(missingContainer).Single().IsEnabled);
+        Assert.IsTrue(Descendants<CheckBox>(missingContainer).Single().IsEnabled, "The user can still clear a missing file's check mark.");
         Assert.AreEqual(Visibility.Visible, removeMissing.Visibility);
         Assert.IsTrue(removeMissing.IsEnabled);
         AssertInside(removeMissing, (FrameworkElement)window.Content);

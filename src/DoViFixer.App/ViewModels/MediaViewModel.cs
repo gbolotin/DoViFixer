@@ -453,11 +453,7 @@ public sealed partial class MediaViewModel : OperationViewModel, INavigationPage
             }
 
             row.IsMissing = missing;
-            if (missing)
-            {
-                row.IsSelected = false;
-            }
-            else if (row.Notice == MediaRow.MissingNote)
+            if (!missing && row.Notice == MediaRow.MissingNote)
             {
                 row.Notice = "";
             }
@@ -610,7 +606,13 @@ public sealed partial class MediaViewModel : OperationViewModel, INavigationPage
     private bool CanRestoreRow(MediaRow? row) => row is not null && IsIdle && Files.Contains(row) && row.CanRestore;
 
     [RelayCommand(CanExecute = nameof(CanRestoreRow))]
-    private Task RestoreRow(MediaRow? row) => RestoreRowAsync(row!);
+    private Task RestoreRow(MediaRow? row) => RestoreRowsAsync([row!]);
+
+    private bool CanRestoreSelected() => IsIdle && ShownFiles.Any(row => row.IsSelected && row.CanRestore);
+
+    /// <summary>Restores every selected file that has a matching .dovi archive, after one review of all of them.</summary>
+    [RelayCommand(CanExecute = nameof(CanRestoreSelected))]
+    private Task RestoreSelected() => RestoreRowsAsync(InDisplayOrder(ShownFiles.Where(row => row.IsSelected && row.CanRestore)));
 
     /// <summary>
     /// Whether the Inspect split button runs a deep inspection. Picking an entry in its menu runs that inspection
@@ -872,6 +874,7 @@ public sealed partial class MediaViewModel : OperationViewModel, INavigationPage
         ConvertCommand?.NotifyCanExecuteChanged();
         ConvertRowCommand?.NotifyCanExecuteChanged();
         RestoreRowCommand?.NotifyCanExecuteChanged();
+        RestoreSelectedCommand?.NotifyCanExecuteChanged();
     }
 
     public Task AddAsync(IEnumerable<string> inputs) => RunAsync("Adding files", async (token, _) =>
@@ -889,7 +892,6 @@ public sealed partial class MediaViewModel : OperationViewModel, INavigationPage
                     var existing = Files.FirstOrDefault(row => row.LibraryFingerprint == remembered.Fingerprint || string.Equals(row.Path, path, StringComparison.OrdinalIgnoreCase));
                     if (existing is not null && string.Equals(existing.Path, path, StringComparison.OrdinalIgnoreCase))
                     {
-                        existing.IsSelected = true;
                         continue;
                     }
                     if (existing is not null)
@@ -962,6 +964,7 @@ public sealed partial class MediaViewModel : OperationViewModel, INavigationPage
         if (e.PropertyName == nameof(MediaRow.CanRestore))
         {
             RestoreRowCommand.NotifyCanExecuteChanged();
+            RestoreSelectedCommand.NotifyCanExecuteChanged();
         }
 
         if (e.PropertyName == nameof(MediaRow.RestoreArchive) && !loadingLibraryRows)
@@ -1020,7 +1023,7 @@ public sealed partial class MediaViewModel : OperationViewModel, INavigationPage
             return;
         }
 
-        row.SetSkipped("Deselected before starting.");
+        row.SetSkipped("Skipped before starting.");
     }
 
     /// <summary>The batch's share done for the taskbar; before a batch starts, the operation's own progress.</summary>
@@ -1111,7 +1114,8 @@ public sealed partial class MediaViewModel : OperationViewModel, INavigationPage
 
     private Task AnalyzeAsync(AnalysisMethod method) => RunAsync(AnalysisTitle(method), async (token, _) =>
     {
-        await AnalyzeRowsAsync(InDisplayOrder(ShownFiles.Where(r => r.IsSelected)), method, token);
+        // A missing file keeps its check mark, which only the user changes, but there is nothing to analyze.
+        await AnalyzeRowsAsync(InDisplayOrder(ShownFiles.Where(r => r.IsSelected && !r.IsMissing)), method, token);
     });
 
     private async Task AnalyzeRowsAsync(MediaRow[] rows, AnalysisMethod method, CancellationToken token)
@@ -1200,10 +1204,6 @@ public sealed partial class MediaViewModel : OperationViewModel, INavigationPage
                     {
                         row.SetConverted(published);
                     }
-                }
-                else if (result.Status == OperationStatus.Failed)
-                {
-                    row.IsSelected = false;
                 }
             }), token);
             SetStatus(ViewStatus.Result, $"{(method == AnalysisMethod.SampledRpu ? "Scan" : "Inspection")}: {TimedSummary(results)}");
@@ -1353,9 +1353,14 @@ public sealed partial class MediaViewModel : OperationViewModel, INavigationPage
         }
     }
 
-    private Task RestoreRowAsync(MediaRow row) => RunAsync("Restoration", async (token, progress) =>
+    private Task RestoreRowsAsync(MediaRow[] rows) => RunAsync("Restoration", async (token, progress) =>
     {
-        if (row.RestoreArchive is not { } archive)
+        if (rows.Length == 0)
+        {
+            return;
+        }
+
+        if (rows.Any(row => row.RestoreArchive is null))
         {
             SetStatus(ViewStatus.Error, "The matching .dovi archive is no longer available. Rescan after restoring it.");
             return;
@@ -1367,48 +1372,63 @@ public sealed partial class MediaViewModel : OperationViewModel, INavigationPage
             return;
         }
 
-        RestorePlan plan;
-        try
+        var plans = new Dictionary<MediaRow, RestorePlan>();
+        foreach (var row in rows)
         {
-            plan = await Task.Run(() => restore.PlanAsync(row.Path, archive, null, null, false, token), token);
+            try
+            {
+                plans[row] = await Task.Run(() => restore.PlanAsync(row.Path, row.RestoreArchive!, null, null, false, token), token);
+            }
+            catch (FileNotFoundException)
+            {
+                row.RestoreArchive = null;
+                throw;
+            }
         }
-        catch (FileNotFoundException)
-        {
-            row.RestoreArchive = null;
-            throw;
-        }
-        string review = $"Base file: {plan.Media.Source.Path}\nArchive: {plan.Archive.Path}\nOutput: {plan.Output}\nScratch: {plan.ScratchBytes / 1073741824d:0.0} GiB\nVerified source pairing required.\nOriginal retained.";
+
+        string review = string.Join("\n\n", plans.Values.Select(plan =>
+                $"Base file: {plan.Media.Source.Path}\nArchive: {plan.Archive.Path}\nOutput: {plan.Output}\nScratch: {plan.ScratchBytes / 1073741824d:0.0} GiB"))
+            + "\nVerified source pairing required.\nOriginal retained.";
         if (!await dialogs.ReviewAsync("Review restoration", review, "Approve and start"))
         {
             SetStatus(ViewStatus.RestoreNotApproved);
             return;
         }
 
-        OperationLog.Audit(logger, "ApproveRestore", review, "ApprovedByDialog", plan.Id);
-        row.ClearPlan();
-        row.AnalysisError = null;
-        row.Notice = "";
-        row.LastAnalysisMethod = null;
-        BeginBatch([row], "Restoration");
-        row.CurrentOperation = "Restoration";
-        LibraryFile? rememberedOutput = null;
+        foreach (var (row, plan) in plans)
+        {
+            OperationLog.Audit(logger, "ApproveRestore", review, "ApprovedByDialog", plan.Id);
+            row.ClearPlan();
+            row.AnalysisError = null;
+            row.Notice = "";
+            row.LastAnalysisMethod = null;
+        }
+
+        BeginBatch(rows, "Restoration");
+        foreach (var row in rows)
+        {
+            row.CurrentOperation = "Restoration";
+        }
+
+        var rememberedOutputs = new ConcurrentDictionary<MediaRow, LibraryFile?>();
         try
         {
-            var result = await batch.ExecuteAsync(new[] { row }, item => item.Path, async (item, itemToken) =>
+            var result = await batch.ExecuteAsync(rows, item => item.Path, async (item, itemToken) =>
             {
                 var jobProgress = Activate(item, "Restoring Profile 7");
-                var restored = await Task.Run(() => restore.ExecuteAsync(plan, jobProgress, itemToken), itemToken);
+                var restored = await Task.Run(() => restore.ExecuteAsync(plans[item], jobProgress, itemToken), itemToken);
                 await ReadResultMetadataAsync(item, restored, itemToken);
-                rememberedOutput = await RememberProducedFileAsync(restored, itemToken);
+                rememberedOutputs[item] = await RememberProducedFileAsync(restored, itemToken);
                 return restored;
             }, control!, new InlineProgress<OperationItemResult>(itemResult =>
             {
+                var row = rows.First(r => r.Path == itemResult.Item);
                 CompleteBatchItem(row, itemResult.Status);
                 row.Result = itemResult;
                 if (itemResult.Status == OperationStatus.Completed)
                 {
                     row.SetRestored(itemResult);
-                    AddOrUpdateProducedRow(row, itemResult, rememberedOutput);
+                    AddOrUpdateProducedRow(row, itemResult, rememberedOutputs.GetValueOrDefault(row));
                 }
                 else if (itemResult.Status == OperationStatus.Cancelled)
                 {
@@ -1426,9 +1446,9 @@ public sealed partial class MediaViewModel : OperationViewModel, INavigationPage
             EndBatch();
         }
 
-        if (row.State == MediaRowState.Failed)
+        // A failed restore may have learned the file's base-layer hash; pair again so a mismatched archive is not offered twice.
+        foreach (var row in rows.Where(row => row.State == MediaRowState.Failed))
         {
-            // A failed restore may have learned the file's base-layer hash; pair again so a mismatched archive is not offered twice.
             await RefreshRestoreArchiveAsync(row, BeginArchivePairing(), token);
         }
     });

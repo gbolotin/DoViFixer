@@ -120,7 +120,7 @@ public sealed partial class MediaRow(string path) : ObservableObject
    
     public string? Warning
     {
-        get => State == MediaRowState.Skipped ? Notice : warning;
+        get => warning;
         set
         {
             SetProperty(ref warning, value);
@@ -133,7 +133,8 @@ public sealed partial class MediaRow(string path) : ObservableObject
     public partial bool IsSelected { get; set; } = true;
     public bool SelectionEnabled
     {
-        get => selectionEnabled && !IsMissing;
+        // A missing file stays checkable, so the user can clear a check mark the app never changes on its own.
+        get => selectionEnabled;
         set => SetProperty(ref selectionEnabled, value);
     }
     [ObservableProperty]
@@ -412,7 +413,6 @@ public sealed partial class MediaRow(string path) : ObservableObject
     {
         ClearPlan();
         IsPending = false;
-        IsSelected = false;
         SelectionEnabled = false;
         Notice = reason;
         Status = $"{OperationName} skipped";
