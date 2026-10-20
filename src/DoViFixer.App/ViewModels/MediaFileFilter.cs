@@ -6,7 +6,7 @@ public enum MediaFileFilter
     All,
     Profile7,
     Profile81,
-    NoDolbyVision,
     OtherProfiles,
+    NoDolbyVision,
     NotScanned
 }

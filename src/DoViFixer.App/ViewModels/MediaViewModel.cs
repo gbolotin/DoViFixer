@@ -89,9 +89,9 @@ public sealed partial class MediaViewModel : OperationViewModel, INavigationPage
             new(MediaFileFilter.All, "All", filter => FileFilter = filter) { IsSelected = true },
             new(MediaFileFilter.Profile7, "Profile 7", filter => FileFilter = filter),
             new(MediaFileFilter.Profile81, "Profile 8.1", filter => FileFilter = filter),
-            new(MediaFileFilter.NoDolbyVision, "No Dolby Vision", filter => FileFilter = filter),
-            new(MediaFileFilter.OtherProfiles, "Other profiles", filter => FileFilter = filter),
-            new(MediaFileFilter.NotScanned, "Not scanned / failed", filter => FileFilter = filter)
+            new(MediaFileFilter.OtherProfiles, "Other DV profiles", filter => FileFilter = filter),
+            new(MediaFileFilter.NoDolbyVision, "Not Dolby Vision", filter => FileFilter = filter),
+            new(MediaFileFilter.NotScanned, "Needs scan", filter => FileFilter = filter)
         ];
         Files.CollectionChanged += (_, e) =>
         {

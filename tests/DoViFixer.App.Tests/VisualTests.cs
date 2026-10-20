@@ -393,7 +393,7 @@ public sealed class VisualTests
         var focused = media.Focused;
         Assert.AreSame(list.FindResource("WfSortableColumnHeaderTemplate"), profileHeader.ContentTemplate, "Columns without a header template use the shared sortable header.");
         Assert.IsTrue(Descendants<TextBlock>(profileHeader).Any(text => text.Text == "Format"));
-        Assert.IsTrue(Descendants<TextBlock>(statusHeader).Any(text => text.Text == "Result"));
+        Assert.IsTrue(Descendants<TextBlock>(statusHeader).Any(text => text.Text == "Status"));
         Assert.IsTrue(Descendants<TextBlock>(actionHeader).Any(text => text.Text == "Analysis"));
         Assert.IsFalse(Indicator(fileHeader).IsVisible);
 

@@ -269,7 +269,7 @@
                                     </DataTemplate>
                                 </GridViewColumn.CellTemplate>
                             </GridViewColumn>
-                            <GridViewColumn Header="Result"
+                            <GridViewColumn Header="Status"
                                             wf:GridViewLayout.Id="Result"
                                             Width="224"
                                             wf:GridViewSort.Key="{x:Static viewModels:MediaSortColumn.Status}">
