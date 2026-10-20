@@ -113,7 +113,7 @@
                           SelectedItem="{Binding Focused}"
                           wf:GridViewLayout.IsEnabled="True"
                           wf:GridViewLayout.State="{Binding ColumnLayout, Mode=TwoWay}"
-                          wf:GridViewSizing.LastColumnMinimumWidth="72"
+                          wf:GridViewSizing.LastColumnMinimumWidth="128"
                           wf:GridViewSort.Sort="{Binding FileSort}"
                           wf:ListFilter.Predicate="{Binding ShownFilePredicate}"
                           wf:ListFilter.LiveProperty="FilterGroup">
@@ -358,7 +358,7 @@
                                     </DataTemplate>
                                 </GridViewColumn.CellTemplate>
                             </GridViewColumn>
-                            <GridViewColumn Width="72"
+                            <GridViewColumn Width="128"
                                             wf:GridViewLayout.Id="Actions"
                                             wf:GridViewSizing.IsFillColumn="True">
                                 <!-- The hover actions need no title: a blank header that takes no clicks, with no
@@ -386,6 +386,63 @@
                                             </Grid.ColumnDefinitions>
                                             <!-- Hover actions are only ever Hidden, never Collapsed, so each keeps its own fixed slot. -->
                                             <StackPanel Grid.Column="1" Orientation="Horizontal">
+                                                <!-- Inspect shows on an incomplete scan, unless the analysis failed (Retry handles that). -->
+                                                <Button Padding="4"
+                                                        Margin="0"
+                                                        VerticalAlignment="Center"
+                                                        ToolTip="Inspect"
+                                                        AutomationProperties.Name="Inspect"
+                                                        Command="{Binding DataContext.InspectIncompleteCommand, RelativeSource={RelativeSource AncestorType=ListView}}"
+                                                        CommandParameter="{Binding}"
+                                                        Content="&#xE721;"
+                                                        FontFamily="{StaticResource SymbolThemeFontFamily}">
+                                                    <Button.Style>
+                                                        <Style TargetType="Button" BasedOn="{StaticResource WfTransparentButtonStyle}">
+                                                            <Setter Property="Visibility" Value="Hidden" />
+                                                            <Style.Triggers>
+                                                                <MultiDataTrigger>
+                                                                    <MultiDataTrigger.Conditions>
+                                                                        <Condition Binding="{Binding IsMouseOver, RelativeSource={RelativeSource AncestorType=ListViewItem}}" Value="True" />
+                                                                        <Condition Binding="{Binding CanInspectIncomplete}" Value="True" />
+                                                                        <Condition Binding="{Binding CanRetryAnalysis}" Value="False" />
+                                                                    </MultiDataTrigger.Conditions>
+                                                                    <Setter Property="Visibility" Value="Visible" />
+                                                                </MultiDataTrigger>
+                                                                <Trigger Property="IsEnabled" Value="False">
+                                                                    <Setter Property="Visibility" Value="Hidden" />
+                                                                </Trigger>
+                                                            </Style.Triggers>
+                                                        </Style>
+                                                    </Button.Style>
+                                                </Button>
+                                                <!-- Convert shows when conversion is the file's recommended next step. -->
+                                                <Button Padding="4"
+                                                        Margin="0"
+                                                        VerticalAlignment="Center"
+                                                        ToolTip="Convert"
+                                                        AutomationProperties.Name="Convert"
+                                                        Command="{Binding DataContext.ConvertRowCommand, RelativeSource={RelativeSource AncestorType=ListView}}"
+                                                        CommandParameter="{Binding}"
+                                                        Content="&#xE8AB;"
+                                                        FontFamily="{StaticResource SymbolThemeFontFamily}">
+                                                    <Button.Style>
+                                                        <Style TargetType="Button" BasedOn="{StaticResource WfTransparentButtonStyle}">
+                                                            <Setter Property="Visibility" Value="Hidden" />
+                                                            <Style.Triggers>
+                                                                <MultiDataTrigger>
+                                                                    <MultiDataTrigger.Conditions>
+                                                                        <Condition Binding="{Binding IsMouseOver, RelativeSource={RelativeSource AncestorType=ListViewItem}}" Value="True" />
+                                                                        <Condition Binding="{Binding NextStepText}" Value="Convert" />
+                                                                    </MultiDataTrigger.Conditions>
+                                                                    <Setter Property="Visibility" Value="Visible" />
+                                                                </MultiDataTrigger>
+                                                                <Trigger Property="IsEnabled" Value="False">
+                                                                    <Setter Property="Visibility" Value="Hidden" />
+                                                                </Trigger>
+                                                            </Style.Triggers>
+                                                        </Style>
+                                                    </Button.Style>
+                                                </Button>
                                                 <Button Padding="4"
                                                         Margin="0"
                                                         VerticalAlignment="Center"

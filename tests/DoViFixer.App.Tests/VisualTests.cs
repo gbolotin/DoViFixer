@@ -515,7 +515,7 @@ public sealed class VisualTests
         Assert.IsFalse(Descendants<System.Windows.Controls.Primitives.Thumb>(actionsHeader).Any(), "The Actions header has no resize gripper.");
         window.Width = 1800;
         await LayoutAsync(window);
-        Assert.IsTrue(grid.Columns[^1].Width > 72, "The last column must expand into spare space.");
+        Assert.IsTrue(grid.Columns[^1].Width > 128, "The last column must expand into spare space.");
         Assert.AreEqual(0, scroll.ScrollableWidth, 0.1, "Filling must not introduce horizontal overflow.");
 
         double wideWidth = grid.Columns[^1].Width;
@@ -545,7 +545,7 @@ public sealed class VisualTests
 
         grid.Columns[0].Width = 2000;
         await LayoutAsync(window);
-        Assert.AreEqual(72, grid.Columns[^1].Width, 0.1, "Keep actions usable when there is insufficient space.");
+        Assert.AreEqual(128, grid.Columns[^1].Width, 0.1, "Keep actions usable when there is insufficient space.");
         Assert.IsTrue(scroll.ScrollableWidth > 0, "Narrow layouts must remain horizontally scrollable.");
 
         grid.Columns[0].Width = originalColumnWidth;
@@ -819,10 +819,21 @@ public sealed class VisualTests
         Assert.AreSame(row, restore.CommandParameter);
         Assert.AreEqual("\uE7A7", restore.Content);
         Assert.AreEqual(Visibility.Hidden, restore.Visibility);
-        Assert.IsFalse(Descendants<Button>(container).Any(button => Equals(button.Content, "Convert") || Equals(button.Content, "Inspect")),
-            "Rows offer no Convert or Inspect buttons; the toolbar and details pane own those actions.");
+        var inspect = Descendants<Button>(container).Single(button => Equals(button.ToolTip, "Inspect"));
+        var convert = Descendants<Button>(container).Single(button => Equals(button.ToolTip, "Convert"));
+        Assert.AreSame(media.InspectIncompleteCommand, inspect.Command);
+        Assert.AreSame(media.ConvertRowCommand, convert.Command);
+        Assert.AreSame(row, inspect.CommandParameter);
+        Assert.AreSame(row, convert.CommandParameter);
+        Assert.AreEqual("", inspect.Content);
+        Assert.AreEqual("", convert.Content);
+        Assert.AreEqual(Visibility.Hidden, inspect.Visibility, "Hover actions stay hidden until the row is hovered.");
+        Assert.AreEqual(Visibility.Hidden, convert.Visibility);
         var actions = (StackPanel)remove.Parent;
-        Assert.AreSame(restore, actions.Children[actions.Children.IndexOf(remove) - 1]);
+        CollectionAssert.AreEqual(new UIElement[] { inspect, convert, restore, remove }, actions.Children.Cast<UIElement>().ToArray(),
+            "Icon-only hover actions share one row, in workflow order.");
+        double minimumActionsWidth = WpfFoundation.Behaviors.GridViewSizing.GetLastColumnMinimumWidth(list);
+        Assert.IsTrue(actions.ActualWidth <= minimumActionsWidth - 12, $"All four hover actions fit the narrowest Actions column: {actions.ActualWidth} of {minimumActionsWidth}.");
         var originalAnalysis = row.Analysis!;
         row.Analysis = originalAnalysis with { Media = originalAnalysis.Media with { Profile = DolbyVisionProfile.Profile81 } };
         await LayoutAsync(window);
