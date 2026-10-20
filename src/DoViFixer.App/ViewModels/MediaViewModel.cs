@@ -5,6 +5,7 @@ using System.Windows.Media.Imaging;
 using DoViFixer.App.Dialogs;
 using DoViFixer.App.Presentation.Application;
 using DoViFixer.Application.Abstractions;
+using DoViFixer.Application.Cleanup;
 using DoViFixer.Application.Conversion;
 using DoViFixer.Application.Inspection;
 using DoViFixer.Application.Library;
@@ -40,6 +41,7 @@ public sealed partial class MediaViewModel : OperationViewModel, INavigationPage
     private readonly ConversionService conversion;
     private readonly ConversionDiskBudget diskBudget;
     private readonly RestoreService restore;
+    private readonly CleanupService cleanup;
     private readonly ControlledBatchService batch;
     private readonly SettingsService settings;
     private readonly DependencySetup dependencies;
@@ -59,7 +61,7 @@ public sealed partial class MediaViewModel : OperationViewModel, INavigationPage
 
     private static string Summary(BatchResult result) => string.Join(" · ", result.Items.GroupBy(r => r.Status).Select(g => $"{g.Count()} {g.Key}"));
     private string TimedSummary(BatchResult result) => $"{Summary(result)}{(result.Status == OperationStatus.Completed ? " in " : " · Finished in ")}{BatchProgress.BatchElapsed}";
-    public MediaViewModel(IFileDiscovery discovery, InspectionService inspection, ConversionService conversion, ConversionDiskBudget diskBudget, ControlledBatchService batch, SettingsService settings, DependencySetup dependencies, IDialogService dialogs, IFileDialogService files, IFileExplorer explorer, ILogger<MediaViewModel> logger, IMediaPreview mediaPreview, RestoreService restore, ISourceFileMonitor sourceFiles, ReportService reports, MediaLibraryService library, IOperationFeedback? feedback = null)
+    public MediaViewModel(IFileDiscovery discovery, InspectionService inspection, ConversionService conversion, ConversionDiskBudget diskBudget, ControlledBatchService batch, SettingsService settings, DependencySetup dependencies, IDialogService dialogs, IFileDialogService files, IFileExplorer explorer, ILogger<MediaViewModel> logger, IMediaPreview mediaPreview, RestoreService restore, ISourceFileMonitor sourceFiles, ReportService reports, MediaLibraryService library, CleanupService cleanup, IOperationFeedback? feedback = null)
         : base(feedback)
     {
         this.discovery = discovery;
@@ -72,6 +74,7 @@ public sealed partial class MediaViewModel : OperationViewModel, INavigationPage
         this.inspection = inspection;
         this.conversion = conversion;
         this.restore = restore;
+        this.cleanup = cleanup;
         this.batch = batch;
         this.settings = settings;
         this.dependencies = dependencies;
@@ -96,7 +99,7 @@ public sealed partial class MediaViewModel : OperationViewModel, INavigationPage
             {
                 return;
             }
-            sourceFiles.Watch(Files.Select(row => row.Path));
+            WatchFiles();
             OnPropertyChanged(nameof(IsFileListEmpty));
             OnPropertyChanged(nameof(HasMissingFiles));
             ShownFilesChanged();
@@ -389,9 +392,12 @@ public sealed partial class MediaViewModel : OperationViewModel, INavigationPage
     /// </summary>
     public void CheckSourceFiles()
     {
-        sourceFiles.Watch(Files.Select(row => row.Path));
+        WatchFiles();
         RefreshSourceAvailability();
     }
+
+    // Archives usually sit beside their media, but an output folder can hold them elsewhere.
+    private void WatchFiles() => sourceFiles.Watch(Files.Select(row => row.Path).Concat(Files.Select(row => row.RestoreArchive).OfType<string>()));
 
     private void OnSourceFilesChanged(object? sender, EventArgs e)
     {
@@ -428,6 +434,13 @@ public sealed partial class MediaViewModel : OperationViewModel, INavigationPage
                 continue;
             }
 
+            // A deleted or moved archive can no longer restore the row; PairRestoreArchives pairs it again when it returns.
+            if (row.RestoreArchive is { } archive && !sourceFiles.Exists(archive))
+            {
+                row.RestoreArchive = null;
+                changed = true;
+            }
+
             bool missing = !sourceFiles.Exists(row.Path);
             if (missing == row.IsMissing)
             {
@@ -462,6 +475,55 @@ public sealed partial class MediaViewModel : OperationViewModel, INavigationPage
             OnPropertyChanged(nameof(HasMissingFiles));
             ConvertRowCommand.NotifyCanExecuteChanged();
             CommandsChanged();
+        }
+
+        PairRestoreArchives();
+    }
+
+    /// <summary>Completes when the background pairing of restored or newly added .dovi archives finishes.</summary>
+    public Task ArchivePairing { get; private set; } = Task.CompletedTask;
+
+    private bool archivePairingQueued;
+
+    // A .dovi archive that returns, for example from the Recycle Bin, offers Restore again without a rescan.
+    // Runs one pass at a time; a change during a pass queues one more.
+    private void PairRestoreArchives()
+    {
+        if (archivePairingQueued)
+        {
+            return;
+        }
+
+        archivePairingQueued = true;
+        ArchivePairing = PairRestoreArchivesAfterAsync(ArchivePairing);
+    }
+
+    private async Task PairRestoreArchivesAfterAsync(Task previous)
+    {
+        await previous;
+        archivePairingQueued = false;
+        // Operations pair the rows they analyze or produce; the next change retries what this pass skipped.
+        if (!IsIdle)
+        {
+            return;
+        }
+
+        var rows = Files.Where(row => row.RestoreArchive is null && !row.IsMissing && !row.IsActive
+            && row.Analysis?.Media is { } media && RestoreService.IsRestoreBase(media)).ToArray();
+        if (rows.Length == 0)
+        {
+            return;
+        }
+
+        var pairing = BeginArchivePairing();
+        foreach (var row in rows)
+        {
+            if (!IsIdle || !Files.Contains(row) || row.RestoreArchive is not null)
+            {
+                continue;
+            }
+
+            await RefreshRestoreArchiveAsync(row, pairing, CancellationToken.None);
         }
     }
 
@@ -500,16 +562,13 @@ public sealed partial class MediaViewModel : OperationViewModel, INavigationPage
     [RelayCommand(CanExecute = nameof(IsIdle))]
     private Task AddFolder() => AddAsync(files.PickFolder() is { } folder ? [folder] : []);
 
-    private bool CanExportSelectedResults() => IsIdle && ShownFiles.Any(row => row.IsSelected);
-    private bool CanExportVisibleResults() => IsIdle && ShownFiles.Any();
+    private bool CanExportResults() => IsIdle && ShownFiles.Any(row => row.IsSelected);
 
-    [RelayCommand(CanExecute = nameof(CanExportSelectedResults))]
-    private Task ExportSelectedResults() => ExportResults(ShownFiles.Where(row => row.IsSelected));
+    /// <summary>Exports the checked files the current filter shows.</summary>
+    [RelayCommand(CanExecute = nameof(CanExportResults))]
+    private Task ExportResults() => ExportRows(ShownFiles.Where(row => row.IsSelected));
 
-    [RelayCommand(CanExecute = nameof(CanExportVisibleResults))]
-    private Task ExportVisibleResults() => ExportResults(ShownFiles);
-
-    private Task ExportResults(IEnumerable<MediaRow> rows)
+    private Task ExportRows(IEnumerable<MediaRow> rows)
     {
         string? destination = files.PickSaveFile("CSV report|*.csv|JSON report|*.json|Text report|*.txt", "media-report.csv");
         if (destination is null)
@@ -701,6 +760,8 @@ public sealed partial class MediaViewModel : OperationViewModel, INavigationPage
         {
             using var linked = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken, operationToken);
             var entries = await Task.Run(() => library.LoadAsync(linked.Token), linked.Token);
+            // Remembered Profile 8.1 files offer Restore again; pairing reads only cached hashes and archive manifests.
+            var pairing = BeginArchivePairing();
             loadingLibraryRows = true;
             try
             {
@@ -716,10 +777,14 @@ public sealed partial class MediaViewModel : OperationViewModel, INavigationPage
                         row.Analysis = entry.Analysis;
                         row.SetScanned();
                     }
-                    if (sourceFiles.Exists(row.Path) && await Task.Run(() => conversion.ReadPublishedResultAsync(row.Path, linked.Token), linked.Token) is { } published)
+                    if (sourceFiles.Exists(row.Path))
                     {
-                        await ReadResultMetadataAsync(row, published, linked.Token);
-                        row.SetConverted(published);
+                        await RefreshRestoreArchiveAsync(row, pairing, linked.Token);
+                        if (await Task.Run(() => conversion.ReadPublishedResultAsync(row.Path, linked.Token), linked.Token) is { } published)
+                        {
+                            await ReadResultMetadataAsync(row, published, linked.Token);
+                            row.SetConverted(published);
+                        }
                     }
                     row.PropertyChanged += OnRowPropertyChanged;
                     Files.Add(row);
@@ -728,7 +793,7 @@ public sealed partial class MediaViewModel : OperationViewModel, INavigationPage
             finally
             {
                 loadingLibraryRows = false;
-                sourceFiles.Watch(Files.Select(row => row.Path));
+                WatchFiles();
                 OnPropertyChanged(nameof(IsFileListEmpty));
                 OnPropertyChanged(nameof(HasMissingFiles));
                 ShownFilesChanged();
@@ -790,14 +855,14 @@ public sealed partial class MediaViewModel : OperationViewModel, INavigationPage
         RetryAnalysisCommand?.NotifyCanExecuteChanged();
         InspectIncompleteCommand?.NotifyCanExecuteChanged();
         ToggleSelectAllCommand?.NotifyCanExecuteChanged();
-        ClearAllCommand?.NotifyCanExecuteChanged();
+        RemoveSelectedCommand?.NotifyCanExecuteChanged();
         RemoveFileCommand?.NotifyCanExecuteChanged();
         RemoveMissingCommand?.NotifyCanExecuteChanged();
+        CleanupBackupsCommand?.NotifyCanExecuteChanged();
         OpenSettingsCommand?.NotifyCanExecuteChanged();
         AddFilesCommand?.NotifyCanExecuteChanged();
         AddFolderCommand?.NotifyCanExecuteChanged();
-        ExportSelectedResultsCommand?.NotifyCanExecuteChanged();
-        ExportVisibleResultsCommand?.NotifyCanExecuteChanged();
+        ExportResultsCommand?.NotifyCanExecuteChanged();
         AddDroppedPathsCommand?.NotifyCanExecuteChanged();
         ScanCommand?.NotifyCanExecuteChanged();
         InspectCommand?.NotifyCanExecuteChanged();
@@ -897,6 +962,11 @@ public sealed partial class MediaViewModel : OperationViewModel, INavigationPage
         if (e.PropertyName == nameof(MediaRow.CanRestore))
         {
             RestoreRowCommand.NotifyCanExecuteChanged();
+        }
+
+        if (e.PropertyName == nameof(MediaRow.RestoreArchive) && !loadingLibraryRows)
+        {
+            WatchFiles();
         }
 
         if (e.PropertyName is nameof(MediaRow.IsActive) or nameof(MediaRow.IsCancellationRequested))
@@ -1567,10 +1637,47 @@ public sealed partial class MediaViewModel : OperationViewModel, INavigationPage
     [RelayCommand(CanExecute = nameof(CanRemoveMissing))]
     private Task RemoveMissing() => RemoveRowsAsync(Files.Where(row => row.IsMissing).ToArray());
 
-    private bool CanClearAll() => IsIdle && Files.Count > 0;
+    [RelayCommand(CanExecute = nameof(CanOperate))]
+    private Task RemoveSelected() => RemoveRowsAsync(ShownFiles.Where(row => row.IsSelected).ToArray());
 
-    [RelayCommand(CanExecute = nameof(CanClearAll))]
-    private Task ClearAll() => RemoveRowsAsync(Files.ToArray());
+    /// <summary>
+    /// Finds .dovi archives and .bak.dovi_convert originals in a folder and its subfolders, and deletes exactly the
+    /// reviewed files. Rows whose archive goes lose Restore through the folder watcher.
+    /// </summary>
+    [RelayCommand(CanExecute = nameof(IsIdle))]
+    private Task CleanupBackups() => RunAsync("Cleanup", async (token, _) =>
+    {
+        string? folder = files.PickFolder();
+        if (folder is null)
+        {
+            return;
+        }
+
+        var plan = await Task.Run(() => cleanup.Plan(folder, 100), token);
+        if (plan.Files.Count == 0)
+        {
+            SetStatus(ViewStatus.NoBackupsFound);
+            return;
+        }
+
+        string review = "Remove exactly these retained backup files (Recycle Bin if enabled in Safety settings; otherwise permanent deletion):\n\n" + string.Join("\n", plan.Files.Select(f => $"{f.Path} ({f.Length:N0} bytes)"));
+        if (!await dialogs.ReviewAsync("Review cleanup", review, "Delete"))
+        {
+            SetStatus(ViewStatus.CleanupNotApproved);
+            return;
+        }
+
+        OperationLog.Audit(logger, "ApproveCleanup", review, "ApprovedByConfirmation", plan.Id);
+        var result = await Task.Run(() => cleanup.ExecuteAsync(plan, token), token);
+        var failed = result.Items.Where(item => item.Status == OperationStatus.Failed).ToArray();
+        if (failed.Length > 0)
+        {
+            ReportItemFailed();
+        }
+
+        SetStatus(failed.Length > 0 ? ViewStatus.Error : ViewStatus.Result,
+            string.Join("\n", failed.Select(item => $"{item.Item}: {item.Message}").Prepend($"Cleanup: {Summary(result)}")));
+    });
 
     private Task RemoveRowsAsync(MediaRow[] rows) => RunAsync(async (token, _) =>
     {

@@ -45,6 +45,34 @@ public sealed class SourceFileMonitorTests
     }
 
     [TestMethod]
+    public async Task ReportsDeletedRestoreArchivesButNotOtherFiles()
+    {
+        string directory = Path.Combine(Path.GetTempPath(), "DoViFixer-tests-" + Guid.NewGuid().ToString("N"));
+        Directory.CreateDirectory(directory);
+        try
+        {
+            string archive = Path.Combine(directory, "Movie.dovi");
+            string other = Path.Combine(directory, "Movie.txt");
+            await File.WriteAllTextAsync(archive, "fixture");
+            await File.WriteAllTextAsync(other, "fixture");
+            using var monitor = new SourceFileMonitor(NullLogger<SourceFileMonitor>.Instance);
+            var changed = new SemaphoreSlim(0);
+            monitor.Changed += (_, _) => changed.Release();
+            monitor.Watch([archive]);
+
+            File.Delete(other);
+            Assert.IsFalse(await changed.WaitAsync(TimeSpan.FromMilliseconds(500)), "Unrelated files are not reported.");
+            File.Delete(archive);
+            Assert.IsTrue(await changed.WaitAsync(TimeSpan.FromSeconds(10)), "Deleting a watched archive raises Changed.");
+            Assert.IsFalse(monitor.Exists(archive));
+        }
+        finally
+        {
+            Directory.Delete(directory, true);
+        }
+    }
+
+    [TestMethod]
     public void UnavailableFoldersAreSkippedUntilTheNextWatch()
     {
         string directory = Path.Combine(Path.GetTempPath(), "DoViFixer-tests-" + Guid.NewGuid().ToString("N"));

@@ -29,22 +29,26 @@ public sealed class MediaFilterTests
     }
 
     [TestMethod]
-    public async Task ExportScopesFollowFilterAndCheckboxesWithoutNewProbes()
+    public async Task ExportCoversCheckedFilesInTheFilterWithoutNewProbes()
     {
         using var runtime = new TestRuntime { SaveFilePath = "report.csv" };
         var model = await CreateAsync(runtime);
         int probes = runtime.Probes;
-        Row(model, Profile7).IsSelected = true;
-        Row(model, Profile81).IsSelected = false;
-        model.FileFilter = MediaFileFilter.Profile7;
+        foreach (var row in model.Files)
+        {
+            row.IsSelected = false;
+        }
+        Assert.IsFalse(model.ExportResultsCommand.CanExecute(null), "Nothing is checked.");
 
-        await model.ExportVisibleResultsCommand.InvokeAsync();
-        Assert.AreEqual(1, runtime.ExportedReport?.Entries.Count);
-        Assert.AreEqual(Profile7, runtime.ExportedReport!.Entries[0].Path);
+        Row(model, Profile7).IsSelected = true;
+        Row(model, Unscanned).IsSelected = true;
+        model.FileFilter = MediaFileFilter.Profile7;
+        await model.ExportResultsCommand.InvokeAsync();
+        Assert.AreEqual(Profile7, runtime.ExportedReport!.Entries.Single().Path, "A checked file the filter hides is not exported.");
 
         model.FileFilter = MediaFileFilter.All;
-        await model.ExportSelectedResultsCommand.InvokeAsync();
-        Assert.IsFalse(runtime.ExportedReport!.Entries.Any(entry => entry.Path == Profile81));
+        await model.ExportResultsCommand.InvokeAsync();
+        CollectionAssert.AreEquivalent(new[] { Profile7, Unscanned }, runtime.ExportedReport!.Entries.Select(entry => entry.Path).ToArray());
         Assert.IsTrue(runtime.ExportedReport.Entries.Any(entry => entry.Path == Unscanned && entry.Status == "NotScanned"));
         Assert.AreEqual(probes, runtime.Probes);
     }

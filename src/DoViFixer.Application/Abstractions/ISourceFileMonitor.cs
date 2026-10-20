@@ -1,7 +1,8 @@
 namespace DoViFixer.Application.Abstractions;
 
 /// <summary>
-/// Reports when source files may have been deleted, moved, renamed or restored outside the application.
+/// Reports when source files or their .dovi restore archives may have been deleted, moved, renamed or restored
+/// outside the application.
 /// </summary>
 public interface ISourceFileMonitor
 {

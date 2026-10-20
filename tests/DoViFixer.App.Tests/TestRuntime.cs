@@ -213,7 +213,7 @@ internal sealed class TestRuntime : IFileDiscovery, IFileOperations, IMediaProbe
     public IReadOnlyList<string> WatchedPaths { get; private set; } = [];
     public event EventHandler? Changed;
     public void Watch(IEnumerable<string> paths) => WatchedPaths = [.. paths];
-    public bool Exists(string path) => !MissingFiles.Contains(path);
+    public bool Exists(string path) => !MissingFiles.Contains(path) && (!path.EndsWith(".dovi", StringComparison.OrdinalIgnoreCase) || Archives.Contains(path));
     public void RaiseSourceFilesChanged() => Changed?.Invoke(this, EventArgs.Empty);
     public FileIdentity Identify(string path)
     {
@@ -314,8 +314,11 @@ internal sealed class TestRuntime : IFileDiscovery, IFileOperations, IMediaProbe
 
         var profile = path.EndsWith(".restored.mkv", StringComparison.OrdinalIgnoreCase)
             ? DolbyVisionProfile.Profile7
-            : path.Contains("P81") ? DolbyVisionProfile.Profile81 : path.Contains("Sdr") ? DolbyVisionProfile.None : DolbyVisionProfile.Profile7;
-        return new MediaInfo(Identify(path), profile, "HEVC", 0, 3840, 2160, 1000, 23.976, 5772, 0, 1000, [], 0, 1, null, "{}");
+            : path.Contains("P81") ? DolbyVisionProfile.Profile81 : path.Contains("Sdr") || path.Contains("HDR10") ? DolbyVisionProfile.None : DolbyVisionProfile.Profile7;
+        return new MediaInfo(Identify(path), profile, "HEVC", 0, 3840, 2160, 1000, 23.976, 5772, 0, 1000, [], 0, 1, null, "{}")
+        {
+            IsHdr = path.Contains("HDR10") ? true : null
+        };
     }
 
     public Func<CancellationToken, Task>? DuringAnalysis

@@ -82,7 +82,6 @@ public sealed class OperationFeedbackTests
 
     [TestMethod]
     [DataRow(ViewStatus.ConversionNotStarted, OperationOutcome.Cancelled)]
-    [DataRow(ViewStatus.BackupNotApproved, OperationOutcome.Cancelled)]
     [DataRow(ViewStatus.RestoreNotApproved, OperationOutcome.Cancelled)]
     [DataRow(ViewStatus.CleanupNotApproved, OperationOutcome.Cancelled)]
     [DataRow(ViewStatus.ToolsUnavailable, OperationOutcome.Failed)]

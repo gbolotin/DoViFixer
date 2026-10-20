@@ -57,11 +57,14 @@ internal sealed class SourceFileMonitor(ILogger<SourceFileMonitor> logger) : ISo
             return null;
         }
 
-        var watcher = new FileSystemWatcher(folder, "*.mkv")
+        // Media and their restore archives.
+        var watcher = new FileSystemWatcher(folder)
         {
             NotifyFilter = NotifyFilters.FileName,
             IncludeSubdirectories = false
         };
+        watcher.Filters.Add("*.mkv");
+        watcher.Filters.Add("*.dovi");
         watcher.Created += OnChanged;
         watcher.Deleted += OnChanged;
         watcher.Renamed += OnChanged;

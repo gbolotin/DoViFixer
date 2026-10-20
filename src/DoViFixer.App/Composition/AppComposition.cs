@@ -48,12 +48,9 @@ public static class AppComposition
         services.AddSingleton<DependencySetup>();
         services.AddTransient<StartupDependencyCheckViewModel>();
         services.AddTransient<MediaViewModel>();
-        services.AddTransient<ArchiveViewModel>();
         services.AddTransient<SettingsViewModel>();
-        // The sidebar shows the pages in registration order.
+        // Media is the only page. Settings opens in a frame over it, from the title bar's Settings button.
         services.AddTransient<INavigationPage>(provider => provider.GetRequiredService<MediaViewModel>());
-        services.AddTransient<INavigationPage>(provider => provider.GetRequiredService<ArchiveViewModel>());
-        // Settings opens in a frame over the pages, from the sidebar's Settings button.
         services.AddTransient<ShellViewModel>();
         services.AddTransient<Shell>();
     }

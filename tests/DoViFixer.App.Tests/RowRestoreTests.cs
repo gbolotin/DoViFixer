@@ -93,6 +93,71 @@ public sealed class RowRestoreTests
     }
 
     [TestMethod]
+    public async Task Hdr10OutputsPairWithTheirArchiveButPlainSdrFilesDoNot()
+    {
+        using var runtime = new TestRuntime();
+        runtime.Archives.UnionWith([@"C:\Media\Movie.dovi", @"C:\Media\Sdr.dovi"]);
+        var model = runtime.Container.GetRequiredService<MediaViewModel>();
+        await model.AddAsync([@"C:\Media\Movie - HDR10.mkv", @"C:\Media\Sdr.mkv"]);
+
+        var hdr10 = model.Files.Single(row => row.Path.EndsWith("HDR10.mkv"));
+        Assert.AreEqual(@"C:\Media\Movie.dovi", hdr10.RestoreArchive, "An HDR10 output finds the archive named after its source.");
+        Assert.IsTrue(model.RestoreRowCommand.CanExecute(hdr10));
+        Assert.IsFalse(model.Files.Single(row => row.Path.EndsWith("Sdr.mkv")).CanRestore, "A non-HDR file is never a restoration base.");
+    }
+
+    [TestMethod]
+    public async Task DeletingTheArchiveRemovesRestoreUntilRescan()
+    {
+        using var runtime = new TestRuntime();
+        const string archive = @"D:\Archives\P81.dovi";
+        runtime.Archives.Add(archive);
+        var model = runtime.Container.GetRequiredService<MediaViewModel>();
+        await model.AddAsync([@"C:\Media\P81.mkv"]);
+        var row = model.Files.Single();
+        row.RestoreArchive = archive;
+        Assert.IsTrue(row.CanRestore);
+        CollectionAssert.Contains(runtime.WatchedPaths.ToArray(), archive, "The archive's folder is watched, even beside no listed media.");
+
+        runtime.Archives.Remove(archive);
+        runtime.RaiseSourceFilesChanged();
+
+        Assert.IsNull(row.RestoreArchive);
+        Assert.IsFalse(row.CanRestore);
+        Assert.IsFalse(model.RestoreRowCommand.CanExecute(row));
+        CollectionAssert.DoesNotContain(runtime.WatchedPaths.ToArray(), archive);
+        Assert.IsFalse(row.IsMissing, "The media itself is still there.");
+    }
+
+    [TestMethod]
+    public async Task ArchiveRestoredFromRecycleBinOffersRestoreAgain()
+    {
+        using var runtime = new TestRuntime();
+        const string archive = @"C:\Media\P81.dovi";
+        runtime.Archives.Add(archive);
+        var model = runtime.Container.GetRequiredService<MediaViewModel>();
+        await model.AddAsync([@"C:\Media\P81.mkv", @"C:\Media\Other P81.mkv"]);
+        var row = model.Files.Single(r => r.Path == @"C:\Media\P81.mkv");
+        var other = model.Files.Single(r => r.Path == @"C:\Media\Other P81.mkv");
+        Assert.AreEqual(archive, row.RestoreArchive);
+        int analyses = runtime.Analyses;
+
+        runtime.Archives.Remove(archive);
+        runtime.RaiseSourceFilesChanged();
+        await model.ArchivePairing;
+        Assert.IsFalse(row.CanRestore);
+
+        runtime.Archives.Add(archive);
+        runtime.RaiseSourceFilesChanged();
+        await model.ArchivePairing;
+
+        Assert.AreEqual(archive, row.RestoreArchive);
+        Assert.IsTrue(model.RestoreRowCommand.CanExecute(row));
+        Assert.IsNull(other.RestoreArchive, "The returned archive is offered to its own file only.");
+        Assert.AreEqual(analyses, runtime.Analyses, "Pairing again must not analyze the video.");
+    }
+
+    [TestMethod]
     [DataRow(false)]
     [DataRow(true)]
     public async Task RestoreHonorsReviewAndArchiveValidation(bool approve)

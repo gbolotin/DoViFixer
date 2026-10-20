@@ -5,7 +5,7 @@ using DoViFixer.App.Presentation.Application;
 namespace DoViFixer.App.ViewModels;
 public sealed partial class ShellViewModel : ObservableObject, INavigationGuard, IDisposable
 {
-    /// <param name="pages">The sidebar pages in display order. They must include the Media page, which the shell wires to Settings.</param>
+    /// <param name="pages">The pages: the Media page, which the shell wires to Settings and the title bar menu.</param>
     /// <param name="settings">Settings, shown in a frame over the pages rather than as a page.</param>
     public ShellViewModel(IEnumerable<INavigationPage> pages, SettingsViewModel settings, StartupDependencyCheckViewModel dependencyCheck, DependencyReportViewModel dependencyReport)
     {
@@ -26,6 +26,9 @@ public sealed partial class ShellViewModel : ObservableObject, INavigationGuard,
         Navigation.NavigationFailed += (_, failure) => (CurrentPage as OperationViewModel)?.SetStatus(ViewStatus.Error, failure.Exception.Message);
         // The Media status bar summarizes the output, retention, FEL and archive choices on the Conversion page.
         var conversion = settings.Sections.Pages.OfType<ConversionSettingsSection>().Single();
+        nativeTools = settings.Sections.Pages.OfType<NativeToolsSettingsSection>().Single();
+        performance = settings.Sections.Pages.OfType<PerformanceSettingsSection>().Single();
+        about = settings.Sections.Pages.OfType<AboutSettingsSection>().Single();
         media.RequestOpenSettings += () =>
         {
             if (OpenSettingsCommand.CanExecute(conversion))
@@ -38,6 +41,8 @@ public sealed partial class ShellViewModel : ObservableObject, INavigationGuard,
         media.ConversionStarting += settings.FlushAsync;
         dependencyReport.PropertyChanged += DependencyReportChanged;
         dependencyCheck.PropertyChanged += DependencyCheckChanged;
+        media.ExportResultsCommand.CanExecuteChanged += MediaCommandsChanged;
+        media.CleanupBackupsCommand.CanExecuteChanged += MediaCommandsChanged;
 
         foreach (var operation in operations)
         {
@@ -49,12 +54,18 @@ public sealed partial class ShellViewModel : ObservableObject, INavigationGuard,
     private readonly CancellationTokenSource startupCancellation = new();
     private Task? initializationTask;
     private readonly MediaViewModel media;
+    private readonly NativeToolsSettingsSection nativeTools;
+    private readonly PerformanceSettingsSection performance;
+    private readonly AboutSettingsSection about;
     private readonly StartupDependencyCheckViewModel dependencyCheck;
     private readonly DependencyReportViewModel dependencyReport;
     private readonly OperationViewModel[] operations;
     public SettingsViewModel Settings { get; }
 
-    /// <summary>Page navigation: the sidebar and the retained page host bind to it.</summary>
+    /// <summary>The Media page, whose commands the title bar menu also offers.</summary>
+    public MediaViewModel Media => media;
+
+    /// <summary>Page navigation: the retained page host binds to it.</summary>
     public NavigationService Navigation { get; }
 
     public Task NavigationTask { get; private set; } = Task.CompletedTask;
@@ -170,6 +181,85 @@ public sealed partial class ShellViewModel : ObservableObject, INavigationGuard,
         IsSettingsOpen = false;
     }
 
+    partial void OnIsSettingsOpenChanged(bool value) => NotifyMenuCommands();
+
+    // The title bar menu's Media commands show the Media page first, so their results and status are visible.
+    private bool CanUseMedia() => !IsSettingsOpen && (ReferenceEquals(CurrentPage, media) || CanNavigate);
+
+    [RelayCommand(CanExecute = nameof(CanAddMedia))]
+    private Task AddFiles() => RunOnMediaAsync(media.AddFilesCommand);
+
+    [RelayCommand(CanExecute = nameof(CanAddMedia))]
+    private Task AddFolder() => RunOnMediaAsync(media.AddFolderCommand);
+
+    private bool CanAddMedia() => CanUseMedia() && media.AddFilesCommand.CanExecute(null);
+
+    [RelayCommand(CanExecute = nameof(CanExportResults))]
+    private Task ExportResults() => RunOnMediaAsync(media.ExportResultsCommand);
+
+    private bool CanExportResults() => CanUseMedia() && media.ExportResultsCommand.CanExecute(null);
+
+    private async Task RunOnMediaAsync(IAsyncRelayCommand command)
+    {
+        if (!ReferenceEquals(CurrentPage, media))
+        {
+            NavigationTask = Navigation.NavigateAsync(media);
+            await NavigationTask;
+        }
+
+        if (ReferenceEquals(CurrentPage, media) && command.CanExecute(null))
+        {
+            await command.ExecuteAsync(null);
+        }
+    }
+
+    [RelayCommand(CanExecute = nameof(CanCleanupBackups))]
+    private Task CleanupBackups() => RunOnMediaAsync(media.CleanupBackupsCommand);
+
+    private bool CanCleanupBackups() => CanUseMedia() && media.CleanupBackupsCommand.CanExecute(null);
+
+    private bool CanOpenSettingsSection() => CanOpenSettings(null);
+
+    // Settings report their results in the settings frame, so the menu opens the section that shows them.
+    [RelayCommand(CanExecute = nameof(CanOpenSettingsSection))]
+    private Task CheckDependencies() => OpenSettingsAndRunAsync(nativeTools, Settings.CheckCommand);
+
+    [RelayCommand(CanExecute = nameof(CanOpenSettingsSection))]
+    private Task CleanLibrary() => OpenSettingsAndRunAsync(performance, Settings.CleanLibraryCommand);
+
+    [RelayCommand(CanExecute = nameof(CanOpenSettingsSection))]
+    private Task ExportDiagnostics() => OpenSettingsAndRunAsync(about, Settings.ExportDiagnosticsCommand);
+
+    [RelayCommand(CanExecute = nameof(CanOpenSettingsSection))]
+    private Task ShowAbout() => OpenSettings(about);
+
+    private async Task OpenSettingsAndRunAsync(SettingsSection section, IAsyncRelayCommand command)
+    {
+        await OpenSettings(section);
+        if (IsSettingsOpen && command.CanExecute(null))
+        {
+            await command.ExecuteAsync(null);
+        }
+    }
+
+    private void MediaCommandsChanged(object? sender, EventArgs e)
+    {
+        ExportResultsCommand.NotifyCanExecuteChanged();
+        CleanupBackupsCommand.NotifyCanExecuteChanged();
+    }
+
+    private void NotifyMenuCommands()
+    {
+        AddFilesCommand.NotifyCanExecuteChanged();
+        AddFolderCommand.NotifyCanExecuteChanged();
+        ExportResultsCommand.NotifyCanExecuteChanged();
+        CleanupBackupsCommand.NotifyCanExecuteChanged();
+        CheckDependenciesCommand.NotifyCanExecuteChanged();
+        CleanLibraryCommand.NotifyCanExecuteChanged();
+        ExportDiagnosticsCommand.NotifyCanExecuteChanged();
+        ShowAboutCommand.NotifyCanExecuteChanged();
+    }
+
     public event EventHandler? CanNavigateChanged;
 
     async Task<bool> INavigationGuard.ConfirmNavigationAsync(INavigationPage from, INavigationPage to, CancellationToken cancellationToken)
@@ -199,11 +289,13 @@ public sealed partial class ShellViewModel : ObservableObject, INavigationGuard,
         if (e.PropertyName == nameof(INavigationService.CurrentPage))
         {
             RefreshStatusItems();
+            NotifyMenuCommands();
         }
 
         if (e.PropertyName == nameof(INavigationService.CanNavigate))
         {
             OpenSettingsCommand.NotifyCanExecuteChanged();
+            NotifyMenuCommands();
         }
 
         OnPropertyChanged(e.PropertyName);
@@ -236,6 +328,7 @@ public sealed partial class ShellViewModel : ObservableObject, INavigationGuard,
         {
             CanNavigateChanged?.Invoke(this, EventArgs.Empty);
             CloseSettingsCommand.NotifyCanExecuteChanged();
+            NotifyMenuCommands();
         }
     }
 
@@ -265,6 +358,7 @@ public sealed partial class ShellViewModel : ObservableObject, INavigationGuard,
         }
         await Task.WhenAll(operations.Select(o => o.Completion).Append(dependencyCheck.Completion));
         await media.CancelPreviewsAsync();
+        await media.ArchivePairing;
         await media.FlushColumnLayoutAsync();
         await Settings.FlushAsync();
     }
@@ -274,6 +368,8 @@ public sealed partial class ShellViewModel : ObservableObject, INavigationGuard,
         Settings.LibraryDeleted -= media.ClearDeletedLibrary;
         dependencyReport.PropertyChanged -= DependencyReportChanged;
         dependencyCheck.PropertyChanged -= DependencyCheckChanged;
+        media.ExportResultsCommand.CanExecuteChanged -= MediaCommandsChanged;
+        media.CleanupBackupsCommand.CanExecuteChanged -= MediaCommandsChanged;
         Navigation.PropertyChanged -= NavigationChanged;
         Navigation.Dispose();
         startupCancellation.Dispose();

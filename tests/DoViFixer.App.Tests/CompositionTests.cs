@@ -40,8 +40,8 @@ public sealed class CompositionTests
         Assert.AreSame(container.GetRequiredService<IThemeService>(), container.GetRequiredService<IThemeService>());
         Assert.AreNotSame(container.GetRequiredService<MediaViewModel>(), container.GetRequiredService<MediaViewModel>());
         Assert.AreNotSame(container.GetRequiredService<ConversionService>(), container.GetRequiredService<ConversionService>());
-        // Settings opens in a frame over the pages, so it is not a sidebar page.
-        CollectionAssert.AreEqual(new[] { typeof(MediaViewModel), typeof(ArchiveViewModel) }, container.GetServices<INavigationPage>().Select(page => page.GetType()).ToArray());
+        // Media is the only page; Settings opens in a frame over it.
+        CollectionAssert.AreEqual(new[] { typeof(MediaViewModel) }, container.GetServices<INavigationPage>().Select(page => page.GetType()).ToArray());
         Assert.IsFalse(Directory.Exists(root));
     }
 

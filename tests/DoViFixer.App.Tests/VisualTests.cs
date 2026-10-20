@@ -110,19 +110,15 @@ public sealed class VisualTests
             window.Width = 1400;
             window.Height = 900;
             await LayoutAsync(window);
-            var navigation = Descendants<ListBox>(window).Single(list => ReferenceEquals(list.ItemsSource, shell.Pages));
+            Assert.IsFalse(Descendants<ListBox>(window).Any(list => ReferenceEquals(list.ItemsSource, shell.Pages)), "Media is the only page, so there is no sidebar.");
+            var settingsButton = Descendants<Button>(window).Single(button => ReferenceEquals(button.Command, shell.OpenSettingsCommand));
             var pageHost = Descendants<RetainedPageHost>(window).Single(host => ReferenceEquals(host.Navigation, shell.Navigation));
             var mediaView = PageView(pageHost, media);
-            Assert.AreSame(media, navigation.SelectedItem);
-            Assert.HasCount(2, navigation.Items);
             VerifyCommandIcons(mediaView);
             SaveRender((FrameworkElement)window.Content, "command-icons-empty");
 
-            await VerifyEmptyMediaAsync(runtime, media, window, navigation, mediaView);
+            await VerifyEmptyMediaAsync(runtime, media, window, settingsButton, mediaView);
             await VerifyFileDropAsync(runtime, media, window, mediaView);
-            shell.Pages.OfType<ArchiveViewModel>().Single().SetStatus(ViewStatus.Result, "Archive status retained.");
-            await LayoutAsync(window);
-            Assert.AreEqual(media.StatusText, StatusItem(window, 1).Text, "Inactive pages must not overwrite the visible status.");
             await media.AddAsync([@"C:\Media\Mountain.mkv", @"C:\Media\Mountain2.mkv"]);
             media.Focused = media.Files[1];
             media.Files[0].IsSelected = false;
@@ -147,56 +143,13 @@ public sealed class VisualTests
             await LayoutAsync(window);
             Assert.AreEqual(listWidth + 80, columns[0].ActualWidth, 1);
             Assert.AreEqual(detailsWidth - 80, columns[2].ActualWidth, 1);
-            double resizedListWidth = columns[0].ActualWidth;
-            double resizedDetailsWidth = columns[2].ActualWidth;
-            var retainedRoots = new Dictionary<object, DependencyObject>
-            {
-                [media] = VisualTreeHelper.GetChild(mediaView, 0)
-            };
-            foreach (var page in shell.Pages.Skip(1).Append(media).Concat(shell.Pages.Skip(1).Append(media)))
-            {
-                navigation.SelectedItem = page;
-                await shell.NavigationTask;
-                await LayoutAsync(window);
-                var workspace = PageView(pageHost, page);
-                Assert.AreSame(page, shell.CurrentPage);
-                var statusBar = Descendants<StatusBar>(window).Single();
-                CollectionAssert.AreEqual(((OperationViewModel)page).StatusItems.Select(item => item.Text).ToArray(), Descendants<TextBlock>(statusBar).Select(text => text.Text).ToArray());
-                AssertInside(statusBar, (FrameworkElement)window.Content);
-                Assert.AreSame(page, workspace.Content);
-                Assert.IsTrue(Descendants<FrameworkElement>(workspace).Any(element => ReferenceEquals(element.DataContext, page) && element.ActualHeight > 0));
-                var root = VisualTreeHelper.GetChild(workspace, 0);
-                if (retainedRoots.TryGetValue(page, out var previousRoot))
-                {
-                    Assert.AreSame(previousRoot, root, "Navigation must retain each page's visual tree.");
-                }
-                retainedRoots[page] = root;
-                var containers = pageHost.RetainedPages.Select(item => PageView(pageHost, item)).ToArray();
-                Assert.AreEqual(1, containers.Count(container => container.IsVisible));
-                Assert.IsTrue(workspace.IsVisible);
-                foreach (var hidden in containers.Where(container => !ReferenceEquals(container, workspace)))
-                {
-                    Assert.AreEqual(Visibility.Collapsed, hidden.Visibility);
-                    foreach (var control in Descendants<Control>(hidden).Where(control => control.Focusable && control.IsEnabled))
-                    {
-                        Assert.IsFalse(control.Focus(), "Controls on a collapsed page must not receive focus.");
-                    }
-                    Assert.IsFalse(hidden.IsKeyboardFocusWithin);
-                }
-                var navigationTask = shell.NavigationTask;
-                navigation.UnselectAll();
-                await LayoutAsync(window);
-                Assert.AreSame(page, shell.CurrentPage, "Deselecting the sidebar must not clear the current page.");
-                Assert.AreSame(page, workspace.Content);
-                Assert.AreSame(page, navigation.SelectedItem, "The sidebar must restore its current selection.");
-                Assert.AreSame(navigationTask, shell.NavigationTask, "Rejecting null must not start another navigation.");
-            }
+            var statusBar = Descendants<StatusBar>(window).Single();
+            CollectionAssert.AreEqual(media.StatusItems.Select(item => item.Text).ToArray(), Descendants<TextBlock>(statusBar).Select(text => text.Text).ToArray());
+            AssertInside(statusBar, (FrameworkElement)window.Content);
             Assert.AreSame(media.Files[1], media.Focused);
             Assert.IsFalse(media.Files[0].IsSelected);
             Assert.AreSame(list, Descendants<ListView>(mediaView).Single());
             Assert.AreEqual(400, fileColumn.Width, "Media must retain resized columns.");
-            Assert.AreEqual(resizedListWidth, columns[0].ActualWidth, 1, "Navigation must retain the panel split.");
-            Assert.AreEqual(resizedDetailsWidth, columns[2].ActualWidth, 1);
             DragSplitter(splitter, 10000);
             await LayoutAsync(window);
             Assert.AreEqual(280, columns[2].ActualWidth, 1, "Details must keep their minimum width.");
@@ -245,7 +198,7 @@ public sealed class VisualTests
             fileLocationLink.Command.Invoke(fileLocationLink.CommandParameter);
             Assert.AreEqual(media.Focused.Path, runtime.ShownFile);
             SaveRender((FrameworkElement)window.Content, "command-icons-toolbar");
-            await VerifyRowActionsAsync(runtime, media, list, window, navigation, mediaView);
+            await VerifyRowActionsAsync(runtime, media, list, window, settingsButton, mediaView);
             window.Width = 800;
             window.Height = 600;
             await LayoutAsync(window);
@@ -286,7 +239,7 @@ public sealed class VisualTests
 
             Assert.IsFalse(Descendants<Button>(mediaView).Any(button => Equals(button.Content, "Settings")));
             await VerifyTotalAndInlineProgressAsync();
-            await VerifySettingsFrameAsync(runtime, shell, window, navigation);
+            await VerifySettingsFrameAsync(runtime, shell, window);
             await VerifySettingsRecoveryAsync(runtime, shell, window);
             Assert.AreEqual("", errors.Errors.ToString(), "WPF binding errors were reported.");
         }
@@ -665,12 +618,12 @@ public sealed class VisualTests
         finally
         {
             runtime.DiscoverFiles = null;
-            media.ClearAllCommand.Invoke();
+            ClearFiles(media);
             await LayoutAsync(window);
         }
     }
 
-    private static async Task VerifyEmptyMediaAsync(TestRuntime runtime, MediaViewModel media, Window window, ListBox navigation, DependencyObject mediaView)
+    private static async Task VerifyEmptyMediaAsync(TestRuntime runtime, MediaViewModel media, Window window, Button settingsButton, DependencyObject mediaView)
     {
         var panel = Descendants<StackPanel>(mediaView).Single(element => element.Name == "EmptyMediaPanel");
         TextBlock Status() => StatusItem(window, 1);
@@ -680,7 +633,7 @@ public sealed class VisualTests
         Assert.IsTrue(panel.IsVisible);
         Assert.IsTrue(Status().IsVisible);
         Assert.AreEqual("0 items", Selection().Text);
-        Assert.IsTrue(navigation.IsVisible && navigation.IsEnabled);
+        Assert.IsTrue(settingsButton.IsVisible && settingsButton.IsEnabled);
         Assert.AreSame(media.AddFilesCommand, addFiles.Command);
         Assert.AreSame(media.AddFolderCommand, addFolder.Command);
         Assert.IsTrue(addFiles.IsEnabled && addFolder.IsEnabled);
@@ -815,7 +768,8 @@ public sealed class VisualTests
         double originalWidth = fileColumn.Width;
         fileColumn.Width = 400;
 
-        Invoke(Button(mediaView, "Clear all"));
+        media.Files.Single().IsSelected = true;
+        Invoke(Button(mediaView, "Remove"));
         await LayoutAsync(window);
         Assert.IsEmpty(media.Files);
         Assert.IsTrue(panel.IsVisible);
@@ -840,7 +794,7 @@ public sealed class VisualTests
         Assert.AreSame(list, Descendants<ListView>(mediaView).Single());
         Assert.AreEqual(400, fileColumn.Width, "Clearing and adding must retain column widths.");
         fileColumn.Width = originalWidth;
-        media.ClearAllCommand.Invoke();
+        ClearFiles(media);
         runtime.PickedFiles = [];
         runtime.PickedFolder = null;
         window.Width = 1400;
@@ -848,7 +802,7 @@ public sealed class VisualTests
         await LayoutAsync(window);
     }
 
-    private static async Task VerifyRowActionsAsync(TestRuntime runtime, MediaViewModel media, ListView list, Window window, ListBox navigation, DependencyObject mediaView)
+    private static async Task VerifyRowActionsAsync(TestRuntime runtime, MediaViewModel media, ListView list, Window window, Button settingsButton, DependencyObject mediaView)
     {
         await LayoutAsync(window);
         var slots = new Dictionary<string, Rect>();
@@ -977,7 +931,7 @@ public sealed class VisualTests
             await started.Task.WaitAsync(TimeSpan.FromSeconds(10));
             await LayoutAsync(window);
             AssertStableActionSlots(list, slots, "conversion running");
-            Assert.IsFalse(navigation.IsEnabled);
+            Assert.IsFalse(settingsButton.IsEnabled, "Settings stay closed while an operation runs.");
             container = (ListViewItem)list.ItemContainerGenerator.ContainerFromItem(row);
             convert = Button(container, "Convert");
             Assert.IsFalse(convert.IsEnabled);
@@ -1055,16 +1009,17 @@ public sealed class VisualTests
     /// The Settings button opens the frame over the page, every close gesture returns to the page, and each section
     /// renders the shared settings in its own retained view. Leaves the frame open on Conversion.
     /// </summary>
-    private static async Task VerifySettingsFrameAsync(TestRuntime runtime, ShellViewModel shell, Window window, ListBox navigation)
+    private static async Task VerifySettingsFrameAsync(TestRuntime runtime, ShellViewModel shell, Window window)
     {
         var content = (FrameworkElement)window.Content;
         var overlay = Descendants<ContentOverlay>(window).Single();
         var open = Descendants<Button>(window).Single(button => ReferenceEquals(button.Command, shell.OpenSettingsCommand));
-        Assert.AreEqual("Settings", open.Content);
-        Assert.AreSame(window.FindResource("WfNavigationButtonStyle"), open.Style);
-        var sidebar = (Border)((FrameworkElement)open.Parent).Parent;
-        Assert.AreSame(window.FindResource("ListBoxBackground"), sidebar.Background, "The Settings button sits on the sidebar background.");
-        Assert.AreEqual(Colors.Transparent, ((SolidColorBrush)navigation.Background).Color, "The pages show the sidebar background behind them, not a second layer.");
+        Assert.AreEqual("\uE713", open.Content, "The gear glyph.");
+        Assert.AreEqual("Settings", System.Windows.Automation.AutomationProperties.GetName(open));
+        Assert.AreSame(window.FindResource("WfSubtleButtonStyle"), open.Style);
+        var titleBar = Descendants<TitleBar>(window).Single();
+        Assert.AreSame(open, titleBar.RightHeader, "The Settings button ends the title bar row.");
+        Assert.IsTrue(open.IsVisible);
         var shortcut = window.InputBindings.OfType<KeyBinding>().Single(binding => ReferenceEquals(binding.Command, shell.OpenSettingsCommand));
         Assert.AreEqual(Key.OemComma, shortcut.Key);
         Assert.AreEqual(ModifierKeys.Control, shortcut.Modifiers, "Ctrl+comma opens Settings.");
@@ -1082,7 +1037,7 @@ public sealed class VisualTests
             await LayoutAsync(window);
             Assert.IsTrue(shell.IsSettingsOpen);
             Assert.IsTrue(overlay.IsVisible);
-            Assert.IsFalse(open.IsEnabled || navigation.IsEnabled, "The pages behind the frame are inert.");
+            Assert.IsFalse(open.IsEnabled, "The frame is already open.");
             if (window.IsActive)
             {
                 Assert.IsTrue(OverlayPart(overlay, "PART_Card").IsKeyboardFocusWithin, "Opening moves focus into the frame.");
@@ -1104,7 +1059,7 @@ public sealed class VisualTests
             await LayoutAsync(window);
             Assert.IsFalse(shell.IsSettingsOpen, gesture + " must close the frame.");
             Assert.AreEqual(Visibility.Collapsed, overlay.Visibility);
-            Assert.IsTrue(open.IsEnabled && navigation.IsEnabled);
+            Assert.IsTrue(open.IsEnabled);
             if (window.IsActive)
             {
                 Assert.IsTrue(open.IsKeyboardFocused, gesture + " must return focus to the Settings button.");
@@ -1362,6 +1317,15 @@ public sealed class VisualTests
         splitter.RaiseEvent(new DragStartedEventArgs(0, 0) { RoutedEvent = Thumb.DragStartedEvent });
         splitter.RaiseEvent(new DragDeltaEventArgs(horizontalChange, 0) { RoutedEvent = Thumb.DragDeltaEvent });
         splitter.RaiseEvent(new DragCompletedEventArgs(horizontalChange, 0, false) { RoutedEvent = Thumb.DragCompletedEvent });
+    }
+
+    private static void ClearFiles(MediaViewModel media)
+    {
+        foreach (var row in media.Files)
+        {
+            row.IsSelected = true;
+        }
+        media.RemoveSelectedCommand.Invoke();
     }
 
     private static Button Button(DependencyObject parent, string caption) => Descendants<Button>(parent).Single(button => Equals(button.Content, caption));

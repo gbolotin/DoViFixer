@@ -50,44 +50,6 @@ public sealed class SettingsPersistenceTests
     }
 
     [TestMethod]
-    public async Task NavigationWaitsForPageReadAndRejectsOverlappingRequests()
-    {
-        using var runtime = new TestRuntime();
-        var store = new DelayedReadStore(runtime);
-        runtime.Services.AddSingleton<ISettingsStore>(store);
-        var shell = runtime.Container.GetRequiredService<ShellViewModel>();
-        var media = shell.Pages.OfType<MediaViewModel>().Single();
-        var archive = shell.Pages.OfType<ArchiveViewModel>().Single();
-        shell.CurrentPage = archive;
-        shell.CurrentPage = media;
-        var navigating = shell.NavigationTask;
-        Task closing = Task.CompletedTask;
-        try
-        {
-            await store.Started.Task.WaitAsync(TimeSpan.FromSeconds(10));
-            Assert.IsFalse(navigating.IsCompleted);
-            Assert.IsFalse(shell.CanNavigate);
-            var currentPage = shell.CurrentPage;
-            shell.CurrentPage = archive;
-            Assert.AreSame(currentPage, shell.CurrentPage);
-            Assert.AreSame(navigating, shell.NavigationTask);
-            Assert.IsFalse(shell.OpenSettingsCommand.CanExecute(null), "Settings must not open during navigation.");
-            closing = shell.CancelAndWaitAsync();
-            Assert.IsFalse(closing.IsCompleted, "Shutdown must also wait for a media summary refresh.");
-        }
-        finally
-        {
-            store.Release.TrySetResult();
-            await navigating.WaitAsync(TimeSpan.FromSeconds(10));
-            await closing.WaitAsync(TimeSpan.FromSeconds(10));
-        }
-        Assert.IsTrue(shell.CanNavigate);
-        Assert.AreEqual(1, store.Reads);
-        shell.CurrentPage = shell.CurrentPage;
-        Assert.AreEqual(1, store.Reads, "Selecting the current page must not reload it.");
-    }
-
-    [TestMethod]
     public async Task OpeningSettingsShowsTheFrameWhileItLoadsAndReloadsOnEveryOpen()
     {
         using var runtime = new TestRuntime();
@@ -163,10 +125,7 @@ public sealed class SettingsPersistenceTests
         Assert.IsTrue(shell.CanNavigate);
         await shell.CloseSettingsCommand.InvokeAsync();
         Assert.IsFalse(shell.IsSettingsOpen);
-        var archive = shell.Pages.OfType<ArchiveViewModel>().Single();
-        shell.CurrentPage = archive;
-        await shell.NavigationTask;
-        Assert.AreSame(archive, shell.CurrentPage);
+        Assert.IsTrue(shell.AddFilesCommand.CanExecute(null), "The page takes commands again.");
     }
 
     [TestMethod]

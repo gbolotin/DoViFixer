@@ -10,9 +10,17 @@ namespace DoViFixer.App.Tests;
 [TestClass]
 public sealed class MediaLibraryTests
 {
+    private static void SelectAll(MediaViewModel media)
+    {
+        foreach (var row in media.Files)
+        {
+            row.IsSelected = true;
+        }
+    }
+
     [TestMethod]
     [DataRow("Remove")]
-    [DataRow("Clear")]
+    [DataRow("Remove selected")]
     [DataRow("Remove missing")]
     public async Task RemovingRowsForgetsTheirLibraryRecordsAcrossReload(string action)
     {
@@ -28,11 +36,12 @@ public sealed class MediaLibraryTests
         }
         var media = runtime.Container.GetRequiredService<MediaViewModel>();
         await media.LoadLibraryAsync();
-        // A library record outside this list must survive Clear all.
+        // A library record outside this list must survive removing every row.
         runtime.LibraryFiles[outside] = new("outside", runtime.Identify(outside), null);
-        if (action == "Clear")
+        if (action == "Remove selected")
         {
-            await media.ClearAllCommand.InvokeAsync();
+            SelectAll(media);
+            await media.RemoveSelectedCommand.InvokeAsync();
         }
         else if (action == "Remove missing")
         {
@@ -43,14 +52,14 @@ public sealed class MediaLibraryTests
             await media.RemoveFileCommand.InvokeAsync(media.Files.Single(row => row.Path == first));
         }
         Assert.IsFalse(runtime.LibraryFiles.ContainsKey(first));
-        Assert.AreEqual(action != "Clear", runtime.LibraryFiles.ContainsKey(second));
+        Assert.AreEqual(action != "Remove selected", runtime.LibraryFiles.ContainsKey(second));
         Assert.IsTrue(runtime.LibraryFiles.ContainsKey(outside));
         Assert.HasCount(0, runtime.DeletedFiles, "Removing rows must never delete media.");
         media.Dispose();
         var reopened = runtime.Container.GetRequiredService<MediaViewModel>();
         await reopened.LoadLibraryAsync();
         Assert.IsFalse(reopened.Files.Any(row => row.Path == first));
-        Assert.AreEqual(action != "Clear", reopened.Files.Any(row => row.Path == second));
+        Assert.AreEqual(action != "Remove selected", reopened.Files.Any(row => row.Path == second));
         await reopened.CancelPreviewsAsync();
     }
 
@@ -63,12 +72,13 @@ public sealed class MediaLibraryTests
         var media = runtime.Container.GetRequiredService<MediaViewModel>();
         await media.LoadLibraryAsync();
         runtime.ForgetLibraryFailure = new IOException("Library is unavailable.");
-        await media.ClearAllCommand.InvokeAsync();
+        SelectAll(media);
+        await media.RemoveSelectedCommand.InvokeAsync();
         Assert.HasCount(1, media.Files);
         Assert.HasCount(1, runtime.LibraryFiles);
         Assert.AreEqual(DoViFixer.App.Presentation.Application.ViewStatus.Error, media.Status);
         runtime.ForgetLibraryFailure = null;
-        await media.ClearAllCommand.InvokeAsync();
+        await media.RemoveSelectedCommand.InvokeAsync();
         Assert.HasCount(0, media.Files);
         Assert.HasCount(0, runtime.LibraryFiles);
         await media.CancelPreviewsAsync();
@@ -99,7 +109,7 @@ public sealed class MediaLibraryTests
         Assert.HasCount(0, runtime.LibraryFiles);
         Assert.HasCount(0, media.Files);
         Assert.IsNull(media.Focused);
-        Assert.IsFalse(media.ClearAllCommand.CanExecute(null));
+        Assert.IsFalse(media.RemoveSelectedCommand.CanExecute(null));
         Assert.HasCount(0, runtime.DeletedFiles);
         Assert.AreEqual(3, runtime.CachedFrames);
         StringAssert.Contains(settings.StatusMessage, "Deleted 1 library record");
@@ -127,6 +137,30 @@ public sealed class MediaLibraryTests
             Assert.AreNotEqual("Unknown", model.Files.Single().DetailRows.Single(detail => detail.Label == label).Result, label);
         }
         Assert.AreEqual(0, runtime.Analyses);
+    }
+
+    [TestMethod]
+    public async Task RememberedProfile81FilesOfferRestoreWhenTheirArchiveExists()
+    {
+        using var runtime = new TestRuntime();
+        string withArchive = @"C:\Media\P81 - DV P8.1.mkv";
+        string withoutArchive = @"C:\Media\Other P81 - DV P8.1.mkv";
+        foreach (string path in new[] { withArchive, withoutArchive })
+        {
+            var analysis = MediaClassifier.Classify(await runtime.ProbeAsync(path, default), new(AnalysisMethod.MetadataOnly, EnhancementLayer.None, 0, null, 0, 0));
+            runtime.LibraryFiles[path] = new(path, runtime.Identify(path), analysis);
+        }
+        runtime.Archives.Add(@"C:\Media\P81.dovi");
+        var model = runtime.Container.GetRequiredService<MediaViewModel>();
+
+        await model.LoadLibraryAsync();
+
+        var restorable = model.Files.Single(row => row.Path == withArchive);
+        Assert.AreEqual(@"C:\Media\P81.dovi", restorable.RestoreArchive);
+        Assert.IsTrue(model.RestoreRowCommand.CanExecute(restorable));
+        Assert.IsNull(model.Files.Single(row => row.Path == withoutArchive).RestoreArchive, "An archive is offered to one file only.");
+        Assert.AreEqual(0, runtime.Analyses, "Pairing must not analyze the video.");
+        await model.CancelPreviewsAsync();
     }
 
     [TestMethod]
