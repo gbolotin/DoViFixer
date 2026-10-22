@@ -30,6 +30,39 @@ public sealed class TitleBarMenuTests
     }
 
     [TestMethod]
+    public async Task FileMenuActsOnTheCheckedFiles()
+    {
+        using var runtime = new TestRuntime();
+        var shell = runtime.Container.GetRequiredService<ShellViewModel>();
+        Assert.IsFalse(shell.RescanCommand.CanExecute(null), "There is nothing to rescan yet.");
+        runtime.PickedFiles = [@"C:\Media\Mountain.mkv"];
+        await shell.AddFilesCommand.InvokeAsync();
+        var row = shell.Media.Files.Single();
+
+        // Cached results would answer a rescan without analyzing again.
+        await runtime.UpdateAsync(settings => settings with { UseCachedResults = false }, default);
+        int analyses = runtime.Analyses;
+        await shell.RescanCommand.InvokeAsync();
+        Assert.IsGreaterThan(analyses, runtime.Analyses, "Rescan analyzes the listed files again.");
+
+        IRelayCommand[] selectionCommands = [shell.InspectCommand, shell.DeepInspectCommand, shell.ConvertCommand, shell.RemoveSelectedCommand];
+        row.IsSelected = false;
+        Assert.IsTrue(selectionCommands.All(command => !command.CanExecute(null)), "Selection commands need a checked file.");
+        Assert.IsTrue(shell.RescanCommand.CanExecute(null), "Rescan covers every listed file, checked or not.");
+        row.IsSelected = true;
+        Assert.IsTrue(selectionCommands.All(command => command.CanExecute(null)));
+        Assert.IsFalse(shell.RestoreSelectedCommand.CanExecute(null), "A Profile 7 file has no archive to restore from.");
+
+        int fullAnalyses = runtime.FullAnalyses;
+        await shell.InspectCommand.InvokeAsync();
+        Assert.AreEqual(fullAnalyses + 1, runtime.FullAnalyses);
+
+        await shell.RemoveSelectedCommand.InvokeAsync();
+        Assert.IsEmpty(shell.Media.Files);
+        Assert.IsFalse(shell.RescanCommand.CanExecute(null));
+    }
+
+    [TestMethod]
     public async Task SettingsCommandsOpenTheSectionThatShowsTheirResult()
     {
         using var runtime = new TestRuntime();
@@ -42,6 +75,7 @@ public sealed class TitleBarMenuTests
 
         Assert.IsFalse(shell.AddFilesCommand.CanExecute(null), "The pages behind the frame take no commands.");
         Assert.IsFalse(shell.CleanupBackupsCommand.CanExecute(null));
+        Assert.IsFalse(shell.RescanCommand.CanExecute(null));
         Assert.IsFalse(shell.ShowAboutCommand.CanExecute(null), "The frame is already open.");
 
         await shell.CloseSettingsCommand.InvokeAsync();

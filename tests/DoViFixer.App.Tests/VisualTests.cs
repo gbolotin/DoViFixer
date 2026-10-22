@@ -177,9 +177,9 @@ public sealed class VisualTests
             var detailValues = Descendants<TextBlock>(mediaView)
                 .Where(text => text.DataContext is MediaDetail && text.IsVisible
                     && (Grid.GetColumn(text) == 1 || text.Parent is DockPanel panel && Grid.GetColumn(panel) == 1)).ToArray();
-            Assert.AreEqual(media.Focused!.DetailRows.Count, detailValues.Length);
+            Assert.AreEqual(media.Focused!.DetailRows.Count + media.Focused.ExaminationRows.Count + media.Focused.SampleRows.Count, detailValues.Length);
             var riskDot = Descendants<System.Windows.Shapes.Ellipse>(mediaView)
-                .Single(dot => dot.IsVisible && dot.DataContext is MediaDetail);
+                .Single(dot => dot.IsVisible && dot.DataContext is MediaDetail detail && media.Focused.DetailRows.Contains(detail));
             Assert.AreEqual("Risk", ((MediaDetail)riskDot.DataContext).Label);
             var nextStep = Descendants<Button>(mediaView).Single(button => AutomationProperties.GetName(button) == "Next step");
             Assert.AreEqual(media.Focused.NextStepText, nextStep.Content);
@@ -393,7 +393,7 @@ public sealed class VisualTests
         var focused = media.Focused;
         Assert.AreSame(list.FindResource("WfSortableColumnHeaderTemplate"), profileHeader.ContentTemplate, "Columns without a header template use the shared sortable header.");
         Assert.IsTrue(Descendants<TextBlock>(profileHeader).Any(text => text.Text == "Format"));
-        Assert.IsTrue(Descendants<TextBlock>(statusHeader).Any(text => text.Text == "Result"));
+        Assert.IsTrue(Descendants<TextBlock>(statusHeader).Any(text => text.Text == "Status"));
         Assert.IsTrue(Descendants<TextBlock>(actionHeader).Any(text => text.Text == "Analysis"));
         Assert.IsFalse(Indicator(fileHeader).IsVisible);
 
@@ -509,9 +509,13 @@ public sealed class VisualTests
         double originalColumnWidth = grid.Columns[0].Width;
         var originalPadding = list.Padding;
         var originalScrollVisibility = scroll.VerticalScrollBarVisibility;
+        var actionsHeader = Descendants<GridViewColumnHeader>(list).Single(header => ReferenceEquals(header.Column, grid.Columns[^1]));
+        Assert.IsNull(grid.Columns[^1].Header, "The Actions column has no title.");
+        Assert.IsFalse(actionsHeader.IsHitTestVisible, "The Actions header takes no clicks.");
+        Assert.IsFalse(Descendants<System.Windows.Controls.Primitives.Thumb>(actionsHeader).Any(), "The Actions header has no resize gripper.");
         window.Width = 1800;
         await LayoutAsync(window);
-        Assert.IsTrue(grid.Columns[^1].Width > 176, "The last column must expand into spare space.");
+        Assert.IsTrue(grid.Columns[^1].Width > 128, "The last column must expand into spare space.");
         Assert.AreEqual(0, scroll.ScrollableWidth, 0.1, "Filling must not introduce horizontal overflow.");
 
         double wideWidth = grid.Columns[^1].Width;
@@ -541,7 +545,7 @@ public sealed class VisualTests
 
         grid.Columns[0].Width = 2000;
         await LayoutAsync(window);
-        Assert.AreEqual(176, grid.Columns[^1].Width, 0.1, "Keep actions usable when there is insufficient space.");
+        Assert.AreEqual(128, grid.Columns[^1].Width, 0.1, "Keep actions usable when there is insufficient space.");
         Assert.IsTrue(scroll.ScrollableWidth > 0, "Narrow layouts must remain horizontally scrollable.");
 
         grid.Columns[0].Width = originalColumnWidth;
@@ -810,26 +814,30 @@ public sealed class VisualTests
         var row = media.Files[0];
         var container = (ListViewItem)list.ItemContainerGenerator.ContainerFromItem(row);
         var remove = Descendants<Button>(container).Single(button => Equals(button.ToolTip, "Remove"));
-        var convert = Descendants<Button>(container).Single(button => Equals(button.ToolTip, "Convert"));
         var restore = Descendants<Button>(container).Single(button => Equals(button.ToolTip, "Restore to DV7 from .dovi archive"));
         Assert.AreSame(media.RestoreRowCommand, restore.Command);
         Assert.AreSame(row, restore.CommandParameter);
         Assert.AreEqual("\uE7A7", restore.Content);
         Assert.AreEqual(Visibility.Hidden, restore.Visibility);
+        var inspect = Descendants<Button>(container).Single(button => Equals(button.ToolTip, "Inspect"));
+        var convert = Descendants<Button>(container).Single(button => Equals(button.ToolTip, "Convert"));
+        Assert.AreSame(media.InspectIncompleteCommand, inspect.Command);
         Assert.AreSame(media.ConvertRowCommand, convert.Command);
+        Assert.AreSame(row, inspect.CommandParameter);
         Assert.AreSame(row, convert.CommandParameter);
-        Assert.AreEqual("Convert", System.Windows.Automation.AutomationProperties.GetName(convert));
-        Assert.AreEqual("Convert", convert.Content);
-        Assert.AreEqual("\uE8AB", convert.Tag);
+        Assert.AreEqual("", inspect.Content);
+        Assert.AreEqual("", convert.Content);
+        Assert.AreEqual(Visibility.Hidden, inspect.Visibility, "Hover actions stay hidden until the row is hovered.");
+        Assert.AreEqual(Visibility.Hidden, convert.Visibility);
         var actions = (StackPanel)remove.Parent;
-        Assert.AreSame(restore, actions.Children[actions.Children.IndexOf(remove) - 1]);
-        Assert.IsFalse(actions.Children.Contains(convert), "Convert belongs in the primary slot, not the hover actions.");
-        Assert.AreEqual(Visibility.Collapsed, convert.Visibility);
+        CollectionAssert.AreEqual(new UIElement[] { inspect, convert, restore, remove }, actions.Children.Cast<UIElement>().ToArray(),
+            "Icon-only hover actions share one row, in workflow order.");
+        double minimumActionsWidth = WpfFoundation.Behaviors.GridViewSizing.GetLastColumnMinimumWidth(list);
+        Assert.IsTrue(actions.ActualWidth <= minimumActionsWidth - 12, $"All four hover actions fit the narrowest Actions column: {actions.ActualWidth} of {minimumActionsWidth}.");
         var originalAnalysis = row.Analysis!;
         row.Analysis = originalAnalysis with { Media = originalAnalysis.Media with { Profile = DolbyVisionProfile.Profile81 } };
         await LayoutAsync(window);
         AssertStableActionSlots(list, slots, "Profile 8.1");
-        Assert.AreEqual(Visibility.Collapsed, convert.Visibility);
         Assert.AreEqual(Visibility.Hidden, restore.Visibility);
         row.RestoreArchive = Path.ChangeExtension(row.Path, ".dovi");
         await LayoutAsync(window);
@@ -839,12 +847,10 @@ public sealed class VisualTests
         row.Analysis = null;
         await LayoutAsync(window);
         AssertStableActionSlots(list, slots, "no analysis");
-        Assert.AreEqual(Visibility.Collapsed, convert.Visibility);
         Assert.AreEqual(Visibility.Hidden, restore.Visibility);
         row.Analysis = originalAnalysis;
         await LayoutAsync(window);
         AssertStableActionSlots(list, slots, "Profile 7 again");
-        Assert.AreEqual(Visibility.Collapsed, convert.Visibility);
         Assert.AreEqual(Visibility.Hidden, restore.Visibility);
         row.RestoreArchive = null;
         Assert.AreSame(media.RemoveFileCommand, remove.Command);
@@ -856,21 +862,26 @@ public sealed class VisualTests
         await LayoutAsync(window);
         AssertStableActionSlots(list, slots, "row selected");
         Assert.IsFalse(remove.IsVisible, "Selecting a row without hovering must keep hover actions hidden.");
-        Assert.IsFalse(convert.IsVisible);
         container.IsSelected = false;
         media.Focused = media.Files[1];
         await LayoutAsync(window);
         AssertStableActionSlots(list, slots, "other row focused");
         Assert.IsFalse(remove.IsVisible, "An unselected row without hover must hide delete.");
+        await VerifyRowContextMenuAsync(media, container, row, window);
         foreach (var (caption, command) in new (string, object)[]
         {
-            ("Cancel", media.CancelFileCommand), ("Retry", media.RetryAnalysisCommand),
-            ("Inspect", media.InspectIncompleteCommand), ("Skip", media.SkipCommand)
+            ("Cancel", media.CancelFileCommand), ("Retry", media.RetryAnalysisCommand), ("Skip", media.SkipCommand)
         })
         {
             var button = Button(container, caption);
             Assert.AreSame(command, button.Command, caption + " must resolve through the actual page template.");
             Assert.AreSame(row, button.CommandParameter);
+            var slot = (Grid)button.Parent;
+            var resultCell = (Grid)slot.Parent;
+            Assert.AreEqual(1, Grid.GetColumn(slot), caption + " sits right of the result text.");
+            Assert.AreEqual(HorizontalAlignment.Right, slot.HorizontalAlignment);
+            Assert.IsTrue(Descendants<TextBlock>(resultCell).Any(text => System.Windows.Data.BindingOperations.GetBinding(text, TextBlock.TextProperty)?.Path.Path == nameof(MediaRow.Status)),
+                caption + " belongs in the Result column.");
         }
 
         // A failed analysis must be retryable from the row even when another row is focused.
@@ -892,8 +903,9 @@ public sealed class VisualTests
         row.Analysis = DoViFixer.Domain.Analysis.MediaClassifier.Classify(analysis.Media, analysis.Evidence with { SuccessfulSamples = 9 });
         await LayoutAsync(window);
         AssertStableActionSlots(list, slots, "incomplete scan");
+        Assert.IsFalse(row.OffersConversion, "An incomplete scan offers Inspect but not Convert.");
         int fullAnalyses = runtime.FullAnalyses;
-        Invoke(Button(container, "Inspect"));
+        await media.InspectIncompleteCommand.InvokeAsync(row);
         await LayoutAsync(window);
         AssertStableActionSlots(list, slots, "inspected");
         await media.Completion;
@@ -902,9 +914,6 @@ public sealed class VisualTests
         await LayoutAsync(window);
         Assert.AreEqual("Convert", row.NextStepText);
         container = (ListViewItem)list.ItemContainerGenerator.ContainerFromItem(row);
-        convert = Button(container, "Convert");
-        Assert.IsTrue(convert.IsVisible, "Recommended conversion must be available without hovering.");
-        Assert.IsTrue(convert.IsEnabled);
         AssertStableActionSlots(list, slots, "conversion recommended");
 
         row.IsSelected = true;
@@ -933,9 +942,6 @@ public sealed class VisualTests
             AssertStableActionSlots(list, slots, "conversion running");
             Assert.IsFalse(settingsButton.IsEnabled, "Settings stay closed while an operation runs.");
             container = (ListViewItem)list.ItemContainerGenerator.ContainerFromItem(row);
-            convert = Button(container, "Convert");
-            Assert.IsFalse(convert.IsEnabled);
-            Assert.AreEqual(Visibility.Collapsed, convert.Visibility, "Cancel replaces Convert in the primary slot during conversion.");
             Assert.AreSame(row, media.BatchProgress.CurrentJob);
             Assert.AreEqual(45, row.Progress.StagePercent);
             var pending = (ListViewItem)list.ItemContainerGenerator.ContainerFromItem(media.Files[1]);
@@ -993,7 +999,7 @@ public sealed class VisualTests
         Assert.AreEqual(window.FindResource("SystemFillColorCautionBrush"), missingStatus.Foreground);
         Assert.IsFalse(ResultDot(missingContainer, missing).IsVisible, "A missing file shows no result dot.");
         Assert.AreEqual(TextDecorationLocation.Strikethrough, Descendants<TextBlock>(missingContainer).Single(text => text.Text == missing.Name).TextDecorations.Single().Location);
-        Assert.IsFalse(Descendants<CheckBox>(missingContainer).Single().IsEnabled);
+        Assert.IsTrue(Descendants<CheckBox>(missingContainer).Single().IsEnabled, "The user can still clear a missing file's check mark.");
         Assert.AreEqual(Visibility.Visible, removeMissing.Visibility);
         Assert.IsTrue(removeMissing.IsEnabled);
         AssertInside(removeMissing, (FrameworkElement)window.Content);
@@ -1024,6 +1030,19 @@ public sealed class VisualTests
         Assert.AreEqual(Key.OemComma, shortcut.Key);
         Assert.AreEqual(ModifierKeys.Control, shortcut.Modifiers, "Ctrl+comma opens Settings.");
         Assert.AreEqual("Settings (Ctrl+,)", open.ToolTip);
+        Assert.AreEqual(Key.F4, window.InputBindings.OfType<KeyBinding>().Single(binding => ReferenceEquals(binding.Command, shell.InspectCommand)).Key);
+        Assert.AreEqual(Key.F5, window.InputBindings.OfType<KeyBinding>().Single(binding => ReferenceEquals(binding.Command, shell.ConvertCommand)).Key);
+        var fileMenu = Descendants<Menu>(titleBar).Single().Items.OfType<MenuItem>().First();
+        var fileItems = fileMenu.Items.OfType<MenuItem>().ToDictionary(item => (string)item.Header);
+        Assert.AreEqual("F4", fileItems["_Inspect"].InputGestureText);
+        Assert.AreEqual("F5", fileItems["_Convert"].InputGestureText);
+        foreach (var (header, glyph) in new[] { ("Re_scan all files", ""), ("_Inspect", ""), ("_Deep Inspect", ""),
+            ("_Convert", ""), ("Rest_ore to DV7…", ""), ("_Remove", "") })
+        {
+            Assert.AreEqual(glyph, ((TextBlock)fileItems[header].Icon).Text, header + " shows its toolbar icon.");
+        }
+        Assert.IsInstanceOfType<WpfFoundation.Controls.PathIcon>(fileItems["_Add files…"].Icon);
+        Assert.IsInstanceOfType<WpfFoundation.Controls.PathIcon>(fileItems["Add _folder…"].Icon);
         Assert.AreEqual(Visibility.Collapsed, overlay.Visibility);
         AssertInside(open, content);
         runtime.AnalysisCacheBytes = 262144;
@@ -1348,9 +1367,55 @@ public sealed class VisualTests
     /// Each row action occupies the same place in every row and state, so showing or hiding one action never
     /// moves another: hover actions always keep their space, and a row shows at most one primary action.
     /// </summary>
+    private static async Task VerifyRowContextMenuAsync(MediaViewModel media, ListViewItem container, MediaRow row, Window window)
+    {
+        var menu = container.ContextMenu;
+        Assert.IsNotNull(menu, "Rows have a right-click menu.");
+        // Rows share one menu; opening it on a row makes that row its DataContext.
+        var other = media.Files.First(file => !ReferenceEquals(file, row));
+        var otherContainer = (ListViewItem)ItemsControl.ItemsControlFromItemContainer(container).ItemContainerGenerator.ContainerFromItem(other);
+        menu.PlacementTarget = otherContainer;
+        menu.IsOpen = true;
+        await LayoutAsync(window);
+        Assert.AreSame(other, menu.DataContext);
+        Assert.AreSame(other, menu.Items.OfType<MenuItem>().First().CommandParameter);
+        menu.IsOpen = false;
+        menu.PlacementTarget = container;
+        menu.IsOpen = true;
+        try
+        {
+            await LayoutAsync(window);
+            Assert.AreSame(row, menu.DataContext);
+            var items = menu.Items.OfType<MenuItem>().ToDictionary(item => (string)item.Header);
+            foreach (var (header, command) in new (string, object)[]
+            {
+                ("_Scan", media.ScanRowCommand), ("_Inspect", media.InspectRowCommand), ("_Deep Inspect", media.DeepInspectRowCommand),
+                ("Re_try analysis", media.RetryAnalysisCommand), ("_Convert", media.ConvertRowCommand), ("Rest_ore to DV7…", media.RestoreRowCommand),
+                ("S_kip", media.SkipCommand), ("C_ancel", media.CancelFileCommand), ("_Remove from list", media.RemoveFileCommand)
+            })
+            {
+                Assert.AreSame(command, items[header].Command, header + " must resolve through the row menu.");
+                Assert.AreSame(row, items[header].CommandParameter);
+            }
+
+            Assert.AreSame(media.ShowResultFileCommand, items["Show in _folder"].Command);
+            Assert.AreEqual(row.Path, items["Show in _folder"].CommandParameter);
+            Assert.AreEqual(row.OffersConversion ? Visibility.Visible : Visibility.Collapsed, items["_Convert"].Visibility, "Convert shows only where conversion would not skip.");
+            Assert.AreEqual(Visibility.Collapsed, items["Rest_ore to DV7…"].Visibility);
+            Assert.AreEqual(Visibility.Collapsed, items["S_kip"].Visibility);
+            Assert.AreEqual(Visibility.Collapsed, items["C_ancel"].Visibility);
+            Assert.AreEqual(Visibility.Collapsed, items["Show _output in folder"].Visibility);
+            Assert.IsTrue(items["_Inspect"].IsEnabled && items["_Remove from list"].IsEnabled);
+        }
+        finally
+        {
+            menu.IsOpen = false;
+        }
+    }
+
     private static void AssertStableActionSlots(ListView list, Dictionary<string, Rect> slots, string checkpoint)
     {
-        string[] primaryActions = ["Cancel", "Skip", "Retry", "Inspect", "Convert"];
+        string[] primaryActions = ["Cancel", "Skip", "Retry"];
         foreach (var item in list.Items)
         {
             var container = (ListViewItem)list.ItemContainerGenerator.ContainerFromItem(item);

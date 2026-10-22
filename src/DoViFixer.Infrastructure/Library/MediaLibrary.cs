@@ -204,6 +204,11 @@ internal sealed class MediaLibrary(StorageOptions options, ISettingsStore settin
             while (await reader.ReadAsync(cancellationToken))
             {
                 stored = ValidAnalysis(reader.GetString(0), source, snapshot.AnalysisOptions);
+                // Scans saved before each sample was kept cannot list their samples, so they do not spare a new scan.
+                if (stored?.Evidence is { Method: AnalysisMethod.SampledRpu, Samples: null })
+                {
+                    stored = null;
+                }
                 if (stored is not null)
                 {
                     break;

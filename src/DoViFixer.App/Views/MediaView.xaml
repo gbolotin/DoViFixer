@@ -65,11 +65,16 @@
                                     <Setter Property="Content" Value="Inspect" />
                                     <Setter Property="Icon" Value="&#xE721;" />
                                     <Setter Property="Command" Value="{Binding InspectCommand}" />
+                                    <!-- F4 always runs Inspect (the window's key binding), so only that choice names it. -->
+                                    <Setter Property="ToolTip" Value="Inspect (F4)" />
+                                    <Setter Property="AutomationProperties.AcceleratorKey" Value="F4" />
                                     <Style.Triggers>
                                         <DataTrigger Binding="{Binding IsDeepInspectionChosen}" Value="True">
                                             <Setter Property="Content" Value="Deep Inspect" />
                                             <Setter Property="Icon" Value="&#xE9D9;" />
                                             <Setter Property="Command" Value="{Binding DeepInspectCommand}" />
+                                            <Setter Property="ToolTip" Value="Deep Inspect" />
+                                            <Setter Property="AutomationProperties.AcceleratorKey" Value="" />
                                         </DataTrigger>
                                     </Style.Triggers>
                                 </Style>
@@ -89,9 +94,16 @@
                         </wfc:SplitButton>
                         <Button Content="Convert"
                                 Command="{Binding ConvertCommand}"
-                                ToolTip="{Binding OutputSummaryToolTip}"
+                                AutomationProperties.AcceleratorKey="F5"
                                 Tag="&#xE8AB;"
-                                ContentTemplate="{StaticResource WfIconContentTemplate}" />
+                                ContentTemplate="{StaticResource WfIconContentTemplate}">
+                            <Button.ToolTip>
+                                <StackPanel>
+                                    <TextBlock Text="Convert (F5)" FontWeight="SemiBold" />
+                                    <TextBlock Text="{Binding OutputSummaryToolTip}" />
+                                </StackPanel>
+                            </Button.ToolTip>
+                        </Button>
                     </WrapPanel>
                 </Border>
             </DataTemplate>
@@ -101,10 +113,93 @@
                           SelectedItem="{Binding Focused}"
                           wf:GridViewLayout.IsEnabled="True"
                           wf:GridViewLayout.State="{Binding ColumnLayout, Mode=TwoWay}"
-                          wf:GridViewSizing.LastColumnMinimumWidth="176"
+                          wf:GridViewSizing.LastColumnMinimumWidth="128"
                           wf:GridViewSort.Sort="{Binding FileSort}"
                           wf:ListFilter.Predicate="{Binding ShownFilePredicate}"
                           wf:ListFilter.LiveProperty="FilterGroup">
+                    <ListView.Resources>
+                        <!-- The right-clicked row's actions. Rows share one menu, whose DataContext follows the row it opens on;
+                             the commands come from the page, which each row container carries in its Tag. Actions that
+                             only apply to some files show only on those, as on the row's hover buttons. -->
+                        <ContextMenu x:Key="MediaRowContextMenu"
+                                     DataContext="{Binding PlacementTarget.DataContext, RelativeSource={RelativeSource Self}}">
+                            <MenuItem Header="_Scan"
+                                      Command="{Binding PlacementTarget.Tag.ScanRowCommand, RelativeSource={RelativeSource AncestorType=ContextMenu}}"
+                                      CommandParameter="{Binding}">
+                                <MenuItem.Icon>
+                                    <TextBlock Text="&#xE72C;" Style="{StaticResource MenuGlyphIconStyle}" />
+                                </MenuItem.Icon>
+                            </MenuItem>
+                            <MenuItem Header="_Inspect"
+                                      Command="{Binding PlacementTarget.Tag.InspectRowCommand, RelativeSource={RelativeSource AncestorType=ContextMenu}}"
+                                      CommandParameter="{Binding}">
+                                <MenuItem.Icon>
+                                    <TextBlock Text="&#xE721;" Style="{StaticResource MenuGlyphIconStyle}" />
+                                </MenuItem.Icon>
+                            </MenuItem>
+                            <MenuItem Header="_Deep Inspect"
+                                      Command="{Binding PlacementTarget.Tag.DeepInspectRowCommand, RelativeSource={RelativeSource AncestorType=ContextMenu}}"
+                                      CommandParameter="{Binding}">
+                                <MenuItem.Icon>
+                                    <TextBlock Text="&#xE9D9;" Style="{StaticResource MenuGlyphIconStyle}" />
+                                </MenuItem.Icon>
+                            </MenuItem>
+                            <MenuItem Header="Re_try analysis"
+                                      Visibility="{Binding CanRetryAnalysis, Converter={StaticResource WfBooleanToVisibilityConverter}}"
+                                      Command="{Binding PlacementTarget.Tag.RetryAnalysisCommand, RelativeSource={RelativeSource AncestorType=ContextMenu}}"
+                                      CommandParameter="{Binding}" />
+                            <MenuItem Header="_Convert"
+                                      Visibility="{Binding OffersConversion, Converter={StaticResource WfBooleanToVisibilityConverter}}"
+                                      Command="{Binding PlacementTarget.Tag.ConvertRowCommand, RelativeSource={RelativeSource AncestorType=ContextMenu}}"
+                                      CommandParameter="{Binding}">
+                                <MenuItem.Icon>
+                                    <TextBlock Text="&#xE8AB;" Style="{StaticResource MenuGlyphIconStyle}" />
+                                </MenuItem.Icon>
+                            </MenuItem>
+                            <MenuItem Header="Rest_ore to DV7…"
+                                      Visibility="{Binding CanRestore, Converter={StaticResource WfBooleanToVisibilityConverter}}"
+                                      Command="{Binding PlacementTarget.Tag.RestoreRowCommand, RelativeSource={RelativeSource AncestorType=ContextMenu}}"
+                                      CommandParameter="{Binding}">
+                                <MenuItem.Icon>
+                                    <TextBlock Text="&#xE7A7;" Style="{StaticResource MenuGlyphIconStyle}" />
+                                </MenuItem.Icon>
+                            </MenuItem>
+                            <MenuItem Header="S_kip"
+                                      Visibility="{Binding IsPending, Converter={StaticResource WfBooleanToVisibilityConverter}}"
+                                      Command="{Binding PlacementTarget.Tag.SkipCommand, RelativeSource={RelativeSource AncestorType=ContextMenu}}"
+                                      CommandParameter="{Binding}" />
+                            <MenuItem Header="C_ancel"
+                                      Visibility="{Binding IsActive, Converter={StaticResource WfBooleanToVisibilityConverter}}"
+                                      Command="{Binding PlacementTarget.Tag.CancelFileCommand, RelativeSource={RelativeSource AncestorType=ContextMenu}}"
+                                      CommandParameter="{Binding}" />
+                            <Separator />
+                            <MenuItem Header="Show in _folder"
+                                      Command="{Binding PlacementTarget.Tag.ShowResultFileCommand, RelativeSource={RelativeSource AncestorType=ContextMenu}}"
+                                      CommandParameter="{Binding Path}">
+                                <MenuItem.Icon>
+                                    <TextBlock Text="&#xE838;" Style="{StaticResource MenuGlyphIconStyle}" />
+                                </MenuItem.Icon>
+                            </MenuItem>
+                            <MenuItem Header="Show _output in folder"
+                                      Visibility="{Binding CanOpenResult, Converter={StaticResource WfBooleanToVisibilityConverter}}"
+                                      Command="{Binding PlacementTarget.Tag.ShowResultFileCommand, RelativeSource={RelativeSource AncestorType=ContextMenu}}"
+                                      CommandParameter="{Binding Result.Output}" />
+                            <Separator />
+                            <MenuItem Header="_Remove from list"
+                                      Command="{Binding PlacementTarget.Tag.RemoveFileCommand, RelativeSource={RelativeSource AncestorType=ContextMenu}}"
+                                      CommandParameter="{Binding}">
+                                <MenuItem.Icon>
+                                    <TextBlock Text="&#xE74D;" Style="{StaticResource MenuGlyphIconStyle}" />
+                                </MenuItem.Icon>
+                            </MenuItem>
+                        </ContextMenu>
+                    </ListView.Resources>
+                    <ListView.ItemContainerStyle>
+                        <Style TargetType="ListViewItem" BasedOn="{StaticResource {x:Static GridView.GridViewItemContainerStyleKey}}">
+                            <Setter Property="Tag" Value="{Binding DataContext, RelativeSource={RelativeSource AncestorType=ListView}}" />
+                            <Setter Property="ContextMenu" Value="{StaticResource MediaRowContextMenu}" />
+                        </Style>
+                    </ListView.ItemContainerStyle>
                     <ListView.ContextMenu>
                         <ContextMenu>
                             <MenuItem Header="Reset columns" Command="{Binding ResetColumnLayoutCommand}" />
@@ -174,162 +269,139 @@
                                     </DataTemplate>
                                 </GridViewColumn.CellTemplate>
                             </GridViewColumn>
-                            <GridViewColumn Header="Result"
+                            <GridViewColumn Header="Status"
                                             wf:GridViewLayout.Id="Result"
-                                            Width="128"
+                                            Width="224"
                                             wf:GridViewSort.Key="{x:Static viewModels:MediaSortColumn.Status}">
-                                <GridViewColumn.CellTemplate>
-                                    <DataTemplate>
-                                        <StackPanel VerticalAlignment="Center">
-                                            <Grid VerticalAlignment="Center">
-                                                <Grid.ColumnDefinitions>
-                                                    <ColumnDefinition Width="Auto" />
-                                                    <ColumnDefinition Width="*" />
-                                                    <ColumnDefinition Width="Auto" />
-                                                </Grid.ColumnDefinitions>
-                                                <Grid.Style>
-                                                    <Style TargetType="Grid">
-                                                        <Style.Triggers>
-                                                            <DataTrigger Binding="{Binding IsActive}" Value="True">
-                                                                <Setter Property="Visibility" Value="Collapsed" />
-                                                            </DataTrigger>
-                                                            <DataTrigger Binding="{Binding Status}" Value="">
-                                                                <Setter Property="Visibility" Value="Collapsed" />
-                                                            </DataTrigger>
-                                                        </Style.Triggers>
-                                                    </Style>
-                                                </Grid.Style>
-                                                <Ellipse>
-                                                    <Ellipse.Style>
-                                                        <Style TargetType="Ellipse" BasedOn="{StaticResource MediaRowResultDotStyle}">
-                                                            <Style.Triggers>
-                                                                <MultiDataTrigger>
-                                                                    <MultiDataTrigger.Conditions>
-                                                                        <Condition Binding="{Binding State}" Value="{x:Static viewModels:MediaRowState.Converted}" />
-                                                                        <Condition Binding="{Binding StatusTone}" Value="{x:Static viewModels:MediaStatusTone.Safe}" />
-                                                                    </MultiDataTrigger.Conditions>
-                                                                    <Setter Property="Visibility" Value="Collapsed" />
-                                                                </MultiDataTrigger>
-                                                            </Style.Triggers>
-                                                        </Style>
-                                                    </Ellipse.Style>
-                                                </Ellipse>
-                                                <TextBlock Text="&#xE73E;"
-                                                           FontFamily="{StaticResource SymbolThemeFontFamily}"
-                                                           Foreground="{DynamicResource SystemFillColorSuccessBrush}"
-                                                           Margin="0,0,8,0"
-                                                           VerticalAlignment="Center"
-                                                           AutomationProperties.Name="Conversion completed">
-                                                    <TextBlock.Style>
-                                                        <Style TargetType="TextBlock">
-                                                            <Setter Property="Visibility" Value="Collapsed" />
-                                                            <Style.Triggers>
-                                                                <MultiDataTrigger>
-                                                                    <MultiDataTrigger.Conditions>
-                                                                        <Condition Binding="{Binding State}" Value="{x:Static viewModels:MediaRowState.Converted}" />
-                                                                        <Condition Binding="{Binding StatusTone}" Value="{x:Static viewModels:MediaStatusTone.Safe}" />
-                                                                    </MultiDataTrigger.Conditions>
-                                                                    <Setter Property="Visibility" Value="Visible" />
-                                                                </MultiDataTrigger>
-                                                            </Style.Triggers>
-                                                        </Style>
-                                                    </TextBlock.Style>
-                                                </TextBlock>
-                                                <TextBlock Grid.Column="1"
-                                                           Text="{Binding Status}"
-                                                           TextWrapping="Wrap"
-                                                           VerticalAlignment="Center"
-                                                           ToolTip="{Binding StatusToolTip}">
-                                                    <TextBlock.Style>
-                                                        <Style TargetType="TextBlock">
-                                                            <Style.Triggers>
-                                                                <DataTrigger Binding="{Binding Status}" Value="{x:Static viewModels:MediaRow.MissingStatus}">
-                                                                    <Setter Property="Foreground" Value="{DynamicResource SystemFillColorCautionBrush}" />
-                                                                </DataTrigger>
-                                                            </Style.Triggers>
-                                                        </Style>
-                                                    </TextBlock.Style>
-                                                </TextBlock>
-                                                <TextBlock Grid.Column="2"
-                                                           Text="&#xE7BA;"
-                                                           FontFamily="{StaticResource SymbolThemeFontFamily}"
-                                                           FontWeight="SemiBold"
-                                                           Foreground="{DynamicResource SystemFillColorCautionBrush}"
-                                                           Margin="8,0,0,0"
-                                                           VerticalAlignment="Center"
-                                                           Visibility="{Binding HasWarning, Converter={StaticResource WfBooleanToVisibilityConverter}}"
-                                                           ToolTip="{Binding Warning}"
-                                                           AutomationProperties.Name="Conversion warning" />
-                                            </Grid>
-                                            <TextBlock Text="{Binding ResultRecommendation}"
-                                                       Foreground="{DynamicResource TextFillColorSecondaryBrush}"
-                                                       TextWrapping="Wrap">
-                                                <TextBlock.Style>
-                                                    <Style TargetType="TextBlock">
-                                                        <Style.Triggers>
-                                                            <Trigger Property="Text" Value="">
-                                                                <Setter Property="Visibility" Value="Collapsed" />
-                                                            </Trigger>
-                                                        </Style.Triggers>
-                                                    </Style>
-                                                </TextBlock.Style>
-                                            </TextBlock>
-                                            <StackPanel Margin="0,4,4,4" Visibility="{Binding IsActive, Converter={StaticResource WfBooleanToVisibilityConverter}}">
-                                                <StackPanel DataContext="{Binding Progress}">
-                                                    <TextBlock Text="{Binding Stage}"
-                                                               TextTrimming="CharacterEllipsis"
-                                                               ToolTip="{Binding Stage}" />
-                                                    <DockPanel Margin="0,4,0,0">
-                                                        <TextBlock Text="{Binding StageProgressText}"
-                                                                   DockPanel.Dock="Right"
-                                                                   Foreground="{DynamicResource AccentTextFillColorPrimaryBrush}"
-                                                                   FontSize="{StaticResource CaptionTextBlockFontSize}"
-                                                                   Margin="8,0,0,0" />
-                                                        <ProgressBar Value="{Binding StagePercent, Mode=OneWay}"
-                                                                     IsIndeterminate="{Binding IsIndeterminate}"
-                                                                     Height="6"
-                                                                     VerticalAlignment="Center"
-                                                                     AutomationProperties.Name="Current job stage progress" />
-                                                    </DockPanel>
-                                                </StackPanel>
-                                            </StackPanel>
-                                        </StackPanel>
-                                    </DataTemplate>
-                                </GridViewColumn.CellTemplate>
-                            </GridViewColumn>
-                            <GridViewColumn Header="Analysis"
-                                            wf:GridViewLayout.Id="Analysis"
-                                            Width="96"
-                                            wf:GridViewSort.Key="{x:Static viewModels:MediaSortColumn.Analysis}">
-                                <GridViewColumn.CellTemplate>
-                                    <DataTemplate>
-                                        <TextBlock Text="{Binding AnalysisText}"
-                                                   VerticalAlignment="Center"
-                                                   TextWrapping="Wrap" />
-                                    </DataTemplate>
-                                </GridViewColumn.CellTemplate>
-                            </GridViewColumn>
-                            <GridViewColumn Header="Actions"
-                                            Width="176"
-                                            wf:GridViewLayout.Id="Actions"
-                                            wf:GridViewSizing.IsFillColumn="True">
                                 <GridViewColumn.CellTemplate>
                                     <DataTemplate>
                                         <Grid VerticalAlignment="Center">
                                             <Grid.ColumnDefinitions>
                                                 <ColumnDefinition Width="*" />
                                                 <ColumnDefinition Width="Auto" />
-                                                <ColumnDefinition Width="Auto" />
                                             </Grid.ColumnDefinitions>
-                                            <!-- One primary action per row, in priority order, right-aligned against the fixed hover
-                                                 actions so no action moves when another appears or disappears. -->
-                                            <Grid Grid.Column="1" HorizontalAlignment="Right">
+                                            <StackPanel VerticalAlignment="Center">
+                                                <Grid VerticalAlignment="Center">
+                                                    <Grid.ColumnDefinitions>
+                                                        <ColumnDefinition Width="Auto" />
+                                                        <ColumnDefinition Width="*" />
+                                                        <ColumnDefinition Width="Auto" />
+                                                    </Grid.ColumnDefinitions>
+                                                    <Grid.Style>
+                                                        <Style TargetType="Grid">
+                                                            <Style.Triggers>
+                                                                <DataTrigger Binding="{Binding IsActive}" Value="True">
+                                                                    <Setter Property="Visibility" Value="Collapsed" />
+                                                                </DataTrigger>
+                                                                <DataTrigger Binding="{Binding Status}" Value="">
+                                                                    <Setter Property="Visibility" Value="Collapsed" />
+                                                                </DataTrigger>
+                                                            </Style.Triggers>
+                                                        </Style>
+                                                    </Grid.Style>
+                                                    <Ellipse>
+                                                        <Ellipse.Style>
+                                                            <Style TargetType="Ellipse" BasedOn="{StaticResource MediaRowResultDotStyle}">
+                                                                <Style.Triggers>
+                                                                    <MultiDataTrigger>
+                                                                        <MultiDataTrigger.Conditions>
+                                                                            <Condition Binding="{Binding State}" Value="{x:Static viewModels:MediaRowState.Converted}" />
+                                                                            <Condition Binding="{Binding StatusTone}" Value="{x:Static viewModels:MediaStatusTone.Safe}" />
+                                                                        </MultiDataTrigger.Conditions>
+                                                                        <Setter Property="Visibility" Value="Collapsed" />
+                                                                    </MultiDataTrigger>
+                                                                </Style.Triggers>
+                                                            </Style>
+                                                        </Ellipse.Style>
+                                                    </Ellipse>
+                                                    <TextBlock Text="&#xE73E;"
+                                                               FontFamily="{StaticResource SymbolThemeFontFamily}"
+                                                               Foreground="{DynamicResource SystemFillColorSuccessBrush}"
+                                                               Margin="0,0,8,0"
+                                                               VerticalAlignment="Center"
+                                                               AutomationProperties.Name="Conversion completed">
+                                                        <TextBlock.Style>
+                                                            <Style TargetType="TextBlock">
+                                                                <Setter Property="Visibility" Value="Collapsed" />
+                                                                <Style.Triggers>
+                                                                    <MultiDataTrigger>
+                                                                        <MultiDataTrigger.Conditions>
+                                                                            <Condition Binding="{Binding State}" Value="{x:Static viewModels:MediaRowState.Converted}" />
+                                                                            <Condition Binding="{Binding StatusTone}" Value="{x:Static viewModels:MediaStatusTone.Safe}" />
+                                                                        </MultiDataTrigger.Conditions>
+                                                                        <Setter Property="Visibility" Value="Visible" />
+                                                                    </MultiDataTrigger>
+                                                                </Style.Triggers>
+                                                            </Style>
+                                                        </TextBlock.Style>
+                                                    </TextBlock>
+                                                    <TextBlock Grid.Column="1"
+                                                               Text="{Binding Status}"
+                                                               TextWrapping="Wrap"
+                                                               VerticalAlignment="Center"
+                                                               ToolTip="{Binding StatusToolTip}">
+                                                        <TextBlock.Style>
+                                                            <Style TargetType="TextBlock">
+                                                                <Style.Triggers>
+                                                                    <DataTrigger Binding="{Binding Status}" Value="{x:Static viewModels:MediaRow.MissingStatus}">
+                                                                        <Setter Property="Foreground" Value="{DynamicResource SystemFillColorCautionBrush}" />
+                                                                    </DataTrigger>
+                                                                </Style.Triggers>
+                                                            </Style>
+                                                        </TextBlock.Style>
+                                                    </TextBlock>
+                                                    <TextBlock Grid.Column="2"
+                                                               Text="&#xE7BA;"
+                                                               FontFamily="{StaticResource SymbolThemeFontFamily}"
+                                                               FontWeight="SemiBold"
+                                                               Foreground="{DynamicResource SystemFillColorCautionBrush}"
+                                                               Margin="8,0,0,0"
+                                                               VerticalAlignment="Center"
+                                                               Visibility="{Binding HasWarning, Converter={StaticResource WfBooleanToVisibilityConverter}}"
+                                                               ToolTip="{Binding Warning}"
+                                                               AutomationProperties.Name="Conversion warning" />
+                                                </Grid>
+                                                <TextBlock Text="{Binding ResultRecommendation}"
+                                                           Foreground="{DynamicResource TextFillColorSecondaryBrush}"
+                                                           TextWrapping="Wrap">
+                                                    <TextBlock.Style>
+                                                        <Style TargetType="TextBlock">
+                                                            <Style.Triggers>
+                                                                <Trigger Property="Text" Value="">
+                                                                    <Setter Property="Visibility" Value="Collapsed" />
+                                                                </Trigger>
+                                                            </Style.Triggers>
+                                                        </Style>
+                                                    </TextBlock.Style>
+                                                </TextBlock>
+                                                <StackPanel Margin="0,4,4,4" Visibility="{Binding IsActive, Converter={StaticResource WfBooleanToVisibilityConverter}}">
+                                                    <StackPanel DataContext="{Binding Progress}">
+                                                        <TextBlock Text="{Binding Stage}"
+                                                                   TextTrimming="CharacterEllipsis"
+                                                                   ToolTip="{Binding Stage}" />
+                                                        <DockPanel Margin="0,4,0,0">
+                                                            <TextBlock Text="{Binding StageProgressText}"
+                                                                       DockPanel.Dock="Right"
+                                                                       Foreground="{DynamicResource AccentTextFillColorPrimaryBrush}"
+                                                                       FontSize="{StaticResource CaptionTextBlockFontSize}"
+                                                                       Margin="8,0,0,0" />
+                                                            <ProgressBar Value="{Binding StagePercent, Mode=OneWay}"
+                                                                         IsIndeterminate="{Binding IsIndeterminate}"
+                                                                         Height="6"
+                                                                         VerticalAlignment="Center"
+                                                                         AutomationProperties.Name="Current job stage progress" />
+                                                        </DockPanel>
+                                                    </StackPanel>
+                                                </StackPanel>
+                                            </StackPanel>
+                                            <!-- One row action at a time, right-aligned in the column so it never moves when another replaces it. -->
+                                            <Grid Grid.Column="1" HorizontalAlignment="Right" VerticalAlignment="Center">
                                                 <Grid.Resources>
                                                     <!-- A shared minimum width keeps the actions of different rows lined up in one column. -->
                                                     <Style x:Key="RowPrimaryActionButtonStyle" TargetType="Button" BasedOn="{StaticResource {x:Type Button}}">
                                                         <Setter Property="ContentTemplate" Value="{StaticResource WfIconContentTemplate}" />
                                                         <Setter Property="Padding" Value="7,6" />
-                                                        <Setter Property="Margin" Value="4" />
+                                                        <Setter Property="Margin" Value="8,4,4,4" />
                                                         <Setter Property="MinWidth" Value="88" />
                                                         <Setter Property="HorizontalAlignment" Value="Right" />
                                                     </Style>
@@ -352,45 +424,108 @@
                                                         Visibility="{Binding CanRetryAnalysis, Converter={StaticResource WfBooleanToVisibilityConverter}}"
                                                         Command="{Binding DataContext.RetryAnalysisCommand, RelativeSource={RelativeSource AncestorType=ListView}}"
                                                         CommandParameter="{Binding}" />
-                                                <Button Content="Inspect"
-                                                        Tag="&#xE721;"
+                                            </Grid>
+                                        </Grid>
+                                    </DataTemplate>
+                                </GridViewColumn.CellTemplate>
+                            </GridViewColumn>
+                            <GridViewColumn Header="Analysis"
+                                            wf:GridViewLayout.Id="Analysis"
+                                            Width="96"
+                                            wf:GridViewSort.Key="{x:Static viewModels:MediaSortColumn.Analysis}">
+                                <GridViewColumn.CellTemplate>
+                                    <DataTemplate>
+                                        <TextBlock Text="{Binding AnalysisText}"
+                                                   VerticalAlignment="Center"
+                                                   TextWrapping="Wrap" />
+                                    </DataTemplate>
+                                </GridViewColumn.CellTemplate>
+                            </GridViewColumn>
+                            <GridViewColumn Width="128"
+                                            wf:GridViewLayout.Id="Actions"
+                                            wf:GridViewSizing.IsFillColumn="True">
+                                <!-- The hover actions need no title: a blank header that takes no clicks, with no
+                                     resize gripper or separator, since the column only fills the remaining width. -->
+                                <GridViewColumn.HeaderContainerStyle>
+                                    <Style TargetType="GridViewColumnHeader" BasedOn="{StaticResource WfSortableColumnHeaderContainerStyle}">
+                                        <Setter Property="IsHitTestVisible" Value="False" />
+                                        <Setter Property="Focusable" Value="False" />
+                                        <Setter Property="AutomationProperties.Name" Value="Actions" />
+                                        <Setter Property="Template">
+                                            <Setter.Value>
+                                                <ControlTemplate TargetType="GridViewColumnHeader">
+                                                    <Border Background="{TemplateBinding Background}" />
+                                                </ControlTemplate>
+                                            </Setter.Value>
+                                        </Setter>
+                                    </Style>
+                                </GridViewColumn.HeaderContainerStyle>
+                                <GridViewColumn.CellTemplate>
+                                    <DataTemplate>
+                                        <Grid VerticalAlignment="Center">
+                                            <Grid.ColumnDefinitions>
+                                                <ColumnDefinition Width="*" />
+                                                <ColumnDefinition Width="Auto" />
+                                            </Grid.ColumnDefinitions>
+                                            <!-- Hover actions are only ever Hidden, never Collapsed, so each keeps its own fixed slot. -->
+                                            <StackPanel Grid.Column="1" Orientation="Horizontal">
+                                                <!-- Inspect shows on an incomplete scan, unless the analysis failed (Retry handles that). -->
+                                                <Button Padding="4"
+                                                        Margin="0"
+                                                        VerticalAlignment="Center"
+                                                        ToolTip="Inspect"
+                                                        AutomationProperties.Name="Inspect"
                                                         Command="{Binding DataContext.InspectIncompleteCommand, RelativeSource={RelativeSource AncestorType=ListView}}"
-                                                        CommandParameter="{Binding}">
+                                                        CommandParameter="{Binding}"
+                                                        Content="&#xE721;"
+                                                        FontFamily="{StaticResource SymbolThemeFontFamily}">
                                                     <Button.Style>
-                                                        <Style TargetType="Button" BasedOn="{StaticResource RowPrimaryActionButtonStyle}">
-                                                            <Setter Property="Visibility" Value="Collapsed" />
+                                                        <Style TargetType="Button" BasedOn="{StaticResource WfTransparentButtonStyle}">
+                                                            <Setter Property="Visibility" Value="Hidden" />
                                                             <Style.Triggers>
                                                                 <MultiDataTrigger>
                                                                     <MultiDataTrigger.Conditions>
+                                                                        <Condition Binding="{Binding IsMouseOver, RelativeSource={RelativeSource AncestorType=ListViewItem}}" Value="True" />
                                                                         <Condition Binding="{Binding CanInspectIncomplete}" Value="True" />
                                                                         <Condition Binding="{Binding CanRetryAnalysis}" Value="False" />
                                                                     </MultiDataTrigger.Conditions>
                                                                     <Setter Property="Visibility" Value="Visible" />
                                                                 </MultiDataTrigger>
+                                                                <Trigger Property="IsEnabled" Value="False">
+                                                                    <Setter Property="Visibility" Value="Hidden" />
+                                                                </Trigger>
                                                             </Style.Triggers>
                                                         </Style>
                                                     </Button.Style>
                                                 </Button>
-                                                <Button Content="Convert"
-                                                        Tag="&#xE8AB;"
+                                                <!-- Convert shows when the file is convertible, also while inspection is still recommended. -->
+                                                <Button Padding="4"
+                                                        Margin="0"
+                                                        VerticalAlignment="Center"
                                                         ToolTip="Convert"
                                                         AutomationProperties.Name="Convert"
                                                         Command="{Binding DataContext.ConvertRowCommand, RelativeSource={RelativeSource AncestorType=ListView}}"
-                                                        CommandParameter="{Binding}">
+                                                        CommandParameter="{Binding}"
+                                                        Content="&#xE8AB;"
+                                                        FontFamily="{StaticResource SymbolThemeFontFamily}">
                                                     <Button.Style>
-                                                        <Style TargetType="Button" BasedOn="{StaticResource RowPrimaryActionButtonStyle}">
-                                                            <Setter Property="Visibility" Value="Collapsed" />
+                                                        <Style TargetType="Button" BasedOn="{StaticResource WfTransparentButtonStyle}">
+                                                            <Setter Property="Visibility" Value="Hidden" />
                                                             <Style.Triggers>
-                                                                <DataTrigger Binding="{Binding NextStepText}" Value="Convert">
+                                                                <MultiDataTrigger>
+                                                                    <MultiDataTrigger.Conditions>
+                                                                        <Condition Binding="{Binding IsMouseOver, RelativeSource={RelativeSource AncestorType=ListViewItem}}" Value="True" />
+                                                                        <Condition Binding="{Binding OffersConversion}" Value="True" />
+                                                                    </MultiDataTrigger.Conditions>
                                                                     <Setter Property="Visibility" Value="Visible" />
-                                                                </DataTrigger>
+                                                                </MultiDataTrigger>
+                                                                <Trigger Property="IsEnabled" Value="False">
+                                                                    <Setter Property="Visibility" Value="Hidden" />
+                                                                </Trigger>
                                                             </Style.Triggers>
                                                         </Style>
                                                     </Button.Style>
                                                 </Button>
-                                            </Grid>
-                                            <!-- Hover actions are only ever Hidden, never Collapsed, so each keeps its own fixed slot. -->
-                                            <StackPanel Grid.Column="2" Orientation="Horizontal">
                                                 <Button Padding="4"
                                                         Margin="0"
                                                         VerticalAlignment="Center"

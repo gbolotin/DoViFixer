@@ -29,7 +29,7 @@ public sealed partial class MediaViewModel : OperationViewModel, INavigationPage
         new(StatusText),
         new(OutputSummary, OutputSummaryToolTip, Command: OpenSettingsCommand),
         new(RetentionSummary, IsEmphasized: IsReplaceOriginalActive),
-        new(FelSummary),
+        new(FelSummary, convertsComplexFel ? ComplexFelWarning : null, IsEmphasized: convertsComplexFel),
         new(ArchiveSummary)
     ];
 
@@ -48,6 +48,7 @@ public sealed partial class MediaViewModel : OperationViewModel, INavigationPage
     private readonly IDialogService dialogs;
     private readonly IFileDialogService files;
     private readonly IFileExplorer explorer;
+    private readonly ITextClipboard clipboard;
     private readonly ILogger<MediaViewModel> logger;
     private BatchControl? control;
     private readonly IMediaPreview mediaPreview;
@@ -61,7 +62,7 @@ public sealed partial class MediaViewModel : OperationViewModel, INavigationPage
 
     private static string Summary(BatchResult result) => string.Join(" · ", result.Items.GroupBy(r => r.Status).Select(g => $"{g.Count()} {g.Key}"));
     private string TimedSummary(BatchResult result) => $"{Summary(result)}{(result.Status == OperationStatus.Completed ? " in " : " · Finished in ")}{BatchProgress.BatchElapsed}";
-    public MediaViewModel(IFileDiscovery discovery, InspectionService inspection, ConversionService conversion, ConversionDiskBudget diskBudget, ControlledBatchService batch, SettingsService settings, DependencySetup dependencies, IDialogService dialogs, IFileDialogService files, IFileExplorer explorer, ILogger<MediaViewModel> logger, IMediaPreview mediaPreview, RestoreService restore, ISourceFileMonitor sourceFiles, ReportService reports, MediaLibraryService library, CleanupService cleanup, IOperationFeedback? feedback = null)
+    public MediaViewModel(IFileDiscovery discovery, InspectionService inspection, ConversionService conversion, ConversionDiskBudget diskBudget, ControlledBatchService batch, SettingsService settings, DependencySetup dependencies, IDialogService dialogs, IFileDialogService files, IFileExplorer explorer, ILogger<MediaViewModel> logger, IMediaPreview mediaPreview, RestoreService restore, ISourceFileMonitor sourceFiles, ReportService reports, MediaLibraryService library, CleanupService cleanup, ITextClipboard clipboard, IOperationFeedback? feedback = null)
         : base(feedback)
     {
         this.discovery = discovery;
@@ -81,6 +82,7 @@ public sealed partial class MediaViewModel : OperationViewModel, INavigationPage
         this.dialogs = dialogs;
         this.files = files;
         this.explorer = explorer;
+        this.clipboard = clipboard;
         this.logger = logger;
         this.mediaPreview = mediaPreview;
 
@@ -89,12 +91,17 @@ public sealed partial class MediaViewModel : OperationViewModel, INavigationPage
             new(MediaFileFilter.All, "All", filter => FileFilter = filter) { IsSelected = true },
             new(MediaFileFilter.Profile7, "Profile 7", filter => FileFilter = filter),
             new(MediaFileFilter.Profile81, "Profile 8.1", filter => FileFilter = filter),
-            new(MediaFileFilter.NoDolbyVision, "No Dolby Vision", filter => FileFilter = filter),
-            new(MediaFileFilter.OtherProfiles, "Other profiles", filter => FileFilter = filter),
-            new(MediaFileFilter.NotScanned, "Not scanned / failed", filter => FileFilter = filter)
+            new(MediaFileFilter.OtherProfiles, "Other DV profiles", filter => FileFilter = filter),
+            new(MediaFileFilter.NoDolbyVision, "Not Dolby Vision", filter => FileFilter = filter),
+            new(MediaFileFilter.NotScanned, "Needs scan", filter => FileFilter = filter)
         ];
-        Files.CollectionChanged += (_, _) =>
+        Files.CollectionChanged += (_, e) =>
         {
+            foreach (var row in e.NewItems?.OfType<MediaRow>() ?? [])
+            {
+                ApplyFelSettings(row);
+            }
+
             if (loadingLibraryRows)
             {
                 return;
@@ -241,7 +248,7 @@ public sealed partial class MediaViewModel : OperationViewModel, INavigationPage
         : null;
 
     [ObservableProperty]
-    [NotifyCanExecuteChangedFor(nameof(OpenOutputCommand), nameof(OpenFileLocationCommand))]
+    [NotifyCanExecuteChangedFor(nameof(OpenOutputCommand), nameof(OpenFileLocationCommand), nameof(CopyDetailsCommand))]
     public partial MediaRow? Focused { get; set; }
 
     partial void OnFocusedChanged(MediaRow? value) => previewCompletion = Task.WhenAll(previewCompletion, LoadPreviewAsync(value), LoadLibraryHistoryAsync(value));
@@ -453,11 +460,7 @@ public sealed partial class MediaViewModel : OperationViewModel, INavigationPage
             }
 
             row.IsMissing = missing;
-            if (missing)
-            {
-                row.IsSelected = false;
-            }
-            else if (row.Notice == MediaRow.MissingNote)
+            if (!missing && row.Notice == MediaRow.MissingNote)
             {
                 row.Notice = "";
             }
@@ -554,7 +557,7 @@ public sealed partial class MediaViewModel : OperationViewModel, INavigationPage
     /// Sorting is blocked while busy because a running batch keeps the order it started with.
     /// </summary>
     public ColumnSort<MediaRow> FileSort { get; }
-    public bool CanInspect => CanOperate();
+    public bool CanInspect => CanInspectChecked();
 
     [RelayCommand(CanExecute = nameof(IsIdle))]
     private Task AddFiles() => AddAsync(files.PickFiles("Matroska media|*.mkv"));
@@ -593,10 +596,10 @@ public sealed partial class MediaViewModel : OperationViewModel, INavigationPage
     [RelayCommand(CanExecute = nameof(CanScan))]
     private Task Scan() => ScanAllAsync();
 
-    [RelayCommand(CanExecute = nameof(CanOperate))]
+    [RelayCommand(CanExecute = nameof(CanInspectChecked))]
     private Task Inspect() => AnalyzeAsync(AnalysisMethod.FullRpu);
 
-    [RelayCommand(CanExecute = nameof(CanOperate))]
+    [RelayCommand(CanExecute = nameof(CanInspectChecked))]
     private Task DeepInspect() => AnalyzeAsync(AnalysisMethod.DeepInspection);
 
     [RelayCommand(CanExecute = nameof(CanOperate))]
@@ -610,7 +613,13 @@ public sealed partial class MediaViewModel : OperationViewModel, INavigationPage
     private bool CanRestoreRow(MediaRow? row) => row is not null && IsIdle && Files.Contains(row) && row.CanRestore;
 
     [RelayCommand(CanExecute = nameof(CanRestoreRow))]
-    private Task RestoreRow(MediaRow? row) => RestoreRowAsync(row!);
+    private Task RestoreRow(MediaRow? row) => RestoreRowsAsync([row!]);
+
+    private bool CanRestoreSelected() => IsIdle && ShownFiles.Any(row => row.IsSelected && row.CanRestore);
+
+    /// <summary>Restores every selected file that has a matching .dovi archive, after one review of all of them.</summary>
+    [RelayCommand(CanExecute = nameof(CanRestoreSelected))]
+    private Task RestoreSelected() => RestoreRowsAsync(InDisplayOrder(ShownFiles.Where(row => row.IsSelected && row.CanRestore)));
 
     /// <summary>
     /// Whether the Inspect split button runs a deep inspection. Picking an entry in its menu runs that inspection
@@ -619,10 +628,10 @@ public sealed partial class MediaViewModel : OperationViewModel, INavigationPage
     [ObservableProperty]
     public partial bool IsDeepInspectionChosen { get; set; }
 
-    [RelayCommand(CanExecute = nameof(CanOperate))]
+    [RelayCommand(CanExecute = nameof(CanInspectChecked))]
     private Task ChooseInspect() => ChooseAndInspectAsync(deep: false);
 
-    [RelayCommand(CanExecute = nameof(CanOperate))]
+    [RelayCommand(CanExecute = nameof(CanInspectChecked))]
     private Task ChooseDeepInspect() => ChooseAndInspectAsync(deep: true);
 
     private static bool CanCancelFile(MediaRow? row) => row is not null && row.IsActive && !row.IsCancellationRequested;
@@ -649,6 +658,9 @@ public sealed partial class MediaViewModel : OperationViewModel, INavigationPage
     [RelayCommand(CanExecute = nameof(CanOpenFileLocation))]
     private void OpenFileLocation() => explorer.ShowInFolder(Focused!.Path);
 
+    [RelayCommand(CanExecute = nameof(CanOpenFileLocation))]
+    private void CopyDetails() => clipboard.SetText(Focused!.DetailsText);
+
     private static bool CanShowResultFile(string? path) => !string.IsNullOrEmpty(path);
 
     [RelayCommand(CanExecute = nameof(CanShowResultFile))]
@@ -663,6 +675,15 @@ public sealed partial class MediaViewModel : OperationViewModel, INavigationPage
 
     [RelayCommand(CanExecute = nameof(CanScanRow))]
     private Task ScanRow(MediaRow? row) => RunAsync(AnalysisTitle(AnalysisMethod.SampledRpu), (token, _) => AnalyzeRowsAsync([row!], AnalysisMethod.SampledRpu, token));
+
+    private bool CanInspectRow(MediaRow? row) => CanScanRow(row) && IsInspectable(row!);
+
+    // The row context menu inspects one file whatever its scan found, like Scan does for one file.
+    [RelayCommand(CanExecute = nameof(CanInspectRow))]
+    private Task InspectRow(MediaRow? row) => RunAsync(AnalysisTitle(AnalysisMethod.FullRpu), (token, _) => AnalyzeRowsAsync([row!], AnalysisMethod.FullRpu, token));
+
+    [RelayCommand(CanExecute = nameof(CanInspectRow))]
+    private Task DeepInspectRow(MediaRow? row) => RunAsync(AnalysisTitle(AnalysisMethod.DeepInspection), (token, _) => AnalyzeRowsAsync([row!], AnalysisMethod.DeepInspection, token));
 
     private bool CanInspectIncomplete(MediaRow? row) => row is not null && IsIdle && Files.Contains(row) && row.CanInspectIncomplete;
 
@@ -693,15 +714,34 @@ public sealed partial class MediaViewModel : OperationViewModel, INavigationPage
     [ObservableProperty]
     public partial string ArchiveSummary { get; private set; } = "EL archive: Off";
 
+    private const string ComplexFelWarning = "Complex FEL conversion is allowed: enhancement-layer picture data that expands dynamic range will be permanently lost.";
+
+    // The FEL settings, so rows offer Convert only where conversion would not skip them.
+    private bool convertsSimpleFel;
+    private bool convertsComplexFel;
+
+    private void ApplyFelSettings(MediaRow row)
+    {
+        row.ConvertsSimpleFel = convertsSimpleFel;
+        row.ConvertsComplexFel = convertsComplexFel;
+    }
+
     public void UpdateSettingsSummary(UserSettings s)
     {
+        convertsSimpleFel = s.IncludeSimple;
+        convertsComplexFel = s.ForceComplex;
+        foreach (var row in Files)
+        {
+            ApplyFelSettings(row);
+        }
+
         IsReplaceOriginalActive = s.ReplaceOriginal;
         RetentionSummary = s.ReplaceOriginal ? "⚠ Replace originals" : "Keep originals";
         FelSummary = (s.IncludeSimple, s.ForceComplex) switch
         {
-            (true, true) => "FEL: Simple + Complex",
+            (true, true) => "⚠ FEL: Simple + Complex",
             (true, false) => "FEL: Simple only",
-            (false, true) => "FEL: Complex only",
+            (false, true) => "⚠ FEL: Complex only",
             _ => "FEL: Skip"
         };
         ArchiveSummary = s.CreateElArchive ? "EL archive: On" : "EL archive: Off";
@@ -847,11 +887,33 @@ public sealed partial class MediaViewModel : OperationViewModel, INavigationPage
     private bool CanScan() => IsIdle && ShownFiles.Any(row => !row.IsMissing);
     private bool CanOperate() => IsIdle && ShownFiles.Any(f => f.IsSelected);
 
+    /// <summary>
+    /// Inspection reads the RPU stream of Profile 7 files only; for any other file it repeats the metadata read. A file
+    /// not analyzed yet may still be Profile 7.
+    /// </summary>
+    private static bool IsInspectable(MediaRow row) => !row.IsMissing && (row.Analysis is null || row.IsProfile7);
+
+    private bool CanInspectChecked() => IsIdle && ShownFiles.Any(row => row.IsSelected && IsInspectable(row));
+
+    // A row's profile or presence decides whether it can be inspected.
+    private void InspectCommandsChanged()
+    {
+        OnPropertyChanged(nameof(CanInspect));
+        InspectCommand.NotifyCanExecuteChanged();
+        DeepInspectCommand.NotifyCanExecuteChanged();
+        ChooseInspectCommand.NotifyCanExecuteChanged();
+        ChooseDeepInspectCommand.NotifyCanExecuteChanged();
+        InspectRowCommand.NotifyCanExecuteChanged();
+        DeepInspectRowCommand.NotifyCanExecuteChanged();
+    }
+
     protected override void CommandsChanged()
     {
         ResetColumnLayoutCommand?.NotifyCanExecuteChanged();
         OnPropertyChanged(nameof(CanInspect));
         ScanRowCommand?.NotifyCanExecuteChanged();
+        InspectRowCommand?.NotifyCanExecuteChanged();
+        DeepInspectRowCommand?.NotifyCanExecuteChanged();
         RetryAnalysisCommand?.NotifyCanExecuteChanged();
         InspectIncompleteCommand?.NotifyCanExecuteChanged();
         ToggleSelectAllCommand?.NotifyCanExecuteChanged();
@@ -872,6 +934,7 @@ public sealed partial class MediaViewModel : OperationViewModel, INavigationPage
         ConvertCommand?.NotifyCanExecuteChanged();
         ConvertRowCommand?.NotifyCanExecuteChanged();
         RestoreRowCommand?.NotifyCanExecuteChanged();
+        RestoreSelectedCommand?.NotifyCanExecuteChanged();
     }
 
     public Task AddAsync(IEnumerable<string> inputs) => RunAsync("Adding files", async (token, _) =>
@@ -889,7 +952,6 @@ public sealed partial class MediaViewModel : OperationViewModel, INavigationPage
                     var existing = Files.FirstOrDefault(row => row.LibraryFingerprint == remembered.Fingerprint || string.Equals(row.Path, path, StringComparison.OrdinalIgnoreCase));
                     if (existing is not null && string.Equals(existing.Path, path, StringComparison.OrdinalIgnoreCase))
                     {
-                        existing.IsSelected = true;
                         continue;
                     }
                     if (existing is not null)
@@ -959,9 +1021,15 @@ public sealed partial class MediaViewModel : OperationViewModel, INavigationPage
             ConvertRowCommand.NotifyCanExecuteChanged();
         }
 
+        if (e.PropertyName is nameof(MediaRow.IsProfile7) or nameof(MediaRow.IsMissing))
+        {
+            InspectCommandsChanged();
+        }
+
         if (e.PropertyName == nameof(MediaRow.CanRestore))
         {
             RestoreRowCommand.NotifyCanExecuteChanged();
+            RestoreSelectedCommand.NotifyCanExecuteChanged();
         }
 
         if (e.PropertyName == nameof(MediaRow.RestoreArchive) && !loadingLibraryRows)
@@ -1020,7 +1088,7 @@ public sealed partial class MediaViewModel : OperationViewModel, INavigationPage
             return;
         }
 
-        row.SetSkipped("Deselected before starting.");
+        row.SetSkipped("Skipped before starting.");
     }
 
     /// <summary>The batch's share done for the taskbar; before a batch starts, the operation's own progress.</summary>
@@ -1111,7 +1179,9 @@ public sealed partial class MediaViewModel : OperationViewModel, INavigationPage
 
     private Task AnalyzeAsync(AnalysisMethod method) => RunAsync(AnalysisTitle(method), async (token, _) =>
     {
-        await AnalyzeRowsAsync(InDisplayOrder(ShownFiles.Where(r => r.IsSelected)), method, token);
+        // Checked files that are missing or not Profile 7 keep their check marks, which only the user changes, but
+        // inspection has nothing to add for them.
+        await AnalyzeRowsAsync(InDisplayOrder(ShownFiles.Where(r => r.IsSelected && IsInspectable(r))), method, token);
     });
 
     private async Task AnalyzeRowsAsync(MediaRow[] rows, AnalysisMethod method, CancellationToken token)
@@ -1200,10 +1270,6 @@ public sealed partial class MediaViewModel : OperationViewModel, INavigationPage
                     {
                         row.SetConverted(published);
                     }
-                }
-                else if (result.Status == OperationStatus.Failed)
-                {
-                    row.IsSelected = false;
                 }
             }), token);
             SetStatus(ViewStatus.Result, $"{(method == AnalysisMethod.SampledRpu ? "Scan" : "Inspection")}: {TimedSummary(results)}");
@@ -1353,9 +1419,14 @@ public sealed partial class MediaViewModel : OperationViewModel, INavigationPage
         }
     }
 
-    private Task RestoreRowAsync(MediaRow row) => RunAsync("Restoration", async (token, progress) =>
+    private Task RestoreRowsAsync(MediaRow[] rows) => RunAsync("Restoration", async (token, progress) =>
     {
-        if (row.RestoreArchive is not { } archive)
+        if (rows.Length == 0)
+        {
+            return;
+        }
+
+        if (rows.Any(row => row.RestoreArchive is null))
         {
             SetStatus(ViewStatus.Error, "The matching .dovi archive is no longer available. Rescan after restoring it.");
             return;
@@ -1367,48 +1438,63 @@ public sealed partial class MediaViewModel : OperationViewModel, INavigationPage
             return;
         }
 
-        RestorePlan plan;
-        try
+        var plans = new Dictionary<MediaRow, RestorePlan>();
+        foreach (var row in rows)
         {
-            plan = await Task.Run(() => restore.PlanAsync(row.Path, archive, null, null, false, token), token);
+            try
+            {
+                plans[row] = await Task.Run(() => restore.PlanAsync(row.Path, row.RestoreArchive!, null, null, false, token), token);
+            }
+            catch (FileNotFoundException)
+            {
+                row.RestoreArchive = null;
+                throw;
+            }
         }
-        catch (FileNotFoundException)
-        {
-            row.RestoreArchive = null;
-            throw;
-        }
-        string review = $"Base file: {plan.Media.Source.Path}\nArchive: {plan.Archive.Path}\nOutput: {plan.Output}\nScratch: {plan.ScratchBytes / 1073741824d:0.0} GiB\nVerified source pairing required.\nOriginal retained.";
+
+        string review = string.Join("\n\n", plans.Values.Select(plan =>
+                $"Base file: {plan.Media.Source.Path}\nArchive: {plan.Archive.Path}\nOutput: {plan.Output}\nScratch: {plan.ScratchBytes / 1073741824d:0.0} GiB"))
+            + "\nVerified source pairing required.\nOriginal retained.";
         if (!await dialogs.ReviewAsync("Review restoration", review, "Approve and start"))
         {
             SetStatus(ViewStatus.RestoreNotApproved);
             return;
         }
 
-        OperationLog.Audit(logger, "ApproveRestore", review, "ApprovedByDialog", plan.Id);
-        row.ClearPlan();
-        row.AnalysisError = null;
-        row.Notice = "";
-        row.LastAnalysisMethod = null;
-        BeginBatch([row], "Restoration");
-        row.CurrentOperation = "Restoration";
-        LibraryFile? rememberedOutput = null;
+        foreach (var (row, plan) in plans)
+        {
+            OperationLog.Audit(logger, "ApproveRestore", review, "ApprovedByDialog", plan.Id);
+            row.ClearPlan();
+            row.AnalysisError = null;
+            row.Notice = "";
+            row.LastAnalysisMethod = null;
+        }
+
+        BeginBatch(rows, "Restoration");
+        foreach (var row in rows)
+        {
+            row.CurrentOperation = "Restoration";
+        }
+
+        var rememberedOutputs = new ConcurrentDictionary<MediaRow, LibraryFile?>();
         try
         {
-            var result = await batch.ExecuteAsync(new[] { row }, item => item.Path, async (item, itemToken) =>
+            var result = await batch.ExecuteAsync(rows, item => item.Path, async (item, itemToken) =>
             {
                 var jobProgress = Activate(item, "Restoring Profile 7");
-                var restored = await Task.Run(() => restore.ExecuteAsync(plan, jobProgress, itemToken), itemToken);
+                var restored = await Task.Run(() => restore.ExecuteAsync(plans[item], jobProgress, itemToken), itemToken);
                 await ReadResultMetadataAsync(item, restored, itemToken);
-                rememberedOutput = await RememberProducedFileAsync(restored, itemToken);
+                rememberedOutputs[item] = await RememberProducedFileAsync(restored, itemToken);
                 return restored;
             }, control!, new InlineProgress<OperationItemResult>(itemResult =>
             {
+                var row = rows.First(r => r.Path == itemResult.Item);
                 CompleteBatchItem(row, itemResult.Status);
                 row.Result = itemResult;
                 if (itemResult.Status == OperationStatus.Completed)
                 {
                     row.SetRestored(itemResult);
-                    AddOrUpdateProducedRow(row, itemResult, rememberedOutput);
+                    AddOrUpdateProducedRow(row, itemResult, rememberedOutputs.GetValueOrDefault(row));
                 }
                 else if (itemResult.Status == OperationStatus.Cancelled)
                 {
@@ -1426,9 +1512,9 @@ public sealed partial class MediaViewModel : OperationViewModel, INavigationPage
             EndBatch();
         }
 
-        if (row.State == MediaRowState.Failed)
+        // A failed restore may have learned the file's base-layer hash; pair again so a mismatched archive is not offered twice.
+        foreach (var row in rows.Where(row => row.State == MediaRowState.Failed))
         {
-            // A failed restore may have learned the file's base-layer hash; pair again so a mismatched archive is not offered twice.
             await RefreshRestoreArchiveAsync(row, BeginArchivePairing(), token);
         }
     });

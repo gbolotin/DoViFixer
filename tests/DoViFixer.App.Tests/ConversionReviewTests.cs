@@ -242,11 +242,36 @@ public sealed class ConversionReviewTests
         Assert.AreEqual("Conversion skipped", originalRows[1].Status);
         Assert.AreEqual(MediaRowState.Skipped, originalRows[1].State);
         StringAssert.Contains(originalRows[1].Notice, "Simple FEL conversion requires enabling 'Include Simple FEL' in Settings.");
-        Assert.IsTrue(originalRows[1].HasWarning);
-        Assert.AreEqual(originalRows[1].Notice, originalRows[1].Warning);
+        Assert.IsFalse(originalRows[1].HasWarning, "A skip reason is not a conversion warning.");
+        Assert.AreEqual(originalRows[1].Notice, originalRows[1].StatusToolTip);
         originalRows[1].IsSelected = true;
-        Assert.IsTrue(originalRows[1].HasWarning, "Reselecting a skipped file must retain its skip reason until retry.");
-        Assert.AreEqual(originalRows[1].Notice, originalRows[1].Warning);
+        Assert.IsFalse(originalRows[1].HasWarning);
+        Assert.AreEqual(originalRows[1].Notice, originalRows[1].StatusToolTip);
+    }
+
+    [TestMethod]
+    public async Task RowsOfferConvertOnlyWhereTheFelSettingsAllowIt()
+    {
+        using var runtime = new TestRuntime();
+        var model = runtime.Container.GetRequiredService<MediaViewModel>();
+        await model.AddAsync([@"C:\Media\Mountain.mkv", @"C:\Media\Ocean.mkv", @"C:\Media\City.mkv"]);
+        var (mel, simple, complex) = (model.Files[0], model.Files[1], model.Files[2]);
+        Assert.AreEqual("Inspect", simple.NextStepText, "The scan recommends inspecting the Simple FEL file.");
+
+        model.UpdateSettingsSummary(new DoViFixer.Application.Settings.UserSettings());
+        Assert.IsTrue(mel.OffersConversion, "MEL always converts.");
+        Assert.IsFalse(simple.OffersConversion, "Convert would only skip Simple FEL while Settings skip it.");
+        Assert.IsFalse(complex.OffersConversion);
+
+        model.UpdateSettingsSummary(new DoViFixer.Application.Settings.UserSettings { IncludeSimple = true });
+        Assert.IsTrue(simple.OffersConversion, "Converting inspects the Simple FEL file in full first.");
+        Assert.IsFalse(complex.OffersConversion);
+
+        model.UpdateSettingsSummary(new DoViFixer.Application.Settings.UserSettings { IncludeSimple = true, ForceComplex = true });
+        Assert.IsTrue(complex.OffersConversion);
+        var added = new MediaRow(@"C:\Media\Added.mkv");
+        model.Files.Add(added);
+        Assert.IsTrue(added.ConvertsSimpleFel && added.ConvertsComplexFel, "Rows added later follow the current settings.");
     }
 
     [TestMethod]
@@ -269,8 +294,8 @@ public sealed class ConversionReviewTests
         Assert.AreEqual("Conversion skipped", originalRows[1].Status);
         Assert.AreEqual(MediaRowState.Skipped, originalRows[1].State);
         StringAssert.Contains(originalRows[1].Notice, "Complex FEL conversion requires enabling 'Allow Complex FEL conversion' in Settings.");
-        Assert.IsTrue(originalRows[1].HasWarning);
-        Assert.AreEqual(originalRows[1].Notice, originalRows[1].Warning);
+        Assert.IsFalse(originalRows[1].HasWarning, "A skip reason is not a conversion warning.");
+        Assert.AreEqual(originalRows[1].Notice, originalRows[1].StatusToolTip);
     }
 
     [TestMethod]
@@ -325,7 +350,7 @@ public sealed class ConversionReviewTests
         Assert.AreEqual("Conversion skipped", model.Files.Single().Status);
         Assert.AreEqual(MediaRowState.Skipped, model.Files.Single().State);
         StringAssert.Contains(model.Files.Single().Notice, "Insufficient temporary disk space");
-        Assert.IsTrue(model.Files.Single().HasWarning);
-        Assert.AreEqual(model.Files.Single().Notice, model.Files.Single().Warning);
+        Assert.IsFalse(model.Files.Single().HasWarning, "A skip reason is not a conversion warning.");
+        Assert.AreEqual(model.Files.Single().Notice, model.Files.Single().StatusToolTip);
     }
 }

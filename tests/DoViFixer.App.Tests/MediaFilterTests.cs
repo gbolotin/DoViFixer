@@ -64,15 +64,15 @@ public sealed class MediaFilterTests
         Assert.AreEqual("All (4)", Option(model, MediaFileFilter.All).Label);
         Assert.AreEqual("Profile 7 (1)", Option(model, MediaFileFilter.Profile7).Label);
         Assert.AreEqual("Profile 8.1 (1)", Option(model, MediaFileFilter.Profile81).Label);
-        Assert.AreEqual("No Dolby Vision (1)", Option(model, MediaFileFilter.NoDolbyVision).Label);
-        Assert.AreEqual("Not scanned / failed (1)", Option(model, MediaFileFilter.NotScanned).Label);
+        Assert.AreEqual("Not Dolby Vision (1)", Option(model, MediaFileFilter.NoDolbyVision).Label);
+        Assert.AreEqual("Needs scan (1)", Option(model, MediaFileFilter.NotScanned).Label);
         Assert.IsFalse(Option(model, MediaFileFilter.OtherProfiles).IsVisible, "Other profiles appear only when a file needs them.");
         CollectionAssert.AreEqual(new[] { Profile7, Profile81, NoDolbyVision, Unscanned }, Shown(model));
 
         Row(model, Profile7).AnalysisError = "Fixture analysis error.";
         Assert.AreEqual(MediaFileFilter.NotScanned, Row(model, Profile7).FilterGroup, "A failed analysis joins the unscanned files.");
         Assert.AreEqual("Profile 7 (0)", Option(model, MediaFileFilter.Profile7).Label);
-        Assert.AreEqual("Not scanned / failed (2)", Option(model, MediaFileFilter.NotScanned).Label);
+        Assert.AreEqual("Needs scan (2)", Option(model, MediaFileFilter.NotScanned).Label);
     }
 
     [TestMethod]
@@ -131,7 +131,7 @@ public sealed class MediaFilterTests
         await model.ScanCommand.InvokeAsync();
         Assert.AreEqual(MediaFileFilter.Profile7, Row(model, Unscanned).FilterGroup);
         Assert.AreEqual(MediaRowState.Scanned, Row(model, Unscanned).State);
-        Assert.AreEqual("Not scanned / failed (0)", Option(model, MediaFileFilter.NotScanned).Label);
+        Assert.AreEqual("Needs scan (0)", Option(model, MediaFileFilter.NotScanned).Label);
         Assert.AreEqual("Profile 7 (2)", Option(model, MediaFileFilter.Profile7).Label);
         Assert.IsTrue(model.HasNoShownFiles, "Scanned files leave the unscanned filter.");
     }
@@ -147,8 +147,8 @@ public sealed class MediaFilterTests
         Assert.AreEqual("All (3)", Option(model, MediaFileFilter.All).Label);
         Assert.AreEqual("Profile 7 (1)", Option(model, MediaFileFilter.Profile7).Label);
         Assert.AreEqual("Profile 8.1 (1)", Option(model, MediaFileFilter.Profile81).Label);
-        Assert.AreEqual("No Dolby Vision (1)", Option(model, MediaFileFilter.NoDolbyVision).Label);
-        Assert.AreEqual("Not scanned / failed (0)", Option(model, MediaFileFilter.NotScanned).Label);
+        Assert.AreEqual("Not Dolby Vision (1)", Option(model, MediaFileFilter.NoDolbyVision).Label);
+        Assert.AreEqual("Needs scan (0)", Option(model, MediaFileFilter.NotScanned).Label);
         Assert.AreEqual("3 of 4 items shown | 3 items selected", model.SelectionSummary);
 
         model.FilterText = "media";
@@ -160,7 +160,7 @@ public sealed class MediaFilterTests
         CollectionAssert.AreEqual(new[] { Unscanned }, Shown(model));
         Assert.AreEqual(Unscanned, model.Focused?.Path);
         Assert.AreEqual("All (1)", Option(model, MediaFileFilter.All).Label);
-        Assert.AreEqual("Not scanned / failed (1)", Option(model, MediaFileFilter.NotScanned).Label);
+        Assert.AreEqual("Needs scan (1)", Option(model, MediaFileFilter.NotScanned).Label);
 
         model.FilterText = "";
         CollectionAssert.AreEqual(new[] { Profile7, Profile81, NoDolbyVision, Unscanned }, Shown(model));

@@ -11,11 +11,14 @@
         MinWidth="800"
         MinHeight="600"
         WindowStartupLocation="CenterScreen">
-    <!-- Ctrl+comma opens Settings, as in Windows apps such as Visual Studio Code and Windows Terminal. -->
+    <!-- Ctrl+comma opens Settings, as in Windows apps such as Visual Studio Code and Windows Terminal.
+         F4 inspects and F5 converts the checked files, from the File menu and the Media toolbar alike. -->
     <Window.InputBindings>
         <KeyBinding Key="OemComma"
                     Modifiers="Control"
                     Command="{Binding OpenSettingsCommand}" />
+        <KeyBinding Key="F4" Command="{Binding InspectCommand}" />
+        <KeyBinding Key="F5" Command="{Binding ConvertCommand}" />
     </Window.InputBindings>
     <Window.Resources>
         <ResourceDictionary>
@@ -45,8 +48,50 @@
                         </wf:TitleBar.RightHeader>
                         <Menu IsEnabled="{Binding IsSettingsOpen, Converter={StaticResource WfInverseBooleanConverter}}">
                             <MenuItem Header="_File">
-                                <MenuItem Header="_Add files…" Command="{Binding AddFilesCommand}" />
-                                <MenuItem Header="Add _folder…" Command="{Binding AddFolderCommand}" />
+                                <!-- Icons match the Media toolbar buttons that do the same. -->
+                                <MenuItem Header="_Add files…" Command="{Binding AddFilesCommand}">
+                                    <MenuItem.Icon>
+                                        <wf:PathIcon Data="{StaticResource WfIconAddFiles}" Size="{StaticResource DefaultIconFontSize}" />
+                                    </MenuItem.Icon>
+                                </MenuItem>
+                                <MenuItem Header="Add _folder…" Command="{Binding AddFolderCommand}">
+                                    <MenuItem.Icon>
+                                        <wf:PathIcon Data="{StaticResource WfIconAddFolder}" Size="{StaticResource DefaultIconFontSize}" />
+                                    </MenuItem.Icon>
+                                </MenuItem>
+                                <Separator />
+                                <MenuItem Header="Re_scan all files" Command="{Binding RescanCommand}">
+                                    <MenuItem.Icon>
+                                        <TextBlock Text="&#xE72C;" Style="{StaticResource MenuGlyphIconStyle}" />
+                                    </MenuItem.Icon>
+                                </MenuItem>
+                                <Separator />
+                                <!-- These act on the selected (checked) files, like the Media toolbar. -->
+                                <MenuItem Header="_Inspect" Command="{Binding InspectCommand}" InputGestureText="F4">
+                                    <MenuItem.Icon>
+                                        <TextBlock Text="&#xE721;" Style="{StaticResource MenuGlyphIconStyle}" />
+                                    </MenuItem.Icon>
+                                </MenuItem>
+                                <MenuItem Header="_Deep Inspect" Command="{Binding DeepInspectCommand}">
+                                    <MenuItem.Icon>
+                                        <TextBlock Text="&#xE9D9;" Style="{StaticResource MenuGlyphIconStyle}" />
+                                    </MenuItem.Icon>
+                                </MenuItem>
+                                <MenuItem Header="_Convert" Command="{Binding ConvertCommand}" InputGestureText="F5">
+                                    <MenuItem.Icon>
+                                        <TextBlock Text="&#xE8AB;" Style="{StaticResource MenuGlyphIconStyle}" />
+                                    </MenuItem.Icon>
+                                </MenuItem>
+                                <MenuItem Header="Rest_ore to DV7…" Command="{Binding RestoreSelectedCommand}">
+                                    <MenuItem.Icon>
+                                        <TextBlock Text="&#xE7A7;" Style="{StaticResource MenuGlyphIconStyle}" />
+                                    </MenuItem.Icon>
+                                </MenuItem>
+                                <MenuItem Header="_Remove" Command="{Binding RemoveSelectedCommand}">
+                                    <MenuItem.Icon>
+                                        <TextBlock Text="&#xE74D;" Style="{StaticResource MenuGlyphIconStyle}" />
+                                    </MenuItem.Icon>
+                                </MenuItem>
                                 <Separator />
                                 <MenuItem Header="_Export results…" Command="{Binding ExportResultsCommand}" />
                                 <Separator />

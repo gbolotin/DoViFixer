@@ -65,6 +65,35 @@ public sealed class RowRestoreTests
     }
 
     [TestMethod]
+    public async Task RestoreSelectedRestoresEveryCheckedRestorableRowAfterOneReview()
+    {
+        using var runtime = new TestRuntime { Approval = true };
+        runtime.Archives.UnionWith([@"C:\Media\P81.dovi", @"C:\Media\P81-copy.dovi"]);
+        var model = runtime.Container.GetRequiredService<MediaViewModel>();
+        await model.AddAsync([@"C:\Media\P81.mkv", @"C:\Media\P81-copy.mkv", @"C:\Media\Mountain.mkv"]);
+        Assert.IsTrue(model.Files.All(row => row.IsSelected));
+        Assert.IsTrue(model.RestoreSelectedCommand.CanExecute(null));
+
+        model.Files[0].IsSelected = false;
+        model.Files[1].IsSelected = false;
+        Assert.IsFalse(model.RestoreSelectedCommand.CanExecute(null), "Only a checked file with a matching archive can be restored.");
+        model.Files[0].IsSelected = true;
+        model.Files[1].IsSelected = true;
+
+        await model.RestoreSelectedCommand.InvokeAsync();
+
+        CollectionAssert.AreEqual(new[] { @"C:\Media\P81.mkv", @"C:\Media\P81-copy.mkv" }, runtime.RestoredInputs, "The Profile 7 file has no archive and is left alone.");
+        Assert.HasCount(1, runtime.Reviews, "One review covers every file.");
+        StringAssert.Contains(runtime.Reviews[0], @"C:\Media\P81.dovi");
+        StringAssert.Contains(runtime.Reviews[0], @"C:\Media\P81-copy.dovi");
+        Assert.AreEqual(MediaRowState.Restored, model.Files.Single(row => row.Path == @"C:\Media\P81.mkv").State);
+        Assert.AreEqual(MediaRowState.Restored, model.Files.Single(row => row.Path == @"C:\Media\P81-copy.mkv").State);
+        Assert.IsNull(model.Files.Single(row => row.Path == @"C:\Media\Mountain.mkv").Result);
+        Assert.AreEqual(2, model.BatchProgress.Total);
+        Assert.IsFalse(model.RestoreSelectedCommand.CanExecute(null), "Restored files are not offered again.");
+    }
+
+    [TestMethod]
     public async Task RestoreRequiresProfile81AndMatchingSiblingArchiveAndRefreshesOnRescan()
     {
         using var runtime = new TestRuntime();

@@ -21,7 +21,7 @@ public sealed class ControlledBatchService(ILogger<ControlledBatchService> logge
             {
                 var token = await control.StartAsync(key, cancellationToken);
                 result = token is null
-                    ? new(key, OperationStatus.Skipped, null, "Deselected before starting.")
+                    ? new(key, OperationStatus.Skipped, null, "Skipped before starting.")
                     : await execute(item, token.Value);
             }
             catch (OperationCanceledException)
@@ -86,7 +86,7 @@ public sealed class ControlledBatchService(ILogger<ControlledBatchService> logge
                 {
                     var token = await control.StartAsync(key, cancellationToken);
                     result = token is null
-                        ? new(key, OperationStatus.Skipped, null, "Deselected before starting.")
+                        ? new(key, OperationStatus.Skipped, null, "Skipped before starting.")
                         : await execute(item, token.Value);
                 }
                 catch (OperationCanceledException)

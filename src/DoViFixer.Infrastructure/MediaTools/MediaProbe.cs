@@ -170,10 +170,11 @@ internal sealed class MediaProbe(IToolCatalog tools, IProcessRunner processes, I
             });
             var samples = results.OfType<RpuEvidence>().ToList();
             var failures = diagnostics.OfType<string>().ToArray();
+            var positions = results.Select((sample, i) => new ScanSample(media.DurationSeconds.Value * ((i + 0.5) / snapshot.ScanSampleCount), sample?.PeakNits)).ToArray();
 
             progress?.Report(new(Guid.Empty, "Samples analyzed", media.Source.Path, 100));
             EnhancementLayer layer = samples.Any(s => s.Layer == EnhancementLayer.Fel) ? EnhancementLayer.Fel : samples.Count > 0 && samples.All(s => s.Layer == EnhancementLayer.Mel) ? EnhancementLayer.Mel : EnhancementLayer.Unknown;
-            return new(method, layer, samples.Sum(s => s.Frames), samples.Select(s => s.PeakNits).Max(), samples.Count, snapshot.ScanSampleCount, SampleDiagnostics: failures.Length == 0 ? null : string.Join("\n", failures));
+            return new(method, layer, samples.Sum(s => s.Frames), samples.Select(s => s.PeakNits).Max(), samples.Count, snapshot.ScanSampleCount, SampleDiagnostics: failures.Length == 0 ? null : string.Join("\n", failures), Samples: positions);
         }
         catch (Exception ex)when (ex is not OperationCanceledException)
         {

@@ -122,6 +122,20 @@ public sealed class MediaLibraryTests
     }
 
     [TestMethod]
+    public async Task ScanSavedWithoutSamplesIsScannedAgainButStillShown()
+    {
+        var source = await CreateAsync("Movie.mkv", 2);
+        using var library = Library();
+        var scan = Analysis(source, AnalysisMethod.SampledRpu);
+        await library.WriteAsync(scan, default);
+        Assert.IsNull(await library.ReadAsync(source, AnalysisMethod.SampledRpu, default));
+        Assert.AreEqual(AnalysisMethod.SampledRpu, (await library.ReadAllAsync(default)).Single().Analysis!.Evidence.Method);
+
+        await library.WriteAsync(scan with { Evidence = scan.Evidence with { Samples = [new(0.5, 400)] } }, default);
+        Assert.HasCount(1, (await library.ReadAsync(source, AnalysisMethod.SampledRpu, default))!.Evidence.Samples!);
+    }
+
+    [TestMethod]
     public async Task FullInspectionIsNotDowngradedByAScanAndChangedOptionsDoNotAuthorizeReuse()
     {
         var source = await CreateAsync("Movie.mkv", 2);

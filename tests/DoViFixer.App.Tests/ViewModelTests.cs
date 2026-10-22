@@ -131,8 +131,12 @@ public sealed class ViewModelTests
         Assert.AreEqual(expectedLength, details["Length"]);
         Assert.AreEqual(path, details["File location"]);
         Assert.AreEqual("3840 × 2160", details["Resolution"]);
-        Assert.AreEqual("10/10", details["Samples"]);
+        Assert.AreEqual("10 of 10", row.ExaminationRows.Single(detail => detail.Label == "Samples read").Value);
         CollectionAssert.Contains(changes, nameof(MediaRow.DetailRows));
+        CollectionAssert.Contains(changes, nameof(MediaRow.ExaminationRows));
+        row.Analysis = DoViFixer.Domain.Analysis.MediaClassifier.Classify(media,
+            new(DoViFixer.Domain.Analysis.AnalysisMethod.FullRpu, DoViFixer.Domain.Media.EnhancementLayer.Mel, 390, 900, 1, 1));
+        Assert.IsFalse(row.ExaminationRows.Any(detail => detail.Label == "Samples read"));
         row.Notice = "Keep this warning visible.";
         row.AnalysisError = "Fixture analysis error.";
         StringAssert.Contains(row.DetailNotes, row.Notice);
@@ -616,6 +620,62 @@ public sealed class ViewModelTests
     }
 
     [TestMethod]
+    public async Task ExaminationShowsLimitsAndMarksEachScanSample()
+    {
+        using var runtime = new TestRuntime();
+        var row = new MediaRow(@"C:\Media\Mountain.mkv");
+        var media = (await runtime.ProbeAsync(row.Path, default)) with { MaxCll = 1000 };
+        var samples = new DoViFixer.Domain.Analysis.ScanSample[] { new(3.4, 900), new(610, 1200), new(4000, null) };
+        row.Analysis = DoViFixer.Domain.Analysis.MediaClassifier.Classify(media,
+            new(DoViFixer.Domain.Analysis.AnalysisMethod.SampledRpu, DoViFixer.Domain.Media.EnhancementLayer.Fel, 48, 1200, 2, 3,
+                Options: new(MinimumScanCoveragePercent: 50), Samples: samples));
+
+        Assert.IsTrue(row.HasExamination);
+        var rows = row.ExaminationRows.ToDictionary(detail => detail.Label);
+        Assert.AreEqual("Complex FEL", rows["Verdict"].Value);
+        Assert.AreEqual("1,000 nits (MaxCLL)", rows["Base picture"].Value);
+        Assert.AreEqual("1,050 nits", rows["Judged unsafe above"].Value);
+        Assert.AreEqual("1,200 nits, 200 over the base picture", rows["Brightest found"].Value);
+        Assert.AreEqual(MediaStatusTone.HighRisk, rows["Brightest found"].StatusTone);
+        Assert.AreEqual("2 of 3", rows["Samples read"].Value);
+        StringAssert.Contains(row.ExaminationNote, "Metadata heuristic");
+        Assert.IsFalse(row.DetailNotes.Contains("Metadata heuristic", StringComparison.Ordinal));
+        Assert.IsFalse(row.DetailRows.Any(detail => detail.Label == "Analysis"));
+
+        CollectionAssert.AreEqual(new[] { "0:03", "10:10", "1:06:40" }, row.SampleRows.Select(sample => sample.Label).ToArray());
+        CollectionAssert.AreEqual(new[] { "900 nits", "1,200 nits", "Not read" }, row.SampleRows.Select(sample => sample.Value).ToArray());
+        CollectionAssert.AreEqual(new[] { MediaStatusTone.None, MediaStatusTone.HighRisk, MediaStatusTone.VerifyRecommended }, row.SampleRows.Select(sample => sample.StatusTone).ToArray());
+
+        row.Analysis = DoViFixer.Domain.Analysis.MediaClassifier.Classify(media,
+            new(DoViFixer.Domain.Analysis.AnalysisMethod.FullRpu, DoViFixer.Domain.Media.EnhancementLayer.Fel, 4475, 900, 1, 1));
+        Assert.IsFalse(row.HasSampleRows);
+        Assert.IsFalse(row.ExaminationRows.Any(detail => detail.Label == "Samples read"));
+        Assert.AreEqual("4,475", row.ExaminationRows.Single(detail => detail.Label == "Frames read").Value);
+    }
+
+    [TestMethod]
+    public async Task CopyDetailsPutsTheFocusedFileDetailsOnTheClipboard()
+    {
+        using var runtime = new TestRuntime();
+        var model = runtime.Container.GetRequiredService<MediaViewModel>();
+        await model.AddAsync([@"C:\Media\Mountain.mkv"]);
+        model.Focused = null;
+        Assert.IsFalse(model.CopyDetailsCommand.CanExecute(null));
+
+        var row = model.Files[0];
+        row.Analysis = DoViFixer.Domain.Analysis.MediaClassifier.Classify(row.Analysis!.Media,
+            row.Analysis.Evidence with { Samples = [new(4, 1720)] });
+        model.Focused = row;
+        model.CopyDetailsCommand.Invoke();
+
+        string text = runtime.ClipboardText!;
+        Assert.AreEqual(row.DetailsText, text);
+        StringAssert.StartsWith(text, $"{row.Name}{Environment.NewLine}File location: {row.Path}");
+        StringAssert.Contains(text, "What the examination found");
+        StringAssert.Contains(text, $"Each sample{Environment.NewLine}0:04  1,720 nits");
+    }
+
+    [TestMethod]
     public async Task IncompleteScanExplainsSampleFailureAndInspectsOnlyClickedRow()
     {
         using var runtime = new TestRuntime();
@@ -629,8 +689,8 @@ public sealed class ViewModelTests
         };
         row.Analysis = DoViFixer.Domain.Analysis.MediaClassifier.Classify(row.Analysis.Media, evidence);
         Assert.AreEqual("Profile 7 · Incomplete scan", row.Classification);
-        Assert.AreEqual("9/10", row.DetailRows.Single(detail => detail.Label == "Samples").Value);
-        Assert.IsTrue(row.DetailNotes.Contains("No RPU was found in input file"));
+        Assert.AreEqual("9 of 10", row.ExaminationRows.Single(detail => detail.Label == "Samples read").Value);
+        Assert.IsTrue(row.ExaminationNote.Contains("No RPU was found in input file"));
         Assert.IsTrue(row.DetailNotes.Contains("Suggested action: Inspect"));
         Assert.IsFalse(row.CanRetryAnalysis);
         Assert.IsTrue(model.InspectIncompleteCommand.CanExecute(row));
@@ -723,6 +783,36 @@ public sealed class ViewModelTests
     }
 
     [TestMethod]
+    public async Task InspectionLeavesOutFilesThatAreNotProfile7()
+    {
+        using var runtime = new TestRuntime();
+        var model = runtime.Container.GetRequiredService<MediaViewModel>();
+        await model.AddAsync([@"C:\Media\P81.mkv", @"C:\Media\Mountain.mkv"]);
+        var (p81, p7) = (model.Files[0], model.Files[1]);
+        Assert.IsFalse(p81.IsProfile7);
+        Assert.IsFalse(model.InspectRowCommand.CanExecute(p81), "Inspection has nothing to add for a file that is not Profile 7.");
+        Assert.IsFalse(model.DeepInspectRowCommand.CanExecute(p81));
+        Assert.IsTrue(model.ScanRowCommand.CanExecute(p81), "Scan still reads the file again.");
+        Assert.IsTrue(model.InspectRowCommand.CanExecute(p7));
+        Assert.IsTrue(model.InspectRowCommand.CanExecute(model.Files.Single(row => row.Analysis is not null && row.IsProfile7)));
+
+        p7.IsSelected = false;
+        Assert.IsTrue(p81.IsSelected);
+        Assert.IsFalse(model.InspectCommand.CanExecute(null), "Only a file that is not Profile 7 is checked.");
+        Assert.IsFalse(model.DeepInspectCommand.CanExecute(null));
+
+        p7.IsSelected = true;
+        int fullAnalyses = runtime.FullAnalyses;
+        await model.InspectCommand.InvokeAsync();
+        Assert.AreEqual(fullAnalyses + 1, runtime.FullAnalyses, "Only the Profile 7 file is inspected.");
+        Assert.IsTrue(p81.IsSelected, "The skipped file keeps its check mark.");
+
+        await runtime.UpdateAsync(settings => settings with { AutomaticallyScanAddedFiles = false }, default);
+        await model.AddAsync([@"C:\Media\Ocean.mkv"]);
+        Assert.IsTrue(model.InspectRowCommand.CanExecute(model.Files.Single(row => row.Path == @"C:\Media\Ocean.mkv")), "A file not analyzed yet may be Profile 7.");
+    }
+
+    [TestMethod]
     public async Task DetailNextStepScansAndInspectsOnlyItsFileWithoutChangingSelection()
     {
         using var runtime = new TestRuntime();
@@ -732,18 +822,25 @@ public sealed class ViewModelTests
         var row = model.Files[0];
         row.IsSelected = false;
         Assert.AreEqual("Scan", row.NextStepText);
+        Assert.IsFalse(row.OffersConversion, "An unscanned file is not offered for conversion.");
         Assert.IsFalse(model.ScanRowCommand.CanExecute(new MediaRow(row.Path)));
+        var changed = new List<string?>();
+        row.PropertyChanged += (_, e) => changed.Add(e.PropertyName);
         await model.ScanRowCommand.InvokeAsync(row);
         Assert.IsNotNull(row.Analysis);
         Assert.IsNull(model.Files[1].Analysis);
         Assert.AreEqual("Inspect", row.NextStepText);
+        Assert.IsTrue(row.OffersConversion, "A scanned MEL file offers Convert while inspection is still recommended.");
+        CollectionAssert.Contains(changed, nameof(MediaRow.OffersConversion));
         await model.InspectIncompleteCommand.InvokeAsync(row);
         Assert.AreEqual(DoViFixer.Domain.Analysis.AnalysisMethod.FullRpu, row.Analysis.Evidence.Method);
         Assert.AreEqual("Convert", row.NextStepText);
+        Assert.IsTrue(row.OffersConversion);
         Assert.IsFalse(row.IsSelected);
         Assert.IsFalse(row.DetailRows.Any(detail => detail.Label == "Next step"));
         row.SetConverted(new(row.Path, OperationStatus.Completed, @"C:\Media\Mountain-P81.mkv"));
         Assert.AreEqual("Open output", row.NextStepText);
+        Assert.IsFalse(row.OffersConversion, "A converted file offers its output instead.");
         row.IsMissing = true;
         Assert.AreEqual("", row.NextStepText);
     }
@@ -1743,8 +1840,9 @@ public sealed class ViewModelTests
 
         model.SkipCommand.Invoke(originalRows[2]);
         Assert.AreEqual("Conversion skipped", originalRows[2].Status);
-        Assert.IsTrue(originalRows[2].HasWarning);
-        Assert.AreEqual("Deselected before starting.", originalRows[2].Warning);
+        Assert.IsFalse(originalRows[2].HasWarning, "A skip reason is not a conversion warning.");
+        Assert.AreEqual("Skipped before starting.", originalRows[2].StatusToolTip);
+        Assert.IsTrue(originalRows[2].IsSelected, "Skip leaves the check mark to the user.");
 
         model.CancelFileCommand.Invoke(originalRows[0]);
         release.SetResult();
@@ -1769,8 +1867,8 @@ public sealed class ViewModelTests
         Assert.AreEqual("Converted", originalRows[0].Status);
         Assert.AreEqual("Conversion skipped", originalRows[1].Status);
         StringAssert.Contains(originalRows[1].Notice, "Multiple inputs resolve to the same output path");
-        Assert.IsTrue(originalRows[1].HasWarning);
-        Assert.AreEqual(originalRows[1].Notice, originalRows[1].Warning);
+        Assert.IsFalse(originalRows[1].HasWarning, "A skip reason is not a conversion warning.");
+        Assert.AreEqual(originalRows[1].Notice, originalRows[1].StatusToolTip);
     }
 
     [TestMethod]
@@ -2015,6 +2113,7 @@ public sealed class ViewModelTests
         settings.Destination = @"C:\Media\CustomOutput";
         settings.OtherFolder = true;
         settings.ReplaceOriginal = true;
+        settings.ForceComplex = true;
         await settings.SaveCommand.InvokeAsync();
 
         Assert.AreEqual(@"Output: C:\Media\CustomOutput (Replace original)", media.OutputSummary);
@@ -2026,6 +2125,10 @@ public sealed class ViewModelTests
         Assert.AreSame(media.OpenSettingsCommand, outputItem.Command);
         Assert.AreEqual(media.OutputSummaryToolTip, outputItem.ToolTipText);
         Assert.IsTrue(media.StatusItems.Single(item => item.Text == media.RetentionSummary).IsEmphasized);
+        var felItem = media.StatusItems.Single(item => item.Text == media.FelSummary);
+        StringAssert.StartsWith(media.FelSummary, "⚠ FEL:");
+        Assert.IsTrue(felItem.IsEmphasized, "Allowing Complex FEL conversion is marked as a warning.");
+        StringAssert.Contains(felItem.ToolTipText, "permanently lost");
     }
 
     [TestMethod]
@@ -2209,7 +2312,7 @@ public sealed class ViewModelTests
             Assert.AreEqual("", row.ResultRecommendation);
             Assert.IsFalse(row.CanInspectIncomplete);
             Assert.IsFalse(row.DetailNotes.Contains("Safe to convert", StringComparison.Ordinal));
-            Assert.IsTrue(row.DetailRows.Any(detail => detail.Label == "Analysis"));
+            Assert.IsTrue(row.ExaminationRows.Any(detail => detail.Label == "Method"));
         }
 
         var methodBeforeConversion = row.AnalysisText;
