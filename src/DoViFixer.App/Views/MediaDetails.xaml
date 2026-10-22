@@ -121,7 +121,7 @@
                     <DockPanel Margin="0,0,0,12">
                         <!-- No fill until the pointer is over it. -->
                         <Button DockPanel.Dock="Right"
-                                Padding="6"
+                                Padding="4"
                                 Margin="8,0,0,0"
                                 VerticalAlignment="Center"
                                 ToolTip="Copy details"
