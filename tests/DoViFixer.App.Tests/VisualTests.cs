@@ -821,7 +821,7 @@ public sealed class VisualTests
         Assert.AreEqual(Visibility.Hidden, restore.Visibility);
         var inspect = Descendants<Button>(container).Single(button => Equals(button.ToolTip, "Inspect"));
         var convert = Descendants<Button>(container).Single(button => Equals(button.ToolTip, "Convert"));
-        Assert.AreSame(media.InspectIncompleteCommand, inspect.Command);
+        Assert.AreSame(media.InspectRowCommand, inspect.Command, "The row's Inspect is available whenever the file can be inspected, not only when suggested.");
         Assert.AreSame(media.ConvertRowCommand, convert.Command);
         Assert.AreSame(row, inspect.CommandParameter);
         Assert.AreSame(row, convert.CommandParameter);
