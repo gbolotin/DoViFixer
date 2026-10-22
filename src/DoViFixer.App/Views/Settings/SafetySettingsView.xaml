@@ -58,6 +58,19 @@
             </Border>
             <Border Style="{StaticResource WfCardStyle}" Margin="0,12,0,0">
                 <StackPanel IsEnabled="{Binding IsIdle}">
+                    <TextBlock Text="Originals" Style="{StaticResource WfLabelTextStyle}" />
+                    <CheckBox Content="Replace original after verification"
+                              AutomationProperties.HelpText="The converted file replaces the source after checks complete. Verification level 1 performs no content check. When off, the original is kept."
+                              IsChecked="{Binding ReplaceOriginal}"
+                              Style="{StaticResource WfToggleSwitchStyle}"
+                              Margin="0,12,0,0" />
+                    <TextBlock Text="The converted file replaces the source after the verification level above passes. When off, the original is kept. Turn on Back up enhancement layer in Conversion settings to keep Profile 7 originals restorable."
+                               TextWrapping="Wrap"
+                               Style="{StaticResource WfSettingNoteTextStyle}" />
+                </StackPanel>
+            </Border>
+            <Border Style="{StaticResource WfCardStyle}" Margin="0,12,0,0">
+                <StackPanel IsEnabled="{Binding IsIdle}">
                     <TextBlock Text="Deletion" Style="{StaticResource WfLabelTextStyle}" />
                     <CheckBox Content="Move deleted originals and backups to Recycle Bin"
                               IsChecked="{Binding RecycleDeletedOriginalsAndBackups}"

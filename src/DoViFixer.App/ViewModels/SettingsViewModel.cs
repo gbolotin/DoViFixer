@@ -275,6 +275,7 @@ public sealed partial class SettingsViewModel : OperationViewModel
     partial void OnOtherFolderChanged(bool value) => TriggerAutoSave();
 
     [ObservableProperty]
+    [NotifyPropertyChangedFor(nameof(IsComplexFelLossPermanent))]
     public partial bool ReplaceOriginal { get; set; }
 
     partial void OnReplaceOriginalChanged(bool value) => TriggerAutoSave();
@@ -298,6 +299,7 @@ public sealed partial class SettingsViewModel : OperationViewModel
     partial void OnRemoveDolbyVisionChanged(bool value) => TriggerAutoSave();
 
     [ObservableProperty]
+    [NotifyPropertyChangedFor(nameof(IsComplexFelLossPermanent))]
     public partial bool CreateArchive { get; set; }
 
     partial void OnCreateArchiveChanged(bool value) => TriggerAutoSave();
@@ -393,6 +395,7 @@ public sealed partial class SettingsViewModel : OperationViewModel
             if (SetProperty(ref forceComplex, value))
             {
                 OnPropertyChanged(nameof(AllowFel));
+                OnPropertyChanged(nameof(IsComplexFelLossPermanent));
                 TriggerAutoSave();
             }
         }
@@ -409,10 +412,14 @@ public sealed partial class SettingsViewModel : OperationViewModel
                 OnPropertyChanged(nameof(IncludeSimple));
                 OnPropertyChanged(nameof(ForceComplex));
                 OnPropertyChanged(nameof(AllowFel));
+                OnPropertyChanged(nameof(IsComplexFelLossPermanent));
                 TriggerAutoSave();
             }
         }
     }
+
+    // Replacing a converted Complex FEL original without an enhancement-layer backup leaves nothing Restore can rebuild.
+    public bool IsComplexFelLossPermanent => ForceComplex && ReplaceOriginal && !CreateArchive;
 
     private void TriggerAutoSave()
     {

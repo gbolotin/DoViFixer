@@ -22,7 +22,7 @@
                               AutomationProperties.HelpText="Convert to HDR10 instead of Dolby Vision Profile 8.1. Applies to both selected files and individual file conversions."
                               IsChecked="{Binding RemoveDolbyVision}"
                               Style="{StaticResource WfToggleSwitchStyle}" />
-                    <TextBlock Text="When enabled, converted files contain HDR10 without Dolby Vision metadata. Originals follow the file handling settings below."
+                    <TextBlock Text="When enabled, converted files contain HDR10 without Dolby Vision metadata. Originals follow the Replace original setting on the Safety page."
                                Style="{StaticResource WfSettingNoteTextStyle}" />
                 </StackPanel>
             </Border>
@@ -46,11 +46,26 @@
                         <Run Text="&#xE7BA;"
                              FontFamily="{StaticResource SymbolThemeFontFamily}"
                              Foreground="{DynamicResource SystemFillColorCautionBrush}" />
-                        <Run Text="Active enhancement-layer picture data will be permanently lost. Complex FEL contains video data that expands dynamic range and brightness beyond the base layer. Discarding it during conversion removes this visual detail." />
+                        <Run Text="Active enhancement-layer picture data will be removed from the converted file. Complex FEL contains video data that expands dynamic range and brightness beyond the base layer. Turn on Back up enhancement layer to keep the Profile 7 original restorable." />
                     </TextBlock>
+                    <TextBlock Style="{StaticResource WfSettingNoteTextStyle}"
+                               AutomationProperties.LiveSetting="Polite"
+                               Visibility="{Binding IsComplexFelLossPermanent, Converter={StaticResource WfBooleanToVisibilityConverter}}">
+                        <Run Text="&#xE783;"
+                             FontFamily="{StaticResource SymbolThemeFontFamily}"
+                             Foreground="{DynamicResource SystemFillColorCriticalBrush}" />
+                        <Run Text="With Replace original on (Safety settings) and no enhancement-layer backup, the enhancement layer of converted Complex FEL files will be permanently lost and Restore cannot rebuild the Profile 7 original." />
+                    </TextBlock>
+                    <Separator />
+                    <CheckBox Content="Back up enhancement layer"
+                              AutomationProperties.HelpText="Saves the enhancement layer in a .dovi archive beside the output, so Restore on the converted file's row can rebuild the Profile 7 original."
+                              IsChecked="{Binding CreateArchive}"
+                              Style="{StaticResource WfToggleSwitchStyle}" />
+                    <TextBlock Text="Saves the enhancement layer in a .dovi archive beside the output, so Restore on the converted file's row can rebuild the Profile 7 original."
+                               Style="{StaticResource WfSettingNoteTextStyle}" />
                 </StackPanel>
             </Border>
-            <TextBlock Text="Output and originals" Style="{StaticResource WfLabelTextStyle}" />
+            <TextBlock Text="Output" Style="{StaticResource WfLabelTextStyle}" />
             <Border Style="{StaticResource WfCardStyle}">
                 <StackPanel IsEnabled="{Binding IsIdle}">
                     <HeaderedContentControl Header="Output folder"
@@ -73,15 +88,6 @@
                     <TextBlock Text="{Binding DestinationError}"
                                TextWrapping="Wrap"
                                AutomationProperties.LiveSetting="Polite" />
-                    <CheckBox Content="Replace original after verification"
-                              AutomationProperties.HelpText="The converted file replaces the source after checks complete. Verification level 1 performs no content check. When off, the original is kept."
-                              IsChecked="{Binding ReplaceOriginal}"
-                              Style="{StaticResource WfToggleSwitchStyle}" />
-                    <Separator />
-                    <CheckBox Content="Back up enhancement layer"
-                              AutomationProperties.HelpText="Saves the enhancement layer in a .dovi archive beside the output, so Restore on the converted file's row can rebuild the Profile 7 original."
-                              IsChecked="{Binding CreateArchive}"
-                              Style="{StaticResource WfToggleSwitchStyle}" />
                 </StackPanel>
             </Border>
             <TextBlock Text="Input and working folders" Style="{StaticResource WfLabelTextStyle}" />
