@@ -313,7 +313,10 @@ public sealed partial class MediaRow(string path) : ObservableObject
                 new(compare ? "Original risk" : "Risk", RiskDetailText(a), StatusTone: RiskTone(a)),
                 new("Analysis", EvidenceName(a.Evidence.Method)),
                 new("Frames", a.Evidence.Frames.ToString("N0")),
-                new("Samples", $"{a.Evidence.SuccessfulSamples}/{a.Evidence.RequestedSamples}")
+                // Only a scan reads separate clips; inspections record the whole stream as one sample.
+                .. a.Evidence.Method == AnalysisMethod.SampledRpu
+                    ? new[] { new MediaDetail("Samples", $"{a.Evidence.SuccessfulSamples}/{a.Evidence.RequestedSamples}") }
+                    : Array.Empty<MediaDetail>()
             ];
         }
     }

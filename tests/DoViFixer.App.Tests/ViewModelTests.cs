@@ -133,6 +133,9 @@ public sealed class ViewModelTests
         Assert.AreEqual("3840 × 2160", details["Resolution"]);
         Assert.AreEqual("10/10", details["Samples"]);
         CollectionAssert.Contains(changes, nameof(MediaRow.DetailRows));
+        row.Analysis = DoViFixer.Domain.Analysis.MediaClassifier.Classify(media,
+            new(DoViFixer.Domain.Analysis.AnalysisMethod.FullRpu, DoViFixer.Domain.Media.EnhancementLayer.Mel, 390, 900, 1, 1));
+        Assert.IsFalse(row.DetailRows.Any(detail => detail.Label == "Samples"));
         row.Notice = "Keep this warning visible.";
         row.AnalysisError = "Fixture analysis error.";
         StringAssert.Contains(row.DetailNotes, row.Notice);
