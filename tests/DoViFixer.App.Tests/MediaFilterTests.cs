@@ -22,6 +22,8 @@ public sealed class MediaFilterTests
     private static async Task<MediaViewModel> CreateAsync(TestRuntime runtime)
     {
         var model = runtime.Container.GetRequiredService<MediaViewModel>();
+        // These tests check files; adding files then keeps the files checked before.
+        model.ShowsCheckBoxes = true;
         await model.AddAsync([Profile7, Profile81, NoDolbyVision]);
         await runtime.UpdateAsync(settings => settings with { AutomaticallyScanAddedFiles = false }, default);
         await model.AddAsync([Unscanned]);

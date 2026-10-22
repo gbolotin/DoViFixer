@@ -1636,6 +1636,7 @@ public sealed class ViewModelTests
         using var runtime = new TestRuntime();
         await runtime.UpdateAsync(s => s with { IncludeSimple = true }, default);
         var model = runtime.Container.GetRequiredService<MediaViewModel>();
+        model.ShowsCheckBoxes = true;
         await model.AddAsync([@"C:\Media\Mountain.mkv", @"C:\Media\Ocean.mkv"]);
 
         model.Files[0].IsSelected = false;
@@ -1954,6 +1955,7 @@ public sealed class ViewModelTests
         using var runtime = new TestRuntime();
         await runtime.UpdateAsync(s => s with { IncludeSimple = true }, default);
         var model = runtime.Container.GetRequiredService<MediaViewModel>();
+        model.ShowsCheckBoxes = true;
 
         Assert.AreEqual("0 items", model.SelectionSummary);
 

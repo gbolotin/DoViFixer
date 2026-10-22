@@ -403,6 +403,7 @@ public sealed partial class ShellViewModel : ObservableObject, INavigationGuard,
         await media.CancelPreviewsAsync();
         await media.ArchivePairing;
         await media.FlushColumnLayoutAsync();
+        await media.FlushSelectionModeAsync();
         await Settings.FlushAsync();
     }
 

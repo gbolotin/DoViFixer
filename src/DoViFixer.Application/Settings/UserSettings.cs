@@ -97,4 +97,6 @@ public sealed record UserSettings
         init;
     }
     = AppTheme.System;
+    /// <summary>Whether each media list row has a check box; otherwise the list selects rows as File Explorer does.</summary>
+    public bool ShowSelectionCheckBoxes { get; init; }
 }

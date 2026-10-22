@@ -27,6 +27,16 @@
             </Border>
             <Border Style="{StaticResource WfCardStyle}" Margin="0,24,0,0">
                 <StackPanel>
+                    <TextBlock Text="File list"
+                               Style="{StaticResource SubtitleTextBlockStyle}" />
+                    <CheckBox Content="Show check boxes to select files"
+                              AutomationProperties.HelpText="When on, check the files to process, and clicking a row only shows its details. When off, select files as in File Explorer: click, Ctrl+click, Shift+click or Ctrl+A. Also on the View menu."
+                              IsChecked="{Binding ShowSelectionCheckBoxes}"
+                              Style="{StaticResource WfToggleSwitchStyle}" />
+                </StackPanel>
+            </Border>
+            <Border Style="{StaticResource WfCardStyle}" Margin="0,24,0,0">
+                <StackPanel>
                     <TextBlock Text="Notifications"
                                Style="{StaticResource SubtitleTextBlockStyle}" />
                     <CheckBox Content="Show a notification when an operation finishes"

@@ -206,6 +206,7 @@ public sealed partial class MediaViewModel : OperationViewModel, INavigationPage
         OnPropertyChanged(nameof(HasNoShownFiles));
         OnPropertyChanged(nameof(SelectionSummary));
         OnPropertyChanged(nameof(AllFilesSelected));
+        PublishListSelection();
         CommandsChanged();
     }
     public BatchProgressViewModel BatchProgress { get; } = new();
@@ -248,7 +249,7 @@ public sealed partial class MediaViewModel : OperationViewModel, INavigationPage
         : null;
 
     [ObservableProperty]
-    [NotifyCanExecuteChangedFor(nameof(OpenOutputCommand), nameof(OpenFileLocationCommand), nameof(CopyDetailsCommand))]
+    [NotifyCanExecuteChangedFor(nameof(OpenOutputCommand), nameof(OpenFileLocationCommand), nameof(CopyDetailsCommand), nameof(RemoveListSelectionCommand))]
     public partial MediaRow? Focused { get; set; }
 
     partial void OnFocusedChanged(MediaRow? value) => previewCompletion = Task.WhenAll(previewCompletion, LoadPreviewAsync(value), LoadLibraryHistoryAsync(value));
@@ -728,6 +729,7 @@ public sealed partial class MediaViewModel : OperationViewModel, INavigationPage
 
     public void UpdateSettingsSummary(UserSettings s)
     {
+        ApplySelectionMode(s.ShowSelectionCheckBoxes);
         convertsSimpleFel = s.IncludeSimple;
         convertsComplexFel = s.ForceComplex;
         foreach (var row in Files)
@@ -909,7 +911,11 @@ public sealed partial class MediaViewModel : OperationViewModel, INavigationPage
 
     protected override void CommandsChanged()
     {
+        // Rows highlighted while an operation ran become the selected files once it ends.
+        ApplyListSelection();
         ResetColumnLayoutCommand?.NotifyCanExecuteChanged();
+        SelectAllCommand?.NotifyCanExecuteChanged();
+        RemoveListSelectionCommand?.NotifyCanExecuteChanged();
         OnPropertyChanged(nameof(CanInspect));
         ScanRowCommand?.NotifyCanExecuteChanged();
         InspectRowCommand?.NotifyCanExecuteChanged();
@@ -984,6 +990,12 @@ public sealed partial class MediaViewModel : OperationViewModel, INavigationPage
         Focused ??= Files.FirstOrDefault();
         if (added.Count > 0)
         {
+            if (!ShowsCheckBoxes)
+            {
+                // As in File Explorer, the files just added become the selection.
+                var addedRows = added.ToHashSet();
+                SetRowSelection(Files, addedRows.Contains);
+            }
             StartBackgroundPreviews();
         }
         InvalidatePlan();
@@ -1069,6 +1081,7 @@ public sealed partial class MediaViewModel : OperationViewModel, INavigationPage
 
         OnPropertyChanged(nameof(SelectionSummary));
         OnPropertyChanged(nameof(AllFilesSelected));
+        PublishListSelection();
         CommandsChanged();
     }
 
@@ -1819,11 +1832,7 @@ public sealed partial class MediaViewModel : OperationViewModel, INavigationPage
         }
 
         bool selectAll = AllFilesSelected != true;
-        foreach (var row in ShownFiles.Where(row => row.SelectionEnabled))
-        {
-            row.IsSelected = selectAll;
-        }
-
+        SetRowSelection(ShownFiles.Where(row => row.SelectionEnabled).ToArray(), _ => selectAll);
         OnPropertyChanged(nameof(AllFilesSelected));
     }
     private void NotifyActiveProgress()

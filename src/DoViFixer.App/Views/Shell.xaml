@@ -100,6 +100,11 @@
                                           Click="OnExitClick" />
                             </MenuItem>
                             <MenuItem Header="_View">
+                                <!-- Also in Settings > General. Without check boxes, the list selects files as File Explorer does. -->
+                                <MenuItem Header="Show _check boxes"
+                                          IsCheckable="True"
+                                          IsChecked="{Binding Media.ShowsCheckBoxes}" />
+                                <Separator />
                                 <MenuItem Header="_Reset media columns" Command="{Binding Media.ResetColumnLayoutCommand}" />
                             </MenuItem>
                             <MenuItem Header="_Tools">
