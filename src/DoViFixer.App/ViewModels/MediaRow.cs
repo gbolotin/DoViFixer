@@ -229,7 +229,7 @@ public sealed partial class MediaRow(string path) : ObservableObject
     }
 
     [ObservableProperty]
-    [NotifyPropertyChangedFor(nameof(Classification), nameof(FilterGroup), nameof(HasAnalysisError), nameof(NeedsInspection), nameof(CanInspectIncomplete), nameof(StatusTone), nameof(AnalysisText), nameof(ResultRecommendation), nameof(NextStepText), nameof(DetailRows), nameof(DetailNotes), nameof(StatusToolTip))]
+    [NotifyPropertyChangedFor(nameof(Classification), nameof(FilterGroup), nameof(HasAnalysisError), nameof(NeedsInspection), nameof(CanInspectIncomplete), nameof(StatusTone), nameof(AnalysisText), nameof(ResultRecommendation), nameof(NextStepText), nameof(DetailRows), nameof(DetailNotes), nameof(HasExamination), nameof(ExaminationRows), nameof(ExaminationNote), nameof(SampleRows), nameof(HasSampleRows), nameof(StatusToolTip))]
     public partial string? AnalysisError { get; set; }
 
     [ObservableProperty]
@@ -252,7 +252,7 @@ public sealed partial class MediaRow(string path) : ObservableObject
     private MediaAnalysis? CurrentFileAnalysis => ReplacesOriginal && ResultAnalysis is { } result ? result : Analysis;
 
     [ObservableProperty]
-    [NotifyPropertyChangedFor(nameof(Format), nameof(IsProfile7), nameof(CanRestore), nameof(HasIncompleteScan), nameof(NeedsInspection), nameof(CanInspectIncomplete), nameof(Classification), nameof(FilterGroup), nameof(StatusTone), nameof(AnalysisText), nameof(ResultRecommendation), nameof(NextStepText), nameof(DetailRows), nameof(DetailNotes))]
+    [NotifyPropertyChangedFor(nameof(Format), nameof(IsProfile7), nameof(CanRestore), nameof(HasIncompleteScan), nameof(NeedsInspection), nameof(CanInspectIncomplete), nameof(Classification), nameof(FilterGroup), nameof(StatusTone), nameof(AnalysisText), nameof(ResultRecommendation), nameof(NextStepText), nameof(DetailRows), nameof(DetailNotes), nameof(HasExamination), nameof(ExaminationRows), nameof(ExaminationNote), nameof(SampleRows), nameof(HasSampleRows))]
     public partial MediaAnalysis? Analysis { get; set; }
 
     /// <summary>The list filter that shows this file. Files not scanned yet and files whose analysis failed share one group.</summary>
@@ -311,21 +311,147 @@ public sealed partial class MediaRow(string path) : ObservableObject
                 Compared("Resolution", FormatResolution(a), FormatResolution),
                 Compared("Frame rate", FormatFrameRate(a), FormatFrameRate),
                 new(compare ? "Original risk" : "Risk", RiskDetailText(a), StatusTone: RiskTone(a)),
-                new("Analysis", EvidenceName(a.Evidence.Method)),
-                new("Frames", a.Evidence.Frames.ToString("N0")),
-                // Only a scan reads separate clips; inspections record the whole stream as one sample.
-                .. a.Evidence.Method == AnalysisMethod.SampledRpu
-                    ? new[] { new MediaDetail("Samples", $"{a.Evidence.SuccessfulSamples}/{a.Evidence.RequestedSamples}") }
-                    : Array.Empty<MediaDetail>()
+                .. HasExamination ? Array.Empty<MediaDetail>() : new[] { new MediaDetail("Analysis", EvidenceName(a.Evidence.Method)) }
             ];
+        }
+    }
+
+    /// <summary>A Profile 7 file was scanned or inspected, so the details explain what the analysis measured.</summary>
+    public bool HasExamination => AnalysisError is null
+        && Analysis is { Media.Profile: Domain.Media.DolbyVisionProfile.Profile7 } a
+        && a.Evidence.Method != AnalysisMethod.MetadataOnly;
+
+    /// <summary>What the analysis measured and the limits it compared those measurements with.</summary>
+    public IReadOnlyList<MediaDetail> ExaminationRows
+    {
+        get
+        {
+            if (!HasExamination)
+            {
+                return [];
+            }
+
+            var a = Analysis!;
+            var e = a.Evidence;
+            var options = e.Options ?? new AnalysisOptions();
+            var rows = new List<MediaDetail>
+            {
+                new("Verdict", VerdictName(a)),
+                new("Method", EvidenceName(e.Method))
+            };
+            if (e.Brightness is { } b)
+            {
+                rows.Add(new("Base picture", $"{b.BaseLayerPeakNits:N0} nits (measured)"));
+                rows.Add(new("Judged unsafe above", $"{b.ThresholdNits:N0} nits over the base picture"));
+                rows.Add(new("Largest difference", $"{b.MaximumDeltaNits:N0} nits at frame {b.MaximumDeltaFrame:N0}"));
+                rows.Add(new("Frames over the limit", $"{b.ExpandedFrames:N0} of {b.ComparedFrames:N0}",
+                    StatusTone: b.ExpandedFrames > 0 ? MediaStatusTone.HighRisk : MediaStatusTone.None));
+            }
+            else if (e.Layer == Domain.Media.EnhancementLayer.Fel)
+            {
+                var (basePeak, assumed) = MediaClassifier.BasePeak(a.Media, options);
+                double? limit = basePeak + options.BrightnessMarginNits;
+                rows.Add(new("Base picture", basePeak is { } nits ? $"{nits:N0} nits ({(assumed ? "assumed" : "MaxCLL")})" : "Not recorded"));
+                if (limit is { } unsafeAbove)
+                {
+                    rows.Add(new("Judged unsafe above", $"{unsafeAbove:N0} nits"));
+                }
+                if (e.PeakNits is { } peak)
+                {
+                    string label = e.Method == AnalysisMethod.FullRpu && options.InspectionPeakPercentile < 100
+                        ? $"Brightest found ({options.InspectionPeakPercentile:0.##}th percentile)"
+                        : "Brightest found";
+                    string over = peak > basePeak ? $", {peak - basePeak:N0} over the base picture" : "";
+                    rows.Add(new(label, $"{peak:N0} nits{over}", StatusTone: peak > limit ? MediaStatusTone.HighRisk : MediaStatusTone.None));
+                }
+            }
+
+            rows.Add(new("Frames read", e.Frames.ToString("N0")));
+            // Only a scan reads separate clips; inspections read the whole stream.
+            if (e.Method == AnalysisMethod.SampledRpu)
+            {
+                rows.Add(new("Samples read", $"{e.SuccessfulSamples} of {e.RequestedSamples}"));
+            }
+
+            return rows;
+        }
+    }
+
+    /// <summary>The verdict's explanation and any samples that could not be read.</summary>
+    public string ExaminationNote => !HasExamination ? "" : string.Join("\n\n", new[]
+    {
+        Analysis!.Reason,
+        Analysis.Evidence.SampleDiagnostics
+    }.Where(text => !string.IsNullOrWhiteSpace(text)));
+
+    /// <summary>Where each scan sample was taken and the brightest metadata it found; samples above the unsafe limit are marked.</summary>
+    public IReadOnlyList<MediaDetail> SampleRows
+    {
+        get
+        {
+            if (!HasExamination || Analysis!.Evidence.Samples is not { Count: > 0 } samples)
+            {
+                return [];
+            }
+
+            var options = Analysis.Evidence.Options ?? new AnalysisOptions();
+            double? limit = Analysis.Evidence.Layer == Domain.Media.EnhancementLayer.Fel
+                ? MediaClassifier.BasePeak(Analysis.Media, options).Nits + options.BrightnessMarginNits
+                : null;
+            return samples.Select(sample => sample.PeakNits is { } peak
+                ? new MediaDetail(FormatPosition(sample.PositionSeconds), $"{peak:N0} nits", StatusTone: peak > limit ? MediaStatusTone.HighRisk : MediaStatusTone.None)
+                : new MediaDetail(FormatPosition(sample.PositionSeconds), "Not read", StatusTone: MediaStatusTone.VerifyRecommended)).ToArray();
+        }
+    }
+
+    public bool HasSampleRows => SampleRows.Count > 0;
+
+    /// <summary>The details panel as plain text, for the clipboard. Compared values read "original → result".</summary>
+    public string DetailsText
+    {
+        get
+        {
+            var text = new System.Text.StringBuilder().AppendLine(Name);
+            foreach (var row in DetailRows)
+            {
+                string value = row.Label == FileLocationLabel ? Path : row.Value;
+                text.AppendLine(string.IsNullOrEmpty(row.Result) || row.Label == FileLocationLabel
+                    ? $"{row.Label}: {value}"
+                    : $"{row.Label}: {value} → {row.Result}");
+            }
+            if (HasExamination)
+            {
+                text.AppendLine().AppendLine("What the examination found");
+                foreach (var row in ExaminationRows)
+                {
+                    text.AppendLine($"{row.Label}: {row.Value}");
+                }
+                if (ExaminationNote.Length > 0)
+                {
+                    text.AppendLine().AppendLine(ExaminationNote);
+                }
+            }
+            if (HasSampleRows)
+            {
+                text.AppendLine().AppendLine("Each sample");
+                foreach (var row in SampleRows)
+                {
+                    text.AppendLine($"{row.Label}  {row.Value}");
+                }
+            }
+            if (DetailNotes.Length > 0)
+            {
+                text.AppendLine().AppendLine(DetailNotes);
+            }
+            return text.ToString().TrimEnd();
         }
     }
 
     public string DetailNotes => string.Join("\n\n", new[]
     {
         ShowsMissing ? MissingNote : null,
-        AnalysisError is not null ? $"Analysis failed\n{AnalysisError}" : Analysis?.Reason,
-        Analysis?.Evidence.SampleDiagnostics,
+        AnalysisError is not null ? $"Analysis failed\n{AnalysisError}" : HasExamination ? null : Analysis?.Reason,
+        HasExamination ? null : Analysis?.Evidence.SampleDiagnostics,
         GuidanceNote(),
         Notice,
         Analysis?.Media.Profile == Domain.Media.DolbyVisionProfile.Profile7
@@ -718,6 +844,22 @@ public sealed partial class MediaRow(string path) : ObservableObject
         Domain.Media.DolbyVisionProfile.None => "No Dolby Vision",
         _ => "Other / unknown profile"
     };
+
+    private string VerdictName(MediaAnalysis analysis) => analysis.Verdict switch
+    {
+        AnalysisVerdict.Mel => "Minimal enhancement layer (MEL)",
+        AnalysisVerdict.SimpleFel => "Simple FEL",
+        AnalysisVerdict.ComplexFel => "Complex FEL",
+        AnalysisVerdict.FelUnclassified => "FEL, not classified",
+        AnalysisVerdict.AnalysisFailed => "Analysis failed",
+        _ => HasIncompleteScan ? "Incomplete scan" : "Unknown"
+    };
+
+    private static string FormatPosition(double seconds)
+    {
+        var position = TimeSpan.FromSeconds(Math.Round(seconds));
+        return position.TotalHours >= 1 ? position.ToString(@"h\:mm\:ss") : position.ToString(@"m\:ss");
+    }
 
     private static string EvidenceName(AnalysisMethod method) => method switch
     {

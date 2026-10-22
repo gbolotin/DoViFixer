@@ -48,7 +48,11 @@ public sealed record AnalysisOptions(double BrightnessMarginNits = 50, double? A
         }
     }
 }
-public sealed record RpuEvidence(AnalysisMethod Method, EnhancementLayer Layer, long Frames, double? PeakNits, int SuccessfulSamples, int RequestedSamples, string? Error = null, BrightnessComparison? Brightness = null, string? SampleDiagnostics = null, MetadataFreeTail? MetadataFreeTail = null, AnalysisOptions? Options = null);
+public sealed record RpuEvidence(AnalysisMethod Method, EnhancementLayer Layer, long Frames, double? PeakNits, int SuccessfulSamples, int RequestedSamples, string? Error = null, BrightnessComparison? Brightness = null, string? SampleDiagnostics = null, MetadataFreeTail? MetadataFreeTail = null, AnalysisOptions? Options = null, IReadOnlyList<ScanSample>? Samples = null);
+/// <summary>One clip a scan read, at <see cref="PositionSeconds"/> into the video; <see cref="PeakNits"/> is null when the clip could not be read.</summary>
+public sealed record ScanSample(double PositionSeconds, double? PeakNits);
+/// <summary>The base-layer brightness the metadata heuristic compares the enhancement layer with: MaxCLL, or the configured assumption when MaxCLL is missing or implausible.</summary>
+public sealed record BasePicturePeak(double? Nits, bool Assumed);
 public sealed record BrightnessComparison(long ComparedFrames, long ExpandedFrames, double BaseLayerPeakNits, double MaximumDeltaNits, long MaximumDeltaFrame, double ThresholdNits = 50);
 public sealed record MediaAnalysis(MediaInfo Media, RpuEvidence Evidence, AnalysisVerdict Verdict, string Reason);
 public static class MediaClassifier
@@ -125,8 +129,7 @@ public static class MediaClassifier
         }
 
         var options = evidence.Options ?? new AnalysisOptions();
-        bool assumed = media.MaxCll is null or < 100;
-        double? basePeak = assumed ? options.AssumedPeakNits : media.MaxCll;
+        var (basePeak, assumed) = BasePeak(media, options);
         if (evidence.Layer != EnhancementLayer.Fel || evidence.PeakNits is null || basePeak is null or <= 0)
         {
             if (evidence.Layer == EnhancementLayer.Fel && HasVerifiedTail(evidence))
@@ -143,6 +146,10 @@ public static class MediaClassifier
         string peakSource = assumed ? "assumed base-layer peak (MaxCLL unavailable or below 100 nits)" : "MaxCLL";
         return new(media, evidence, complex ? AnalysisVerdict.ComplexFel : AnalysisVerdict.SimpleFel, $"Metadata heuristic: {peakLabel} {evidence.PeakNits:F0} nits; {peakSource} {basePeak:F0} nits; margin {options.BrightnessMarginNits:F0} nits. This is not a base-layer frame measurement or a playback guarantee.");
     }
+
+    public static BasePicturePeak BasePeak(MediaInfo media, AnalysisOptions options) => media.MaxCll is null or < 100
+        ? new(options.AssumedPeakNits, true)
+        : new(media.MaxCll, false);
 
     public static double PqToNits(int value)
     {

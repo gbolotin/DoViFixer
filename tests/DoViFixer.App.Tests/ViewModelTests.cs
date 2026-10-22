@@ -131,11 +131,12 @@ public sealed class ViewModelTests
         Assert.AreEqual(expectedLength, details["Length"]);
         Assert.AreEqual(path, details["File location"]);
         Assert.AreEqual("3840 × 2160", details["Resolution"]);
-        Assert.AreEqual("10/10", details["Samples"]);
+        Assert.AreEqual("10 of 10", row.ExaminationRows.Single(detail => detail.Label == "Samples read").Value);
         CollectionAssert.Contains(changes, nameof(MediaRow.DetailRows));
+        CollectionAssert.Contains(changes, nameof(MediaRow.ExaminationRows));
         row.Analysis = DoViFixer.Domain.Analysis.MediaClassifier.Classify(media,
             new(DoViFixer.Domain.Analysis.AnalysisMethod.FullRpu, DoViFixer.Domain.Media.EnhancementLayer.Mel, 390, 900, 1, 1));
-        Assert.IsFalse(row.DetailRows.Any(detail => detail.Label == "Samples"));
+        Assert.IsFalse(row.ExaminationRows.Any(detail => detail.Label == "Samples read"));
         row.Notice = "Keep this warning visible.";
         row.AnalysisError = "Fixture analysis error.";
         StringAssert.Contains(row.DetailNotes, row.Notice);
@@ -619,6 +620,62 @@ public sealed class ViewModelTests
     }
 
     [TestMethod]
+    public async Task ExaminationShowsLimitsAndMarksEachScanSample()
+    {
+        using var runtime = new TestRuntime();
+        var row = new MediaRow(@"C:\Media\Mountain.mkv");
+        var media = (await runtime.ProbeAsync(row.Path, default)) with { MaxCll = 1000 };
+        var samples = new DoViFixer.Domain.Analysis.ScanSample[] { new(3.4, 900), new(610, 1200), new(4000, null) };
+        row.Analysis = DoViFixer.Domain.Analysis.MediaClassifier.Classify(media,
+            new(DoViFixer.Domain.Analysis.AnalysisMethod.SampledRpu, DoViFixer.Domain.Media.EnhancementLayer.Fel, 48, 1200, 2, 3,
+                Options: new(MinimumScanCoveragePercent: 50), Samples: samples));
+
+        Assert.IsTrue(row.HasExamination);
+        var rows = row.ExaminationRows.ToDictionary(detail => detail.Label);
+        Assert.AreEqual("Complex FEL", rows["Verdict"].Value);
+        Assert.AreEqual("1,000 nits (MaxCLL)", rows["Base picture"].Value);
+        Assert.AreEqual("1,050 nits", rows["Judged unsafe above"].Value);
+        Assert.AreEqual("1,200 nits, 200 over the base picture", rows["Brightest found"].Value);
+        Assert.AreEqual(MediaStatusTone.HighRisk, rows["Brightest found"].StatusTone);
+        Assert.AreEqual("2 of 3", rows["Samples read"].Value);
+        StringAssert.Contains(row.ExaminationNote, "Metadata heuristic");
+        Assert.IsFalse(row.DetailNotes.Contains("Metadata heuristic", StringComparison.Ordinal));
+        Assert.IsFalse(row.DetailRows.Any(detail => detail.Label == "Analysis"));
+
+        CollectionAssert.AreEqual(new[] { "0:03", "10:10", "1:06:40" }, row.SampleRows.Select(sample => sample.Label).ToArray());
+        CollectionAssert.AreEqual(new[] { "900 nits", "1,200 nits", "Not read" }, row.SampleRows.Select(sample => sample.Value).ToArray());
+        CollectionAssert.AreEqual(new[] { MediaStatusTone.None, MediaStatusTone.HighRisk, MediaStatusTone.VerifyRecommended }, row.SampleRows.Select(sample => sample.StatusTone).ToArray());
+
+        row.Analysis = DoViFixer.Domain.Analysis.MediaClassifier.Classify(media,
+            new(DoViFixer.Domain.Analysis.AnalysisMethod.FullRpu, DoViFixer.Domain.Media.EnhancementLayer.Fel, 4475, 900, 1, 1));
+        Assert.IsFalse(row.HasSampleRows);
+        Assert.IsFalse(row.ExaminationRows.Any(detail => detail.Label == "Samples read"));
+        Assert.AreEqual("4,475", row.ExaminationRows.Single(detail => detail.Label == "Frames read").Value);
+    }
+
+    [TestMethod]
+    public async Task CopyDetailsPutsTheFocusedFileDetailsOnTheClipboard()
+    {
+        using var runtime = new TestRuntime();
+        var model = runtime.Container.GetRequiredService<MediaViewModel>();
+        await model.AddAsync([@"C:\Media\Mountain.mkv"]);
+        model.Focused = null;
+        Assert.IsFalse(model.CopyDetailsCommand.CanExecute(null));
+
+        var row = model.Files[0];
+        row.Analysis = DoViFixer.Domain.Analysis.MediaClassifier.Classify(row.Analysis!.Media,
+            row.Analysis.Evidence with { Samples = [new(4, 1720)] });
+        model.Focused = row;
+        model.CopyDetailsCommand.Invoke();
+
+        string text = runtime.ClipboardText!;
+        Assert.AreEqual(row.DetailsText, text);
+        StringAssert.StartsWith(text, $"{row.Name}{Environment.NewLine}File location: {row.Path}");
+        StringAssert.Contains(text, "What the examination found");
+        StringAssert.Contains(text, $"Each sample{Environment.NewLine}0:04  1,720 nits");
+    }
+
+    [TestMethod]
     public async Task IncompleteScanExplainsSampleFailureAndInspectsOnlyClickedRow()
     {
         using var runtime = new TestRuntime();
@@ -632,8 +689,8 @@ public sealed class ViewModelTests
         };
         row.Analysis = DoViFixer.Domain.Analysis.MediaClassifier.Classify(row.Analysis.Media, evidence);
         Assert.AreEqual("Profile 7 · Incomplete scan", row.Classification);
-        Assert.AreEqual("9/10", row.DetailRows.Single(detail => detail.Label == "Samples").Value);
-        Assert.IsTrue(row.DetailNotes.Contains("No RPU was found in input file"));
+        Assert.AreEqual("9 of 10", row.ExaminationRows.Single(detail => detail.Label == "Samples read").Value);
+        Assert.IsTrue(row.ExaminationNote.Contains("No RPU was found in input file"));
         Assert.IsTrue(row.DetailNotes.Contains("Suggested action: Inspect"));
         Assert.IsFalse(row.CanRetryAnalysis);
         Assert.IsTrue(model.InspectIncompleteCommand.CanExecute(row));
@@ -2255,7 +2312,7 @@ public sealed class ViewModelTests
             Assert.AreEqual("", row.ResultRecommendation);
             Assert.IsFalse(row.CanInspectIncomplete);
             Assert.IsFalse(row.DetailNotes.Contains("Safe to convert", StringComparison.Ordinal));
-            Assert.IsTrue(row.DetailRows.Any(detail => detail.Label == "Analysis"));
+            Assert.IsTrue(row.ExaminationRows.Any(detail => detail.Label == "Method"));
         }
 
         var methodBeforeConversion = row.AnalysisText;

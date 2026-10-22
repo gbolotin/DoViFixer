@@ -44,6 +44,7 @@ public static class AppComposition
         services.AddSingleton<ITaskbarService>(_ => new TaskbarService(System.Windows.Application.Current));
         services.AddSingleton<IOperationFeedback>(provider => new OperationFeedback(provider.GetRequiredService<ITaskbarService>(), provider.GetRequiredService<CompletionNotifications>()));
         services.AddSingleton<IFileExplorer>(provider => new FileExplorer(configuration["DoViFixer:Logging:Directory"] ?? Path.Combine(root, "Logs"), provider.GetRequiredService<IDialogService>()));
+        services.AddSingleton<ITextClipboard, TextClipboard>();
         services.AddSingleton<DependencyReportViewModel>();
         services.AddSingleton<DependencySetup>();
         services.AddTransient<StartupDependencyCheckViewModel>();

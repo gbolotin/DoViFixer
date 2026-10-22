@@ -48,6 +48,7 @@ public sealed partial class MediaViewModel : OperationViewModel, INavigationPage
     private readonly IDialogService dialogs;
     private readonly IFileDialogService files;
     private readonly IFileExplorer explorer;
+    private readonly ITextClipboard clipboard;
     private readonly ILogger<MediaViewModel> logger;
     private BatchControl? control;
     private readonly IMediaPreview mediaPreview;
@@ -61,7 +62,7 @@ public sealed partial class MediaViewModel : OperationViewModel, INavigationPage
 
     private static string Summary(BatchResult result) => string.Join(" · ", result.Items.GroupBy(r => r.Status).Select(g => $"{g.Count()} {g.Key}"));
     private string TimedSummary(BatchResult result) => $"{Summary(result)}{(result.Status == OperationStatus.Completed ? " in " : " · Finished in ")}{BatchProgress.BatchElapsed}";
-    public MediaViewModel(IFileDiscovery discovery, InspectionService inspection, ConversionService conversion, ConversionDiskBudget diskBudget, ControlledBatchService batch, SettingsService settings, DependencySetup dependencies, IDialogService dialogs, IFileDialogService files, IFileExplorer explorer, ILogger<MediaViewModel> logger, IMediaPreview mediaPreview, RestoreService restore, ISourceFileMonitor sourceFiles, ReportService reports, MediaLibraryService library, CleanupService cleanup, IOperationFeedback? feedback = null)
+    public MediaViewModel(IFileDiscovery discovery, InspectionService inspection, ConversionService conversion, ConversionDiskBudget diskBudget, ControlledBatchService batch, SettingsService settings, DependencySetup dependencies, IDialogService dialogs, IFileDialogService files, IFileExplorer explorer, ILogger<MediaViewModel> logger, IMediaPreview mediaPreview, RestoreService restore, ISourceFileMonitor sourceFiles, ReportService reports, MediaLibraryService library, CleanupService cleanup, ITextClipboard clipboard, IOperationFeedback? feedback = null)
         : base(feedback)
     {
         this.discovery = discovery;
@@ -81,6 +82,7 @@ public sealed partial class MediaViewModel : OperationViewModel, INavigationPage
         this.dialogs = dialogs;
         this.files = files;
         this.explorer = explorer;
+        this.clipboard = clipboard;
         this.logger = logger;
         this.mediaPreview = mediaPreview;
 
@@ -246,7 +248,7 @@ public sealed partial class MediaViewModel : OperationViewModel, INavigationPage
         : null;
 
     [ObservableProperty]
-    [NotifyCanExecuteChangedFor(nameof(OpenOutputCommand), nameof(OpenFileLocationCommand))]
+    [NotifyCanExecuteChangedFor(nameof(OpenOutputCommand), nameof(OpenFileLocationCommand), nameof(CopyDetailsCommand))]
     public partial MediaRow? Focused { get; set; }
 
     partial void OnFocusedChanged(MediaRow? value) => previewCompletion = Task.WhenAll(previewCompletion, LoadPreviewAsync(value), LoadLibraryHistoryAsync(value));
@@ -655,6 +657,9 @@ public sealed partial class MediaViewModel : OperationViewModel, INavigationPage
 
     [RelayCommand(CanExecute = nameof(CanOpenFileLocation))]
     private void OpenFileLocation() => explorer.ShowInFolder(Focused!.Path);
+
+    [RelayCommand(CanExecute = nameof(CanOpenFileLocation))]
+    private void CopyDetails() => clipboard.SetText(Focused!.DetailsText);
 
     private static bool CanShowResultFile(string? path) => !string.IsNullOrEmpty(path);
 

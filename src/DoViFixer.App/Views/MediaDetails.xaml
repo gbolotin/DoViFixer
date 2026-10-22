@@ -70,6 +70,24 @@
         </Style.Triggers>
     </Style>
 
+    <!-- A label with its value on the right, after a result dot when the value is marked. -->
+    <DataTemplate x:Key="MediaExaminationRowTemplate" DataType="{x:Type viewModels:MediaDetail}">
+        <Grid Margin="0,0,0,8">
+            <Grid.ColumnDefinitions>
+                <ColumnDefinition Width="Auto" SharedSizeGroup="MediaExaminationLabels" />
+                <ColumnDefinition Width="*" />
+            </Grid.ColumnDefinitions>
+            <TextBlock Text="{Binding Label}" Margin="0,0,12,0" />
+            <DockPanel Grid.Column="1" HorizontalAlignment="Right">
+                <Ellipse Style="{StaticResource MediaRowResultDotStyle}" />
+                <TextBlock Text="{Binding Value}"
+                           TextAlignment="Right"
+                           TextTrimming="CharacterEllipsis"
+                           ToolTip="{Binding Value}" />
+            </DockPanel>
+        </Grid>
+    </DataTemplate>
+
     <DataTemplate x:Key="MediaDetailsTemplate" DataType="{x:Type viewModels:MediaViewModel}">
         <Border Style="{StaticResource WfCardStyle}" Padding="0">
             <ScrollViewer VerticalScrollBarVisibility="Auto" Padding="16">
@@ -101,6 +119,17 @@
                         </Grid>
                     </Border>
                     <DockPanel Margin="0,0,0,12">
+                        <!-- No fill until the pointer is over it. -->
+                        <Button DockPanel.Dock="Right"
+                                Padding="6"
+                                Margin="8,0,0,0"
+                                VerticalAlignment="Center"
+                                ToolTip="Copy details"
+                                AutomationProperties.Name="Copy details"
+                                Command="{Binding CopyDetailsCommand}"
+                                Content="&#xE8C8;"
+                                FontFamily="{StaticResource SymbolThemeFontFamily}"
+                                Style="{StaticResource WfTransparentButtonStyle}" />
                         <TextBlock DockPanel.Dock="Right"
                                    Text="&#xE7BA;"
                                    FontFamily="{StaticResource SymbolThemeFontFamily}"
@@ -251,6 +280,29 @@
                             </Style>
                         </Button.Style>
                     </Button>
+                    <!-- What a scan or inspection measured, the limits it used, and each scan sample. -->
+                    <StackPanel Grid.IsSharedSizeScope="True"
+                                Margin="0,16,0,0"
+                                TextBlock.Foreground="{DynamicResource TextFillColorSecondaryBrush}"
+                                Visibility="{Binding Focused.HasExamination, Converter={StaticResource WfBooleanToVisibilityConverter}, FallbackValue=Collapsed}">
+                        <TextBlock Text="What the examination found"
+                                   Style="{StaticResource BodyStrongTextBlockStyle}"
+                                   Foreground="{DynamicResource TextFillColorPrimaryBrush}"
+                                   Margin="0,0,0,12" />
+                        <ItemsControl ItemsSource="{Binding Focused.ExaminationRows}"
+                                      ItemTemplate="{StaticResource MediaExaminationRowTemplate}" />
+                        <TextBlock Text="{Binding Focused.ExaminationNote}"
+                                   TextWrapping="Wrap"
+                                   Margin="0,4,0,0" />
+                        <Expander Header="Each sample"
+                                  Margin="0,12,0,0"
+                                  Visibility="{Binding Focused.HasSampleRows, Converter={StaticResource WfBooleanToVisibilityConverter}, FallbackValue=Collapsed}">
+                            <ItemsControl ItemsSource="{Binding Focused.SampleRows}"
+                                          ItemTemplate="{StaticResource MediaExaminationRowTemplate}"
+                                          Foreground="{DynamicResource TextFillColorSecondaryBrush}"
+                                          AutomationProperties.Name="Scan samples" />
+                        </Expander>
+                    </StackPanel>
                     <Expander Header="Library history"
                               Margin="0,12,0,0"
                               Visibility="{Binding Focused.HasLibraryHistory, Converter={StaticResource WfBooleanToVisibilityConverter}, FallbackValue=Collapsed}">

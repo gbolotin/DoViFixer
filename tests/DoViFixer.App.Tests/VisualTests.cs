@@ -177,9 +177,9 @@ public sealed class VisualTests
             var detailValues = Descendants<TextBlock>(mediaView)
                 .Where(text => text.DataContext is MediaDetail && text.IsVisible
                     && (Grid.GetColumn(text) == 1 || text.Parent is DockPanel panel && Grid.GetColumn(panel) == 1)).ToArray();
-            Assert.AreEqual(media.Focused!.DetailRows.Count, detailValues.Length);
+            Assert.AreEqual(media.Focused!.DetailRows.Count + media.Focused.ExaminationRows.Count + media.Focused.SampleRows.Count, detailValues.Length);
             var riskDot = Descendants<System.Windows.Shapes.Ellipse>(mediaView)
-                .Single(dot => dot.IsVisible && dot.DataContext is MediaDetail);
+                .Single(dot => dot.IsVisible && dot.DataContext is MediaDetail detail && media.Focused.DetailRows.Contains(detail));
             Assert.AreEqual("Risk", ((MediaDetail)riskDot.DataContext).Label);
             var nextStep = Descendants<Button>(mediaView).Single(button => AutomationProperties.GetName(button) == "Next step");
             Assert.AreEqual(media.Focused.NextStepText, nextStep.Content);
