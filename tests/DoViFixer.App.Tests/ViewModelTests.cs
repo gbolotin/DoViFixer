@@ -1892,6 +1892,31 @@ public sealed class ViewModelTests
     }
 
     [TestMethod]
+    public async Task SettingsWarnsOnlyWhenReplacedComplexFelHasNoBackup()
+    {
+        using var runtime = new TestRuntime();
+        var settings = runtime.Container.GetRequiredService<SettingsViewModel>();
+        await settings.LoadCommand.InvokeAsync();
+        var changed = new List<string?>();
+        settings.PropertyChanged += (_, e) => changed.Add(e.PropertyName);
+
+        settings.ForceComplex = true;
+        settings.ReplaceOriginal = true;
+        settings.CreateArchive = false;
+        Assert.IsTrue(settings.IsComplexFelLossPermanent);
+
+        settings.CreateArchive = true;
+        Assert.IsFalse(settings.IsComplexFelLossPermanent);
+        settings.CreateArchive = false;
+        settings.ReplaceOriginal = false;
+        Assert.IsFalse(settings.IsComplexFelLossPermanent);
+        settings.ReplaceOriginal = true;
+        settings.AllowFel = false;
+        Assert.IsFalse(settings.IsComplexFelLossPermanent);
+        Assert.IsTrue(changed.Count(name => name == nameof(SettingsViewModel.IsComplexFelLossPermanent)) >= 5);
+    }
+
+    [TestMethod]
     public async Task SettingsLoadsAndPersistsIncludeSimpleAndForceComplex()
     {
         using var runtime = new TestRuntime();
