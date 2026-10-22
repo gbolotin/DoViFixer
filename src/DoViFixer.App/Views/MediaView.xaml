@@ -109,8 +109,13 @@
             </DataTemplate>
 
             <DataTemplate x:Key="MediaListTemplate" DataType="{x:Type viewModels:MediaViewModel}">
+                <!-- With check boxes, the checked rows are the selected files and a click only shows a row's details.
+                     Without them, the list selects as File Explorer does (Ctrl+click, Shift+click, Ctrl+A) and the
+                     highlighted rows are the selected files. Ctrl+A checks all shown files when check boxes show, and
+                     Delete removes the selected rows from the list. -->
                 <ListView ItemsSource="{Binding Files}"
-                          SelectedItem="{Binding Focused}"
+                          views:ListSelection.CurrentItem="{Binding Focused}"
+                          views:ListSelection.SelectedItems="{Binding SelectedRows}"
                           wf:GridViewLayout.IsEnabled="True"
                           wf:GridViewLayout.State="{Binding ColumnLayout, Mode=TwoWay}"
                           wf:GridViewSizing.LastColumnMinimumWidth="128"
@@ -194,6 +199,22 @@
                             </MenuItem>
                         </ContextMenu>
                     </ListView.Resources>
+                    <ListView.Style>
+                        <Style TargetType="ListView" BasedOn="{StaticResource {x:Type ListView}}">
+                            <Setter Property="SelectionMode" Value="Extended" />
+                            <Style.Triggers>
+                                <DataTrigger Binding="{Binding ShowsCheckBoxes}" Value="True">
+                                    <Setter Property="SelectionMode" Value="Single" />
+                                </DataTrigger>
+                            </Style.Triggers>
+                        </Style>
+                    </ListView.Style>
+                    <ListView.InputBindings>
+                        <KeyBinding Key="A"
+                                    Modifiers="Control"
+                                    Command="{Binding SelectAllCommand}" />
+                        <KeyBinding Key="Delete" Command="{Binding RemoveListSelectionCommand}" />
+                    </ListView.InputBindings>
                     <ListView.ItemContainerStyle>
                         <Style TargetType="ListViewItem" BasedOn="{StaticResource {x:Static GridView.GridViewItemContainerStyleKey}}">
                             <Setter Property="Tag" Value="{Binding DataContext, RelativeSource={RelativeSource AncestorType=ListView}}" />
@@ -217,6 +238,7 @@
                                             <StackPanel Orientation="Horizontal">
                                                 <CheckBox IsChecked="{Binding DataContext.AllFilesSelected, RelativeSource={RelativeSource AncestorType=ListView}, Mode=OneWay}"
                                                           Command="{Binding DataContext.ToggleSelectAllCommand, RelativeSource={RelativeSource AncestorType=ListView}}"
+                                                          Visibility="{Binding DataContext.ShowsCheckBoxes, RelativeSource={RelativeSource AncestorType=ListView}, Converter={StaticResource WfBooleanToVisibilityConverter}}"
                                                           Margin="0,0,12,0"
                                                           VerticalAlignment="Center"
                                                           ToolTip="Select all / none"
@@ -232,6 +254,7 @@
                                         <DockPanel Margin="0,8">
                                             <CheckBox IsChecked="{Binding IsSelected, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}"
                                                   IsEnabled="{Binding SelectionEnabled}"
+                                                  Visibility="{Binding DataContext.ShowsCheckBoxes, RelativeSource={RelativeSource AncestorType=ListView}, Converter={StaticResource WfBooleanToVisibilityConverter}}"
                                                   Margin="0,0,12,0"
                                                   VerticalAlignment="Center"
                                                   AutomationProperties.Name="Include file" />

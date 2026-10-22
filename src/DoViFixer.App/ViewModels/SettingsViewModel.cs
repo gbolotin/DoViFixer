@@ -148,6 +148,7 @@ public sealed partial class SettingsViewModel : OperationViewModel
             AutomaticallyScanAddedFiles = value.AutomaticallyScanAddedFiles;
             UseCachedResults = value.UseCachedResults;
             ShowCompletionNotifications = value.ShowCompletionNotifications;
+            ShowSelectionCheckBoxes = value.ShowSelectionCheckBoxes;
             selectedTheme = value.Theme;
             OnPropertyChanged(nameof(SelectedTheme));
             OnPropertyChanged(nameof(IsSystemTheme));
@@ -249,6 +250,12 @@ public sealed partial class SettingsViewModel : OperationViewModel
     public partial bool ShowCompletionNotifications { get; set; } = true;
 
     partial void OnShowCompletionNotificationsChanged(bool value) => TriggerAutoSave();
+
+    /// <summary>Whether each media list row has a check box; otherwise the list selects rows as File Explorer does.</summary>
+    [ObservableProperty]
+    public partial bool ShowSelectionCheckBoxes { get; set; }
+
+    partial void OnShowSelectionCheckBoxesChanged(bool value) => TriggerAutoSave();
 
     [ObservableProperty]
     public partial string Temporary { get; set; } = "";
@@ -538,6 +545,7 @@ public sealed partial class SettingsViewModel : OperationViewModel
             AutomaticallyScanAddedFiles = AutomaticallyScanAddedFiles,
             UseCachedResults = UseCachedResults,
             ShowCompletionNotifications = ShowCompletionNotifications,
+            ShowSelectionCheckBoxes = ShowSelectionCheckBoxes,
             Theme = SelectedTheme,
             IncludeSimple = IncludeSimple,
             ForceComplex = ForceComplex
@@ -567,7 +575,8 @@ public sealed partial class SettingsViewModel : OperationViewModel
             inspectionPeakPercentile: snapshot.InspectionPeakPercentile,
             safeMode: snapshot.SafeMode,
             removeDolbyVision: snapshot.RemoveDolbyVision,
-            folderSearchDepth: snapshot.FolderSearchDepth), token);
+            folderSearchDepth: snapshot.FolderSearchDepth,
+            showSelectionCheckBoxes: snapshot.ShowSelectionCheckBoxes), token);
 
         lastSavedSettings = snapshot;
         SetStatus(ViewStatus.SettingsSaved);
