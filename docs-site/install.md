@@ -10,12 +10,27 @@ DoViFixer needs the **.NET 10 Desktop Runtime** (x64).
 2. Under **.NET Desktop Runtime**, download the **x64** Windows installer.
 3. Run the installer.
 
-## 2. Download DoViFixer
+## 2. Install DoViFixer
 
 1. Open the [latest release](https://github.com/gbolotin/DoViFixer/releases/latest).
-2. Download `DoViFixer.App-X.Y.Z.zip`.
-3. Unzip it to a folder of your choice, for example `C:\Apps\DoViFixer`.
-4. Run `DoViFixer.App.exe`.
+2. Download `DoViFixer-Setup-X.Y.Z.exe` and run it.
+3. Allow the administrator prompt. Setup installs DoViFixer for all users in `Program Files`.
+4. Leave **Start DoViFixer** checked and click **Finish**.
+
+Setup also trusts the certificate of DoViFixer's File Explorer package. On Windows 11, **Open in DoViFixer** and **Convert with DoViFixer** are then in the first right-click menu as soon as DoViFixer has started once. To remove DoViFixer, use **Settings › Apps › Installed apps**. Uninstalling removes the File Explorer commands and the certificate too.
+
+!!! note "Windows SmartScreen"
+    Setup is not signed by a certificate authority, so Windows may say that it protected your PC. Click **More info**, then **Run anyway**.
+
+### Without setup
+
+You can also use DoViFixer without installing it:
+
+1. Download `DoViFixer.App-X.Y.Z.zip` from the same release.
+2. Unzip it to a folder of your choice, for example `C:\Apps\DoViFixer`.
+3. Run `DoViFixer.App.exe`.
+
+On Windows 11, the File Explorer commands are then under **Show more options** until you click **Settings › General › File Explorer › Show in the Windows 11 menu…**.
 
 !!! tip "Other downloads in the release"
     `DoViFixer.Console` is the command-line version. `DoViFixer.Mcp` lets an AI assistant such as Claude Desktop use DoViFixer. You only need `DoViFixer.App` for the desktop app. See [Command line and AI assistants](console.md).

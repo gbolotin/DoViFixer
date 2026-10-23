@@ -25,9 +25,19 @@ public partial class App : System.Windows.Application
     private DispatcherTimer? fileExplorerBatch;
     private ShellViewModel? readyShell;
 
+    /// <summary>The argument setup's uninstaller starts the app with, to remove what the app added for the user.</summary>
+    private const string UninstallArgument = "--uninstall";
+
     protected override async void OnStartup(StartupEventArgs e)
     {
         base.OnStartup(e);
+        if (e.Args.Contains(UninstallArgument, StringComparer.OrdinalIgnoreCase))
+        {
+            await UninstallAsync();
+            Shutdown();
+            return;
+        }
+
         var request = FileExplorerRequest.Parse(e.Args, Environment.CurrentDirectory);
         // Only DoViFixer.App.exe keeps one window and offers File Explorer's menu, not a test host that runs this class.
         bool isAppProcess = Assembly.GetEntryAssembly() == typeof(App).Assembly;
@@ -76,6 +86,30 @@ public partial class App : System.Windows.Application
             readyShell = shell;
             await OpenFileExplorerRequestsAsync();
             await fileExplorerMenu;
+        }
+    }
+
+    /// <summary>
+    /// Removes, without a window, what the app added for the user: File Explorer's commands with the Windows 11 package,
+    /// and the notification registration with its Start menu shortcut.
+    /// </summary>
+    private static async Task UninstallAsync()
+    {
+        var registrations = new ServiceCollection();
+        AppComposition.Register(registrations, new ConfigurationBuilder().AddEnvironmentVariables().Build());
+        await using var provider = registrations.BuildServiceProvider();
+        var logger = provider.GetRequiredService<ILogger<App>>();
+        await provider.GetRequiredService<IFileExplorerIntegration>().UpdateAsync(false);
+        try
+        {
+            // Unregister removes what Register added in this process, so it registers first.
+            var notifications = provider.GetRequiredService<WindowsNotificationService>();
+            notifications.Register(AppId, ApplicationTitle.Name, Path.Combine(AppContext.BaseDirectory, "dovifixer.ico"));
+            notifications.Unregister();
+        }
+        catch (Exception ex)
+        {
+            logger.LogWarning(ex, "Could not remove the Windows notification registration");
         }
     }
 
