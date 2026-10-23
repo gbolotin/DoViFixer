@@ -8,6 +8,7 @@ namespace DoViFixer.Infrastructure.Configuration;
 public sealed record StorageOptions(string RootDirectory)
 {
     public string SettingsPath => Path.Combine(RootDirectory, "settings.json");
+    public string PresetsPath => Path.Combine(RootDirectory, "presets.json");
     public string ToolsDirectory => Path.Combine(RootDirectory, "tools");
     public string CacheDirectory => Path.Combine(RootDirectory, "cache");
 }

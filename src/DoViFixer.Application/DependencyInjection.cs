@@ -28,6 +28,7 @@ public static class DependencyInjection
         services.AddTransient<CleanupService>();
         services.AddTransient<UpdateService>();
         services.AddTransient<SettingsService>();
+        services.AddTransient<PresetService>();
         services.AddTransient<Diagnostics.DiagnosticsService>();
         services.AddTransient<Reports.ReportService>();
         return services;

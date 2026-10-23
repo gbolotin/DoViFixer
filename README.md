@@ -171,6 +171,21 @@ To run from any directory, run `.\DoViFixer.Console.exe settings add-to-path` fr
 
 Exit codes: `0` success, `1` failure/partial batch, `2` invalid arguments, `3` unmet dependencies, `4` declined/no selected work, `130` cancellation.
 
+### Presets
+
+A preset sets every scan, conversion and safety setting at once: clips per video, clip length, scan coverage, peak-brightness percentile, brightness margin, assumed peak brightness, Simple and Complex FEL, enhancement-layer backup, HDR10, Safe mode, Replace original, verification level, Recycle Bin and free-space margin. Folders, worker counts, process priority, tool paths and appearance belong to the computer, so presets never change them. Because each preset sets all of its values, the result does not depend on which preset was applied before.
+
+| Built-in preset | What it sets |
+| --- | --- |
+| Default | The settings a new installation starts with |
+| Thorough check (40 clips) | 40 scan clips per video and full integrity verification; originals kept |
+| Exhaustive check (100 clips) | 100 scan clips per video and full integrity verification; originals kept |
+| Replace originals, keep EL archive | 40 clips, enhancement-layer backup, Replace original after full integrity verification, Recycle Bin on |
+
+No built-in preset scans fewer clips or verifies less than the default. Applying a preset first lists every setting it changes and asks for approval. Changes that can lose data or picture detail, such as turning on Replace original, are marked. Settings > Presets and the Settings footer name the preset the current settings match, or the preset they were changed from. Your own presets are kept in `presets.json` beside `settings.json`; built-in presets cannot be replaced or deleted.
+
+In the console, `settings preset list` lists presets, `settings preset apply <name> [--yes]` reviews and applies one, and `settings preset save <name> [description]` and `settings preset delete <name>` manage your own. MCP clients use `list_presets`, then `plan_preset` and `apply_preset`.
+
 ## Logging and operation history
 
 Serilog writes local, structured JSON Lines logs to `%LOCALAPPDATA%\DoViFixer\Logs` (or `Logs` under `DoViFixer__DataDirectory`). Each line is one event in Serilog's compact JSON format (CLEF): `@t` timestamp, `@m` rendered message, `@l` level (left out for Information), `@x` full exception when present, and the structured properties as top-level fields. [Seq](https://datalust.co/seq) and [Compact Log Viewer](https://github.com/warrenbuckley/Compact-Log-Format-Viewer) open these files directly.

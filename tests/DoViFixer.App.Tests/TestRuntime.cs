@@ -16,7 +16,7 @@ using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
 
 namespace DoViFixer.App.Tests;
-internal sealed class TestRuntime : IFileDiscovery, IFileOperations, IMediaProbe, IMediaPreview, ISettingsStore, IDependencyDetector, IDependencyInstaller, ITemporaryWorkspaceFactory, IAnalysisCache, IMediaLibrary, IVideoProcessor, IMediaVerifier, IOutputPublisher, IBackupArchiveStore, IReportWriter, IDialogService, IFileDialogService, IFileExplorer, ITextClipboard, IThemeService, ISourceFileMonitor, IDisposable
+internal sealed class TestRuntime : IFileDiscovery, IFileOperations, IMediaProbe, IMediaPreview, ISettingsStore, IDependencyDetector, IDependencyInstaller, ITemporaryWorkspaceFactory, IAnalysisCache, IMediaLibrary, IVideoProcessor, IMediaVerifier, IOutputPublisher, IBackupArchiveStore, IReportWriter, IDialogService, IFileDialogService, IFileExplorer, ITextClipboard, IThemeService, ISourceFileMonitor, IPresetStore, IDisposable
 {
     private ServiceProvider? container;
     public IServiceCollection Services { get; } = new ServiceCollection();
@@ -84,7 +84,7 @@ internal sealed class TestRuntime : IFileDiscovery, IFileOperations, IMediaProbe
     public TestRuntime()
     {
         AppComposition.Register(Services, new ConfigurationBuilder().Build(), false);
-        Type[] contracts = [typeof(IFileDiscovery), typeof(IFileOperations), typeof(IMediaProbe), typeof(IMediaPreview), typeof(ISettingsStore), typeof(IDependencyDetector), typeof(IDependencyInstaller), typeof(ITemporaryWorkspaceFactory), typeof(IAnalysisCache), typeof(IMediaLibrary), typeof(IVideoProcessor), typeof(IMediaVerifier), typeof(IOutputPublisher), typeof(IBackupArchiveStore), typeof(IReportWriter), typeof(IDialogService), typeof(IFileDialogService), typeof(IFileExplorer), typeof(ITextClipboard), typeof(IThemeService), typeof(ISourceFileMonitor)];
+        Type[] contracts = [typeof(IFileDiscovery), typeof(IFileOperations), typeof(IMediaProbe), typeof(IMediaPreview), typeof(ISettingsStore), typeof(IDependencyDetector), typeof(IDependencyInstaller), typeof(ITemporaryWorkspaceFactory), typeof(IAnalysisCache), typeof(IMediaLibrary), typeof(IVideoProcessor), typeof(IMediaVerifier), typeof(IOutputPublisher), typeof(IBackupArchiveStore), typeof(IReportWriter), typeof(IDialogService), typeof(IFileDialogService), typeof(IFileExplorer), typeof(ITextClipboard), typeof(IThemeService), typeof(ISourceFileMonitor), typeof(IPresetStore)];
         foreach (var contract in contracts)
         {
             Services.AddSingleton(contract, this);
@@ -358,6 +358,14 @@ internal sealed class TestRuntime : IFileDiscovery, IFileOperations, IMediaProbe
         return Task.CompletedTask;
     }
 
+    public List<SettingsPreset> SavedPresets { get; private set; } = [];
+    Task<IReadOnlyList<SettingsPreset>> IPresetStore.ReadAsync(CancellationToken cancellationToken) => Task.FromResult<IReadOnlyList<SettingsPreset>>([.. SavedPresets]);
+    Task IPresetStore.WriteAsync(IReadOnlyList<SettingsPreset> presets, CancellationToken cancellationToken)
+    {
+        SavedPresets = [.. presets];
+        return Task.CompletedTask;
+    }
+
     public Func<CancellationToken, Task>? DuringDependencyCheck { get; set; }
     public HashSet<NativeTool> MissingTools { get; } = [];
     public async Task<DependencyReport> DetectAsync(IReadOnlyList<NativeTool> tools, CancellationToken cancellationToken, bool skipConfiguredPaths = false)
@@ -522,6 +530,7 @@ internal sealed class TestRuntime : IFileDiscovery, IFileOperations, IMediaProbe
 
     public string? LastApproveLabel { get; private set; }
     public List<string> Messages { get; } = [];
+    public List<string> Confirmations { get; } = [];
     public List<string> ExistingOutputQuestions { get; } = [];
     /// <summary>The answer to "File already exists"; null cancels.</summary>
     public ExistingOutputHandling? ExistingOutputAnswer { get; set; }
@@ -541,6 +550,17 @@ internal sealed class TestRuntime : IFileDiscovery, IFileOperations, IMediaProbe
                 else
                 {
                     review.Cancel();
+                }
+                break;
+            case ConfirmationDialogViewModel confirmation:
+                Confirmations.Add($"{confirmation.Title}: {confirmation.Message}");
+                if (Approval)
+                {
+                    confirmation.Accept();
+                }
+                else
+                {
+                    confirmation.Cancel();
                 }
                 break;
             case MessageDialogViewModel message:

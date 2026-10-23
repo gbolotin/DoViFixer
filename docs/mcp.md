@@ -65,6 +65,8 @@ The server reads the same Generic Host configuration as the console app, so envi
 | `check_dependencies` | Check the native tools | No |
 | `plan_dependency_install` / `start_dependency_install` | Prepare, then run, installation of missing tools | Yes, on start |
 | `get_settings`, `set_tool_path`, `set_temporary_directory` | Read or change saved settings | Setters only |
+| `list_presets` | List built-in and saved presets, their values and the one the settings match | No |
+| `plan_preset` / `apply_preset` | List every setting a preset changes, marking risky ones, then apply it | Settings only, on apply |
 | `check_for_update` | Compare with the latest GitHub release | No |
 | `get_job`, `list_jobs`, `cancel_job` | Follow or cancel background jobs | No |
 

@@ -20,6 +20,8 @@ public sealed partial class SettingsViewModel : OperationViewModel
     private readonly IFileDialogService files;
     private readonly IFileExplorer explorer;
     private readonly DiagnosticsService diagnostics;
+    private readonly PresetService presets;
+    private readonly IDialogService dialogs;
     public string DiagnosticContentsNotice => DiagnosticsService.ContentsNotice;
     private bool includeSimple;
     private bool forceComplex;
@@ -48,7 +50,7 @@ public sealed partial class SettingsViewModel : OperationViewModel
 
     public DependencyReportViewModel Dependencies { get; }
 
-    public SettingsViewModel(SettingsService settings, DependencySetup setup, DependencyReportViewModel dependencies, IFileDialogService files, IFileExplorer explorer, IMediaLibrary library, Application.Library.MediaLibraryService libraryService, IThemeService themeService, DiagnosticsService diagnostics, IOperationFeedback? feedback = null)
+    public SettingsViewModel(SettingsService settings, DependencySetup setup, DependencyReportViewModel dependencies, IFileDialogService files, IFileExplorer explorer, IMediaLibrary library, Application.Library.MediaLibraryService libraryService, IThemeService themeService, DiagnosticsService diagnostics, PresetService presets, IDialogService dialogs, IOperationFeedback? feedback = null)
         : base(feedback)
     {
         this.settings = settings;
@@ -59,10 +61,12 @@ public sealed partial class SettingsViewModel : OperationViewModel
         this.files = files;
         this.explorer = explorer;
         this.diagnostics = diagnostics;
+        this.presets = presets;
+        this.dialogs = dialogs;
         Dependencies = dependencies;
         var general = new GeneralSettingsSection(this);
         Sections = new NavigationService(
-            [general, new AnalysisSettingsSection(this), new ConversionSettingsSection(this), new SafetySettingsSection(this), new PerformanceSettingsSection(this), new NativeToolsSettingsSection(this), new AboutSettingsSection(this)],
+            [general, new PresetsSettingsSection(this), new AnalysisSettingsSection(this), new ConversionSettingsSection(this), new SafetySettingsSection(this), new PerformanceSettingsSection(this), new NativeToolsSettingsSection(this), new AboutSettingsSection(this)],
             initialPage: general);
     }
 
@@ -160,6 +164,7 @@ public sealed partial class SettingsViewModel : OperationViewModel
         {
             SynchronizeNumericText();
             ValidatePreferences();
+            RefreshActivePreset();
             isLoading = false;
         }
     }
@@ -424,6 +429,7 @@ public sealed partial class SettingsViewModel : OperationViewModel
     private void TriggerAutoSave()
     {
         ValidatePreferences();
+        RefreshActivePreset();
         if (isLoading)
         {
             return;
@@ -527,36 +533,7 @@ public sealed partial class SettingsViewModel : OperationViewModel
 
         // Capture one consistent UI snapshot before moving directory validation
         // and persistence onto the worker thread.
-        var snapshot = new UserSettings
-        {
-            TemporaryDirectory = Temporary,
-            OutputDirectory = OtherFolder ? Destination : null,
-            ReplaceOriginal = ReplaceOriginal,
-            CreateElArchive = CreateArchive,
-            SafeMode = SafeMode,
-            FolderSearchDepth = FolderSearchDepth,
-            RemoveDolbyVision = RemoveDolbyVision,
-            ConversionWorkers = ConversionWorkers,
-            ScanSampleCount = ScanSampleCount,
-            ScanSampleSeconds = ScanSampleSeconds,
-            MinimumScanCoveragePercent = MinimumScanCoveragePercent,
-            InspectionPeakPercentile = InspectionPeakPercentile,
-            BrightnessMarginNits = BrightnessMarginNits,
-            AssumedPeakBrightnessNits = AssumedPeakBrightnessNits,
-            AnalysisWorkers = AnalysisWorkers,
-            ToolProcessPriority = ToolProcessPriority,
-            PipeBufferKiB = PipeBufferKiB,
-            VerificationLevel = (Application.Settings.VerificationLevel)VerificationLevel,
-            RecycleDeletedOriginalsAndBackups = RecycleDeletedOriginalsAndBackups,
-            FreeSpaceMarginPercent = FreeSpaceMarginPercent,
-            AutomaticallyScanAddedFiles = AutomaticallyScanAddedFiles,
-            UseCachedResults = UseCachedResults,
-            ShowCompletionNotifications = ShowCompletionNotifications,
-            ShowSelectionCheckBoxes = ShowSelectionCheckBoxes,
-            Theme = SelectedTheme,
-            IncludeSimple = IncludeSimple,
-            ForceComplex = ForceComplex
-        };
+        var snapshot = CreateSnapshot();
         await Task.Run(() => settings.SetPreferencesAsync(
             snapshot.TemporaryDirectory,
             snapshot.OutputDirectory,
@@ -589,6 +566,38 @@ public sealed partial class SettingsViewModel : OperationViewModel
         SetStatus(ViewStatus.SettingsSaved);
         Saved?.Invoke(snapshot);
     }
+
+    private UserSettings CreateSnapshot() => new()
+    {
+        TemporaryDirectory = Temporary,
+        OutputDirectory = OtherFolder ? Destination : null,
+        ReplaceOriginal = ReplaceOriginal,
+        CreateElArchive = CreateArchive,
+        SafeMode = SafeMode,
+        FolderSearchDepth = FolderSearchDepth,
+        RemoveDolbyVision = RemoveDolbyVision,
+        ConversionWorkers = ConversionWorkers,
+        ScanSampleCount = ScanSampleCount,
+        ScanSampleSeconds = ScanSampleSeconds,
+        MinimumScanCoveragePercent = MinimumScanCoveragePercent,
+        InspectionPeakPercentile = InspectionPeakPercentile,
+        BrightnessMarginNits = BrightnessMarginNits,
+        AssumedPeakBrightnessNits = AssumedPeakBrightnessNits,
+        AnalysisWorkers = AnalysisWorkers,
+        ToolProcessPriority = ToolProcessPriority,
+        PipeBufferKiB = PipeBufferKiB,
+        VerificationLevel = (Application.Settings.VerificationLevel)VerificationLevel,
+        RecycleDeletedOriginalsAndBackups = RecycleDeletedOriginalsAndBackups,
+        FreeSpaceMarginPercent = FreeSpaceMarginPercent,
+        AutomaticallyScanAddedFiles = AutomaticallyScanAddedFiles,
+        UseCachedResults = UseCachedResults,
+        ShowCompletionNotifications = ShowCompletionNotifications,
+        ShowSelectionCheckBoxes = ShowSelectionCheckBoxes,
+        Theme = SelectedTheme,
+        IncludeSimple = IncludeSimple,
+        ForceComplex = ForceComplex
+    };
+
     [ObservableProperty]
     public partial NativeTool SelectedTool { get; set; }
 
@@ -607,9 +616,11 @@ public sealed partial class SettingsViewModel : OperationViewModel
     {
         await FlushAsync(token);
         lastSavedSettings = await settings.ReadAsync(token);
+        lastAppliedPreset = lastSavedSettings.LastAppliedPreset;
         ApplyPreferences(lastSavedSettings);
         await RefreshLibrarySizeAsync(token);
         SetStatus(ViewStatus.SettingsLoaded);
+        await LoadPresetsAsync(token);
     });
 
     [RelayCommand(CanExecute = nameof(IsIdle))]
@@ -711,5 +722,8 @@ public sealed partial class SettingsViewModel : OperationViewModel
         SetToolCommand?.NotifyCanExecuteChanged();
         ResetToolCommand?.NotifyCanExecuteChanged();
         ExportDiagnosticsCommand?.NotifyCanExecuteChanged();
+        ApplyPresetCommand?.NotifyCanExecuteChanged();
+        SavePresetCommand?.NotifyCanExecuteChanged();
+        DeletePresetCommand?.NotifyCanExecuteChanged();
     }
 }

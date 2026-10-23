@@ -26,7 +26,7 @@ public sealed class McpServerTests
     {
         await using var server = await StartAsync();
         var tools = (await server.Client.ListToolsAsync()).ToDictionary(tool => tool.Name, tool => tool.ProtocolTool);
-        CollectionAssert.AreEquivalent(new[] { "scan_media", "inspect_media", "plan_conversion", "start_conversion", "plan_backup", "start_backup", "plan_restore", "start_restore", "list_backups", "delete_backups", "check_dependencies", "plan_dependency_install", "start_dependency_install", "get_settings", "set_tool_path", "set_temporary_directory", "check_for_update", "get_job", "list_jobs", "cancel_job" }, tools.Keys.ToArray());
+        CollectionAssert.AreEquivalent(new[] { "scan_media", "inspect_media", "plan_conversion", "start_conversion", "plan_backup", "start_backup", "plan_restore", "start_restore", "list_backups", "delete_backups", "check_dependencies", "plan_dependency_install", "start_dependency_install", "get_settings", "list_presets", "plan_preset", "apply_preset", "set_tool_path", "set_temporary_directory", "check_for_update", "get_job", "list_jobs", "cancel_job" }, tools.Keys.ToArray());
         Assert.IsTrue(tools["start_conversion"].Annotations!.DestructiveHint);
         Assert.IsTrue(tools["delete_backups"].Annotations!.DestructiveHint);
         Assert.IsTrue(tools["plan_conversion"].Annotations!.ReadOnlyHint);

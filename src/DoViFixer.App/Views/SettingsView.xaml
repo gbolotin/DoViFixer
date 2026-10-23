@@ -19,6 +19,9 @@
         <DataTemplate DataType="{x:Type viewModels:GeneralSettingsSection}">
             <settings:GeneralSettingsView DataContext="{Binding Settings}" />
         </DataTemplate>
+        <DataTemplate DataType="{x:Type viewModels:PresetsSettingsSection}">
+            <settings:PresetsSettingsView DataContext="{Binding Settings}" />
+        </DataTemplate>
         <DataTemplate DataType="{x:Type viewModels:ConversionSettingsSection}">
             <settings:ConversionSettingsView DataContext="{Binding Settings}" />
         </DataTemplate>
@@ -112,6 +115,11 @@
                                DockPanel.Dock="Left"
                                Foreground="{DynamicResource TextFillColorSecondaryBrush}"
                                VerticalAlignment="Center" />
+                    <TextBlock Text="{Binding ActivePresetText}"
+                               DockPanel.Dock="Left"
+                               Foreground="{DynamicResource TextFillColorSecondaryBrush}"
+                               VerticalAlignment="Center"
+                               Margin="12,0,0,0" />
                     <TextBlock Text="Saving settings…"
                                DockPanel.Dock="Left"
                                Visibility="{Binding IsSaving, Converter={StaticResource WfBooleanToVisibilityConverter}}"

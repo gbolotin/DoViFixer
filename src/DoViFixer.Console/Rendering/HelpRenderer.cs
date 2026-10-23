@@ -45,7 +45,12 @@ internal sealed class HelpRenderer(ConsoleRenderer renderer)
         Command("settings reset-tool <Tool>", "Remove the saved executable override for a tool.");
         Command("settings temp <directory>", "Save the temporary directory; creates missing folders and checks write access.");
         Command("settings add-to-path", "Add this app folder to your user PATH. No administrator rights needed. Reopen your terminal afterwards and keep the app in that folder.");
-        Examples(("settings show", "Show current configuration"), ("settings tool FFmpeg \"C:\\Tools\\ffmpeg.exe\"", "Set a tool path"), ("settings temp \"D:\\DoViScratch\"", "Set the working directory for temporary files"));
+        Command("settings preset list", "List built-in and saved presets, marking the one the current settings match.");
+        Command("settings preset apply <name> [--yes]", "Show every setting the preset changes, then ask before applying it. A preset sets scan, conversion and safety settings; folders, worker counts, tool paths and appearance stay as they are.");
+        Command("settings preset save <name> [description]", "Save the current scan, conversion and safety settings as a preset. An existing saved preset with that name is replaced.");
+        Command("settings preset delete <name>", "Delete a saved preset. Built-in presets cannot be deleted. Settings do not change.");
+        Options(("--yes", "Apply the preset without prompting; only for settings preset apply."));
+        Examples(("settings show", "Show current configuration"), ("settings tool FFmpeg \"C:\\Tools\\ffmpeg.exe\"", "Set a tool path"), ("settings temp \"D:\\DoViScratch\"", "Set the working directory for temporary files"), ("settings preset apply \"Thorough check (40 clips)\"", "Review and apply a preset"));
         Group("Diagnostics");
         Command("diagnostics export <path.zip>", "Save app/runtime details, known tool paths/versions, saved settings and bounded recent logs locally. May contain personal paths and names. Nothing is uploaded. Existing files are never overwritten. Missing or trimmed entries are listed in manifest.json.");
         Group("Updates");
