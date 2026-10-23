@@ -119,6 +119,7 @@
                           wf:GridViewLayout.IsEnabled="True"
                           wf:GridViewLayout.State="{Binding ColumnLayout, Mode=TwoWay}"
                           wf:GridViewSizing.LastColumnMinimumWidth="128"
+                          wf:GridViewSizing.ColumnMinimumWidth="90"
                           wf:GridViewSort.Sort="{Binding FileSort}"
                           wf:ListFilter.Predicate="{Binding ShownFilePredicate}"
                           wf:ListFilter.LiveProperty="FilterGroup">
