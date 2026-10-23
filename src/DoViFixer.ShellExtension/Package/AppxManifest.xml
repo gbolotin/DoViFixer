@@ -1,8 +1,8 @@
 <?xml version="1.0" encoding="utf-8"?>
 <!-- A sparse package: it holds no files of its own and gives DoViFixer.App.exe, in the folder it is registered with,
      the package identity Windows 11 requires before File Explorer's menu shows an app's commands.
-     The publisher's OID marks it as unsigned, which Windows 11 accepts with AllowUnsigned; it can never stand in for a
-     signed package. tools/package-file-explorer.ps1 sets the version and packs it. -->
+     Windows refuses an unsigned package with a COM server, so tools/package-file-explorer.ps1 sets the version, packs it
+     and signs it. The publisher must equal the subject of the signing certificate (tools/new-file-explorer-certificate.ps1). -->
 <Package xmlns="http://schemas.microsoft.com/appx/manifest/foundation/windows10"
          xmlns:uap="http://schemas.microsoft.com/appx/manifest/uap/windows10"
          xmlns:uap10="http://schemas.microsoft.com/appx/manifest/uap/windows10/10"
@@ -12,7 +12,7 @@
          xmlns:desktop5="http://schemas.microsoft.com/appx/manifest/desktop/windows10/5"
          IgnorableNamespaces="uap uap10 rescap com desktop4 desktop5">
   <Identity Name="gbolotin.DoViFixer.FileExplorer"
-            Publisher="CN=gbolotin, OID.2.25.311729368913984317654407730594956997722=1"
+            Publisher="CN=gbolotin"
             Version="0.0.0.0"
             ProcessorArchitecture="x64" />
   <Properties>

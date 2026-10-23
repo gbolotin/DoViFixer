@@ -51,9 +51,18 @@
                                Style="{StaticResource SubtitleTextBlockStyle}" />
                     <CheckBox Content="{x:Static updates:ApplicationTitle.Name}"
                               ContentStringFormat="Show Open in {0} and Convert with {0} when you right-click a movie or folder"
-                              AutomationProperties.HelpText="Right-click MKV files or a folder in File Explorer to add them to the list, or to add and convert them as the Convert button does. On Windows 10, and when Windows 11 does not accept the app's menu package, the commands are under Show more options. The commands start the app from its current folder; open the app once after you move it."
+                              AutomationProperties.HelpText="Right-click MKV files or a folder in File Explorer to add them to the list, or to add and convert them as the Convert button does. On Windows 10, and on Windows 11 until this PC trusts the certificate of the app's menu package, the commands are under Show more options. The commands start the app from its current folder; open the app once after you move it."
                               IsChecked="{Binding ShowInFileExplorerMenu}"
                               Style="{StaticResource WfToggleSwitchStyle}" />
+                    <StackPanel Visibility="{Binding OffersWindows11Menu, Converter={StaticResource WfBooleanToVisibilityConverter}}">
+                        <TextBlock Text="Windows 11 shows the commands under Show more options until this PC trusts the certificate of the app's File Explorer package. Trusting it needs an administrator once."
+                                   Style="{StaticResource WfSettingNoteTextStyle}" />
+                        <Button Content="Show in the Windows 11 menu…"
+                                Command="{Binding ShowInWindows11MenuCommand}"
+                                AutomationProperties.HelpText="Windows asks for administrator permission to trust the certificate on this PC. The certificate only lets Windows accept the app's File Explorer package."
+                                HorizontalAlignment="Left"
+                                Margin="0,8,0,0" />
+                    </StackPanel>
                 </StackPanel>
             </Border>
         </StackPanel>

@@ -14,7 +14,7 @@ Main projects:
 - DoViFixer.Console: console entry point, command parsing, interaction, rendering, and dependency injection composition.
 - DoViFixer.Mcp: Model Context Protocol server over stdio for AI assistants; tool definitions, plan and job tracking, and dependency injection composition.
 - DoViFixer.App: WPF entry point, views, ViewModels, commands, dialogs, WPF navigation, and dependency injection composition.
-- WpfFoundation (separate repository and NuGet packages): shared WPF styles, controls, behaviors, converters, navigation, dialogs, theme service and taskbar progress, plus WpfFoundation.Notifications for Windows notifications. Only DoViFixer.App references them, and it targets `net10.0-windows10.0.22000.0` for the notifications package and for registering the Windows 11 File Explorer package, with `SupportedOSPlatformVersion` 10.0.19041.0 so it still runs on Windows 10. DoViFixer.App references the package pinned in `Directory.Packages.props`, or `..\WpfFoundation` through a project reference when that checkout exists (see [WpfFoundation reference](#wpffoundation-reference)).
+- WpfFoundation (separate repository and NuGet packages): shared WPF styles, controls, behaviors, converters, navigation, dialogs, theme service and taskbar progress, plus WpfFoundation.Notifications for Windows notifications. Only DoViFixer.App references them, and it targets `net10.0-windows10.0.19041.0` for the notifications package, whose Windows SDK projection also registers the Windows 11 File Explorer package. DoViFixer.App references the package pinned in `Directory.Packages.props`, or `..\WpfFoundation` through a project reference when that checkout exists (see [WpfFoundation reference](#wpffoundation-reference)).
 
 ## Layering and media workflows
 
