@@ -955,7 +955,10 @@ public sealed class ViewModelTests
     {
         using var runtime = new TestRuntime { ExistingOutputAnswer = ExistingOutputHandling.Replace };
         runtime.ExistingOutputFiles.Add(@"C:\Media\One\Mountain - DV P8.1.mkv");
+        // Both files convert, so this is a batch rather than one file left after the Simple FEL file.
+        await runtime.UpdateAsync(s => s with { IncludeSimple = true }, default);
         var model = runtime.Container.GetRequiredService<MediaViewModel>();
+        await model.RefreshSettingsSummaryAsync();
         await model.AddAsync([@"C:\Media\One\Mountain.mkv", @"C:\Media\Two\Ocean.mkv"]);
         foreach (var file in model.Files)
         {
@@ -1396,6 +1399,7 @@ public sealed class ViewModelTests
         using var runtime = new TestRuntime();
         await runtime.UpdateAsync(s => s with { AllowFel = true }, default);
         var model = runtime.Container.GetRequiredService<MediaViewModel>();
+        await model.RefreshSettingsSummaryAsync();
         await model.AddAsync([@"C:\Media\Ocean.mkv"]);
         var row = model.Files.Single();
         Assert.AreEqual(0, runtime.FullAnalyses);
@@ -1874,6 +1878,7 @@ public sealed class ViewModelTests
         using var runtime = new TestRuntime();
         await runtime.UpdateAsync(s => s with { OutputDirectory = @"C:\Output", AllowFel = true }, default);
         var model = runtime.Container.GetRequiredService<MediaViewModel>();
+        await model.RefreshSettingsSummaryAsync();
         await model.AddAsync([@"C:\FolderA\Movie.mkv", @"C:\FolderB\Movie.mkv"]);
         var originalRows = model.Files.ToArray();
 
