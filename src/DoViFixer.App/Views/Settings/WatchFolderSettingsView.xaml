@@ -73,8 +73,10 @@
                 <StackPanel>
                     <TextBlock Text="Automatic conversion uses the same settings as the Convert button: target, FEL handling and enhancement-layer backup on the Conversion page, and verification and originals on the Safety page."
                                TextWrapping="Wrap" />
+                    <!-- The note style pulls itself up under a control; below plain text it needs its own gap. -->
                     <TextBlock Text="It waits while another operation runs or Settings is open. It never installs tools, and it skips a file whose output already exists. Activity and the log mark each automatic conversion."
                                TextWrapping="Wrap"
+                               Margin="0,8,0,0"
                                Style="{StaticResource WfSettingNoteTextStyle}" />
                 </StackPanel>
             </Border>
