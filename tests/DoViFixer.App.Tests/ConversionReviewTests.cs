@@ -1,5 +1,6 @@
 using DoViFixer.App.ViewModels;
 using DoViFixer.Application.Operations;
+using DoViFixer.Domain.Analysis;
 using Microsoft.VisualStudio.TestTools.UnitTesting;
 using Microsoft.Extensions.DependencyInjection;
 
@@ -275,11 +276,53 @@ public sealed class ConversionReviewTests
     }
 
     [TestMethod]
+    public async Task ToolbarConvertIsDisabledOnlyWhenEveryCheckedFileWouldBeSkipped()
+    {
+        using var runtime = new TestRuntime();
+        var model = runtime.Container.GetRequiredService<MediaViewModel>();
+        await model.AddAsync([@"C:\Media\Mountain.mkv", @"C:\Media\Ocean.mkv", @"C:\Media\City.mkv", @"C:\Media\P81.mkv", @"C:\Media\Sdr.mkv"]);
+        var (mel, simple, complex) = (model.Files[0], model.Files[1], model.Files[2]);
+        model.UpdateSettingsSummary(new DoViFixer.Application.Settings.UserSettings());
+        mel.IsSelected = false;
+        Assert.IsTrue(model.Files.Skip(1).All(row => row.IsSelected));
+        Assert.IsFalse(model.ConvertCommand.CanExecute(null), "FEL with FEL skipped and non-Profile 7 files would all be skipped.");
+
+        int changes = 0;
+        model.ConvertCommand.CanExecuteChanged += (_, _) => changes++;
+        model.UpdateSettingsSummary(new DoViFixer.Application.Settings.UserSettings { ForceComplex = true });
+        Assert.IsTrue(changes > 0, "Settings changes refresh Convert.");
+        Assert.IsTrue(model.ConvertCommand.CanExecute(null), "A scan leaves Simple versus Complex FEL to the full inspection.");
+
+        await model.InspectRowCommand.InvokeAsync(simple);
+        await model.InspectRowCommand.InvokeAsync(complex);
+        Assert.AreEqual(AnalysisMethod.FullRpu, simple.Analysis!.Evidence.Method);
+        model.UpdateSettingsSummary(new DoViFixer.Application.Settings.UserSettings { IncludeSimple = true });
+        Assert.AreEqual(AnalysisVerdict.ComplexFel, complex.Analysis!.Verdict);
+        simple.IsSelected = false;
+        Assert.IsFalse(model.ConvertCommand.CanExecute(null), "An inspected Complex FEL file stays skipped without Complex FEL.");
+
+        var unscanned = new MediaRow(@"C:\Media\Unscanned.mkv");
+        model.Files.Add(unscanned);
+        Assert.IsTrue(unscanned.IsSelected);
+        Assert.IsTrue(model.ConvertCommand.CanExecute(null), "Conversion inspects a file not analyzed yet.");
+        unscanned.IsMissing = true;
+        Assert.IsFalse(model.ConvertCommand.CanExecute(null), "A missing file cannot convert.");
+
+        complex.AnalysisError = "Fixture analysis failure.";
+        Assert.IsTrue(model.ConvertCommand.CanExecute(null), "A failed analysis settles nothing.");
+        complex.IsSelected = false;
+        unscanned.IsSelected = false;
+        mel.IsSelected = true;
+        Assert.IsTrue(model.ConvertCommand.CanExecute(null), "MEL always converts.");
+    }
+
+    [TestMethod]
     public async Task ConvertDv81WithIncludeSimpleConvertsSimpleFelAndSkipsComplexFel()
     {
         using var runtime = new TestRuntime();
         await runtime.UpdateAsync(settings => settings with { IncludeSimple = true }, default);
         var model = runtime.Container.GetRequiredService<MediaViewModel>();
+        await model.RefreshSettingsSummaryAsync();
         await model.AddAsync([@"C:\Media\Ocean.mkv", @"C:\Media\City.mkv"]);
         var originalRows = model.Files.ToArray();
         originalRows[1].IsSelected = true;
@@ -304,6 +347,7 @@ public sealed class ConversionReviewTests
         using var runtime = new TestRuntime();
         await runtime.UpdateAsync(settings => settings with { ForceComplex = true }, default);
         var model = runtime.Container.GetRequiredService<MediaViewModel>();
+        await model.RefreshSettingsSummaryAsync();
         await model.AddAsync([@"C:\Media\City.mkv"]);
         model.Files[0].IsSelected = true;
 

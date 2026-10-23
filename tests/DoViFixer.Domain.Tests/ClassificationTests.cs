@@ -73,6 +73,28 @@ public sealed class ClassificationTests
     }
 
     [TestMethod]
+    [DataRow(AnalysisMethod.SampledRpu, 1000d, false, false, false)]
+    [DataRow(AnalysisMethod.SampledRpu, 1000d, false, true, true)]
+    [DataRow(AnalysisMethod.SampledRpu, 1100d, true, false, true)]
+    [DataRow(AnalysisMethod.FullRpu, 1000d, false, true, false)]
+    [DataRow(AnalysisMethod.FullRpu, 1100d, true, false, false)]
+    [DataRow(AnalysisMethod.FullRpu, 1100d, false, true, true)]
+    public void FelScanLeavesSimpleVersusComplexToConversionPlanning(AnalysisMethod method, double peak, bool simple, bool force, bool mayAllow)
+    {
+        var analysis = MediaClassifier.Classify(Media(), new(method, EnhancementLayer.Fel, 24, peak, 1, 1));
+        Assert.AreEqual(mayAllow, ConversionPolicy.MayAllow(analysis, simple, force));
+    }
+
+    [TestMethod]
+    public void UnsettledVerdictsMayStillConvert()
+    {
+        var unknown = MediaClassifier.Classify(Media(null), new(AnalysisMethod.FullRpu, EnhancementLayer.Fel, 24, 1000, 1, 1));
+        var failed = MediaClassifier.Classify(Media(), new(AnalysisMethod.FullRpu, EnhancementLayer.Fel, 0, null, 0, 1, "bad data"));
+        Assert.IsTrue(ConversionPolicy.MayAllow(unknown, false, false));
+        Assert.IsTrue(ConversionPolicy.MayAllow(failed, false, false));
+    }
+
+    [TestMethod]
     public void ConversionScratchSpaceIsBoundedByThreeSourceCopies()
     {
         const long source = 66L * 1024 * 1024 * 1024;

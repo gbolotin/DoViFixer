@@ -1384,6 +1384,7 @@ public sealed class ViewModelTests
         using var runtime = new TestRuntime();
         await runtime.UpdateAsync(s => s with { AllowFel = true }, default);
         var model = runtime.Container.GetRequiredService<MediaViewModel>();
+        await model.RefreshSettingsSummaryAsync();
         await model.AddAsync([@"C:\Media\Ocean.mkv"]);
         var row = model.Files.Single();
         Assert.AreEqual(0, runtime.FullAnalyses);
@@ -1860,6 +1861,7 @@ public sealed class ViewModelTests
         using var runtime = new TestRuntime();
         await runtime.UpdateAsync(s => s with { OutputDirectory = @"C:\Output", AllowFel = true }, default);
         var model = runtime.Container.GetRequiredService<MediaViewModel>();
+        await model.RefreshSettingsSummaryAsync();
         await model.AddAsync([@"C:\FolderA\Movie.mkv", @"C:\FolderB\Movie.mkv"]);
         var originalRows = model.Files.ToArray();
 

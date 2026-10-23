@@ -32,6 +32,25 @@ public static class ConversionPolicy
     }
 
     /// <summary>
+    /// Whether conversion could still allow the file. Conversion planning inspects every file in full first, so an
+    /// unknown or failed verdict settles nothing, and a scan settles the layer type but not Simple versus Complex FEL.
+    /// </summary>
+    public static bool MayAllow(MediaAnalysis analysis, bool includeSimple, bool forceComplex)
+    {
+        if (analysis.Media.Profile != DolbyVisionProfile.Profile7 || !analysis.Media.VideoCodec.Contains("HEVC", StringComparison.OrdinalIgnoreCase))
+        {
+            return false;
+        }
+
+        if (analysis.Verdict is AnalysisVerdict.Unknown or AnalysisVerdict.AnalysisFailed || Evaluate(analysis, includeSimple, forceComplex).Allowed)
+        {
+            return true;
+        }
+
+        return analysis.Evidence.Method is AnalysisMethod.MetadataOnly or AnalysisMethod.SampledRpu && (includeSimple || forceComplex);
+    }
+
+    /// <summary>
     /// Scratch space a conversion, backup or restore needs. At most three video-sized files exist at once:
     /// the enhancement-layer backup plus an extracted track and its processed copy, or during verification
     /// an extracted track and its cleaned base layer. Each is bounded by the source size. Track verification

@@ -729,12 +729,24 @@ public sealed partial class MediaRow(string path) : ObservableObject
             _ => false
         };
 
+    /// <summary>
+    /// Converting the file would not just skip it: it is present and either not analyzed yet, its analysis failed, or
+    /// conversion could still allow it under the FEL settings once it inspects the file in full.
+    /// </summary>
+    public bool MayConvert => !IsMissing && (Analysis is null || AnalysisError is not null
+        || Domain.Conversion.ConversionPolicy.MayAllow(Analysis, ConvertsSimpleFel, ConvertsComplexFel));
+
     protected override void OnPropertyChanged(System.ComponentModel.PropertyChangedEventArgs e)
     {
         base.OnPropertyChanged(e);
         if (e.PropertyName == nameof(NextStepText))
         {
             base.OnPropertyChanged(new System.ComponentModel.PropertyChangedEventArgs(nameof(OffersConversion)));
+        }
+
+        if (e.PropertyName is nameof(Analysis) or nameof(AnalysisError) or nameof(IsMissing) or nameof(ConvertsSimpleFel) or nameof(ConvertsComplexFel))
+        {
+            base.OnPropertyChanged(new System.ComponentModel.PropertyChangedEventArgs(nameof(MayConvert)));
         }
     }
 
