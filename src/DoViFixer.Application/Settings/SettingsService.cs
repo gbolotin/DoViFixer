@@ -13,7 +13,7 @@ public sealed class SettingsService(ISettingsStore store, IDependencyDetector de
         store.UpdateAsync(settings => settings with { MediaListLayout = layout }, cancellationToken);
     public Task SetShowSelectionCheckBoxesAsync(bool show, CancellationToken cancellationToken) =>
         store.UpdateAsync(settings => settings with { ShowSelectionCheckBoxes = show }, cancellationToken);
-    public async Task SetPreferencesAsync(string? temporaryDirectory, string? outputDirectory, bool replaceOriginal, bool createElArchive, CancellationToken cancellationToken, bool? automaticallyScanAddedFiles = null, bool? useCachedResults = null, AppTheme? theme = null, bool? allowFel = null, bool? includeSimple = null, bool? forceComplex = null, bool? showCompletionNotifications = null, int? conversionWorkers = null, VerificationLevel? verificationLevel = null, bool? recycleDeletedOriginalsAndBackups = null, double? freeSpaceMarginPercent = null, int? analysisWorkers = null, ToolProcessPriority? toolProcessPriority = null, int? pipeBufferKiB = null, int? brightnessMarginNits = null, int? assumedPeakBrightnessNits = null, int? scanSampleCount = null, double? scanSampleSeconds = null, int? minimumScanCoveragePercent = null, double? inspectionPeakPercentile = null, bool? safeMode = null, bool? removeDolbyVision = null, int? folderSearchDepth = null, bool? showSelectionCheckBoxes = null)
+    public async Task SetPreferencesAsync(string? temporaryDirectory, string? outputDirectory, bool replaceOriginal, bool createElArchive, CancellationToken cancellationToken, bool? automaticallyScanAddedFiles = null, bool? useCachedResults = null, AppTheme? theme = null, bool? allowFel = null, bool? includeSimple = null, bool? forceComplex = null, bool? showCompletionNotifications = null, int? conversionWorkers = null, VerificationLevel? verificationLevel = null, bool? recycleDeletedOriginalsAndBackups = null, double? freeSpaceMarginPercent = null, int? analysisWorkers = null, ToolProcessPriority? toolProcessPriority = null, int? pipeBufferKiB = null, int? brightnessMarginNits = null, int? assumedPeakBrightnessNits = null, int? scanSampleCount = null, double? scanSampleSeconds = null, int? minimumScanCoveragePercent = null, double? inspectionPeakPercentile = null, bool? safeMode = null, bool? removeDolbyVision = null, int? folderSearchDepth = null, bool? showSelectionCheckBoxes = null, bool? showInFileExplorerMenu = null)
     {
         cancellationToken.ThrowIfCancellationRequested();
         if (folderSearchDepth is < 0 or > 100)
@@ -95,7 +95,8 @@ public sealed class SettingsService(ISettingsStore store, IDependencyDetector de
             UseCachedResults = useCachedResults ?? s.UseCachedResults,
             Theme = theme ?? s.Theme,
             ShowCompletionNotifications = showCompletionNotifications ?? s.ShowCompletionNotifications,
-            ShowSelectionCheckBoxes = showSelectionCheckBoxes ?? s.ShowSelectionCheckBoxes
+            ShowSelectionCheckBoxes = showSelectionCheckBoxes ?? s.ShowSelectionCheckBoxes,
+            ShowInFileExplorerMenu = showInFileExplorerMenu ?? s.ShowInFileExplorerMenu
         }, cancellationToken);
         OperationLog.Audit(logger, "SetConversionDefaults", full ?? "Same folder as source", "Completed");
     }

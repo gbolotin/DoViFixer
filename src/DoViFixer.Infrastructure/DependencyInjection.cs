@@ -30,6 +30,7 @@ public static class DependencyInjection
         services.AddSingleton<IMediaLibrary>(provider => provider.GetRequiredService<MediaLibrary>());
         services.AddSingleton<IAnalysisCache>(provider => provider.GetRequiredService<MediaLibrary>());
         services.AddTransient<IUserPathRegistration, UserPathRegistration>();
+        services.AddTransient<IFileExplorerMenu, FileExplorerMenu>();
         services.AddSingleton<IToolCatalog, ToolCatalog>();
         services.AddSingleton(_ =>
         {

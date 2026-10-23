@@ -153,6 +153,7 @@ public sealed partial class SettingsViewModel : OperationViewModel
             UseCachedResults = value.UseCachedResults;
             ShowCompletionNotifications = value.ShowCompletionNotifications;
             ShowSelectionCheckBoxes = value.ShowSelectionCheckBoxes;
+            ShowInFileExplorerMenu = value.ShowInFileExplorerMenu;
             WatchFolder = value.WatchFolder ?? "";
             WatchSubfolders = value.WatchSubfolders;
             WatchSettleSeconds = value.WatchSettleSeconds;
@@ -264,6 +265,12 @@ public sealed partial class SettingsViewModel : OperationViewModel
     public partial bool ShowSelectionCheckBoxes { get; set; }
 
     partial void OnShowSelectionCheckBoxesChanged(bool value) => TriggerAutoSave();
+
+    /// <summary>Whether File Explorer's right-click menu offers to open or convert Matroska files and folders here.</summary>
+    [ObservableProperty]
+    public partial bool ShowInFileExplorerMenu { get; set; } = true;
+
+    partial void OnShowInFileExplorerMenuChanged(bool value) => TriggerAutoSave();
 
     /// <summary>The folder whose new files are converted without asking; empty watches nothing.</summary>
     [ObservableProperty]
@@ -593,7 +600,8 @@ public sealed partial class SettingsViewModel : OperationViewModel
             safeMode: snapshot.SafeMode,
             removeDolbyVision: snapshot.RemoveDolbyVision,
             folderSearchDepth: snapshot.FolderSearchDepth,
-            showSelectionCheckBoxes: snapshot.ShowSelectionCheckBoxes), token);
+            showSelectionCheckBoxes: snapshot.ShowSelectionCheckBoxes,
+            showInFileExplorerMenu: snapshot.ShowInFileExplorerMenu), token);
         await Task.Run(() => settings.SetWatchFolderAsync(snapshot.WatchFolder, snapshot.WatchSubfolders, snapshot.WatchSettleSeconds, token), token);
 
         lastSavedSettings = snapshot;
@@ -627,6 +635,7 @@ public sealed partial class SettingsViewModel : OperationViewModel
         UseCachedResults = UseCachedResults,
         ShowCompletionNotifications = ShowCompletionNotifications,
         ShowSelectionCheckBoxes = ShowSelectionCheckBoxes,
+        ShowInFileExplorerMenu = ShowInFileExplorerMenu,
         Theme = SelectedTheme,
         IncludeSimple = IncludeSimple,
         ForceComplex = ForceComplex,

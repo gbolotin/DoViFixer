@@ -78,13 +78,13 @@ public sealed partial class MediaViewModel
     }
 
     /// <summary>
-    /// Holds automatic conversion while <paramref name="hold"/> is <see langword="true"/>, as the shell does while Settings
-    /// is open, so settings never change under an automatic batch. Files that arrive meanwhile wait.
+    /// Holds automatic conversion and File Explorer requests while <paramref name="hold"/> is <see langword="true"/>, as the
+    /// shell does while Settings is open, so settings never change under such a batch. Files that arrive meanwhile wait.
     /// </summary>
     public void HoldAutomaticWork(bool hold)
     {
         automaticWorkHeld = hold;
-        StartAutoConversion();
+        StartQueuedWork();
     }
 
     private void OnFileArrived(object? sender, string path)
@@ -108,7 +108,7 @@ public sealed partial class MediaViewModel
 
         arrivedFiles.Add(path);
         OnPropertyChanged(nameof(StatusItems));
-        StartAutoConversion();
+        StartQueuedWork();
     }
 
     private void OnBusyChangedForWatchFolder()
@@ -121,11 +121,11 @@ public sealed partial class MediaViewModel
         // Start after the finished operation has fully ended, not from inside it.
         if (uiContext is null)
         {
-            StartAutoConversion();
+            StartQueuedWork();
         }
         else
         {
-            uiContext.Post(_ => StartAutoConversion(), null);
+            uiContext.Post(_ => StartQueuedWork(), null);
         }
     }
 
