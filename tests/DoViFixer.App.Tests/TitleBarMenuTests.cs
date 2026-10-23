@@ -1,3 +1,4 @@
+using DoViFixer.App.Dialogs;
 using DoViFixer.App.ViewModels;
 using DoViFixer.App.Presentation.Application;
 using Microsoft.VisualStudio.TestTools.UnitTesting;
@@ -87,5 +88,18 @@ public sealed class TitleBarMenuTests
         await shell.CleanLibraryCommand.InvokeAsync();
         Assert.IsInstanceOfType<PerformanceSettingsSection>(shell.Settings.Sections.CurrentPage);
         Assert.AreEqual(ViewStatus.Result, shell.Settings.Status);
+    }
+
+    [TestMethod]
+    public async Task HelpOpensTheOnlineDocumentationEvenOverSettings()
+    {
+        using var runtime = new TestRuntime();
+        var shell = runtime.Container.GetRequiredService<ShellViewModel>();
+
+        shell.OpenDocumentationCommand.Invoke();
+        Assert.AreEqual(DefaultBrowser.DocumentationAddress, runtime.OpenedAddress);
+
+        await shell.ShowAboutCommand.InvokeAsync();
+        Assert.IsTrue(shell.OpenDocumentationCommand.CanExecute(null), "F1 still works while the Settings frame is open.");
     }
 }

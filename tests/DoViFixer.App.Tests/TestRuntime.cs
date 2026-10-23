@@ -16,7 +16,7 @@ using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
 
 namespace DoViFixer.App.Tests;
-internal sealed class TestRuntime : IFileDiscovery, IFileOperations, IMediaProbe, IMediaPreview, ISettingsStore, IDependencyDetector, IDependencyInstaller, ITemporaryWorkspaceFactory, IAnalysisCache, IMediaLibrary, IVideoProcessor, IMediaVerifier, IOutputPublisher, IBackupArchiveStore, IReportWriter, IDialogService, IFileDialogService, IFileExplorer, ITextClipboard, IThemeService, ISourceFileMonitor, IFolderWatcher, IPresetStore, IDisposable
+internal sealed class TestRuntime : IFileDiscovery, IFileOperations, IMediaProbe, IMediaPreview, ISettingsStore, IDependencyDetector, IDependencyInstaller, ITemporaryWorkspaceFactory, IAnalysisCache, IMediaLibrary, IVideoProcessor, IMediaVerifier, IOutputPublisher, IBackupArchiveStore, IReportWriter, IDialogService, IFileDialogService, IFileExplorer, ITextClipboard, IThemeService, ISourceFileMonitor, IFolderWatcher, IPresetStore, IWebBrowser, IDisposable
 {
     private ServiceProvider? container;
     public IServiceCollection Services { get; } = new ServiceCollection();
@@ -84,7 +84,7 @@ internal sealed class TestRuntime : IFileDiscovery, IFileOperations, IMediaProbe
     public TestRuntime()
     {
         AppComposition.Register(Services, new ConfigurationBuilder().Build(), false);
-        Type[] contracts = [typeof(IFileDiscovery), typeof(IFileOperations), typeof(IMediaProbe), typeof(IMediaPreview), typeof(ISettingsStore), typeof(IDependencyDetector), typeof(IDependencyInstaller), typeof(ITemporaryWorkspaceFactory), typeof(IAnalysisCache), typeof(IMediaLibrary), typeof(IVideoProcessor), typeof(IMediaVerifier), typeof(IOutputPublisher), typeof(IBackupArchiveStore), typeof(IReportWriter), typeof(IDialogService), typeof(IFileDialogService), typeof(IFileExplorer), typeof(ITextClipboard), typeof(IThemeService), typeof(ISourceFileMonitor), typeof(IFolderWatcher), typeof(IPresetStore)];
+        Type[] contracts = [typeof(IFileDiscovery), typeof(IFileOperations), typeof(IMediaProbe), typeof(IMediaPreview), typeof(ISettingsStore), typeof(IDependencyDetector), typeof(IDependencyInstaller), typeof(ITemporaryWorkspaceFactory), typeof(IAnalysisCache), typeof(IMediaLibrary), typeof(IVideoProcessor), typeof(IMediaVerifier), typeof(IOutputPublisher), typeof(IBackupArchiveStore), typeof(IReportWriter), typeof(IDialogService), typeof(IFileDialogService), typeof(IFileExplorer), typeof(ITextClipboard), typeof(IThemeService), typeof(ISourceFileMonitor), typeof(IFolderWatcher), typeof(IPresetStore), typeof(IWebBrowser)];
         foreach (var contract in contracts)
         {
             Services.AddSingleton(contract, this);
@@ -538,6 +538,16 @@ internal sealed class TestRuntime : IFileDiscovery, IFileOperations, IMediaProbe
 
     public void OpenLogs()
     {
+    }
+
+    public Uri? OpenedAddress
+    {
+        get;
+        private set;
+    }
+    public void Open(Uri address)
+    {
+        OpenedAddress = address;
     }
 
     public string? LastApproveLabel { get; private set; }

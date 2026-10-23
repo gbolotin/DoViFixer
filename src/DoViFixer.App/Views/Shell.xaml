@@ -12,13 +12,15 @@
         MinHeight="600"
         WindowStartupLocation="CenterScreen">
     <!-- Ctrl+comma opens Settings, as in Windows apps such as Visual Studio Code and Windows Terminal.
-         F4 inspects and F5 converts the checked files, from the File menu and the Media toolbar alike. -->
+         F4 inspects and F5 converts the checked files, from the File menu and the Media toolbar alike.
+         F1 opens the online documentation, as Help does in Windows apps. -->
     <Window.InputBindings>
         <KeyBinding Key="OemComma"
                     Modifiers="Control"
                     Command="{Binding OpenSettingsCommand}" />
         <KeyBinding Key="F4" Command="{Binding InspectCommand}" />
         <KeyBinding Key="F5" Command="{Binding ConvertCommand}" />
+        <KeyBinding Key="F1" Command="{Binding OpenDocumentationCommand}" />
     </Window.InputBindings>
     <Window.Resources>
         <ResourceDictionary>
@@ -117,6 +119,14 @@
                                 <MenuItem Header="Clean up _backups…" Command="{Binding CleanupBackupsCommand}" />
                             </MenuItem>
                             <MenuItem Header="_Help">
+                                <MenuItem Header="_Documentation"
+                                          Command="{Binding OpenDocumentationCommand}"
+                                          InputGestureText="F1">
+                                    <MenuItem.Icon>
+                                        <TextBlock Text="&#xE897;" Style="{StaticResource MenuGlyphIconStyle}" />
+                                    </MenuItem.Icon>
+                                </MenuItem>
+                                <Separator />
                                 <MenuItem Header="Open _logs" Command="{Binding Settings.OpenLogsCommand}" />
                                 <MenuItem Header="_Export diagnostics…" Command="{Binding ExportDiagnosticsCommand}" />
                                 <Separator />

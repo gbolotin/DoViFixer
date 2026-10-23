@@ -1,0 +1,19 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="-20 -10 120 120" width="120" height="120" role="img" aria-label="DoViFixer">
+  
+      <g transform="translate(0 0)" stroke="#111" stroke-width="3" stroke-linejoin="round" stroke-linecap="round">
+        <path d="M30 14 L22 0 M50 14 L60 2" fill="none"/>
+        <circle cx="22" cy="0" r="3.5" fill="#ff5a5f"/>
+        <circle cx="60" cy="2" r="3.5" fill="#ff5a5f"/>
+        <path d="M30 76 L24 92 M50 76 L58 92" fill="none"/>
+        <path d="M14 92 h16 a5 5 0 0 1 0 8 h-18 a4 4 0 0 1 2 -8 Z M52 92 h14 a6 6 0 0 1 2 8 h-18 a4 4 0 0 1 2 -8 Z" fill="#ffffff"/>
+        <path d="M6 44 L-6 54 M74 44 L88 36" fill="none"/>
+        <circle cx="-7" cy="56" r="5" fill="#ffffff"/>
+        <circle cx="89" cy="34" r="5" fill="#ffffff"/>
+        <rect x="2" y="14" width="76" height="62" rx="14" fill="#4c8dff"/>
+        <rect x="11" y="22" width="58" height="42" rx="9" fill="#e9f3ff"/>
+        <circle cx="29" cy="38" r="4.5" fill="#111" stroke="none"/>
+        <circle cx="51" cy="38" r="4.5" fill="#111" stroke="none"/>
+        <path d="M28 50 q12 9 24 0" fill="none"/>
+        <circle cx="70" cy="70" r="2.5" fill="#111" stroke="none"/>
+      </g>
+</svg>

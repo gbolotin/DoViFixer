@@ -1,5 +1,6 @@
 using System.Collections.ObjectModel;
 using System.ComponentModel;
+using DoViFixer.App.Dialogs;
 using DoViFixer.App.Presentation.Application;
 
 namespace DoViFixer.App.ViewModels;
@@ -7,13 +8,16 @@ public sealed partial class ShellViewModel : ObservableObject, INavigationGuard,
 {
     /// <param name="pages">The pages: the Media page, which the shell wires to Settings and the title bar menu.</param>
     /// <param name="settings">Settings, shown in a frame over the pages rather than as a page.</param>
-    public ShellViewModel(IEnumerable<INavigationPage> pages, SettingsViewModel settings, StartupDependencyCheckViewModel dependencyCheck, DependencyReportViewModel dependencyReport, ActivityViewModel activity)
+    /// <param name="browser">Opens the online documentation from Help › Documentation (F1).</param>
+    public ShellViewModel(IEnumerable<INavigationPage> pages, SettingsViewModel settings, StartupDependencyCheckViewModel dependencyCheck, DependencyReportViewModel dependencyReport, ActivityViewModel activity, IWebBrowser browser)
     {
         ArgumentNullException.ThrowIfNull(pages);
         ArgumentNullException.ThrowIfNull(settings);
         ArgumentNullException.ThrowIfNull(dependencyCheck);
         ArgumentNullException.ThrowIfNull(dependencyReport);
         ArgumentNullException.ThrowIfNull(activity);
+        ArgumentNullException.ThrowIfNull(browser);
+        this.browser = browser;
         INavigationPage[] navigationPages = [.. pages];
         var media = navigationPages.OfType<MediaViewModel>().Single();
         this.media = media;
@@ -69,6 +73,7 @@ public sealed partial class ShellViewModel : ObservableObject, INavigationGuard,
     private readonly CancellationTokenSource startupCancellation = new();
     private Task? initializationTask;
     private readonly MediaViewModel media;
+    private readonly IWebBrowser browser;
     // The Media commands the title bar menu forwards; their availability changes refresh the menu's commands.
     private readonly IAsyncRelayCommand[] menuMediaCommands;
     private readonly NativeToolsSettingsSection nativeTools;
@@ -288,6 +293,10 @@ public sealed partial class ShellViewModel : ObservableObject, INavigationGuard,
 
     [RelayCommand(CanExecute = nameof(CanOpenSettingsSection))]
     private Task ShowAbout() => OpenSettings(about);
+
+    // Help stays available while Settings is open or an operation runs.
+    [RelayCommand]
+    private void OpenDocumentation() => browser.Open(DefaultBrowser.DocumentationAddress);
 
     private async Task OpenSettingsAndRunAsync(SettingsSection section, IAsyncRelayCommand command)
     {

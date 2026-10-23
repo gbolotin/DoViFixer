@@ -1,0 +1,81 @@
+# The user documentation at https://gbolotin.github.io/DoViFixer/. Help › Documentation (F1) in the app opens it.
+# Build locally: pip install -r tools/docs-requirements.txt, then mkdocs serve.
+# CI (.github/workflows/docs.yml) adds the screenshots from the WPF visual tests and publishes the site to GitHub Pages.
+site_name: DoViFixer
+site_description: Make Dolby Vision Profile 7 movies play right on Apple TV, NVIDIA Shield and Amazon Fire TV.
+site_url: https://gbolotin.github.io/DoViFixer/
+repo_url: https://github.com/gbolotin/DoViFixer
+repo_name: gbolotin/DoViFixer
+edit_uri: edit/main/docs-site/
+docs_dir: docs-site
+
+theme:
+  name: material
+  logo: assets/logo.svg
+  favicon: assets/logo.svg
+  icon:
+    repo: fontawesome/brands/github
+  palette:
+    - media: "(prefers-color-scheme: light)"
+      scheme: default
+      primary: deep orange
+      accent: amber
+      toggle:
+        icon: material/weather-night
+        name: Switch to dark mode
+    - media: "(prefers-color-scheme: dark)"
+      scheme: slate
+      primary: deep orange
+      accent: amber
+      toggle:
+        icon: material/weather-sunny
+        name: Switch to light mode
+  features:
+    - navigation.sections
+    - navigation.top
+    - navigation.footer
+    - navigation.instant
+    - search.highlight
+    - content.code.copy
+
+nav:
+  - Home: index.md
+  - Get started:
+      - Install: install.md
+      - Before you convert: before-you-convert.md
+  - Using the app:
+      - Add and scan movies: guide/scan.md
+      - Convert: guide/convert.md
+      - Backup and restore: guide/restore.md
+      - Watch folder: guide/watch-folder.md
+      - Settings: guide/settings.md
+  - Learn:
+      - How Dolby Vision works: dolby-vision.md
+      - Streaming boxes: devices.md
+  - More:
+      - Command line and AI assistants: console.md
+      - Troubleshooting: troubleshooting.md
+
+markdown_extensions:
+  - admonition
+  - attr_list
+  - def_list
+  - md_in_html
+  - tables
+  - toc:
+      permalink: true
+  - pymdownx.details
+  - pymdownx.superfences
+  - pymdownx.keys
+  - pymdownx.emoji:
+      emoji_index: !!python/name:material.extensions.emoji.twemoji
+      emoji_generator: !!python/name:material.extensions.emoji.to_svg
+
+extra_css:
+  - assets/extra.css
+
+validation:
+  omitted_files: warn
+  absolute_links: warn
+  unrecognized_links: warn
+  anchors: warn
