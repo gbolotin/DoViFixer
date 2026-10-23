@@ -603,7 +603,10 @@ public sealed partial class MediaViewModel : OperationViewModel, INavigationPage
     [RelayCommand(CanExecute = nameof(CanInspectChecked))]
     private Task DeepInspect() => AnalyzeAsync(AnalysisMethod.DeepInspection);
 
-    [RelayCommand(CanExecute = nameof(CanOperate))]
+    // Convert stays available while any checked file may still convert, so it is not offered just to skip them all.
+    private bool CanConvertChecked() => IsIdle && ShownFiles.Any(row => row.IsSelected && row.MayConvert);
+
+    [RelayCommand(CanExecute = nameof(CanConvertChecked))]
     private Task Convert() => ConvertBatchAsync();
 
     private bool CanConvertRow(MediaRow? row) => row is not null && IsIdle && Files.Contains(row) && row.IsProfile7 && !row.IsMissing;
@@ -1031,6 +1034,11 @@ public sealed partial class MediaViewModel : OperationViewModel, INavigationPage
         if (e.PropertyName == nameof(MediaRow.IsProfile7))
         {
             ConvertRowCommand.NotifyCanExecuteChanged();
+        }
+
+        if (e.PropertyName == nameof(MediaRow.MayConvert))
+        {
+            ConvertCommand.NotifyCanExecuteChanged();
         }
 
         if (e.PropertyName is nameof(MediaRow.IsProfile7) or nameof(MediaRow.IsMissing))
