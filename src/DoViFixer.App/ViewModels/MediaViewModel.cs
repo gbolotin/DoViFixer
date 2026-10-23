@@ -62,6 +62,7 @@ public sealed partial class MediaViewModel : OperationViewModel, INavigationPage
     private readonly ISourceFileMonitor sourceFiles;
     private readonly ReportService reports;
     private readonly SynchronizationContext? uiContext;
+    private readonly Lock completionGate = new();
     private readonly ActivityViewModel activity;
     private readonly IFolderWatcher folderWatcher;
     private readonly WatchFolderService watchFolder;
@@ -470,6 +471,27 @@ public sealed partial class MediaViewModel : OperationViewModel, INavigationPage
         else
         {
             uiContext.Post(_ => RunQueuedAvailabilityCheck(), null);
+        }
+    }
+
+    /// <summary>Runs <paramref name="action"/> on the UI thread, or one at a time when there is none, as in tests.</summary>
+    private void OnUiThread(Action action)
+    {
+        if (uiContext is null)
+        {
+            // Without a UI thread to post to, batch workers complete their items at the same time.
+            lock (completionGate)
+            {
+                action();
+            }
+        }
+        else if (SynchronizationContext.Current == uiContext)
+        {
+            action();
+        }
+        else
+        {
+            uiContext.Post(_ => action(), null);
         }
     }
 
@@ -1799,7 +1821,7 @@ public sealed partial class MediaViewModel : OperationViewModel, INavigationPage
                 {
                     row.IsActive = false;
                 }
-            }, control!, new InlineProgress<OperationItemResult>(itemResult =>
+            }, control!, new InlineProgress<OperationItemResult>(itemResult => OnUiThread(() =>
             {
                 var row = rows.First(r => r.Path == itemResult.Item);
                 CompleteBatchItem(row, itemResult.Status);
@@ -1826,7 +1848,7 @@ public sealed partial class MediaViewModel : OperationViewModel, INavigationPage
                         row.SetCancelled();
                     }
                 }
-            }), token);
+            })), token);
 
             SetStatus(ViewStatus.Result, Summary(result));
         }
