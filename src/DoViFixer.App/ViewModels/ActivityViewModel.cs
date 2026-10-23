@@ -15,6 +15,7 @@ public sealed partial class ActivityViewModel : ObservableObject, IDisposable
     private readonly IFileExplorer explorer;
     private readonly ITextClipboard clipboard;
     private readonly SynchronizationContext? uiContext;
+    private readonly Lock applyGate = new();
 
     public ActivityViewModel(IActivityFeed feed, IFileExplorer explorer, ITextClipboard clipboard)
     {
@@ -85,7 +86,15 @@ public sealed partial class ActivityViewModel : ObservableObject, IDisposable
 
     private void OnReported(object? sender, ActivityEntry entry)
     {
-        if (uiContext is null || SynchronizationContext.Current == uiContext)
+        if (uiContext is null)
+        {
+            // Without a UI thread to post to, as in tests, batch workers report at the same time.
+            lock (applyGate)
+            {
+                Apply(entry);
+            }
+        }
+        else if (SynchronizationContext.Current == uiContext)
         {
             Apply(entry);
         }
