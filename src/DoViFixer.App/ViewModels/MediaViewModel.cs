@@ -1587,7 +1587,8 @@ public sealed partial class MediaViewModel : OperationViewModel, INavigationPage
             return;
         }
 
-        rows ??= InDisplayOrder(ShownFiles.Where(r => r.IsSelected));
+        // Like Inspect, the toolbar leaves out checked files that conversion would only skip; they keep their check marks.
+        rows ??= InDisplayOrder(ShownFiles.Where(r => r.IsSelected && r.MayConvert));
         if (rows.Length == 0)
         {
             return;

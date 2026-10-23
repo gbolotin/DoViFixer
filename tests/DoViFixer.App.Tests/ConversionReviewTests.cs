@@ -240,6 +240,12 @@ public sealed class ConversionReviewTests
         Assert.AreEqual(MediaRowState.Converted, originalRows[0].State);
         Assert.IsTrue(originalRows[0].CanOpenResult);
 
+        Assert.AreNotEqual(MediaRowState.Skipped, originalRows[1].State, "Like Inspect, the batch leaves out a file conversion would only skip.");
+        Assert.IsTrue(originalRows[1].IsSelected, "The left-out file keeps its check mark.");
+
+        // The row's own Convert still runs conversion, which explains the skip.
+        await model.ConvertRowCommand.InvokeAsync(originalRows[1]);
+        Assert.AreEqual(1, runtime.Conversions);
         Assert.AreEqual("Conversion skipped", originalRows[1].Status);
         Assert.AreEqual(MediaRowState.Skipped, originalRows[1].State);
         StringAssert.Contains(originalRows[1].Notice, "Simple FEL conversion requires enabling 'Include Simple FEL' in Settings.");
@@ -314,6 +320,27 @@ public sealed class ConversionReviewTests
         unscanned.IsSelected = false;
         mel.IsSelected = true;
         Assert.IsTrue(model.ConvertCommand.CanExecute(null), "MEL always converts.");
+    }
+
+    [TestMethod]
+    public async Task ToolbarConvertLeavesOutCheckedFilesItWouldOnlySkip()
+    {
+        using var runtime = new TestRuntime();
+        var model = runtime.Container.GetRequiredService<MediaViewModel>();
+        await model.RefreshSettingsSummaryAsync();
+        await model.AddAsync([@"C:\Media\Mountain.mkv", @"C:\Media\P81.mkv", @"C:\Media\City.mkv"]);
+        var (mel, p81, complex) = (model.Files[0], model.Files[1], model.Files[2]);
+        await model.InspectRowCommand.InvokeAsync(complex);
+        Assert.IsTrue(model.Files.All(row => row.IsSelected));
+        Assert.IsFalse(p81.MayConvert || complex.MayConvert);
+
+        await model.ConvertCommand.InvokeAsync();
+
+        Assert.AreEqual(1, runtime.Conversions);
+        Assert.AreEqual(MediaRowState.Converted, mel.State);
+        Assert.AreNotEqual(MediaRowState.Skipped, p81.State, "A file that is not Profile 7 is left out of the batch.");
+        Assert.AreNotEqual(MediaRowState.Skipped, complex.State, "Inspected Complex FEL is left out while Settings skip it.");
+        Assert.IsTrue(p81.IsSelected && complex.IsSelected, "Left-out files keep their check marks.");
     }
 
     [TestMethod]
