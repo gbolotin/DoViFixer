@@ -55,3 +55,7 @@ A Profile 7 video has three parts. Streaming boxes cannot use the third part, th
 <img class="screenshot" src="assets/screenshots/media.png" alt="The Media page: a list of movies with their Dolby Vision profile and enhancement layer type, and the details of the selected movie">
 
 Press ++f1++ in the app to open this documentation.
+
+## Credits
+
+DoViFixer is inspired by [dovi_convert](https://github.com/cryptochrome/dovi_convert) and by [DoviConvert](https://github.com/myristate/dovi_convert), its C# / .NET rewrite for Windows. It runs [dovi_tool](https://github.com/quietvoid/dovi_tool), [FFmpeg](https://ffmpeg.org/), [MKVToolNix](https://mkvtoolnix.download/) and [MediaInfo](https://mediaarea.net/en/MediaInfo).
