@@ -229,7 +229,7 @@ public sealed partial class MediaRow(string path) : ObservableObject
     }
 
     [ObservableProperty]
-    [NotifyPropertyChangedFor(nameof(Classification), nameof(FilterGroup), nameof(HasAnalysisError), nameof(NeedsInspection), nameof(CanInspectIncomplete), nameof(StatusTone), nameof(AnalysisText), nameof(ResultRecommendation), nameof(NextStepText), nameof(DetailRows), nameof(DetailNotes), nameof(HasExamination), nameof(ExaminationRows), nameof(ExaminationNote), nameof(SampleRows), nameof(HasSampleRows), nameof(StatusToolTip))]
+    [NotifyPropertyChangedFor(nameof(Classification), nameof(FilterGroup), nameof(HasAnalysisError), nameof(NeedsInspection), nameof(CanInspectIncomplete), nameof(StatusTone), nameof(AnalysisText), nameof(ResultRecommendation), nameof(NextStepText), nameof(DetailRows), nameof(DetailNotes), nameof(HasExamination), nameof(ExaminationRows), nameof(ExaminationNote), nameof(SampleRows), nameof(HasSampleRows), nameof(SampleSummary), nameof(StatusToolTip))]
     public partial string? AnalysisError { get; set; }
 
     [ObservableProperty]
@@ -252,7 +252,7 @@ public sealed partial class MediaRow(string path) : ObservableObject
     private MediaAnalysis? CurrentFileAnalysis => ReplacesOriginal && ResultAnalysis is { } result ? result : Analysis;
 
     [ObservableProperty]
-    [NotifyPropertyChangedFor(nameof(Format), nameof(IsProfile7), nameof(CanRestore), nameof(HasIncompleteScan), nameof(NeedsInspection), nameof(CanInspectIncomplete), nameof(Classification), nameof(FilterGroup), nameof(StatusTone), nameof(AnalysisText), nameof(ResultRecommendation), nameof(NextStepText), nameof(DetailRows), nameof(DetailNotes), nameof(HasExamination), nameof(ExaminationRows), nameof(ExaminationNote), nameof(SampleRows), nameof(HasSampleRows))]
+    [NotifyPropertyChangedFor(nameof(Format), nameof(IsProfile7), nameof(CanRestore), nameof(HasIncompleteScan), nameof(NeedsInspection), nameof(CanInspectIncomplete), nameof(Classification), nameof(FilterGroup), nameof(StatusTone), nameof(AnalysisText), nameof(ResultRecommendation), nameof(NextStepText), nameof(DetailRows), nameof(DetailNotes), nameof(HasExamination), nameof(ExaminationRows), nameof(ExaminationNote), nameof(SampleRows), nameof(HasSampleRows), nameof(SampleSummary))]
     public partial MediaAnalysis? Analysis { get; set; }
 
     /// <summary>The list filter that shows this file. Files not scanned yet and files whose analysis failed share one group.</summary>
@@ -389,15 +389,12 @@ public sealed partial class MediaRow(string path) : ObservableObject
     {
         get
         {
-            if (!HasExamination || Analysis!.Evidence.Samples is not { Count: > 0 } samples)
+            if (Samples is not { } samples)
             {
                 return [];
             }
 
-            var options = Analysis.Evidence.Options ?? new AnalysisOptions();
-            double? limit = Analysis.Evidence.Layer == Domain.Media.EnhancementLayer.Fel
-                ? MediaClassifier.BasePeak(Analysis.Media, options).Nits + options.BrightnessMarginNits
-                : null;
+            double? limit = SampleLimit;
             return samples.Select(sample => sample.PeakNits is { } peak
                 ? new MediaDetail(FormatPosition(sample.PositionSeconds), $"{peak:N0} nits", StatusTone: peak > limit ? MediaStatusTone.HighRisk : MediaStatusTone.None)
                 : new MediaDetail(FormatPosition(sample.PositionSeconds), "Not read", StatusTone: MediaStatusTone.VerifyRecommended)).ToArray();
@@ -405,6 +402,45 @@ public sealed partial class MediaRow(string path) : ObservableObject
     }
 
     public bool HasSampleRows => SampleRows.Count > 0;
+
+    /// <summary>
+    /// The sample list's title: how many samples were read and, for FEL, how many exceed the unsafe limit, so a reader
+    /// knows whether to expand it. A count, not an average: one bright scene decides the verdict, and an average hides it.
+    /// </summary>
+    public string SampleSummary
+    {
+        get
+        {
+            if (Samples is not { } samples)
+            {
+                return "Each sample";
+            }
+
+            int read = samples.Count(sample => sample.PeakNits is not null);
+            string summary = read == samples.Count ? $"Each sample · {read} read" : $"Each sample · {read} of {samples.Count} read";
+            if (SampleLimit is not { } limit)
+            {
+                return summary;
+            }
+
+            int above = samples.Count(sample => sample.PeakNits > limit);
+            return above == 0 ? $"{summary}, none above limit" : $"{summary}, {above} above limit";
+        }
+    }
+
+    private IReadOnlyList<ScanSample>? Samples => HasExamination && Analysis!.Evidence.Samples is { Count: > 0 } samples ? samples : null;
+
+    // Only FEL brightness is judged against the base picture; MEL samples have no limit.
+    private double? SampleLimit
+    {
+        get
+        {
+            var options = Analysis!.Evidence.Options ?? new AnalysisOptions();
+            return Analysis.Evidence.Layer == Domain.Media.EnhancementLayer.Fel
+                ? MediaClassifier.BasePeak(Analysis.Media, options).Nits + options.BrightnessMarginNits
+                : null;
+        }
+    }
 
     /// <summary>The details panel as plain text, for the clipboard. Compared values read "original → result".</summary>
     public string DetailsText
@@ -433,7 +469,7 @@ public sealed partial class MediaRow(string path) : ObservableObject
             }
             if (HasSampleRows)
             {
-                text.AppendLine().AppendLine("Each sample");
+                text.AppendLine().AppendLine(SampleSummary);
                 foreach (var row in SampleRows)
                 {
                     text.AppendLine($"{row.Label}  {row.Value}");
