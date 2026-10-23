@@ -127,6 +127,16 @@ jobs:
             out/*.zip
             out/*.exe
 
+      # The Microsoft Store package, unsigned: Partner Center signs it on upload. It is not attached to releases.
+      - name: Build Store package
+        shell: pwsh
+        run: ./tools/package-store.ps1 -Version '${{ steps.version.outputs.version }}' -OutputFolder out/store
+
+      - uses: actions/upload-artifact@v7
+        with:
+          name: store
+          path: out/store/*.msix
+
   release:
     if: needs.build.outputs.release == 'true'
     needs: build

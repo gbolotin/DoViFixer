@@ -274,6 +274,12 @@ public sealed partial class SettingsViewModel : OperationViewModel
     [NotifyPropertyChangedFor(nameof(OffersWindows11Menu))]
     public partial bool ShowInFileExplorerMenu { get; set; } = true;
 
+    /// <summary>
+    /// Whether the app manages its notifications and File Explorer commands itself, as setup and the zip install it.
+    /// The Store package declares the commands, and notifications are not available there yet.
+    /// </summary>
+    public bool ManagesWindowsIntegration { get; } = !AppPackage.IsStoreApp;
+
     /// <summary>Whether Windows 11 would show the commands in its first menu once this PC trusts the app's package certificate.</summary>
     [ObservableProperty]
     [NotifyPropertyChangedFor(nameof(OffersWindows11Menu))]

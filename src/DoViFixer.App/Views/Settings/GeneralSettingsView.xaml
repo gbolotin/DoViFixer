@@ -35,7 +35,9 @@
                               Style="{StaticResource WfToggleSwitchStyle}" />
                 </StackPanel>
             </Border>
-            <Border Style="{StaticResource WfCardStyle}" Margin="0,24,0,0">
+            <Border Style="{StaticResource WfCardStyle}"
+                    Visibility="{Binding ManagesWindowsIntegration, Converter={StaticResource WfBooleanToVisibilityConverter}}"
+                    Margin="0,24,0,0">
                 <StackPanel>
                     <TextBlock Text="Notifications"
                                Style="{StaticResource SubtitleTextBlockStyle}" />
@@ -45,7 +47,9 @@
                               Style="{StaticResource WfToggleSwitchStyle}" />
                 </StackPanel>
             </Border>
-            <Border Style="{StaticResource WfCardStyle}" Margin="0,24,0,0">
+            <Border Style="{StaticResource WfCardStyle}"
+                    Visibility="{Binding ManagesWindowsIntegration, Converter={StaticResource WfBooleanToVisibilityConverter}}"
+                    Margin="0,24,0,0">
                 <StackPanel>
                     <TextBlock Text="File Explorer"
                                Style="{StaticResource SubtitleTextBlockStyle}" />

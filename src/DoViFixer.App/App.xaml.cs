@@ -57,7 +57,12 @@ public partial class App : System.Windows.Application
         var registrations = new ServiceCollection();
         AppComposition.Register(registrations, new ConfigurationBuilder().AddEnvironmentVariables().Build());
         services = registrations.BuildServiceProvider(new ServiceProviderOptions { ValidateOnBuild = true, ValidateScopes = true });
-        RegisterNotifications(services);
+        // The Store package gives the app its identity, which WpfFoundation.Notifications does not use yet; it shows none.
+        if (!AppPackage.IsStoreApp)
+        {
+            RegisterNotifications(services);
+        }
+
         MainWindow = services.GetRequiredService<Shell>();
         var settingsService = services.GetRequiredService<SettingsService>();
         var themeService = services.GetRequiredService<IThemeService>();
@@ -80,7 +85,8 @@ public partial class App : System.Windows.Application
         if (MainWindow.DataContext is ShellViewModel shell)
         {
             // Registering the package can take a few seconds; the window does not wait for it.
-            var fileExplorerMenu = isAppProcess && settings is not null ? KeepFileExplorerMenuAsync(services!.GetRequiredService<IFileExplorerIntegration>(), shell.Settings, settings.ShowInFileExplorerMenu) : Task.CompletedTask;
+            // The Store package declares the File Explorer commands itself.
+            var fileExplorerMenu = isAppProcess && !AppPackage.IsStoreApp && settings is not null ? KeepFileExplorerMenuAsync(services!.GetRequiredService<IFileExplorerIntegration>(), shell.Settings, settings.ShowInFileExplorerMenu) : Task.CompletedTask;
 
             await shell.InitializeAsync();
             readyShell = shell;
