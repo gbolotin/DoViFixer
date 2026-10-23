@@ -99,6 +99,8 @@ public sealed record UserSettings
     = AppTheme.System;
     /// <summary>Whether each media list row has a check box; otherwise the list selects rows as File Explorer does.</summary>
     public bool ShowSelectionCheckBoxes { get; init; }
+    /// <summary>Whether File Explorer's right-click menu offers to open or convert Matroska files and folders in the app.</summary>
+    public bool ShowInFileExplorerMenu { get; init; } = true;
     /// <summary>The preset applied last, so changed settings can say which preset they started from.</summary>
     public string? LastAppliedPreset { get; init; }
     /// <summary>

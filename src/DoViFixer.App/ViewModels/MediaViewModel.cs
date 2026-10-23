@@ -996,15 +996,20 @@ public sealed partial class MediaViewModel : OperationViewModel, INavigationPage
         RestoreSelectedCommand?.NotifyCanExecuteChanged();
     }
 
-    public Task AddAsync(IEnumerable<string> inputs) => RunAsync("Adding files", async (token, _) =>
+    public Task AddAsync(IEnumerable<string> inputs) => RunAsync("Adding files", (token, _) => AddInputsAsync(inputs, token));
+
+    /// <summary>Adds the files <paramref name="inputs"/> name or contain and returns the files found, including those the list already showed.</summary>
+    private async Task<List<string>> AddInputsAsync(IEnumerable<string> inputs, CancellationToken token)
     {
         var preferences = await settings.ReadAsync(token);
         var added = new List<MediaRow>();
+        var found = new List<string>();
         foreach (string input in inputs)
         {
             try
             {
                 var paths = await Task.Run(() => discovery.Discover(input, preferences.FolderSearchDepth), token);
+                found.AddRange(paths);
                 foreach (string path in paths)
                 {
                     var remembered = await Task.Run(() => library.RememberAsync(path, token), token);
@@ -1039,7 +1044,9 @@ public sealed partial class MediaViewModel : OperationViewModel, INavigationPage
         {
             await AnalyzeRowsAsync(InDisplayOrder(added), AnalysisMethod.SampledRpu, token);
         }
-    });
+
+        return found;
+    }
 
     /// <summary>
     /// Adds a row for <paramref name="path"/>, or returns <see langword="null"/> when the list already shows it. A row
@@ -1610,7 +1617,10 @@ public sealed partial class MediaViewModel : OperationViewModel, INavigationPage
         }
     });
 
-    private Task ConvertBatchAsync(MediaRow[]? rows = null) => RunAsync("Conversion", async (token, progress) =>
+    private Task ConvertBatchAsync(MediaRow[]? rows = null) => RunAsync("Conversion", (token, progress) => ConvertBatchCoreAsync(rows, progress, token));
+
+    /// <summary>Converts <paramref name="rows"/>, or the checked files that may convert, as the Convert button does.</summary>
+    private async Task ConvertBatchCoreAsync(MediaRow[]? rows, IProgress<OperationProgress> progress, CancellationToken token)
     {
         if (ConversionStarting is not null)
         {
@@ -1658,7 +1668,7 @@ public sealed partial class MediaViewModel : OperationViewModel, INavigationPage
         }
 
         await ConvertRowsAsync(rows, userSettings, existingOutput, ActivityOperation.Conversion, token);
-    });
+    }
 
     private static CandidateConversionRequest ConversionRequest(MediaRow row, UserSettings userSettings, ExistingOutputHandling existingOutput, ISet<string> outputs) => new(
         row.Path,

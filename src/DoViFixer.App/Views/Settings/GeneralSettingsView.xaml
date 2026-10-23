@@ -45,6 +45,17 @@
                               Style="{StaticResource WfToggleSwitchStyle}" />
                 </StackPanel>
             </Border>
+            <Border Style="{StaticResource WfCardStyle}" Margin="0,24,0,0">
+                <StackPanel>
+                    <TextBlock Text="File Explorer"
+                               Style="{StaticResource SubtitleTextBlockStyle}" />
+                    <CheckBox Content="{x:Static updates:ApplicationTitle.Name}"
+                              ContentStringFormat="Show Open in {0} and Convert with {0} when you right-click a movie or folder"
+                              AutomationProperties.HelpText="Right-click MKV files or a folder in File Explorer to add them to the list, or to add and convert them as the Convert button does. On Windows 11, the commands are under Show more options. The commands start the app from its current folder; open the app once after you move it."
+                              IsChecked="{Binding ShowInFileExplorerMenu}"
+                              Style="{StaticResource WfToggleSwitchStyle}" />
+                </StackPanel>
+            </Border>
         </StackPanel>
     </ScrollViewer>
 </UserControl>

@@ -2,6 +2,7 @@ using System.Collections.ObjectModel;
 using System.ComponentModel;
 using DoViFixer.App.Dialogs;
 using DoViFixer.App.Presentation.Application;
+using DoViFixer.Application.FileExplorer;
 
 namespace DoViFixer.App.ViewModels;
 public sealed partial class ShellViewModel : ObservableObject, INavigationGuard, IDisposable
@@ -205,6 +206,20 @@ public sealed partial class ShellViewModel : ObservableObject, INavigationGuard,
         }
 
         IsSettingsOpen = false;
+    }
+
+    /// <summary>
+    /// Adds, and for Convert converts, what File Explorer's right-click menu sent. Settings closes first, as the Media page
+    /// shows the files; a save error keeps it open, and the request waits until it closes.
+    /// </summary>
+    public async Task OpenFromFileExplorerAsync(FileExplorerRequest request)
+    {
+        if (IsSettingsOpen && CloseSettingsCommand.CanExecute(null))
+        {
+            await CloseSettingsCommand.ExecuteAsync(null);
+        }
+
+        media.Open(request);
     }
 
     partial void OnIsSettingsOpenChanged(bool value)

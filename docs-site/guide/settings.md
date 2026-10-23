@@ -21,7 +21,7 @@ A preset sets every scan, conversion and safety setting at once. Folders, worker
 
 | Page | What you set there |
 | --- | --- |
-| **General** | Theme, check boxes in the file list, notifications |
+| **General** | Theme, check boxes in the file list, notifications, File Explorer commands |
 | **Conversion** | Safe mode, Convert to HDR10, FEL handling, enhancement-layer backup, output folder, subfolder search depth, temporary storage folder |
 | **Safety** | Verification level, Replace original after verification, Recycle Bin, extra free-space margin |
 | **Analysis** | Scan clips and clip length, required scan coverage, peak-brightness percentile, Complex FEL detection margin and assumed peak brightness |
