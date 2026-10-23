@@ -57,6 +57,7 @@ nav:
   - More:
       - Command line and AI assistants: console.md
       - Troubleshooting: troubleshooting.md
+      - Privacy policy: privacy.md
 
 plugins:
   - search
@@ -97,6 +98,7 @@ plugins:
             More: Ещё
             Command line and AI assistants: Командная строка и ИИ-ассистенты
             Troubleshooting: Решение проблем
+            Privacy policy: Политика конфиденциальности
 
 markdown_extensions:
   - admonition
