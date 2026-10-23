@@ -26,6 +26,8 @@ public partial class App : System.Windows.Application
     private readonly List<FileExplorerRequest> fileExplorerRequests = [];
     private DispatcherTimer? fileExplorerBatch;
     private ShellViewModel? readyShell;
+    // A change of the setting waits for the update at startup, so two never change the menu at once.
+    private static readonly SemaphoreSlim fileExplorerMenuUpdate = new(1, 1);
 
     protected override async void OnStartup(StartupEventArgs e)
     {
@@ -71,14 +73,13 @@ public partial class App : System.Windows.Application
 
         if (MainWindow.DataContext is ShellViewModel shell)
         {
-            if (isAppProcess && settings is not null)
-            {
-                KeepFileExplorerMenu(services!, shell.Settings, settings.ShowInFileExplorerMenu);
-            }
+            // Registering the package can take a few seconds; the window does not wait for it.
+            var fileExplorerMenu = isAppProcess && settings is not null ? KeepFileExplorerMenuAsync(services!, shell.Settings, settings.ShowInFileExplorerMenu) : Task.CompletedTask;
 
             await shell.InitializeAsync();
             readyShell = shell;
             await OpenFileExplorerRequestsAsync();
+            await fileExplorerMenu;
         }
     }
 
@@ -101,7 +102,7 @@ public partial class App : System.Windows.Application
     /// Updates File Explorer's menu at every start, so its commands follow the app when its folder moves, and whenever
     /// the setting changes.
     /// </summary>
-    private static void KeepFileExplorerMenu(IServiceProvider provider, SettingsViewModel settings, bool show)
+    private static async Task KeepFileExplorerMenuAsync(IServiceProvider provider, SettingsViewModel settings, bool show)
     {
         string executable = Path.ChangeExtension(typeof(App).Assembly.Location, ".exe");
         if (!File.Exists(executable))
@@ -109,27 +110,50 @@ public partial class App : System.Windows.Application
             return;
         }
 
-        UpdateFileExplorerMenu(provider, show, executable);
-        settings.Saved += saved =>
+        settings.Saved += async saved =>
         {
             if (saved.ShowInFileExplorerMenu != show)
             {
                 show = saved.ShowInFileExplorerMenu;
-                UpdateFileExplorerMenu(provider, show, executable);
+                await UpdateFileExplorerMenuAsync(provider, show, executable);
             }
         };
+        await UpdateFileExplorerMenuAsync(provider, show, executable);
     }
 
-    private static void UpdateFileExplorerMenu(IServiceProvider provider, bool show, string executable)
+    /// <summary>
+    /// Shows the commands in Windows 11's menu through the app's package, or, before Windows 11 or when Windows does not
+    /// register the package, as classic commands under "Show more options".
+    /// </summary>
+    private static async Task UpdateFileExplorerMenuAsync(IServiceProvider provider, bool show, string executable)
     {
+        var logger = provider.GetRequiredService<ILogger<App>>();
+        await fileExplorerMenuUpdate.WaitAsync();
         try
         {
-            provider.GetRequiredService<IFileExplorerMenu>().Update(show, executable);
+            bool packaged = false;
+            try
+            {
+                packaged = await FileExplorerPackage.UpdateAsync(show, Path.GetDirectoryName(executable)!);
+            }
+            catch (Exception ex)
+            {
+                logger.LogWarning(ex, "Could not update the Windows 11 File Explorer menu package; using the classic File Explorer menu");
+            }
+
+            try
+            {
+                provider.GetRequiredService<IFileExplorerMenu>().Update(show && !packaged, executable);
+            }
+            catch (Exception ex) when (ex is IOException or UnauthorizedAccessException or SecurityException)
+            {
+                // The app works without the menu; files can still be added in the window.
+                logger.LogWarning(ex, "Could not update the File Explorer menu");
+            }
         }
-        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException or SecurityException)
+        finally
         {
-            // The app works without the menu; files can still be added in the window.
-            provider.GetRequiredService<ILogger<App>>().LogWarning(ex, "Could not update the File Explorer menu");
+            fileExplorerMenuUpdate.Release();
         }
     }
 
