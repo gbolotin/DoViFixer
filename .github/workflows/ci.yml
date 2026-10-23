@@ -19,9 +19,9 @@ jobs:
       DOTNET_NOLOGO: true
       DOTNET_CLI_TELEMETRY_OPTOUT: true
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
 
-      - uses: actions/setup-dotnet@v4
+      - uses: actions/setup-dotnet@v6
         with:
           global-json-file: global.json
 
@@ -73,7 +73,7 @@ jobs:
         run: dotnet test DoViFixer.sln -c Release --no-build -p:UseLocalWpfFoundation=false --filter "TestCategory!=NativeIntegration"
 
       # The WPF visual tests render the real views; keep them so each run shows the UI, failed runs included.
-      - uses: actions/upload-artifact@v4
+      - uses: actions/upload-artifact@v7
         if: always()
         with:
           name: wpf-renders
@@ -91,7 +91,7 @@ jobs:
             Compress-Archive -Path out/$app/* -DestinationPath "out/$app-$version.zip"
           }
 
-      - uses: actions/upload-artifact@v4
+      - uses: actions/upload-artifact@v7
         with:
           name: apps
           path: out/*.zip
@@ -103,7 +103,7 @@ jobs:
     permissions:
       contents: write
     steps:
-      - uses: actions/download-artifact@v4
+      - uses: actions/download-artifact@v8
         with:
           name: apps
           path: out
