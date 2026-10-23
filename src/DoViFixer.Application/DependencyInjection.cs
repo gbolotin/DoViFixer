@@ -14,6 +14,8 @@ public static class DependencyInjection
 {
     public static IServiceCollection AddDoViFixerApplication(this IServiceCollection services)
     {
+        // One feed for the process, so every operation's entries reach the same activity list.
+        services.AddSingleton<Abstractions.IActivityFeed, Activity.ActivityFeed>();
         services.AddTransient<DependencyService>();
         services.AddTransient<InspectionService>();
         services.AddTransient<Library.MediaLibraryService>();

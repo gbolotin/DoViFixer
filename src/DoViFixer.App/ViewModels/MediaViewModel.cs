@@ -1,10 +1,12 @@
 using System.Collections.Concurrent;
 using System.Collections.ObjectModel;
+using System.Collections.Specialized;
 using System.ComponentModel;
 using System.Windows.Media.Imaging;
 using DoViFixer.App.Dialogs;
 using DoViFixer.App.Presentation.Application;
 using DoViFixer.Application.Abstractions;
+using DoViFixer.Application.Activity;
 using DoViFixer.Application.Cleanup;
 using DoViFixer.Application.Conversion;
 using DoViFixer.Application.Inspection;
@@ -58,11 +60,12 @@ public sealed partial class MediaViewModel : OperationViewModel, INavigationPage
     private readonly ISourceFileMonitor sourceFiles;
     private readonly ReportService reports;
     private readonly SynchronizationContext? uiContext;
+    private readonly ActivityViewModel activity;
     private int availabilityCheckQueued;
 
-    private static string Summary(BatchResult result) => string.Join(" · ", result.Items.GroupBy(r => r.Status).Select(g => $"{g.Count()} {g.Key}"));
-    private string TimedSummary(BatchResult result) => $"{Summary(result)}{(result.Status == OperationStatus.Completed ? " in " : " · Finished in ")}{BatchProgress.BatchElapsed}";
-    public MediaViewModel(IFileDiscovery discovery, InspectionService inspection, ConversionService conversion, ConversionDiskBudget diskBudget, ControlledBatchService batch, SettingsService settings, DependencySetup dependencies, IDialogService dialogs, IFileDialogService files, IFileExplorer explorer, ILogger<MediaViewModel> logger, IMediaPreview mediaPreview, RestoreService restore, ISourceFileMonitor sourceFiles, ReportService reports, MediaLibraryService library, CleanupService cleanup, ITextClipboard clipboard, IOperationFeedback? feedback = null)
+    // The status at the end of an operation, which its notification also shows, reads the same as its activity entry.
+    private static string Summary(BatchResult result) => result.Activity?.Text ?? string.Join(" · ", result.Items.GroupBy(r => r.Status).Select(g => $"{g.Count()} {g.Key}"));
+    public MediaViewModel(IFileDiscovery discovery, InspectionService inspection, ConversionService conversion, ConversionDiskBudget diskBudget, ControlledBatchService batch, SettingsService settings, DependencySetup dependencies, IDialogService dialogs, IFileDialogService files, IFileExplorer explorer, ILogger<MediaViewModel> logger, IMediaPreview mediaPreview, RestoreService restore, ISourceFileMonitor sourceFiles, ReportService reports, MediaLibraryService library, CleanupService cleanup, ITextClipboard clipboard, ActivityViewModel activity, IOperationFeedback? feedback = null)
         : base(feedback)
     {
         this.discovery = discovery;
@@ -85,6 +88,8 @@ public sealed partial class MediaViewModel : OperationViewModel, INavigationPage
         this.clipboard = clipboard;
         this.logger = logger;
         this.mediaPreview = mediaPreview;
+        this.activity = activity;
+        activity.Entries.CollectionChanged += OnActivityChanged;
 
         FilterOptions =
         [
@@ -252,7 +257,35 @@ public sealed partial class MediaViewModel : OperationViewModel, INavigationPage
     [NotifyCanExecuteChangedFor(nameof(OpenOutputCommand), nameof(OpenFileLocationCommand), nameof(CopyDetailsCommand), nameof(RemoveListSelectionCommand))]
     public partial MediaRow? Focused { get; set; }
 
-    partial void OnFocusedChanged(MediaRow? value) => previewCompletion = Task.WhenAll(previewCompletion, LoadPreviewAsync(value), LoadLibraryHistoryAsync(value));
+    partial void OnFocusedChanged(MediaRow? value)
+    {
+        previewCompletion = Task.WhenAll(previewCompletion, LoadPreviewAsync(value), LoadLibraryHistoryAsync(value));
+        RefreshFocusedActivity();
+    }
+
+    /// <summary>This session's activity entries about the focused file, newest first.</summary>
+    public IReadOnlyList<ActivityEntry> FocusedActivity { get; private set; } = [];
+
+    public bool HasFocusedActivity => FocusedActivity.Count > 0;
+
+    private void OnActivityChanged(object? sender, NotifyCollectionChangedEventArgs e)
+    {
+        var changed = (e.NewItems?.OfType<ActivityEntry>() ?? []).Concat(e.OldItems?.OfType<ActivityEntry>() ?? []);
+        if (e.Action == NotifyCollectionChangedAction.Reset || changed.Any(IsAboutFocused))
+        {
+            RefreshFocusedActivity();
+        }
+    }
+
+    private bool IsAboutFocused(ActivityEntry entry) =>
+        Focused is { } row && string.Equals(entry.FilePath, row.Path, StringComparison.OrdinalIgnoreCase);
+
+    private void RefreshFocusedActivity()
+    {
+        FocusedActivity = activity.Entries.Where(IsAboutFocused).ToArray();
+        OnPropertyChanged(nameof(FocusedActivity));
+        OnPropertyChanged(nameof(HasFocusedActivity));
+    }
 
     [ObservableProperty]
     public partial BitmapSource? FramePreview { get; private set; }
@@ -387,6 +420,7 @@ public sealed partial class MediaViewModel : OperationViewModel, INavigationPage
     {
         FileSort.PropertyChanged -= OnFileSortChanged;
         sourceFiles.Changed -= OnSourceFilesChanged;
+        activity.Entries.CollectionChanged -= OnActivityChanged;
         CancelPreviews();
     }
 
@@ -1122,6 +1156,13 @@ public sealed partial class MediaViewModel : OperationViewModel, INavigationPage
         _ => "Inspection"
     };
 
+    private static ActivityOperation ActivityFor(AnalysisMethod method) => method switch
+    {
+        AnalysisMethod.SampledRpu => ActivityOperation.Scan,
+        AnalysisMethod.DeepInspection => ActivityOperation.DeepInspection,
+        _ => ActivityOperation.Inspection
+    };
+
     // A failed file makes the whole batch finish with errors on the taskbar and in the notification.
     private void CompleteBatchItem(MediaRow row, OperationStatus status)
     {
@@ -1221,7 +1262,7 @@ public sealed partial class MediaViewModel : OperationViewModel, INavigationPage
         BeginBatch(rows, method == AnalysisMethod.SampledRpu ? "Scan" : method == AnalysisMethod.DeepInspection ? "Deep inspection" : "Inspection");
         try
         {
-            var results = await batch.ExecuteAsync(rows, row => row.Path, async (row, itemToken) =>
+            var results = await batch.ExecuteAsync(ActivityFor(method), rows, row => row.Path, async (row, itemToken) =>
             {
                 if (!sourceFiles.Exists(row.Path))
                 {
@@ -1293,7 +1334,7 @@ public sealed partial class MediaViewModel : OperationViewModel, INavigationPage
                     }
                 }
             }), token);
-            SetStatus(ViewStatus.Result, $"{(method == AnalysisMethod.SampledRpu ? "Scan" : "Inspection")}: {TimedSummary(results)}");
+            SetStatus(ViewStatus.Result, Summary(results));
         }
         finally
         {
@@ -1500,7 +1541,7 @@ public sealed partial class MediaViewModel : OperationViewModel, INavigationPage
         var rememberedOutputs = new ConcurrentDictionary<MediaRow, LibraryFile?>();
         try
         {
-            var result = await batch.ExecuteAsync(rows, item => item.Path, async (item, itemToken) =>
+            var result = await batch.ExecuteAsync(ActivityOperation.Restoration, rows, item => item.Path, async (item, itemToken) =>
             {
                 var jobProgress = Activate(item, "Restoring Profile 7");
                 var restored = await Task.Run(() => restore.ExecuteAsync(plans[item], jobProgress, itemToken), itemToken);
@@ -1526,7 +1567,7 @@ public sealed partial class MediaViewModel : OperationViewModel, INavigationPage
                     row.SetFailed(itemResult);
                 }
             }), token);
-            SetStatus(ViewStatus.Result, $"Restoration: {TimedSummary(result)}");
+            SetStatus(ViewStatus.Result, Summary(result));
         }
         finally
         {
@@ -1638,7 +1679,7 @@ public sealed partial class MediaViewModel : OperationViewModel, INavigationPage
         BeginBatch(rows, opName);
         try
         {
-            var result = await batch.ExecuteQueuedAsync(rows, settings.Hardware.ConversionWorkers(userSettings.ConversionWorkers), r => r.Path, async (row, itemToken) =>
+            var result = await batch.ExecuteQueuedAsync(ActivityOperation.Conversion, rows, settings.Hardware.ConversionWorkers(userSettings.ConversionWorkers), r => r.Path, async (row, itemToken) =>
             {
                 if (!sourceFiles.Exists(row.Path))
                 {
@@ -1725,7 +1766,7 @@ public sealed partial class MediaViewModel : OperationViewModel, INavigationPage
                 }
             }), token);
 
-            SetStatus(ViewStatus.Result, $"{opName}: {TimedSummary(result)}");
+            SetStatus(ViewStatus.Result, Summary(result));
         }
         finally
         {
@@ -1783,8 +1824,8 @@ public sealed partial class MediaViewModel : OperationViewModel, INavigationPage
             ReportItemFailed();
         }
 
-        SetStatus(failed.Length > 0 ? ViewStatus.Error : ViewStatus.Result,
-            string.Join("\n", failed.Select(item => $"{item.Item}: {item.Message}").Prepend($"Cleanup: {Summary(result)}")));
+        // Each file that could not be removed has its own entry in Activity.
+        SetStatus(failed.Length > 0 ? ViewStatus.Error : ViewStatus.Result, Summary(result));
     });
 
     private Task RemoveRowsAsync(MediaRow[] rows) => RunAsync(async (token, _) =>

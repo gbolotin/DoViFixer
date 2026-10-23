@@ -1,3 +1,4 @@
+using DoViFixer.Application.Activity;
 using DoViFixer.Application.Operations;
 using Microsoft.Extensions.Logging.Abstractions;
 using Microsoft.VisualStudio.TestTools.UnitTesting;
@@ -16,8 +17,8 @@ public sealed class ControlledBatchTests
         var releases = files.ToDictionary(file => file, _ => new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously));
         int active = 0;
         int peak = 0;
-        var service = new ControlledBatchService(NullLogger<ControlledBatchService>.Instance);
-        var run = service.ExecuteQueuedAsync(files, 2, file => file, async (file, token) =>
+        var service = new ControlledBatchService(NullLogger<ControlledBatchService>.Instance, new ActivityFeed(TimeProvider.System));
+        var run = service.ExecuteQueuedAsync(ActivityOperation.Conversion, files, 2, file => file, async (file, token) =>
         {
             int count = Interlocked.Increment(ref active);
             peak = Math.Max(peak, count);
@@ -52,8 +53,8 @@ public sealed class ControlledBatchTests
         using var control = new BatchControl(files);
         var started = Channel.CreateUnbounded<string>();
         var release = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
-        var service = new ControlledBatchService(NullLogger<ControlledBatchService>.Instance);
-        var run = service.ExecuteQueuedAsync(files, 2, file => file, async (file, token) =>
+        var service = new ControlledBatchService(NullLogger<ControlledBatchService>.Instance, new ActivityFeed(TimeProvider.System));
+        var run = service.ExecuteQueuedAsync(ActivityOperation.Conversion, files, 2, file => file, async (file, token) =>
         {
             started.Writer.TryWrite(file);
             await release.Task.WaitAsync(token);
@@ -82,8 +83,8 @@ public sealed class ControlledBatchTests
         using var cancellation = new CancellationTokenSource();
         using var control = new BatchControl(["a", "b", "c"]);
         var visited = new List<string>();
-        var service = new ControlledBatchService(NullLogger<ControlledBatchService>.Instance);
-        var run = service.ExecuteAsync(new[] { "a", "b", "c" }, x => x, (path, token) =>
+        var service = new ControlledBatchService(NullLogger<ControlledBatchService>.Instance, new ActivityFeed(TimeProvider.System));
+        var run = service.ExecuteAsync(ActivityOperation.Conversion, new[] { "a", "b", "c" }, x => x, (path, token) =>
         {
             visited.Add(path);
             if (path == "a")
@@ -124,8 +125,8 @@ public sealed class ControlledBatchTests
         var recovery = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
         var cancellationObserved = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
         var visited = new List<string>();
-        var service = new ControlledBatchService(NullLogger<ControlledBatchService>.Instance);
-        var run = service.ExecuteAsync(new[]
+        var service = new ControlledBatchService(NullLogger<ControlledBatchService>.Instance, new ActivityFeed(TimeProvider.System));
+        var run = service.ExecuteAsync(ActivityOperation.Conversion, new[]
         {
             "a", "b", "c"
         }, x => x, async (path, token) =>
@@ -171,8 +172,8 @@ public sealed class ControlledBatchTests
     {
         using var cancellation = new CancellationTokenSource();
         using var control = new BatchControl(["a", "b", "c"]);
-        var service = new ControlledBatchService(NullLogger<ControlledBatchService>.Instance);
-        var result = await service.ExecuteAsync(new[]
+        var service = new ControlledBatchService(NullLogger<ControlledBatchService>.Instance, new ActivityFeed(TimeProvider.System));
+        var result = await service.ExecuteAsync(ActivityOperation.Conversion, new[]
         {
             "a", "b", "c"
         }, x => x, (path, _) =>

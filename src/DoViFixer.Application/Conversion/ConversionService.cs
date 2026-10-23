@@ -431,7 +431,13 @@ public sealed class ConversionService(DependencyService dependencies, IFileOpera
                 OperationLog.Audit(logger, "DeleteOriginalBackup", backupIdentity.Path, "Completed", approvedPlan.Id);
             }
 
-            string verificationNote = safety.VerificationLevel == VerificationLevel.None ? "Output published without integrity verification. " : $"Output published after {safety.VerificationLevel} verification. ";
+            string verificationNote = safety.VerificationLevel switch
+            {
+                VerificationLevel.None => "Output published without integrity verification. ",
+                VerificationLevel.FrameCount => "Output published after a frame count check. ",
+                VerificationLevel.FrameCountWithRecount => "Output published after a frame count check and mismatch recount. ",
+                _ => "Output published after a full integrity check. "
+            };
             string originalNote = !approvedPlan.DeleteBackup ? "Original retained." : safety.RecycleDeletedOriginalsAndBackups ? "Original moved to Recycle Bin." : "Original backup deleted.";
             var completed = new OperationItemResult(approvedPlan.Analysis.Media.Source.Path, OperationStatus.Completed, approvedPlan.Output, verificationNote + originalNote + archiveNote)
             {

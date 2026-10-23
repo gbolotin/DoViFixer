@@ -193,6 +193,12 @@ The console's composition root configures Serilog through the existing Generic H
 
 Separate rolling JSON Lines sinks store operation history, audit, and diagnostics. Stable `LogKind` properties route history/audit independently of the diagnostic sink's minimum level. Session, command, batch, operation, plan, and native invocation IDs support correlation; failed batch items retain their exceptions while subsequent items continue. Logging neither authorizes execution nor changes verification rules. See the README for file locations, retention, configuration, and incident investigation.
 
+### Activity
+
+Logs are written for diagnosis; people read the activity feed instead. `Application/Abstractions/IActivityFeed` holds this session's `ActivityEntry` records in memory: a severity, a title, a detail, the file the entry is about and the file worth showing. `Application/Activity/ActivityText` owns all wording, so every host words outcomes the same way: file names instead of paths, readable durations, and result messages that say what happened to the original. Services report entries where they record history: `ControlledBatchService` reports each file that starts, under the batch's `ActivityOperation`, and a summary for a batch of several files; `CleanupService` reports a summary and each file it could not remove. An operation keeps one entry: reporting the same id again replaces it and makes it the newest. `BatchResult.Activity` carries the entry that sums a batch up (its summary, or its one file's entry), and WPF ends the operation with that entry's text, so the status bar and the Windows notification read the same as the activity list. `ActivityFeed` is a thread-safe singleton that keeps the last 500 entries; it neither persists nor logs.
+
+WPF shows the feed through the singleton `ActivityViewModel`, which marshals reports to the UI thread: the status bar's Activity flyout, with a count of problems reported while it was closed, and the focused file's entries in the details pane.
+
 ## Upstream feature mapping
 
 | Upstream capability | Application responsibility | Infrastructure responsibility |

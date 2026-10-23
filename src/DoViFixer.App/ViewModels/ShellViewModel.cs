@@ -7,17 +7,19 @@ public sealed partial class ShellViewModel : ObservableObject, INavigationGuard,
 {
     /// <param name="pages">The pages: the Media page, which the shell wires to Settings and the title bar menu.</param>
     /// <param name="settings">Settings, shown in a frame over the pages rather than as a page.</param>
-    public ShellViewModel(IEnumerable<INavigationPage> pages, SettingsViewModel settings, StartupDependencyCheckViewModel dependencyCheck, DependencyReportViewModel dependencyReport)
+    public ShellViewModel(IEnumerable<INavigationPage> pages, SettingsViewModel settings, StartupDependencyCheckViewModel dependencyCheck, DependencyReportViewModel dependencyReport, ActivityViewModel activity)
     {
         ArgumentNullException.ThrowIfNull(pages);
         ArgumentNullException.ThrowIfNull(settings);
         ArgumentNullException.ThrowIfNull(dependencyCheck);
         ArgumentNullException.ThrowIfNull(dependencyReport);
+        ArgumentNullException.ThrowIfNull(activity);
         INavigationPage[] navigationPages = [.. pages];
         var media = navigationPages.OfType<MediaViewModel>().Single();
         this.media = media;
         this.dependencyCheck = dependencyCheck;
         this.dependencyReport = dependencyReport;
+        Activity = activity;
         Settings = settings;
         operations = [.. navigationPages.OfType<OperationViewModel>(), settings];
         // Media is shown from the start; InitializeAsync loads its summary as part of startup.
@@ -68,6 +70,9 @@ public sealed partial class ShellViewModel : ObservableObject, INavigationGuard,
     private readonly OperationViewModel[] operations;
     public SettingsViewModel Settings { get; }
 
+    /// <summary>The session's activity, opened from the start of the status bar.</summary>
+    public ActivityViewModel Activity { get; }
+
     /// <summary>The Media page, whose commands the title bar menu also offers.</summary>
     public MediaViewModel Media => media;
 
@@ -80,13 +85,14 @@ public sealed partial class ShellViewModel : ObservableObject, INavigationGuard,
 
     /// <summary>
     /// Updated in place so unchanged items, such as the startup check's Cancel button, keep their containers.
-    /// Status belongs to the shell: the current page's items, then the startup check and dependency warning.
+    /// Status belongs to the shell: the activity button, the current page's items, then the startup check and
+    /// dependency warning.
     /// </summary>
     public ObservableCollection<object> StatusItems { get; } = [];
 
     private void RefreshStatusItems()
     {
-        List<object> items = [.. (CurrentPage as OperationViewModel)?.StatusItems ?? []];
+        List<object> items = [Activity, .. (CurrentPage as OperationViewModel)?.StatusItems ?? []];
         if (dependencyCheck.IsBusy)
         {
             items.Add(dependencyCheck);

@@ -73,6 +73,12 @@ public sealed record BatchResult(IReadOnlyList<OperationItemResult> Items) : Bat
     public BatchResult(IEnumerable<OperationItemResult> items) : this(items as IReadOnlyList<OperationItemResult> ?? items.ToArray())
     {
     }
+
+    /// <summary>
+    /// The activity entry that sums the batch up, worded for people: the batch summary, or the file's own entry when
+    /// the batch had one file. <see langword="null"/> when the service reports no activity.
+    /// </summary>
+    public Activity.ActivityEntry? Activity { get; init; }
 }
 
 public sealed class DependencyNotReadyException(string message) : InvalidOperationException(message);

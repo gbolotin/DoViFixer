@@ -1369,7 +1369,7 @@ public sealed class ViewModelTests
 
         var change = changes.Single();
         Assert.AreEqual(System.Collections.Specialized.NotifyCollectionChangedAction.Replace, change.Action);
-        Assert.AreEqual(1, change.NewStartingIndex);
+        Assert.AreEqual(2, change.NewStartingIndex, "The status text follows the Activity button and the selection summary.");
         Assert.AreSame(dependencyItem, shell.StatusItems.Last());
     }
 
@@ -1545,7 +1545,7 @@ public sealed class ViewModelTests
         using var runtime = new TestRuntime();
         var media = runtime.Container.GetRequiredService<MediaViewModel>();
         var settings = runtime.Container.GetRequiredService<SettingsViewModel>();
-        var shell = new ShellViewModel([media], settings, runtime.Container.GetRequiredService<StartupDependencyCheckViewModel>(), runtime.Container.GetRequiredService<DependencyReportViewModel>());
+        var shell = new ShellViewModel([media], settings, runtime.Container.GetRequiredService<StartupDependencyCheckViewModel>(), runtime.Container.GetRequiredService<DependencyReportViewModel>(), runtime.Container.GetRequiredService<ActivityViewModel>());
 
         await media.AddAsync([
             @"C:\Media\Mountain.mkv",
@@ -1705,7 +1705,7 @@ public sealed class ViewModelTests
         Assert.AreEqual(2, model.BatchProgress.Processed);
         Assert.AreEqual("Converted", originalRows[0].Status);
         Assert.AreEqual("Converted", originalRows[1].Status);
-        StringAssert.StartsWith(model.StatusMessage, "Conversion to DV8.1: 2 Completed in ");
+        StringAssert.StartsWith(model.StatusMessage, "Converted 2 files · took ");
     }
 
     [TestMethod]
@@ -2141,7 +2141,7 @@ public sealed class ViewModelTests
         using var runtime = new TestRuntime();
         var media = runtime.Container.GetRequiredService<MediaViewModel>();
         var settings = runtime.Container.GetRequiredService<SettingsViewModel>();
-        var shell = new ShellViewModel([media], settings, runtime.Container.GetRequiredService<StartupDependencyCheckViewModel>(), runtime.Container.GetRequiredService<DependencyReportViewModel>());
+        var shell = new ShellViewModel([media], settings, runtime.Container.GetRequiredService<StartupDependencyCheckViewModel>(), runtime.Container.GetRequiredService<DependencyReportViewModel>(), runtime.Container.GetRequiredService<ActivityViewModel>());
 
         await media.RefreshSettingsSummaryAsync();
         Assert.AreEqual("Output: Same folder", media.OutputSummary);

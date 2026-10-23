@@ -144,7 +144,11 @@ public sealed class VisualTests
             Assert.AreEqual(listWidth + 80, columns[0].ActualWidth, 1);
             Assert.AreEqual(detailsWidth - 80, columns[2].ActualWidth, 1);
             var statusBar = Descendants<StatusBar>(window).Single();
-            CollectionAssert.AreEqual(media.StatusItems.Select(item => item.Text).ToArray(), Descendants<TextBlock>(statusBar).Select(text => text.Text).ToArray());
+            CollectionAssert.AreEqual(media.StatusItems.Select(item => item.Text).ToArray(),
+                Descendants<TextBlock>(statusBar).Where(text => text.DataContext is not ActivityViewModel).Select(text => text.Text).ToArray());
+            var activityButton = Descendants<Button>(statusBar).Single(button => button.DataContext is ActivityViewModel);
+            Assert.IsTrue(activityButton.IsVisible);
+            Assert.AreEqual("Activity", AutomationProperties.GetName(activityButton));
             AssertInside(statusBar, (FrameworkElement)window.Content);
             Assert.AreSame(media.Files[1], media.Focused);
             Assert.IsFalse(media.Files[0].IsSelected);
@@ -1366,7 +1370,7 @@ public sealed class VisualTests
     private static string DisplayedText(TextBlock text) => new System.Windows.Documents.TextRange(text.ContentStart, text.ContentEnd).Text;
 
     private static TextBlock StatusItem(DependencyObject window, int index) =>
-        Descendants<TextBlock>(Descendants<StatusBar>(window).Single()).ElementAt(index);
+        Descendants<TextBlock>(Descendants<StatusBar>(window).Single()).Where(text => text.DataContext is not ActivityViewModel).ElementAt(index);
 
     /// <summary>
     /// Each row action occupies the same place in every row and state, so showing or hiding one action never
