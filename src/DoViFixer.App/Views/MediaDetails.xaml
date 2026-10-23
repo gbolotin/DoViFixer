@@ -294,7 +294,7 @@
                         <TextBlock Text="{Binding Focused.ExaminationNote}"
                                    TextWrapping="Wrap"
                                    Margin="0,4,0,0" />
-                        <Expander Header="Each sample"
+                        <Expander Header="{Binding Focused.SampleSummary}"
                                   Margin="0,12,0,0"
                                   Visibility="{Binding Focused.HasSampleRows, Converter={StaticResource WfBooleanToVisibilityConverter}, FallbackValue=Collapsed}">
                             <ItemsControl ItemsSource="{Binding Focused.SampleRows}"
