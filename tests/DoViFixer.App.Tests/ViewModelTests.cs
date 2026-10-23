@@ -1722,6 +1722,8 @@ public sealed class ViewModelTests
         Assert.AreEqual("6 (Recommended)", model.AnalysisWorkerChoices.Single(choice => choice.Value == 6).Label);
         Assert.IsFalse(model.ConversionWorkerChoices.Any(choice => choice.Value == 0));
         Assert.IsFalse(model.AnalysisWorkerChoices.Any(choice => choice.Value == 0));
+        Assert.AreEqual("4096 (Recommended)", model.PipeBufferChoices.Single(choice => choice.Value == 4096).Label);
+        Assert.AreEqual(1, model.PipeBufferChoices.Count(choice => choice.Label.EndsWith("(Recommended)")));
         Assert.AreEqual(0, runtime.Settings.ConversionWorkers, "Loading the page must not save settings.");
     }
 

@@ -198,6 +198,51 @@ public sealed class ProcessLifetimeTests
     }
 
     [TestMethod]
+    public async Task InactiveToolIsStoppedAsTimeout()
+    {
+        var watchedRunner = new ProcessRunner(NullLogger<ProcessRunner>.Instance) { InactivityLimit = TimeSpan.FromSeconds(2), ActivityPollInterval = TimeSpan.FromMilliseconds(100) };
+        Task operation = watchedRunner.RunAsync(ProcessTestHost.Request("leaf", directory, "idle"), default);
+        var process = await ReadProcessAsync("idle");
+        var failure = await Assert.ThrowsExactlyAsync<OperationTimeoutException>(() => operation.WaitAsync(TimeSpan.FromSeconds(15)));
+        Assert.AreEqual(FailureCategory.Timeout, failure.Diagnosis.Category);
+        StringAssert.Contains(failure.Diagnosis.TechnicalDetail, "made no progress for 2 seconds");
+        await process.WaitForExitAsync().WaitAsync(TimeSpan.FromSeconds(15));
+    }
+
+    [TestMethod]
+    public async Task InactivePipelineIsStoppedAsTimeout()
+    {
+        var watchedRunner = new ProcessRunner(NullLogger<ProcessRunner>.Instance) { InactivityLimit = TimeSpan.FromSeconds(2), ActivityPollInterval = TimeSpan.FromMilliseconds(100) };
+        Task operation = watchedRunner.PipeAsync(ProcessTestHost.Request("leaf", directory, "producer"), ProcessTestHost.Request("leaf", directory, "consumer"), default);
+        var producer = await ReadProcessAsync("producer");
+        var consumer = await ReadProcessAsync("consumer");
+        var failure = await Assert.ThrowsExactlyAsync<OperationTimeoutException>(() => operation.WaitAsync(TimeSpan.FromSeconds(15)));
+        Assert.AreEqual(FailureCategory.Timeout, failure.Diagnosis.Category);
+        StringAssert.Contains(failure.Diagnosis.TechnicalDetail, "made no progress");
+        await producer.WaitForExitAsync().WaitAsync(TimeSpan.FromSeconds(15));
+        await consumer.WaitForExitAsync().WaitAsync(TimeSpan.FromSeconds(15));
+    }
+
+    [TestMethod]
+    public async Task WorkingToolOutlastsTheInactivityLimit()
+    {
+        var watchedRunner = new ProcessRunner(NullLogger<ProcessRunner>.Instance) { InactivityLimit = TimeSpan.FromSeconds(1.5), ActivityPollInterval = TimeSpan.FromMilliseconds(100) };
+        var result = await watchedRunner.RunAsync(ProcessTestHost.Request("busy", "4000"), default);
+        StringAssert.Contains(result.Output, "working");
+        await watchedRunner.PipeAsync(ProcessTestHost.Request("busy", "4000"), ProcessTestHost.Request("copy", Path.Combine(directory, "output.txt")), default);
+    }
+
+    [TestMethod]
+    public async Task ShortTimeLimitsAreNotWatchedForInactivity()
+    {
+        // The request's own limit is shorter than the inactivity limit, so only the time limit applies.
+        var watchedRunner = new ProcessRunner(NullLogger<ProcessRunner>.Instance) { InactivityLimit = TimeSpan.FromSeconds(1), ActivityPollInterval = TimeSpan.FromMilliseconds(100) };
+        var request = ProcessTestHost.Request("leaf", directory, "probe") with { Timeout = TimeSpan.FromSeconds(1) };
+        var failure = await Assert.ThrowsExactlyAsync<OperationTimeoutException>(() => watchedRunner.RunAsync(request, default).WaitAsync(TimeSpan.FromSeconds(15)));
+        StringAssert.Contains(failure.Diagnosis.TechnicalDetail, "time limit");
+    }
+
+    [TestMethod]
     public async Task NormalCompletionClosesJobAndTerminatesRemainingDescendants()
     {
         Task operation = runner.RunAsync(ProcessTestHost.Request("orphan", directory, "orphan"), default);

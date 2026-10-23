@@ -35,6 +35,18 @@ internal static class ProcessTestHost
             await File.WriteAllTextAsync(args[2], Environment.ProcessId.ToString());
             await Task.Delay(Timeout.Infinite);
         }
+        if (mode == "busy")
+        {
+            // Writes small output steadily, like a tool reporting progress, then exits.
+            var until = DateTime.UtcNow.AddMilliseconds(int.Parse(args[1]));
+            while (DateTime.UtcNow < until)
+            {
+                Console.WriteLine("working");
+                await Task.Delay(100);
+            }
+
+            return 0;
+        }
         if (mode == "echo")
         {
             Console.WriteLine(args[1]);

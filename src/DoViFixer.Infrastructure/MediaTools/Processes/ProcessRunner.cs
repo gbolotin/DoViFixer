@@ -19,6 +19,12 @@ internal interface IProcessRunner
 
 internal sealed class ProcessRunner(ILogger<ProcessRunner> logger, ISettingsStore? settings = null) : IProcessRunner
 {
+    private static readonly TimeSpan TimeLimit = TimeSpan.FromHours(24);
+
+    // A stalled tool would otherwise hold a batch for the whole time limit; slow but working tools keep running.
+    internal TimeSpan InactivityLimit { get; init; } = TimeSpan.FromMinutes(30);
+    internal TimeSpan ActivityPollInterval { get; init; } = TimeSpan.FromSeconds(30);
+
     public async Task<ProcessResult> RunAsync(ProcessRequest request, CancellationToken cancellationToken)
     {
         var preferences = settings is null ? new UserSettings() : await settings.ReadAsync(cancellationToken);
@@ -28,7 +34,7 @@ internal sealed class ProcessRunner(ILogger<ProcessRunner> logger, ISettingsStor
             ["ToolInvocationId"] = invocationId, ["Tool"] = Path.GetFileName(request.Executable), ["ToolPath"] = request.Executable
         });
         long started = Stopwatch.GetTimestamp();
-        logger.LogDebug("Starting native tool with arguments {Arguments}; working directory {WorkingDirectory}; timeout {Timeout}", request.Arguments, request.WorkingDirectory ?? Environment.CurrentDirectory, request.Timeout ?? TimeSpan.FromHours(24));
+        logger.LogDebug("Starting native tool with arguments {Arguments}; working directory {WorkingDirectory}; timeout {Timeout}", request.Arguments, request.WorkingDirectory ?? Environment.CurrentDirectory, request.Timeout ?? TimeLimit);
         try
         {
             var result = await RunCoreAsync(request, invocationId, preferences, cancellationToken);
@@ -58,8 +64,9 @@ internal sealed class ProcessRunner(ILogger<ProcessRunner> logger, ISettingsStor
         using var scope = logger.BeginScope(new Dictionary<string, object> { ["ToolInvocationId"] = invocationId });
         cancellationToken.ThrowIfCancellationRequested();
         using var job = new ProcessJob();
-        using var timeout = new CancellationTokenSource(TimeSpan.FromHours(24));
-        using var linked = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken, timeout.Token);
+        using var timeout = new CancellationTokenSource(TimeLimit);
+        using var watchdog = new InactivityWatchdog(job, InactivityLimit, ActivityPollInterval, logger);
+        using var linked = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken, timeout.Token, watchdog.Token);
         using var source = CreatePipelineProcess(producer);
         using var target = CreatePipelineProcess(consumer);
         bool sourceStarted = false, targetStarted = false;
@@ -86,6 +93,7 @@ internal sealed class ProcessRunner(ILogger<ProcessRunner> logger, ISettingsStor
             copy = CopyAsync();
             await Task.WhenAll(copy, source.WaitForExitAsync(linked.Token), target.WaitForExitAsync(linked.Token));
             // Descendants may retain redirected handles after the direct processes exit.
+            await watchdog.StopAsync();
             job.Dispose();
             string error = await sourceError + await targetError;
             await targetOutput;
@@ -98,9 +106,11 @@ internal sealed class ProcessRunner(ILogger<ProcessRunner> logger, ISettingsStor
                     $"Streaming failed: producer exit {source.ExitCode}, consumer exit {target.ExitCode}: {Tail(error)}", invocationId));
             }
         }
-        catch (OperationCanceledException)when (!cancellationToken.IsCancellationRequested && timeout.IsCancellationRequested)
+        catch (OperationCanceledException)when (!cancellationToken.IsCancellationRequested && (timeout.IsCancellationRequested || watchdog.Stalled))
         {
-            var error = new TimeoutException("Streaming conversion exceeded its time limit.");
+            var error = new TimeoutException(watchdog.Stalled
+                ? $"Streaming conversion made no progress for {Describe(watchdog.Limit)}."
+                : "Streaming conversion exceeded its time limit.");
             throw new OperationTimeoutException(FailureClassifier.Describe(error, "Streaming conversion", invocationId: invocationId), error);
         }
         catch (Win32Exception ex)
@@ -111,6 +121,7 @@ internal sealed class ProcessRunner(ILogger<ProcessRunner> logger, ISettingsStor
         finally
         {
             linked.Cancel();
+            await watchdog.StopAsync();
             job.Dispose();
 
             if (sourceStarted)
@@ -244,8 +255,11 @@ internal sealed class ProcessRunner(ILogger<ProcessRunner> logger, ISettingsStor
         {
             StartInfo = start
         };
-        using var timeout = new CancellationTokenSource(request.Timeout ?? TimeSpan.FromHours(24));
-        using var linked = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken, timeout.Token);
+        TimeSpan timeLimit = request.Timeout ?? TimeLimit;
+        using var timeout = new CancellationTokenSource(timeLimit);
+        // Short probes rely on their own time limit.
+        using var watchdog = timeLimit > InactivityLimit ? new InactivityWatchdog(job, InactivityLimit, ActivityPollInterval, logger) : null;
+        using var linked = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken, timeout.Token, watchdog?.Token ?? CancellationToken.None);
         await job.StartAsync(process);
         SetPriority(process, preferences.ToolProcessPriority);
         Task<string>? stdout = null, stderr = null;
@@ -257,12 +271,20 @@ internal sealed class ProcessRunner(ILogger<ProcessRunner> logger, ISettingsStor
             stderr = DrainAsync(process.StandardError);
             await process.WaitForExitAsync(linked.Token);
         }
-        catch (OperationCanceledException) when (!cancellationToken.IsCancellationRequested && timeout.IsCancellationRequested)
+        catch (OperationCanceledException) when (!cancellationToken.IsCancellationRequested && (timeout.IsCancellationRequested || watchdog?.Stalled == true))
         {
-            throw new TimeoutException($"{Path.GetFileName(request.Executable)} exceeded its {request.Timeout ?? TimeSpan.FromHours(24)} time limit.");
+            string tool = Path.GetFileName(request.Executable);
+            throw new TimeoutException(watchdog?.Stalled == true
+                ? $"{tool} made no progress for {Describe(watchdog.Limit)}."
+                : $"{tool} exceeded its {timeLimit} time limit.");
         }
         finally
         {
+            if (watchdog is not null)
+            {
+                await watchdog.StopAsync();
+            }
+
             // Close the job before draining: descendants can otherwise keep stdout/stderr open forever.
             job.Dispose();
             await ProcessJob.StopAsync(process);
@@ -347,6 +369,10 @@ internal sealed class ProcessRunner(ILogger<ProcessRunner> logger, ISettingsStor
 
         return builder.ToString();
     }
+
+    private static string Describe(TimeSpan duration) => duration >= TimeSpan.FromMinutes(1)
+        ? $"{duration.TotalMinutes:0} minutes"
+        : $"{duration.TotalSeconds:0.#} seconds";
 
     private static string Tail(string text) => text.Length > 3000 ? text[^3000..] : text.Trim();
 }

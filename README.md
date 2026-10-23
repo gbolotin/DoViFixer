@@ -250,7 +250,7 @@ dotnet test DoViFixer.sln --no-restore --filter 'TestCategory!=NativeIntegration
 
 Fast tests use small fixtures and fake external boundaries. They cover domain eligibility, missing evidence, dependency coordination, changed inputs, partial batches, cancellation/disposal, settings concurrency, TAR integrity, publication collisions and CLI composition/arguments.
 
-Windows process-lifetime tests are labelled `ProcessIntegration`. They launch disposable test hosts, not media tools. They cover abrupt host termination, nested jobs, child/grandchild cleanup, concurrent invocation isolation, cancellation, timeout, startup failure, and assignment failure. The test assembly's executable entry point is only a process fixture; use `dotnet test` to run the tests.
+Windows process-lifetime tests are labelled `ProcessIntegration`. They launch disposable test hosts, not media tools. They cover abrupt host termination, nested jobs, child/grandchild cleanup, concurrent invocation isolation, cancellation, timeout, inactivity, startup failure, and assignment failure. The test assembly's executable entry point is only a process fixture; use `dotnet test` to run the tests.
 
 ```powershell
 dotnet test tests/DoViFixer.Infrastructure.Tests -c Release --filter TestCategory=ProcessIntegration

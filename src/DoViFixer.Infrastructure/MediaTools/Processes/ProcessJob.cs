@@ -5,6 +5,8 @@ using Microsoft.Win32.SafeHandles;
 
 namespace DoViFixer.Infrastructure.MediaTools.Processes;
 
+internal readonly record struct JobActivity(TimeSpan CpuTime, ulong TransferredBytes);
+
 /// <summary>Owns one invocation's processes; Windows terminates them when the last job handle closes.</summary>
 internal sealed class ProcessJob : IDisposable
 {
@@ -71,6 +73,19 @@ internal sealed class ProcessJob : IDisposable
         await process.WaitForExitAsync(CancellationToken.None);
     }
 
+    /// <summary>Totals for every process the job has held, including descendants that already exited.</summary>
+    public JobActivity ReadActivity()
+    {
+        if (!QueryInformationJobObject(handle, 8, out BasicAndIoAccountingInformation information, (uint)Marshal.SizeOf<BasicAndIoAccountingInformation>(), nint.Zero))
+        {
+            throw new Win32Exception(Marshal.GetLastWin32Error(), "Could not read native-process activity.");
+        }
+
+        var io = information.IoInfo;
+        return new(TimeSpan.FromTicks(information.BasicInfo.TotalUserTime + information.BasicInfo.TotalKernelTime),
+            io.ReadTransferCount + io.WriteTransferCount + io.OtherTransferCount);
+    }
+
     public void Dispose() => handle.Dispose();
 
     private sealed class SafeJobHandle() : SafeHandleZeroOrMinusOneIsInvalid(ownsHandle: true)
@@ -113,6 +128,31 @@ internal sealed class ProcessJob : IDisposable
         public nuint PeakProcessMemoryUsed;
         public nuint PeakJobMemoryUsed;
     }
+
+    [StructLayout(LayoutKind.Sequential)]
+    private struct BasicAccountingInformation
+    {
+        // Times are in 100-nanosecond units, the same as TimeSpan ticks.
+        public long TotalUserTime;
+        public long TotalKernelTime;
+        public long ThisPeriodTotalUserTime;
+        public long ThisPeriodTotalKernelTime;
+        public uint TotalPageFaultCount;
+        public uint TotalProcesses;
+        public uint ActiveProcesses;
+        public uint TotalTerminatedProcesses;
+    }
+
+    [StructLayout(LayoutKind.Sequential)]
+    private struct BasicAndIoAccountingInformation
+    {
+        public BasicAccountingInformation BasicInfo;
+        public IoCounters IoInfo;
+    }
+
+    [DllImport("kernel32.dll", SetLastError = true)]
+    [return: MarshalAs(UnmanagedType.Bool)]
+    private static extern bool QueryInformationJobObject(SafeJobHandle job, int informationClass, out BasicAndIoAccountingInformation information, uint length, nint returnLength);
 
     [DllImport("kernel32.dll", CharSet = CharSet.Unicode, SetLastError = true)]
     private static extern SafeJobHandle CreateJobObjectW(nint attributes, string? name);
