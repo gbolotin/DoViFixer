@@ -77,7 +77,7 @@ Prefer a terminal or an AI assistant? The same engine runs as `DoViFixer.Console
 
 ## Credits
 
-DoViFixer is a native Windows implementation inspired by [dovi_convert](https://github.com/cryptochrome/dovi_convert). It runs [dovi_tool](https://github.com/quietvoid/dovi_tool), [FFmpeg](https://ffmpeg.org/), [MKVToolNix](https://mkvtoolnix.download/) and [MediaInfo](https://mediaarea.net/en/MediaInfo).
+DoViFixer is a native Windows implementation inspired by [dovi_convert](https://github.com/cryptochrome/dovi_convert) and by [DoviConvert](https://github.com/myristate/dovi_convert), its C# / .NET rewrite for Windows. It runs [dovi_tool](https://github.com/quietvoid/dovi_tool), [FFmpeg](https://ffmpeg.org/), [MKVToolNix](https://mkvtoolnix.download/) and [MediaInfo](https://mediaarea.net/en/MediaInfo).
 
 ---
 
