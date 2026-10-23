@@ -106,10 +106,26 @@ jobs:
             Compress-Archive -Path out/$app/* -DestinationPath "out/$app-$version.zip"
           }
 
+      # DoViFixer-Setup-<version>.exe installs the app for all users and trusts the File Explorer package certificate.
+      - name: Build setup
+        shell: pwsh
+        run: |
+          $version = '${{ steps.version.outputs.version }}'
+          if ($version -notmatch '^(\d+)\.(\d+)\.(\d+)(?:-ci\.(\d+))?') { throw "Version $version is not X.Y.Z[-ci.N]." }
+          $numeric = '{0}.{1}.{2}.{3}' -f $Matches[1], $Matches[2], $Matches[3], ($Matches[4] ?? 0)
+          choco install innosetup --no-progress -y
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          $compiler = Get-ChildItem "${env:ProgramFiles(x86)}\Inno Setup*\ISCC.exe", "$env:ProgramFiles\Inno Setup*\ISCC.exe" -ErrorAction SilentlyContinue | Select-Object -First 1
+          if (-not $compiler) { throw 'ISCC.exe was not found after installing Inno Setup.' }
+          & $compiler.FullName /Q "/DAppVersion=$version" "/DNumericVersion=$numeric" installer/DoViFixer.iss
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+
       - uses: actions/upload-artifact@v7
         with:
           name: apps
-          path: out/*.zip
+          path: |
+            out/*.zip
+            out/*.exe
 
   release:
     if: needs.build.outputs.release == 'true'
@@ -123,7 +139,7 @@ jobs:
           name: apps
           path: out
 
-      - name: Create GitHub release with the apps
+      - name: Create GitHub release with the apps and setup
         shell: pwsh
         env:
           GH_TOKEN: ${{ github.token }}
@@ -134,4 +150,4 @@ jobs:
           if ($env:TAG.Contains('-')) {
             $options += '--prerelease'
           }
-          gh release create $env:TAG (Get-ChildItem out/*.zip).FullName @options
+          gh release create $env:TAG (Get-ChildItem out/*.zip, out/*.exe).FullName @options

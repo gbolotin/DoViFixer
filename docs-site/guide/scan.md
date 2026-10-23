@@ -27,7 +27,7 @@ The File Explorer commands point to the folder DoViFixer runs from. If you move 
 
 | Windows | Where |
 | --- | --- |
-| Windows 11 | Under **Show more options** at first. To move them into the first menu, open **Settings › General › File Explorer** and click **Show in the Windows 11 menu…**. |
+| Windows 11 | In the first menu when you installed DoViFixer with setup. With the zip, under **Show more options** at first: to move them into the first menu, open **Settings › General › File Explorer** and click **Show in the Windows 11 menu…**. |
 | Windows 10 | In the right-click menu. |
 
 Windows 11 only shows packaged apps in its first menu, so DoViFixer comes with a small signed package. The package is signed with DoViFixer's own certificate, not one from a certificate authority, so Windows accepts it only after your PC trusts that certificate:

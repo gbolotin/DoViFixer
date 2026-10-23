@@ -81,7 +81,7 @@ The screenshots come from the app's automated UI tests, so they always show the 
 ## Get started
 
 1. Install the [.NET 10 Desktop Runtime](https://dotnet.microsoft.com/download/dotnet/10.0) (x64).
-2. Download `DoViFixer.App-X.Y.Z.zip` from the [latest release](https://github.com/gbolotin/DoViFixer/releases/latest). Unzip it and run `DoViFixer.App.exe`.
+2. Download `DoViFixer-Setup-X.Y.Z.exe` from the [latest release](https://github.com/gbolotin/DoViFixer/releases/latest) and run it. Prefer no installer? Unzip `DoViFixer.App-X.Y.Z.zip` and run `DoViFixer.App.exe`.
 3. On first start, the app checks for FFmpeg, MKVToolNix, MediaInfo CLI and dovi_tool. If a tool is missing, it shows exactly what it will download and asks before it installs anything.
 4. Drag your movies or a folder into the window, or use **Add files** / **Add folder**. You can also right-click them in File Explorer and select **Open in DoViFixer** or **Convert with DoViFixer**. The app scans each file and shows its profile and enhancement layer type.
 5. Select the movies and click **Convert** (**F5**). The app inspects each file fully, then converts only the safe ones.
