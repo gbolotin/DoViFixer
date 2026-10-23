@@ -54,6 +54,22 @@ public sealed class ActivityTests
     }
 
     [TestMethod]
+    public void EntriesReportedAtOnceWithoutAUiThreadAreAllKept()
+    {
+        // Tests have no UI thread, so batch workers report on their own threads at the same time.
+        using var runtime = new TestRuntime();
+        var feed = new ActivityFeed(TimeProvider.System);
+        using var activity = new ActivityViewModel(feed, runtime, runtime);
+
+        Parallel.For(0, 200, new ParallelOptions { MaxDegreeOfParallelism = 8 }, i =>
+            feed.Report(new(Guid.NewGuid(), i % 2 == 0 ? ActivitySeverity.Warning : ActivitySeverity.Success, $"File {i}")));
+
+        Assert.HasCount(200, activity.Entries);
+        Assert.HasCount(200, activity.Entries.Select(entry => entry.Id).Distinct());
+        Assert.AreEqual(100, activity.UnseenProblems);
+    }
+
+    [TestMethod]
     public void ProblemsCountUntilTheFlyoutOpensAndEntriesStayInPlace()
     {
         using var runtime = new TestRuntime();
