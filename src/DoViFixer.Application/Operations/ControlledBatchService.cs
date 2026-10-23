@@ -91,6 +91,11 @@ public sealed class ControlledBatchService(ILogger<ControlledBatchService> logge
         CancellationToken cancellationToken)
     {
         // Files that never start, because they were skipped or the batch was cancelled first, appear only in the summary.
+        // Every log entry about the item names the operation, so an automatic conversion reads as one in the log.
+        using var scope = logger.BeginScope(new Dictionary<string, object>
+        {
+            ["Activity"] = operation.ToString()
+        });
         var entryId = Guid.NewGuid();
         long started = Stopwatch.GetTimestamp();
         bool reported = false;

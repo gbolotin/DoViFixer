@@ -38,6 +38,15 @@ public sealed partial class ShellViewModel : ObservableObject, INavigationGuard,
                 OpenSettingsCommand.Execute(conversion);
             }
         };
+        // The Media status bar shows the watch folder; clicking it opens the page that sets it.
+        var watchFolder = settings.Sections.Pages.OfType<WatchFolderSettingsSection>().Single();
+        media.RequestOpenWatchFolderSettings += () =>
+        {
+            if (OpenSettingsCommand.CanExecute(watchFolder))
+            {
+                OpenSettingsCommand.Execute(watchFolder);
+            }
+        };
         settings.Saved += media.UpdateSettingsSummary;
         settings.LibraryDeleted += media.ClearDeletedLibrary;
         media.ConversionStarting += settings.FlushAsync;
@@ -193,7 +202,12 @@ public sealed partial class ShellViewModel : ObservableObject, INavigationGuard,
         IsSettingsOpen = false;
     }
 
-    partial void OnIsSettingsOpenChanged(bool value) => NotifyMenuCommands();
+    partial void OnIsSettingsOpenChanged(bool value)
+    {
+        NotifyMenuCommands();
+        // Settings never change under an automatic conversion; files that arrive meanwhile wait until the frame closes.
+        media.HoldAutomaticWork(value);
+    }
 
     // The title bar menu's Media commands show the Media page first, so their results and status are visible.
     private bool CanUseMedia() => !IsSettingsOpen && (ReferenceEquals(CurrentPage, media) || CanNavigate);

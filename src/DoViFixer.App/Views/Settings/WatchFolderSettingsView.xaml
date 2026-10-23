@@ -1,0 +1,83 @@
+<UserControl x:Class="DoViFixer.App.Views.Settings.WatchFolderSettingsView"
+             xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:behaviors="clr-namespace:WpfFoundation.Behaviors;assembly=WpfFoundation"
+             xmlns:viewModels="clr-namespace:DoViFixer.App.ViewModels"
+             xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
+             xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
+             mc:Ignorable="d"
+             d:DataContext="{d:DesignInstance Type=viewModels:SettingsViewModel}">
+    <ScrollViewer VerticalScrollBarVisibility="Auto">
+        <StackPanel Margin="24,8,24,24">
+            <TextBlock Text="Watch folder" Style="{StaticResource WfHeadingTextStyle}" />
+            <TextBlock Text="Suits a download or transfer folder. New files are scanned once they finish arriving. Files your conversion settings would convert are added to the media list and converted without asking. Other files are left as they are. Files already in the folder are not converted."
+                       TextWrapping="Wrap"
+                       Style="{StaticResource WfSettingNoteTextStyle}" />
+            <TextBlock Text="What to watch" Style="{StaticResource WfLabelTextStyle}" />
+            <Border Style="{StaticResource WfCardStyle}">
+                <StackPanel IsEnabled="{Binding IsIdle}">
+                    <HeaderedContentControl Header="Folder to watch"
+                                            AutomationProperties.HelpText="New Matroska files in this folder are scanned, and converted when your conversion settings allow it. Leave blank to watch no folder."
+                                            Style="{StaticResource WfStackedSettingRowStyle}">
+                        <DockPanel>
+                            <Button Content="Stop watching"
+                                    DockPanel.Dock="Right"
+                                    Command="{Binding StopWatchingCommand}"
+                                    Margin="8,0,0,0" />
+                            <Button Content="Browse"
+                                    DockPanel.Dock="Right"
+                                    Command="{Binding BrowseWatchFolderCommand}"
+                                    Margin="8,0,0,0" />
+                            <TextBox Text="{Binding WatchFolder}"
+                                     behaviors:TextBoxAssist.Placeholder="Not watching a folder"
+                                     AutomationProperties.Name="Folder to watch" />
+                        </DockPanel>
+                    </HeaderedContentControl>
+                    <Separator />
+                    <CheckBox Content="Watch subfolders too"
+                              AutomationProperties.HelpText="Files that arrive in folders inside the watch folder count too, such as a download client's folder for each film."
+                              IsChecked="{Binding WatchSubfolders}"
+                              Style="{StaticResource WfToggleSwitchStyle}" />
+                    <Separator />
+                    <HeaderedContentControl Header="Wait before acting"
+                                            AutomationProperties.HelpText="How long a new file's size must stay the same, with no other app writing to it, before it is scanned."
+                                            Style="{StaticResource WfSettingRowStyle}">
+                        <StackPanel Orientation="Horizontal" Width="248">
+                            <TextBox Text="{Binding WatchSettleSecondsText, UpdateSourceTrigger=PropertyChanged, ValidatesOnNotifyDataErrors=True}"
+                                     Width="208"
+                                     Margin="0,0,8,0"
+                                     behaviors:TextBoxAssist.Placeholder="30"
+                                     behaviors:TextBoxAssist.Suffix="seconds"
+                                     AutomationProperties.Name="Wait before acting"
+                                     AutomationProperties.HelpText="Valid range: 5 to 3600 seconds." />
+                            <Button Content="&#xE777;"
+                                    FontFamily="{StaticResource SymbolThemeFontFamily}"
+                                    Width="32"
+                                    MinWidth="0"
+                                    Height="32"
+                                    Padding="4"
+                                    VerticalAlignment="Center"
+                                    ToolTip="Reset to default"
+                                    AutomationProperties.Name="Reset wait before acting"
+                                    Command="{Binding ResetWatchSettleCommand}"
+                                    Visibility="{Binding IsWatchSettleModified, Converter={StaticResource WfBooleanToVisibilityConverter}}" />
+                        </StackPanel>
+                    </HeaderedContentControl>
+                    <TextBlock Text="Default: 30 seconds. A file is acted on only once its size stops changing and no other app is writing to it, so a transfer still in progress is never read half-written."
+                               TextWrapping="Wrap"
+                               Style="{StaticResource WfSettingNoteTextStyle}" />
+                </StackPanel>
+            </Border>
+            <TextBlock Text="What happens" Style="{StaticResource WfLabelTextStyle}" />
+            <Border Style="{StaticResource WfCardStyle}">
+                <StackPanel>
+                    <TextBlock Text="Automatic conversion uses the same settings as the Convert button: target, FEL handling and enhancement-layer backup on the Conversion page, and verification and originals on the Safety page."
+                               TextWrapping="Wrap" />
+                    <TextBlock Text="It waits while another operation runs or Settings is open. It never installs tools, and it skips a file whose output already exists. Activity and the log mark each automatic conversion."
+                               TextWrapping="Wrap"
+                               Style="{StaticResource WfSettingNoteTextStyle}" />
+                </StackPanel>
+            </Border>
+        </StackPanel>
+    </ScrollViewer>
+</UserControl>

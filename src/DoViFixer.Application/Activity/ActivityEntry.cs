@@ -15,6 +15,8 @@ public enum ActivityOperation
     Inspection,
     DeepInspection,
     Conversion,
+    /// <summary>A conversion the watch folder started without asking.</summary>
+    AutoConversion,
     Restoration,
     Cleanup
 }

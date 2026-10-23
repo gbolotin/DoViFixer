@@ -100,6 +100,32 @@ public sealed class SettingsService(ISettingsStore store, IDependencyDetector de
         OperationLog.Audit(logger, "SetConversionDefaults", full ?? "Same folder as source", "Completed");
     }
 
+    /// <summary>
+    /// Sets the watch folder, or stops watching when <paramref name="folder"/> is empty. A folder that is unavailable,
+    /// such as a disconnected drive, is kept: watching starts when it returns.
+    /// </summary>
+    public async Task SetWatchFolderAsync(string? folder, bool includeSubfolders, int settleSeconds, CancellationToken cancellationToken)
+    {
+        cancellationToken.ThrowIfCancellationRequested();
+        if (settleSeconds is < UserSettings.MinimumWatchSettleSeconds or > UserSettings.MaximumWatchSettleSeconds)
+        {
+            throw new ArgumentOutOfRangeException(nameof(settleSeconds), $"The wait before acting must be between {UserSettings.MinimumWatchSettleSeconds} and {UserSettings.MaximumWatchSettleSeconds} seconds.");
+        }
+
+        string? full = string.IsNullOrWhiteSpace(folder) ? null : Path.GetFullPath(folder);
+        var previous = await store.ReadAsync(cancellationToken);
+        await store.UpdateAsync(s => s with
+        {
+            WatchFolder = full,
+            WatchSubfolders = includeSubfolders,
+            WatchSettleSeconds = settleSeconds
+        }, cancellationToken);
+        if (!string.Equals(previous.WatchFolder, full, StringComparison.OrdinalIgnoreCase))
+        {
+            OperationLog.Audit(logger, "SetWatchFolder", full ?? "Not watching", "Completed");
+        }
+    }
+
     public async Task SetThemeAsync(AppTheme theme, CancellationToken cancellationToken)
     {
         cancellationToken.ThrowIfCancellationRequested();

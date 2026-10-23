@@ -33,6 +33,7 @@ public static class DependencyInjection
         services.AddTransient<PresetService>();
         services.AddTransient<Diagnostics.DiagnosticsService>();
         services.AddTransient<Reports.ReportService>();
+        services.AddTransient<WatchFolder.WatchFolderService>();
         return services;
     }
 }

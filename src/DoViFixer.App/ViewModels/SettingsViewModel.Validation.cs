@@ -1,6 +1,7 @@
 using System.Collections;
 using System.ComponentModel;
 using System.Globalization;
+using DoViFixer.Application.Settings;
 
 namespace DoViFixer.App.ViewModels;
 
@@ -72,6 +73,20 @@ public sealed partial class SettingsViewModel : INotifyDataErrorInfo
         }
     });
 
+    [ObservableProperty]
+    [NotifyPropertyChangedFor(nameof(IsWatchSettleModified))]
+    public partial string WatchSettleSecondsText { get; set; } = UserSettings.DefaultWatchSettleSeconds.ToString(CultureInfo.CurrentCulture);
+
+    public bool IsWatchSettleModified => !int.TryParse(WatchSettleSecondsText, NumberStyles.Integer, CultureInfo.CurrentCulture, out int value) || value != UserSettings.DefaultWatchSettleSeconds;
+
+    partial void OnWatchSettleSecondsTextChanged(string value) => UpdateNumericPreference(() =>
+    {
+        if (int.TryParse(value, NumberStyles.Integer, CultureInfo.CurrentCulture, out int number))
+        {
+            WatchSettleSeconds = number;
+        }
+    });
+
     private void UpdateNumericPreference(Action update)
     {
         if (updatingNumericText)
@@ -138,6 +153,10 @@ public sealed partial class SettingsViewModel : INotifyDataErrorInfo
             {
                 AssumedPeakBrightnessText = AssumedPeakBrightnessNits.ToString(CultureInfo.CurrentCulture);
             }
+            if (propertyName is null or nameof(WatchSettleSecondsText))
+            {
+                WatchSettleSecondsText = WatchSettleSeconds.ToString(CultureInfo.CurrentCulture);
+            }
             if (propertyName is null or nameof(FreeSpaceMarginText))
             {
                 FreeSpaceMarginText = FreeSpaceMarginPercent.ToString(CultureInfo.CurrentCulture);
@@ -175,6 +194,9 @@ public sealed partial class SettingsViewModel : INotifyDataErrorInfo
         SetValidationError(nameof(InspectionPeakPercentileText),
             double.TryParse(InspectionPeakPercentileText, NumberStyles.Float, CultureInfo.CurrentCulture, out double inspectionPeakPercentile) && double.IsFinite(inspectionPeakPercentile) && inspectionPeakPercentile is >= 1 and <= 100
                 ? null : "Enter a number from 1 to 100.");
+        SetValidationError(nameof(WatchSettleSecondsText),
+            int.TryParse(WatchSettleSecondsText, NumberStyles.Integer, CultureInfo.CurrentCulture, out int settle) && settle is >= UserSettings.MinimumWatchSettleSeconds and <= UserSettings.MaximumWatchSettleSeconds
+                ? null : $"Enter a whole number from {UserSettings.MinimumWatchSettleSeconds} to {UserSettings.MaximumWatchSettleSeconds} seconds.");
         SetValidationError(nameof(Destination), DestinationError);
     }
 

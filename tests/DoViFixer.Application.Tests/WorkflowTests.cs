@@ -219,6 +219,52 @@ public sealed class WorkflowTests
     }
 
     [TestMethod]
+    [DataRow("good.mkv", false, true)]
+    [DataRow("simple.mkv", false, false)]
+    [DataRow("simple.mkv", true, true)]
+    [DataRow("bad.mkv", true, false)]
+    public async Task WatchFolderAcceptsWhatTheConversionSettingsCouldConvert(string file, bool includeSimple, bool accepted)
+    {
+        var runtime = new Runtime { PlanningFixtures = true };
+        var inspection = new InspectionService(runtime.Dependencies(), runtime, runtime, runtime, runtime, NullLogger<InspectionService>.Instance, new MemoryCache());
+        var feed = new DoViFixer.Application.Activity.ActivityFeed(TimeProvider.System);
+        var service = new DoViFixer.Application.WatchFolder.WatchFolderService(inspection, feed, NullLogger<DoViFixer.Application.WatchFolder.WatchFolderService>.Instance);
+
+        var decision = await service.EvaluateAsync(file, new UserSettings { IncludeSimple = includeSimple }, null, default);
+
+        Assert.AreEqual(accepted, decision.Accepted);
+        Assert.AreEqual(0, runtime.ConvertCalls, "Deciding converts nothing.");
+        if (accepted)
+        {
+            Assert.AreEqual(AnalysisMethod.SampledRpu, decision.Analysis!.Evidence.Method);
+            Assert.IsEmpty(feed.Entries, "Accepted files are reported by their conversion.");
+        }
+        else
+        {
+            var entry = feed.Entries.Single();
+            Assert.AreEqual($"Didn't auto-convert {file}", entry.Title);
+            Assert.AreEqual(decision.Reason, entry.Detail);
+            Assert.AreEqual(file, entry.FilePath);
+        }
+    }
+
+    [TestMethod]
+    public async Task WatchFolderLeavesFilesThatAreNotProfile7()
+    {
+        var runtime = new Runtime();
+        runtime.ProbedMedia = Plan("p81.mkv").Analysis.Media with { Profile = DolbyVisionProfile.Profile81 };
+        var inspection = new InspectionService(runtime.Dependencies(), runtime, runtime, runtime, runtime, NullLogger<InspectionService>.Instance, new MemoryCache());
+        var feed = new DoViFixer.Application.Activity.ActivityFeed(TimeProvider.System);
+        var service = new DoViFixer.Application.WatchFolder.WatchFolderService(inspection, feed, NullLogger<DoViFixer.Application.WatchFolder.WatchFolderService>.Instance);
+
+        var decision = await service.EvaluateAsync("p81.mkv", new UserSettings { IncludeSimple = true, ForceComplex = true }, null, default);
+
+        Assert.IsFalse(decision.Accepted);
+        Assert.AreEqual("Only HEVC Dolby Vision Profile 7 MKV inputs are supported.", decision.Reason);
+        Assert.AreEqual(DoViFixer.Application.Activity.ActivitySeverity.Info, feed.Entries.Single().Severity);
+    }
+
+    [TestMethod]
     public void InspectionReservesFarLessScratchThanConversion()
     {
         long source = 77L << 30;
