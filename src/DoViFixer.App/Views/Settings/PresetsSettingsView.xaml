@@ -1,0 +1,70 @@
+<UserControl x:Class="DoViFixer.App.Views.Settings.PresetsSettingsView"
+             xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:behaviors="clr-namespace:WpfFoundation.Behaviors;assembly=WpfFoundation"
+             xmlns:viewModels="clr-namespace:DoViFixer.App.ViewModels"
+             xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
+             xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
+             mc:Ignorable="d"
+             d:DataContext="{d:DesignInstance Type=viewModels:SettingsViewModel}">
+    <!-- The Presets page of the settings frame. Its DataContext is the SettingsViewModel all pages share. -->
+    <ScrollViewer VerticalScrollBarVisibility="Auto">
+        <StackPanel Margin="24,8,24,24">
+            <TextBlock Text="Presets" Style="{StaticResource WfHeadingTextStyle}" />
+            <TextBlock Text="A preset sets how files are scanned, converted, verified and kept, all at once. Folders, worker counts, tool paths and appearance do not change."
+                       TextWrapping="Wrap"
+                       Style="{StaticResource WfSettingNoteTextStyle}" />
+            <Border Style="{StaticResource WfCardStyle}">
+                <StackPanel IsEnabled="{Binding IsIdle}">
+                    <TextBlock Text="{Binding ActivePresetText}"
+                               Style="{StaticResource SubtitleTextBlockStyle}"
+                               AutomationProperties.LiveSetting="Polite" />
+                    <HeaderedContentControl Header="Preset"
+                                            AutomationProperties.HelpText="Choose a preset to see what it is for. Applying it lists every setting that will change and asks before changing them."
+                                            Style="{StaticResource WfStackedSettingRowStyle}">
+                        <StackPanel>
+                            <ComboBox ItemsSource="{Binding Presets}"
+                                      SelectedItem="{Binding SelectedPreset}"
+                                      DisplayMemberPath="Name"
+                                      AutomationProperties.Name="Preset"
+                                      HorizontalAlignment="Left"
+                                      MinWidth="320" />
+                            <TextBlock Text="{Binding SelectedPreset.Description}"
+                                       TextWrapping="Wrap"
+                                       Foreground="{DynamicResource TextFillColorSecondaryBrush}"
+                                       Margin="0,8,0,0" />
+                            <StackPanel Orientation="Horizontal" Margin="0,12,0,0">
+                                <Button Content="Apply preset…"
+                                        Command="{Binding ApplyPresetCommand}"
+                                        Style="{StaticResource WfPrimaryButtonStyle}"
+                                        Margin="0,0,8,0" />
+                                <Button Content="Delete preset…"
+                                        Command="{Binding DeletePresetCommand}"
+                                        ToolTipService.ShowOnDisabled="True"
+                                        ToolTip="Built-in presets cannot be deleted." />
+                            </StackPanel>
+                        </StackPanel>
+                    </HeaderedContentControl>
+                </StackPanel>
+            </Border>
+            <Border Style="{StaticResource WfCardStyle}" Margin="0,24,0,0">
+                <StackPanel IsEnabled="{Binding IsIdle}">
+                    <HeaderedContentControl Header="Save current settings as a preset"
+                                            AutomationProperties.HelpText="Saves the scan, conversion and safety settings you use now. Saving with the name of one of your presets replaces it."
+                                            Style="{StaticResource WfStackedSettingRowStyle}">
+                        <DockPanel>
+                            <Button Content="Save preset"
+                                    DockPanel.Dock="Right"
+                                    Command="{Binding SavePresetCommand}" />
+                            <TextBox Text="{Binding NewPresetName, UpdateSourceTrigger=PropertyChanged}"
+                                     MaxLength="{Binding PresetNameMaximumLength, Mode=OneTime}"
+                                     behaviors:TextBoxAssist.Placeholder="Preset name"
+                                     AutomationProperties.Name="Preset name"
+                                     Margin="0,0,8,0" />
+                        </DockPanel>
+                    </HeaderedContentControl>
+                </StackPanel>
+            </Border>
+        </StackPanel>
+    </ScrollViewer>
+</UserControl>

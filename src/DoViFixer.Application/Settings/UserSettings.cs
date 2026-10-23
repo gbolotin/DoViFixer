@@ -99,4 +99,6 @@ public sealed record UserSettings
     = AppTheme.System;
     /// <summary>Whether each media list row has a check box; otherwise the list selects rows as File Explorer does.</summary>
     public bool ShowSelectionCheckBoxes { get; init; }
+    /// <summary>The preset applied last, so changed settings can say which preset they started from.</summary>
+    public string? LastAppliedPreset { get; init; }
 }

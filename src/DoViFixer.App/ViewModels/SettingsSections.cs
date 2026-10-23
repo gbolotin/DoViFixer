@@ -19,6 +19,12 @@ public sealed class GeneralSettingsSection(SettingsViewModel settings) : Setting
     public override string? NavigationIcon => "\uE713";
 }
 
+public sealed class PresetsSettingsSection(SettingsViewModel settings) : SettingsSection(settings)
+{
+    public override string NavigationName => "Presets";
+    public override string? NavigationIcon => "";
+}
+
 public sealed class ConversionSettingsSection(SettingsViewModel settings) : SettingsSection(settings)
 {
     public override string NavigationName => "Conversion";

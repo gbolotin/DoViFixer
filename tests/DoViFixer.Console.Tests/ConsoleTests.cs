@@ -201,6 +201,26 @@ public sealed class ConsoleTests
     {
         "settings", "add-to-path", "--json"
     })]
+    [DataRow(new[]
+    {
+        "settings", "preset", "apply"
+    })]
+    [DataRow(new[]
+    {
+        "settings", "preset", "list", "--yes"
+    })]
+    [DataRow(new[]
+    {
+        "settings", "show", "--yes"
+    })]
+    [DataRow(new[]
+    {
+        "settings", "preset", "rename", "Old", "New"
+    })]
+    [DataRow(new[]
+    {
+        "settings", "preset", "save", "Name", "Description", "extra"
+    })]
     public void InvalidArgumentsFailWithoutStartingHost(string[] args) => Assert.ThrowsExactly<ArgumentException>(() => CommandLine.Parse(args));
     [TestMethod]
     public void UpstreamConversionAndRestoreArgumentsParse()
@@ -211,6 +231,17 @@ public sealed class ConsoleTests
         Assert.AreEqual(1, CommandLine.Parse(["restore", "movie.mkv"]).Arguments.Count);
         Assert.AreEqual("backup.dovi", CommandLine.Parse(["restore", "movie.mkv", "--source", "backup.dovi"]).Value("source"));
         Assert.ThrowsExactly<ArgumentException>(() => CommandLine.Parse(["restore", "movie.mkv", "old.dovi", "--source", "other.dovi"]));
+    }
+
+    [TestMethod]
+    public void PresetCommandsParse()
+    {
+        var apply = CommandLine.Parse(["settings", "preset", "apply", "Thorough check (40 clips)", "--yes"]);
+        CollectionAssert.AreEqual(new[] { "preset", "apply", "Thorough check (40 clips)" }, apply.Arguments.ToArray());
+        Assert.IsTrue(apply.Has("yes"));
+        Assert.HasCount(2, CommandLine.Parse(["settings", "preset", "list"]).Arguments);
+        Assert.HasCount(4, CommandLine.Parse(["settings", "preset", "save", "Mine", "For films I keep"]).Arguments);
+        Assert.HasCount(3, CommandLine.Parse(["settings", "preset", "delete", "Mine"]).Arguments);
     }
 
     [TestMethod]

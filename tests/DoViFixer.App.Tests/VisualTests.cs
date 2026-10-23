@@ -1094,7 +1094,7 @@ public sealed class VisualTests
         Assert.AreSame(window.FindResource("TextFillColorSecondaryBrush"), title.Foreground);
         Assert.AreSame(window.FindResource("ListBoxBackground"), overlay.HeaderBackground, "The title shares the section list's background.");
         var sections = Descendants<ListBox>(overlay).Single(list => ReferenceEquals(list.ItemsSource, shell.Settings.Sections.Pages));
-        Assert.HasCount(7, sections.Items);
+        Assert.HasCount(8, sections.Items);
         var host = Descendants<RetainedPageHost>(overlay).Single();
         var retained = new Dictionary<object, DependencyObject>();
         double? toolsOffset = null;
@@ -1122,6 +1122,11 @@ public sealed class VisualTests
             {
                 case GeneralSettingsSection when firstVisit:
                     SaveRender(content, "settings-minimum");
+                    break;
+                case PresetsSettingsSection when firstVisit:
+                    Assert.HasCount(1, Descendants<ComboBox>(view).Where(combo => System.Windows.Automation.AutomationProperties.GetName(combo) == "Preset"));
+                    Assert.IsTrue(Descendants<TextBlock>(view).Any(text => text.Text == shell.Settings.ActivePresetText && text.IsVisible), "The page names the active preset.");
+                    SaveRender(content, "settings-presets");
                     break;
                 case AnalysisSettingsSection when firstVisit:
                     foreach (string name in new[] { "Clips per video", "Clip length", "Required scan coverage", "Peak-brightness percentile", "Brightness margin", "Assumed peak brightness" })

@@ -9,7 +9,7 @@ using ModelContextProtocol.Server;
 
 namespace DoViFixer.Mcp.Tools;
 [McpServerToolType]
-public sealed class SetupTools(DependencyService dependencies, SettingsService settings, UpdateService updates, JobRegistry jobs, PlanRegistry plans, ILogger<SetupTools> logger)
+public sealed class SetupTools(DependencyService dependencies, SettingsService settings, PresetService presetService, UpdateService updates, JobRegistry jobs, PlanRegistry plans, ILogger<SetupTools> logger)
 {
     [McpServerTool(Name = "check_dependencies", Title = "Check dependencies", ReadOnly = true, Destructive = false, OpenWorld = false)]
     [Description("Check whether the native tools DoViFixer needs (FFmpeg, FFprobe, MkvMerge, MkvExtract, MkvPropEdit, MediaInfo, DoviTool) are installed and compatible.")]
@@ -59,6 +59,65 @@ public sealed class SetupTools(DependencyService dependencies, SettingsService s
     [McpServerTool(Name = "get_settings", Title = "Get settings", ReadOnly = true, Destructive = false, OpenWorld = false)]
     [Description("Show DoViFixer's saved settings: temporary and output folders, conversion preferences and native tool paths.")]
     public async Task<string> GetSettings(CancellationToken cancellationToken = default) => ToolViews.Json(await settings.ReadAsync(cancellationToken));
+
+    [McpServerTool(Name = "list_presets", Title = "List presets", ReadOnly = true, Destructive = false, OpenWorld = false)]
+    [Description("List built-in and saved presets with every value each one sets, and name the preset the current settings match. A preset sets scan, conversion and safety settings; folders, worker counts, tool paths and appearance are not part of it.")]
+    public async Task<string> ListPresets(CancellationToken cancellationToken = default)
+    {
+        var list = await presetService.ListAsync(cancellationToken);
+        var current = await settings.ReadAsync(cancellationToken);
+        return ToolViews.Json(new
+        {
+            ActivePreset = PresetService.FindActive(list, current)?.Name,
+            current.LastAppliedPreset,
+            Presets = list
+        });
+    }
+
+    [McpServerTool(Name = "plan_preset", Title = "Plan applying a preset", ReadOnly = true, Destructive = false, OpenWorld = false)]
+    [Description("List every setting a preset would change, without changing anything. Show the user each change, especially those marked IncreasesRisk, and get their approval before apply_preset. Changed settings apply to later scans and conversions in DoViFixer and its app.")]
+    public async Task<string> PlanPreset([Description("Preset name, as list_presets shows it.")] string name, CancellationToken cancellationToken = default)
+    {
+        var preset = await presetService.FindAsync(name, cancellationToken);
+        var changes = await presetService.PreviewAsync(preset, cancellationToken);
+        if (changes.Count == 0)
+        {
+            return ToolViews.Json(new
+            {
+                Status = "AlreadyApplied",
+                Preset = preset.Name
+            });
+        }
+
+        var plan = new PresetPlan(Guid.NewGuid(), preset, changes);
+        plans.Add(plan.Id, plan);
+        OperationLog.Audit(logger, "ApplyPreset", preset.Name, "PlanPresented", plan.Id);
+        return ToolViews.Json(new
+        {
+            PlanId = plan.Id,
+            Preset = preset.Name,
+            preset.Description,
+            Changes = changes
+        });
+    }
+
+    [McpServerTool(Name = "apply_preset", Title = "Apply preset", ReadOnly = false, Destructive = false, Idempotent = true, OpenWorld = false)]
+    [Description("Apply the preset in a plan_preset plan the user approved. Only settings change; no file is converted or deleted.")]
+    public async Task<string> ApplyPreset([Description("Plan id the user approved.")] string planId, CancellationToken cancellationToken = default)
+    {
+        var plan = plans.Take<PresetPlan>(ToolArguments.PlanIds([planId]))[0];
+        OperationLog.Audit(logger, "Approval", "Apply this preset", "ApprovedByAssistantUser", plan.Id);
+        var changes = await presetService.ApplyAsync(plan.Preset, cancellationToken);
+        return ToolViews.Json(new
+        {
+            Status = "Applied",
+            Preset = plan.Preset.Name,
+            Changes = changes
+        });
+    }
+
+    /// <summary>A preset change shown to the user, waiting for approval.</summary>
+    public sealed record PresetPlan(Guid Id, SettingsPreset Preset, IReadOnlyList<PresetChange> Changes);
 
     [McpServerTool(Name = "set_tool_path", Title = "Set tool path", ReadOnly = false, Destructive = false, Idempotent = true, OpenWorld = false)]
     [Description("Use a specific executable for a native tool. The path is validated before it is saved.")]

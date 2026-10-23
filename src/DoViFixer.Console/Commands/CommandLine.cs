@@ -29,7 +29,7 @@ public sealed record CommandLine(string Command, IReadOnlyList<string> Arguments
             "restore" => ["temp", "output", "yes", "plan", "allow-legacy-archive", "source", "install-dependencies"],
             "cleanup" => ["recursive", "delete-backups", "yes"],
             "dependencies" => ["yes", "repair", "json"],
-            "settings" => ["json"],
+            "settings" => ["json", "yes"],
             "diagnostics" => [],
             "update-check" => ["json"],
             _ => throw new ArgumentException($"Unknown command '{command}'. Run --help.")
@@ -117,6 +117,13 @@ public sealed record CommandLine(string Command, IReadOnlyList<string> Arguments
                 "temp" => Arguments.Count == 2,
                 "tool" => Arguments.Count == 3 && Enum.TryParse<NativeTool>(Arguments[1], true, out var tool) && Enum.IsDefined(tool),
                 "reset-tool" => Arguments.Count == 2 && Enum.TryParse<NativeTool>(Arguments[1], true, out var tool) && Enum.IsDefined(tool),
+                "preset" => Arguments.Count >= 2 && (Arguments[1] switch
+                {
+                    "list" => Arguments.Count == 2,
+                    "apply" or "delete" => Arguments.Count == 3,
+                    "save" => Arguments.Count is 3 or 4,
+                    _ => false
+                }),
                 _ => false
             }),
             _ => false
@@ -134,6 +141,11 @@ public sealed record CommandLine(string Command, IReadOnlyList<string> Arguments
         if (Command == "dependencies" && ((Arguments[0] == "check" && (Has("yes") || Has("repair"))) || (Arguments[0] == "install" && Has("json"))))
         {
             throw new ArgumentException("dependencies check supports --json; dependencies install supports --yes and --repair.");
+        }
+
+        if (Command == "settings" && Has("yes") && !(Arguments[0] == "preset" && Arguments[1] == "apply"))
+        {
+            throw new ArgumentException("--yes applies only to settings preset apply.");
         }
 
         if (Command == "cleanup" && Has("yes") && !Has("delete-backups"))

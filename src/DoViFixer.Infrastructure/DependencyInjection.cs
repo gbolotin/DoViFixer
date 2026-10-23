@@ -24,6 +24,7 @@ public static class DependencyInjection
         services.AddSingleton(new DiagnosticOptions(Path.GetFullPath(configuration["DoViFixer:Logging:Directory"] ?? Path.Combine(root, "Logs"))));
         services.TryAddSingleton(TimeProvider.System);
         services.AddSingleton<ISettingsStore, SettingsStore>();
+        services.AddSingleton<IPresetStore, PresetStore>();
         services.AddSingleton<IHardwareInfoProvider, HardwareInfoProvider>();
         services.AddSingleton<MediaLibrary>();
         services.AddSingleton<IMediaLibrary>(provider => provider.GetRequiredService<MediaLibrary>());
