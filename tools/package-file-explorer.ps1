@@ -46,6 +46,7 @@ $sdk = Get-ChildItem "${env:ProgramFiles(x86)}\Windows Kits\10\bin\*\x64\makeapp
     Sort-Object { [version]$_.Directory.Parent.Name } | Select-Object -Last 1
 if (-not $sdk) { throw 'makeappx.exe was not found; install the Windows SDK.' }
 $signTool = Join-Path $sdk.DirectoryName 'signtool.exe'
+$makePri = Join-Path $sdk.DirectoryName 'makepri.exe'
 
 $work = Join-Path ([IO.Path]::GetTempPath()) ("dovifixer-package-" + [Guid]::NewGuid().ToString('N'))
 try {
@@ -60,6 +61,15 @@ try {
     Copy-Item (Join-Path $project 'Package/Assets') $AppFolder -Recurse -Force
     $manifest.Package.Identity.Version = $packageVersion
     $manifest.Save((Join-Path $layout 'AppxManifest.xml'))
+
+    # The resource index lets Windows pick the logo drawn for each size (tools/package-icons.py), such as the
+    # single-line knot File Explorer's menu shows at 16 to 32 pixels, instead of scaling one image.
+    $priConfig = Join-Path $work 'priconfig.xml'
+    & $makePri createconfig /cf $priConfig /dq en-US /pv 10.0.0 /o
+    if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+    & $makePri new /pr $layout /cf $priConfig /mn (Join-Path $layout 'AppxManifest.xml') /of (Join-Path $layout 'resources.pri') /o
+    if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+    Copy-Item (Join-Path $layout 'resources.pri') $AppFolder -Force
 
     $package = Join-Path $AppFolder 'DoViFixer.FileExplorer.msix'
     & $sdk.FullName pack /d $layout /p $package /nv /o
