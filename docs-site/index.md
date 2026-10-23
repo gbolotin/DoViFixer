@@ -50,6 +50,8 @@ A Profile 7 video has three parts. Streaming boxes cannot use the third part, th
 - The converted movie is saved next to the original as `Movie - DV P8.1.mkv`. Your original is not changed.
 - If you want, the enhancement layer goes into a small `.dovi` backup. With it, you can restore the original Profile 7 movie later.
 
+[All features](features.md){ .md-button }
+
 ## The app
 
 <img class="screenshot" src="assets/screenshots/media.png" alt="The Media page: a list of movies with their Dolby Vision profile and enhancement layer type, and the details of the selected movie">

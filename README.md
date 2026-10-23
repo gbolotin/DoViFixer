@@ -5,6 +5,7 @@
 <p align="center">
   <a href="https://github.com/gbolotin/DoViFixer/releases/latest"><b>Download</b></a> ·
   <a href="https://gbolotin.github.io/DoViFixer/"><b>Documentation</b></a> ·
+  <a href="https://gbolotin.github.io/DoViFixer/ru/"><b>Документация на русском</b></a> ·
   <a href="LICENSE">GPL-3.0</a>
 </p>
 
@@ -45,6 +46,19 @@ Pictures are simulated. Results depend on the player app and firmware.
 - Saves the converted movie next to the original as `Movie - DV P8.1.mkv`. Your original is not changed.
 - Optionally keeps the enhancement layer in a small `.dovi` backup, so you can **Restore to DV7** later and delete the large original.
 - Verifies the result before it publishes it: frame counts, timestamps, audio and subtitle data.
+
+## Features
+
+- **Check:** finds each MKV file's Dolby Vision profile and enhancement layer type (MEL, Simple FEL or Complex FEL) with a fast **Scan**, a full **Inspect** of every frame's metadata, or a **Deep Inspect** that measures every decoded frame. Each file gets a clear risk verdict and a suggested next step. Results export to CSV, JSON or text.
+- **Convert:** Profile 7 to Profile 8.1, or to plain HDR10. The base layer stays bit for bit, and audio, subtitles, chapters, tags and attachments stay as they are. Complex FEL is skipped by default and Simple FEL is opt-in.
+- **Batches:** several movies convert at once, each with its own progress card and time left; cancel, skip or pause at any time. Free disk space is checked before each start.
+- **Safety:** originals stay unchanged; every result is verified before it is saved; nothing changes before you approve the exact plan; replacing originals is opt-in, happens only after verification and uses the Recycle Bin.
+- **Backup and restore:** an optional `.dovi` enhancement-layer backup, bound to the movie by SHA-256, lets you **Restore to DV7** later. **Clean up backups** deletes exactly the files you review.
+- **Automation:** a **Watch folder** converts new movies by itself, **presets** set every scan, conversion and safety setting at once, and a **media library** remembers your movies, results and history.
+- **Easy setup:** the app installs FFmpeg, MKVToolNix, MediaInfo CLI and dovi_tool for you after asking, checks every download's SHA-256 and needs no administrator rights.
+- **Native Windows app:** light and dark themes, drag and drop, File Explorer-style selection or check boxes, keyboard shortcuts, Windows notifications, taskbar progress, a plain-words **Activity** list, logs and a diagnostics ZIP.
+- **Command line and AI assistants:** the same engine runs as `DoViFixer.Console` (with a plan mode that changes nothing) and as an MCP server for Claude Desktop and Claude Code.
+- **Documentation** in English and Russian at [gbolotin.github.io/DoViFixer](https://gbolotin.github.io/DoViFixer/).
 
 ## Which files are safe to convert?
 

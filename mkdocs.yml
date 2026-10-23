@@ -1,6 +1,8 @@
 # The user documentation at https://gbolotin.github.io/DoViFixer/. Help › Documentation (F1) in the app opens it.
 # Build locally: pip install -r tools/docs-requirements.txt, then mkdocs serve.
 # CI (.github/workflows/docs.yml) adds the screenshots from the WPF visual tests and publishes the site to GitHub Pages.
+# English pages are <page>.md and are built at the site root; their Russian translations are <page>.ru.md, built under /ru/.
+# The language selector in the header switches to the same page in the other language. Change both files together.
 site_name: DoViFixer
 site_description: Make Dolby Vision Profile 7 movies play right on Apple TV, NVIDIA Shield and Amazon Fire TV.
 site_url: https://gbolotin.github.io/DoViFixer/
@@ -34,12 +36,12 @@ theme:
     - navigation.sections
     - navigation.top
     - navigation.footer
-    - navigation.instant
     - search.highlight
     - content.code.copy
 
 nav:
   - Home: index.md
+  - Features: features.md
   - Get started:
       - Install: install.md
       - Before you convert: before-you-convert.md
@@ -55,6 +57,46 @@ nav:
   - More:
       - Command line and AI assistants: console.md
       - Troubleshooting: troubleshooting.md
+
+plugins:
+  - search
+  - i18n:
+      docs_structure: suffix
+      reconfigure_material: true
+      reconfigure_search: true
+      languages:
+        - locale: en
+          name: English
+          default: true
+          build: true
+        - locale: ru
+          name: Русский
+          build: true
+          site_description: Чтобы фильмы с Dolby Vision Profile 7 правильно показывались на Apple TV, NVIDIA Shield и Amazon Fire TV.
+          theme:
+            palette:
+              - toggle:
+                  name: Включить тёмную тему
+              - toggle:
+                  name: Включить светлую тему
+          nav_translations:
+            Home: Главная
+            Features: Возможности
+            Get started: Начало работы
+            Install: Установка
+            Before you convert: Перед конвертацией
+            Using the app: Работа с приложением
+            Add and scan movies: Добавление и сканирование
+            Convert: Конвертация
+            Backup and restore: Резервная копия и восстановление
+            Watch folder: Папка наблюдения
+            Settings: Настройки
+            Learn: Теория
+            How Dolby Vision works: Как устроен Dolby Vision
+            Streaming boxes: Приставки
+            More: Ещё
+            Command line and AI assistants: Командная строка и ИИ-ассистенты
+            Troubleshooting: Решение проблем
 
 markdown_extensions:
   - admonition
