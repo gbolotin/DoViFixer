@@ -321,7 +321,7 @@ public sealed partial class MediaViewModel : OperationViewModel, INavigationPage
 
     private async Task LoadPreviewAsync(MediaRow? row)
     {
-        previewCancellation?.Cancel();
+        CancelPreview(previewCancellation);
         previewCancellation = null;
         FramePreview = null;
         PreviewStatus = "";
@@ -381,7 +381,7 @@ public sealed partial class MediaViewModel : OperationViewModel, INavigationPage
 
     private async Task GeneratePreviewsAsync(MediaRow[] rows)
     {
-        backgroundPreviewCancellation?.Cancel();
+        CancelPreview(backgroundPreviewCancellation);
         using var cancellation = new CancellationTokenSource();
         backgroundPreviewCancellation = cancellation;
         try
@@ -425,8 +425,20 @@ public sealed partial class MediaViewModel : OperationViewModel, INavigationPage
 
     private void CancelPreviews()
     {
-        previewCancellation?.Cancel();
-        backgroundPreviewCancellation?.Cancel();
+        CancelPreview(previewCancellation);
+        CancelPreview(backgroundPreviewCancellation);
+    }
+
+    // Without a UI thread, a preview can finish and dispose its source after another thread read the field; a finished preview has nothing to cancel.
+    private static void CancelPreview(CancellationTokenSource? cancellation)
+    {
+        try
+        {
+            cancellation?.Cancel();
+        }
+        catch (ObjectDisposedException)
+        {
+        }
     }
 
     public void Dispose()

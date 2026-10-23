@@ -99,6 +99,36 @@ public sealed class MediaPreviewTests
     }
 
     [TestMethod]
+    public async Task CancellingOrDisposingWhilePreviewsFinishDoesNotThrow()
+    {
+        using var runtime = new TestRuntime();
+        await runtime.UpdateAsync(settings => settings with { AutomaticallyScanAddedFiles = false }, default);
+        var model = runtime.Container.GetRequiredService<ShellViewModel>().Pages.OfType<MediaViewModel>().Single();
+        byte[] image = CreateImage();
+        runtime.Preview = async (_, _) =>
+        {
+            await Task.Yield();
+            return image;
+        };
+
+        // No UI thread runs here, so previews finish and dispose their cancellation sources on the thread pool while this thread cancels them.
+        for (int file = 0; file < 200; file++)
+        {
+            await model.AddAsync([$@"C:\Media\Clip{file}.mkv"]).WaitAsync(TimeSpan.FromSeconds(5));
+            Task previews;
+            do
+            {
+                previews = model.CancelPreviewsAsync();
+            }
+            while (!previews.IsCompleted);
+            await previews;
+        }
+        await model.AddAsync([@"C:\Media\Last.mkv"]).WaitAsync(TimeSpan.FromSeconds(5));
+        model.Dispose();
+        await model.CancelPreviewsAsync().WaitAsync(TimeSpan.FromSeconds(5));
+    }
+
+    [TestMethod]
     public async Task FocusChangesCancelOldPreviewsAndClearImagesOnFailureOrDeselection()
     {
         using var runtime = new TestRuntime();
