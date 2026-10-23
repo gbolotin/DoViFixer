@@ -15,7 +15,8 @@ powershell -ExecutionPolicy Bypass -File tools\new-file-explorer-certificate.ps1
 param(
     # Must equal the Publisher in src/DoViFixer.ShellExtension/Package/AppxManifest.xml.
     [string] $Subject = 'CN=gbolotin',
-    [string] $OutputFolder = (Get-Location).Path
+    # Outside the repository by default, so the private key is never committed.
+    [string] $OutputFolder = [Environment]::GetFolderPath('Desktop')
 )
 
 $ErrorActionPreference = 'Stop'

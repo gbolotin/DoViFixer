@@ -9,3 +9,6 @@ artifacts/
 *.pubxml
 __pycache__/
 /site/
+# The File Explorer package certificate (tools/new-file-explorer-certificate.ps1) belongs only in the repository secrets.
+*.pfx
+*.pfx.base64.txt
