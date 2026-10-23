@@ -645,6 +645,17 @@ public sealed class ViewModelTests
         CollectionAssert.AreEqual(new[] { "0:03", "10:10", "1:06:40" }, row.SampleRows.Select(sample => sample.Label).ToArray());
         CollectionAssert.AreEqual(new[] { "900 nits", "1,200 nits", "Not read" }, row.SampleRows.Select(sample => sample.Value).ToArray());
         CollectionAssert.AreEqual(new[] { MediaStatusTone.None, MediaStatusTone.HighRisk, MediaStatusTone.VerifyRecommended }, row.SampleRows.Select(sample => sample.StatusTone).ToArray());
+        Assert.AreEqual("Each sample · 2 of 3 read, 1 above limit", row.SampleSummary);
+
+        row.Analysis = DoViFixer.Domain.Analysis.MediaClassifier.Classify(media,
+            new(DoViFixer.Domain.Analysis.AnalysisMethod.SampledRpu, DoViFixer.Domain.Media.EnhancementLayer.Fel, 48, 1000, 2, 2,
+                Samples: [new(3, 900), new(610, 1000)]));
+        Assert.AreEqual("Each sample · 2 read, none above limit", row.SampleSummary);
+
+        row.Analysis = DoViFixer.Domain.Analysis.MediaClassifier.Classify(media,
+            new(DoViFixer.Domain.Analysis.AnalysisMethod.SampledRpu, DoViFixer.Domain.Media.EnhancementLayer.Mel, 48, 1200, 2, 2,
+                Samples: [new(3, 900), new(610, 1200)]));
+        Assert.AreEqual("Each sample · 2 read", row.SampleSummary, "MEL brightness has no unsafe limit to count against.");
 
         row.Analysis = DoViFixer.Domain.Analysis.MediaClassifier.Classify(media,
             new(DoViFixer.Domain.Analysis.AnalysisMethod.FullRpu, DoViFixer.Domain.Media.EnhancementLayer.Fel, 4475, 900, 1, 1));
@@ -672,7 +683,8 @@ public sealed class ViewModelTests
         Assert.AreEqual(row.DetailsText, text);
         StringAssert.StartsWith(text, $"{row.Name}{Environment.NewLine}File location: {row.Path}");
         StringAssert.Contains(text, "What the examination found");
-        StringAssert.Contains(text, $"Each sample{Environment.NewLine}0:04  1,720 nits");
+        StringAssert.StartsWith(row.SampleSummary, "Each sample · 1 read");
+        StringAssert.Contains(text, $"{row.SampleSummary}{Environment.NewLine}0:04  1,720 nits");
     }
 
     [TestMethod]
