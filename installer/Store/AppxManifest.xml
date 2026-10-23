@@ -1,0 +1,70 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- The Microsoft Store package. The identity is the one Partner Center assigned to DoViFixer (Product management >
+     Product identity); the Store signs the package. tools/package-store.ps1 sets the version and packs the self-contained
+     app, the File Explorer commands' DLL and the logos.
+     Writes to AppData and HKCU are not virtualized, so settings, logs and tools stay in %LOCALAPPDATA%\DoViFixer as with
+     setup, File Explorer opens the same folders the app shows, and the console can share them. -->
+<Package xmlns="http://schemas.microsoft.com/appx/manifest/foundation/windows10"
+         xmlns:uap="http://schemas.microsoft.com/appx/manifest/uap/windows10"
+         xmlns:rescap="http://schemas.microsoft.com/appx/manifest/foundation/windows10/restrictedcapabilities"
+         xmlns:com="http://schemas.microsoft.com/appx/manifest/com/windows10"
+         xmlns:desktop4="http://schemas.microsoft.com/appx/manifest/desktop/windows10/4"
+         xmlns:desktop5="http://schemas.microsoft.com/appx/manifest/desktop/windows10/5"
+         xmlns:desktop6="http://schemas.microsoft.com/appx/manifest/desktop/windows10/6"
+         IgnorableNamespaces="uap rescap com desktop4 desktop5 desktop6">
+  <Identity Name="GabiBolotin.DoViFixer"
+            Publisher="CN=9A2E7198-3280-4166-9548-BE9E8D87B670"
+            Version="0.0.0.0"
+            ProcessorArchitecture="x64" />
+  <Properties>
+    <DisplayName>DoViFixer</DisplayName>
+    <PublisherDisplayName>Gabi Bolotin</PublisherDisplayName>
+    <Logo>Assets\StoreLogo.png</Logo>
+    <desktop6:FileSystemWriteVirtualization>disabled</desktop6:FileSystemWriteVirtualization>
+    <desktop6:RegistryWriteVirtualization>disabled</desktop6:RegistryWriteVirtualization>
+  </Properties>
+  <Dependencies>
+    <TargetDeviceFamily Name="Windows.Desktop" MinVersion="10.0.19041.0" MaxVersionTested="10.0.26100.0" />
+  </Dependencies>
+  <Resources>
+    <Resource Language="en-us" />
+  </Resources>
+  <Capabilities>
+    <rescap:Capability Name="runFullTrust" />
+    <rescap:Capability Name="unvirtualizedResources" />
+  </Capabilities>
+  <Applications>
+    <Application Id="DoViFixer"
+                 Executable="DoViFixer.App.exe"
+                 EntryPoint="Windows.FullTrustApplication">
+      <uap:VisualElements DisplayName="DoViFixer"
+                          Description="Make Dolby Vision Profile 7 movies play on Apple TV, NVIDIA Shield and Amazon Fire TV"
+                          BackgroundColor="transparent"
+                          Square150x150Logo="Assets\Square150x150Logo.png"
+                          Square44x44Logo="Assets\Square44x44Logo.png" />
+      <Extensions>
+        <!-- Open and Convert in Windows 11's File Explorer menu, as in src/DoViFixer.ShellExtension/Package/AppxManifest.xml. -->
+        <com:Extension Category="windows.comServer">
+          <com:ComServer>
+            <com:SurrogateServer DisplayName="DoViFixer File Explorer commands">
+              <com:Class Id="a2760a01-4960-43ed-880d-7e19fbec2f5d" Path="DoViFixer.ShellExtension.dll" ThreadingModel="STA" />
+              <com:Class Id="64401690-ab1c-46c3-8512-78c0f3cbe147" Path="DoViFixer.ShellExtension.dll" ThreadingModel="STA" />
+            </com:SurrogateServer>
+          </com:ComServer>
+        </com:Extension>
+        <desktop4:Extension Category="windows.fileExplorerContextMenus">
+          <desktop4:FileExplorerContextMenus>
+            <desktop5:ItemType Type=".mkv">
+              <desktop5:Verb Id="DoViFixerOpen" Clsid="a2760a01-4960-43ed-880d-7e19fbec2f5d" />
+              <desktop5:Verb Id="DoViFixerConvert" Clsid="64401690-ab1c-46c3-8512-78c0f3cbe147" />
+            </desktop5:ItemType>
+            <desktop5:ItemType Type="Directory">
+              <desktop5:Verb Id="DoViFixerOpen" Clsid="a2760a01-4960-43ed-880d-7e19fbec2f5d" />
+              <desktop5:Verb Id="DoViFixerConvert" Clsid="64401690-ab1c-46c3-8512-78c0f3cbe147" />
+            </desktop5:ItemType>
+          </desktop4:FileExplorerContextMenus>
+        </desktop4:Extension>
+      </Extensions>
+    </Application>
+  </Applications>
+</Package>
