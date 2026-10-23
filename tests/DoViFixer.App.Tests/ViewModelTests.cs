@@ -1545,7 +1545,7 @@ public sealed class ViewModelTests
         using var runtime = new TestRuntime();
         var media = runtime.Container.GetRequiredService<MediaViewModel>();
         var settings = runtime.Container.GetRequiredService<SettingsViewModel>();
-        var shell = new ShellViewModel([media], settings, runtime.Container.GetRequiredService<StartupDependencyCheckViewModel>(), runtime.Container.GetRequiredService<DependencyReportViewModel>(), runtime.Container.GetRequiredService<ActivityViewModel>());
+        var shell = new ShellViewModel([media], settings, runtime.Container.GetRequiredService<StartupDependencyCheckViewModel>(), runtime.Container.GetRequiredService<DependencyReportViewModel>(), runtime.Container.GetRequiredService<ActivityViewModel>(), runtime);
 
         await media.AddAsync([
             @"C:\Media\Mountain.mkv",
@@ -2141,7 +2141,7 @@ public sealed class ViewModelTests
         using var runtime = new TestRuntime();
         var media = runtime.Container.GetRequiredService<MediaViewModel>();
         var settings = runtime.Container.GetRequiredService<SettingsViewModel>();
-        var shell = new ShellViewModel([media], settings, runtime.Container.GetRequiredService<StartupDependencyCheckViewModel>(), runtime.Container.GetRequiredService<DependencyReportViewModel>(), runtime.Container.GetRequiredService<ActivityViewModel>());
+        var shell = new ShellViewModel([media], settings, runtime.Container.GetRequiredService<StartupDependencyCheckViewModel>(), runtime.Container.GetRequiredService<DependencyReportViewModel>(), runtime.Container.GetRequiredService<ActivityViewModel>(), runtime);
 
         await media.RefreshSettingsSummaryAsync();
         Assert.AreEqual("Output: Same folder", media.OutputSummary);

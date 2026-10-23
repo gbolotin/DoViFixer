@@ -45,6 +45,7 @@ public static class AppComposition
         services.AddSingleton<IOperationFeedback>(provider => new OperationFeedback(provider.GetRequiredService<ITaskbarService>(), provider.GetRequiredService<CompletionNotifications>()));
         services.AddSingleton<IFileExplorer>(provider => new FileExplorer(configuration["DoViFixer:Logging:Directory"] ?? Path.Combine(root, "Logs"), provider.GetRequiredService<IDialogService>()));
         services.AddSingleton<ITextClipboard, TextClipboard>();
+        services.AddSingleton<IWebBrowser, DefaultBrowser>();
         services.AddSingleton<DependencyReportViewModel>();
         // The status bar flyout and the Media details show the same session activity.
         services.AddSingleton<ActivityViewModel>();

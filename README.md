@@ -1,10 +1,91 @@
-# DoViFixer
+<p align="center">
+  <img src="docs-site/assets/hero.svg" width="100%" alt="DoViFixer: make Dolby Vision Profile 7 movies play right on Apple TV, NVIDIA Shield and Amazon Fire TV">
+</p>
 
-[GPL-3.0 license](LICENSE)
+<p align="center">
+  <a href="https://github.com/gbolotin/DoViFixer/releases/latest"><b>Download</b></a> ·
+  <a href="https://gbolotin.github.io/DoViFixer/"><b>Documentation</b></a> ·
+  <a href="LICENSE">GPL-3.0</a>
+</p>
 
-Native Windows .NET 10 console and WPF applications for inspecting Dolby Vision MKVs, converting Profile 7 to Profile 8.1 or HDR10, and backing up/restoring enhancement layers. Both applications use the same Domain, Application and Infrastructure services, as does an [MCP server](docs/mcp.md) that lets an AI assistant such as Claude Desktop run these operations for you.
+## What is DoViFixer?
 
-DoViFixer is a native Windows .NET implementation inspired by [dovi_convert](https://github.com/cryptochrome/dovi_convert), adapting its Dolby Vision workflows for a shared console and WPF architecture.
+DoViFixer is a free Windows app for your 4K movie files. Most UHD Blu-ray movies use **Dolby Vision Profile 7**. Most streaming boxes cannot play Profile 7 correctly. They show a flatter HDR10 picture, or they drop part of the video.
+
+DoViFixer checks each MKV file first. Then it converts the files that are safe to convert to **Profile 8.1**. Apple TV, NVIDIA Shield and Amazon Fire TV play Profile 8.1 in Dolby Vision. Your original file stays where it is, unchanged.
+
+## Why Profile 7 movies look wrong
+
+A Profile 7 video has three parts. Only a full Dolby Vision decoder, like a UHD Blu-ray player, uses all three.
+
+<p align="center"><img src="docs-site/assets/dv-layers.svg" width="100%" alt="Animation: the base layer, the RPU metadata and the enhancement layer stack up and combine into the full Dolby Vision picture"></p>
+
+- **Base layer (BL):** the 4K HDR10 picture. Every HDR TV can show it.
+- **RPU:** Dolby Vision metadata that tells the TV how bright each scene is.
+- **Enhancement layer (EL):** extra data. In a **MEL** (minimal enhancement layer) it is almost empty. In a **FEL** (full enhancement layer) it holds real picture data, and sometimes extra brightness.
+
+Streaming boxes cannot use the enhancement layer, so they do one of two things:
+
+<p align="center"><img src="docs-site/assets/playback.svg" width="100%" alt="Animation with simulated pictures: a Profile 7 movie on Apple TV 4K, NVIDIA Shield TV and Amazon Fire TV, then the same movie after conversion to Profile 8.1"></p>
+
+| Player | Profile 7 movie | After DoViFixer (Profile 8.1) |
+| --- | --- | --- |
+| Apple TV 4K | Cannot decode Profile 7. Most apps show only the HDR10 base layer. | Dolby Vision |
+| NVIDIA Shield TV | Dolby Vision from BL + RPU; the EL is dropped. A complex FEL title shows the wrong brightness. | Dolby Vision, same picture, in a file every box can play |
+| Amazon Fire TV | Depends on the model and app: HDR10 only, or Dolby Vision without the EL. | Dolby Vision on models with Dolby Vision |
+
+Pictures are simulated. Results depend on the player app and firmware.
+
+## What DoViFixer does
+
+<p align="center"><img src="docs-site/assets/conversion.svg" width="100%" alt="Animation: DoViFixer keeps the base layer, converts the RPU to Profile 8.1 and moves the enhancement layer into an optional .dovi backup"></p>
+
+- Keeps the base layer bit for bit, and audio, subtitles and chapters as they are.
+- Converts the RPU metadata from Profile 7 to Profile 8.1.
+- Saves the converted movie next to the original as `Movie - DV P8.1.mkv`. Your original is not changed.
+- Optionally keeps the enhancement layer in a small `.dovi` backup, so you can **Restore to DV7** later and delete the large original.
+- Verifies the result before it publishes it: frame counts, timestamps, audio and subtitle data.
+
+## Which files are safe to convert?
+
+<p align="center"><img src="docs-site/assets/fel-check.svg" width="100%" alt="Animation: MEL files are converted, Simple FEL files are converted only when you turn it on, and Complex FEL files are skipped"></p>
+
+DoViFixer reads every frame's metadata to find out what the enhancement layer does. **Deep Inspect** goes further and measures every decoded frame. Complex FEL files are skipped by default, because dropping their enhancement layer would lose real brightness.
+
+## Screenshots
+
+<p align="center">
+  <img src="https://gbolotin.github.io/DoViFixer/assets/screenshots/media.png" width="100%" alt="The Media page: a list of movies with their Dolby Vision profile and enhancement layer type, and the details of the selected movie">
+</p>
+<p align="center">
+  <img src="https://gbolotin.github.io/DoViFixer/assets/screenshots/settings.png" width="49%" alt="Settings: presets">
+  <img src="https://gbolotin.github.io/DoViFixer/assets/screenshots/dependencies.png" width="49%" alt="First start: the app checks the tools it needs">
+</p>
+
+The screenshots come from the app's automated UI tests, so they always show the current version.
+
+## Get started
+
+1. Install the [.NET 10 Desktop Runtime](https://dotnet.microsoft.com/download/dotnet/10.0) (x64).
+2. Download `DoViFixer.App-X.Y.Z.zip` from the [latest release](https://github.com/gbolotin/DoViFixer/releases/latest). Unzip it and run `DoViFixer.App.exe`.
+3. On first start, the app checks for FFmpeg, MKVToolNix, MediaInfo CLI and dovi_tool. If a tool is missing, it shows exactly what it will download and asks before it installs anything.
+4. Drag your movies or a folder into the window, or use **Add files** / **Add folder**. The app scans each file and shows its profile and enhancement layer type.
+5. Select the movies and click **Convert** (**F5**). The app inspects each file fully, then converts only the safe ones.
+6. Press **F1** at any time to open the [documentation](https://gbolotin.github.io/DoViFixer/).
+
+Prefer a terminal or an AI assistant? The same engine runs as `DoViFixer.Console` and as an [MCP server](docs/mcp.md) for Claude Desktop and Claude Code. See [Media commands](#media-commands).
+
+## Credits
+
+DoViFixer is a native Windows implementation inspired by [dovi_convert](https://github.com/cryptochrome/dovi_convert). It runs [dovi_tool](https://github.com/quietvoid/dovi_tool), [FFmpeg](https://ffmpeg.org/), [MKVToolNix](https://mkvtoolnix.download/) and [MediaInfo](https://mediaarea.net/en/MediaInfo).
+
+---
+
+# Reference
+
+The rest of this page is the detailed reference for the console app, settings and logs, and for developers. The [documentation site](https://gbolotin.github.io/DoViFixer/) covers the desktop app step by step.
+
+Native Windows .NET 10 console and WPF applications share the same Domain, Application and Infrastructure services, as does an [MCP server](docs/mcp.md) that lets an AI assistant such as Claude Desktop run these operations for you.
 
 ## Build and run
 
@@ -41,6 +122,7 @@ Phase 4 follows the Studio v3 Media mockups and v2 Settings designs; Media is th
 - **Cancellation:** row Cancel waits for that file's recovery before continuing. Skip leaves a pending file out of the batch; only you change check marks, so it stays checked. Cancel batch stops subsequent items. Closing the application cancels and awaits active work before disposing its resources.
 - **Restore:** a Profile 8.1 or HDR10 file whose `.dovi` archive sits in the same folder shows **Restore to DV7** on its row. The archive is matched by the base-layer hash the library recorded at conversion, or, without one, by name and frame count. Restore appears and disappears as archives are added, renamed or deleted. **Tools > Clean up backups…** finds `.dovi` archives and `.bak.dovi_convert` originals in a folder and deletes exactly the reviewed files. Manual backup, legacy archives without a manifest, archives in another folder and restoring to another folder use the console (`backup`, `restore --allow-legacy-archive`, `--output`).
 - **File menu:** **Rescan all files** analyzes every listed file again. **Inspect**, **Deep Inspect**, **Convert**, **Restore to DV7** (one review for every checked file with a matching archive) and **Remove** act on the selected (or checked) files, like the Media toolbar. **F4** inspects and **F5** converts, from the menu or the toolbar. **Convert** is unavailable when every selected file would only be skipped: missing, not Profile 7, or FEL that the FEL settings rule out even after a full inspection. Files not analyzed yet, or with an unsettled analysis, keep it available. Like Inspect, Convert leaves out the selected files it would only skip; a row's own Convert still runs and shows why it skips. Only you change check marks; operations never check or clear them.
+- **Help menu:** **Documentation** (**F1**) opens the [online documentation](https://gbolotin.github.io/DoViFixer/) in your browser. F1 also works while Settings is open.
 - **Settings:** Conversion includes **Use disk-based conversion (Safe mode)** (disk extraction from the first attempt) and **Convert to HDR10** (removes Dolby Vision metadata). The saved target controls the main Convert button and individual file conversion; there is no per-operation target menu. With Safe mode off, streaming retains automatic disk fallback for eligible failures. **Subfolder search depth** controls newly added folders from 0 (selected folder only) to 100 nested levels; the default remains 100. Settings also provides shared temporary storage, output and retention defaults, dependency installation and validated tool paths. Safety has four verification levels (default: frame count with mismatch recount), a Recycle Bin option for deleted originals and approved backups, and a 20% extra free-space margin. Defaults never authorize execution. WPF logs are rolling `app-diagnostic-`, `app-history-` and `app-audit-` JSONL files under `%LOCALAPPDATA%\DoViFixer\Logs`.
 
 ### Persistent media library

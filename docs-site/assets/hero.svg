@@ -1,0 +1,58 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1000 300" width="1000" height="300" role="img" aria-labelledby="title desc">
+  <title id="title">DoViFixer</title>
+  <desc id="desc">DoViFixer makes Dolby Vision Profile 7 movies play right on Apple TV, NVIDIA Shield and Amazon Fire TV.</desc>
+  <defs>
+    <pattern id="chevrons" width="140" height="140" patternUnits="userSpaceOnUse">
+      <rect width="140" height="140" fill="#ffa412"/>
+      <path d="M-35 105 L35 35 L105 105 L175 35" fill="none" stroke="#ffb02e" stroke-width="30"/>
+      <path d="M-35 175 L35 105 L105 175 L175 105" fill="none" stroke="#ffb02e" stroke-width="30"/>
+      <path d="M-35 35 L35 -35 L105 35 L175 -35" fill="none" stroke="#ffb02e" stroke-width="30"/>
+    </pattern>
+    <filter id="textShadow" x="-10%" y="-30%" width="120%" height="160%">
+      <feDropShadow dx="0" dy="2" stdDeviation="2" flood-color="#7a3d00" flood-opacity="0.45"/>
+    </filter>
+    <filter id="sheetShadow" x="-20%" y="-20%" width="140%" height="140%">
+      <feDropShadow dx="6" dy="8" stdDeviation="8" flood-color="#6b3200" flood-opacity="0.35"/>
+    </filter></defs>
+  <style>
+    text { font-family: 'Futura', 'Century Gothic', 'Trebuchet MS', 'Segoe UI', system-ui, sans-serif; font-style: italic; font-weight: 700; fill: #ffffff; }
+    .title { font-size: 68px; } .tagline { font-size: 22px; } .chip { font-size: 15px; font-style: normal; }
+    .hop { animation: hop 1.2s ease-in-out infinite alternate; }
+    @keyframes hop { from { transform: translateY(0); } to { transform: translateY(-10px); } }
+    .spark { animation: spark 2.4s ease-in-out infinite; transform-box: fill-box; transform-origin: center; }
+    .spark:nth-of-type(2) { animation-delay: -0.8s; } .spark:nth-of-type(3) { animation-delay: -1.6s; }
+    @keyframes spark { 0%, 100% { opacity: 0; transform: scale(0.4); } 50% { opacity: 1; transform: scale(1); } }
+    @media (prefers-reduced-motion: reduce) { .hop, .spark { animation: none; } }
+  </style>
+  <rect width="1000" height="300" rx="18" fill="url(#chevrons)"/>
+  <g transform="translate(70 70) scale(1.7)">
+    <g class="hop">
+      <g transform="translate(0 0)" stroke="#111" stroke-width="3" stroke-linejoin="round" stroke-linecap="round">
+        <path d="M30 14 L22 0 M50 14 L60 2" fill="none"/>
+        <circle cx="22" cy="0" r="3.5" fill="#ff5a5f"/>
+        <circle cx="60" cy="2" r="3.5" fill="#ff5a5f"/>
+        <path d="M30 76 L24 92 M50 76 L58 92" fill="none"/>
+        <path d="M14 92 h16 a5 5 0 0 1 0 8 h-18 a4 4 0 0 1 2 -8 Z M52 92 h14 a6 6 0 0 1 2 8 h-18 a4 4 0 0 1 2 -8 Z" fill="#ffffff"/>
+        <path d="M6 44 L-6 54 M74 44 L88 36" fill="none"/>
+        <circle cx="-7" cy="56" r="5" fill="#ffffff"/>
+        <circle cx="89" cy="34" r="5" fill="#ffffff"/>
+        <rect x="2" y="14" width="76" height="62" rx="14" fill="#4c8dff"/>
+        <rect x="11" y="22" width="58" height="42" rx="9" fill="#e9f3ff"/>
+        <circle cx="29" cy="38" r="4.5" fill="#111" stroke="none"/>
+        <circle cx="51" cy="38" r="4.5" fill="#111" stroke="none"/>
+        <path d="M28 50 q12 9 24 0" fill="none"/>
+        <circle cx="70" cy="70" r="2.5" fill="#111" stroke="none"/>
+      </g></g>
+  </g>
+  <g fill="#ffffff">
+    <path class="spark" d="M70 70 l4 12 l12 4 l-12 4 l-4 12 l-4 -12 l-12 -4 l12 -4 Z"/>
+    <path class="spark" d="M250 60 l3 9 l9 3 l-9 3 l-3 9 l-3 -9 l-9 -3 l9 -3 Z"/>
+    <path class="spark" d="M240 230 l3 9 l9 3 l-9 3 l-3 9 l-3 -9 l-9 -3 l9 -3 Z"/>
+  </g>
+  <g filter="url(#textShadow)">
+    <text x="300" y="120" class="title">DoViFixer</text>
+    <text x="304" y="162" class="tagline">Make Dolby Vision Profile 7 movies play right</text>
+    <text x="304" y="190" class="tagline">on Apple TV, NVIDIA Shield and Amazon Fire TV.</text>
+  </g>
+  <g transform="translate(304 218)"><g transform="translate(0 0)"><rect width="129" height="32" rx="16" fill="#ffffff" opacity="0.22"/><text x="15" y="21" class="chip">Windows app</text></g><g transform="translate(139 0)"><rect width="234" height="32" rx="16" fill="#ffffff" opacity="0.22"/><text x="15" y="21" class="chip">Checks every file first</text></g><g transform="translate(383 0)"><rect width="199" height="32" rx="16" fill="#ffffff" opacity="0.22"/><text x="15" y="21" class="chip">Keeps your original</text></g></g>
+</svg>

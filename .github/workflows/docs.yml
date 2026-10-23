@@ -1,0 +1,81 @@
+name: Docs
+
+# Publishes docs-site to GitHub Pages (https://gbolotin.github.io/DoViFixer/) after CI passes on main, with the
+# screenshots from that CI run's WPF visual tests. Pull requests that change the docs only check that the site builds.
+on:
+  workflow_run:
+    workflows: [CI]
+    types: [completed]
+    branches: [main]
+  pull_request:
+    paths:
+      - docs-site/**
+      - mkdocs.yml
+      - tools/docs-requirements.txt
+      - .github/workflows/docs.yml
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: docs-${{ github.event_name == 'pull_request' && github.ref || 'pages' }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+
+jobs:
+  build:
+    if: github.event_name != 'workflow_run' || github.event.workflow_run.conclusion == 'success'
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      actions: read
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.workflow_run.head_sha || github.sha }}
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+
+      - name: Install MkDocs
+        run: pip install -r tools/docs-requirements.txt
+
+      # The WPF visual tests render the real app with sample files; those renders are the documentation's screenshots.
+      # A manual run uses the latest successful CI run on main.
+      - name: Add the app screenshots from CI
+        if: github.event_name != 'pull_request'
+        env:
+          GH_TOKEN: ${{ github.token }}
+          RUN_ID: ${{ github.event.workflow_run.id }}
+        run: |
+          if [ -z "$RUN_ID" ]; then
+            RUN_ID=$(gh run list --repo "$GITHUB_REPOSITORY" --workflow ci.yml --branch main --status success --limit 1 --json databaseId --jq '.[0].databaseId')
+          fi
+          gh run download "$RUN_ID" --repo "$GITHUB_REPOSITORY" --name wpf-renders --dir renders
+          mkdir -p docs-site/assets/screenshots
+          cp renders/command-icons-toolbar.png docs-site/assets/screenshots/media.png
+          cp renders/settings-presets.png docs-site/assets/screenshots/settings.png
+          cp renders/startup-dependency-check.png docs-site/assets/screenshots/dependencies.png
+
+      - name: Build the site
+        run: mkdocs build --strict
+
+      - uses: actions/upload-pages-artifact@v3
+        if: github.event_name != 'pull_request'
+        with:
+          path: site
+
+  deploy:
+    if: github.event_name != 'pull_request'
+    needs: build
+    runs-on: ubuntu-latest
+    permissions:
+      pages: write
+      id-token: write
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    steps:
+      - id: deployment
+        uses: actions/deploy-pages@v4
