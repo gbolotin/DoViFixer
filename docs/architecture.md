@@ -284,7 +284,8 @@ Use .NET 10 LTS. The machine had SDK `10.0.400` installed when reviewed; pin the
 
 - Domain and Application: `net10.0`.
 - Infrastructure and Console: `net10.0-windows` for the Windows implementation.
-- App: `net10.0-windows10.0.19041.0`, with WPF enabled. The Windows SDK projection is needed by WpfFoundation.Notifications, which sends the notification when an operation finishes, and adds about 25 MB to the App publish.
+- App: `net10.0-windows10.0.22000.0`, with WPF enabled, and `SupportedOSPlatformVersion` 10.0.19041.0. The Windows SDK projection is needed by WpfFoundation.Notifications, which sends the notification when an operation finishes, and by the registration of the unsigned Windows 11 File Explorer package. It adds about 25 MB to the App publish.
+- ShellExtension: `net10.0-windows`, published with Native AOT as a native COM server (DoViFixer.ShellExtension.dll) that implements Windows 11's File Explorer commands. No project references it; CI publishes it next to DoViFixer.App.exe with the sparse package DoViFixer.FileExplorer.msix (see tools/package-file-explorer.ps1).
 - Tests: target the framework required by the projects under test.
 
 Use `Directory.Build.props` for shared compiler settings and `Directory.Packages.props` for central package versions. App uses standard WPF and Microsoft DI packages; Console uses Microsoft hosting and DI packages.

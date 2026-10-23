@@ -1,0 +1,29 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <!-- The Windows 11 File Explorer commands: a COM server that Native AOT compiles to a native DLL, so the process
+       Windows loads it into never loads .NET. CI publishes it with -r win-x64 next to DoViFixer.App.exe. -->
+  <PropertyGroup>
+    <TargetFramework>net10.0-windows</TargetFramework>
+    <AllowUnsafeBlocks>true</AllowUnsafeBlocks>
+    <PublishAot>true</PublishAot>
+    <IsAotCompatible>true</IsAotCompatible>
+    <InvariantGlobalization>true</InvariantGlobalization>
+    <UseSystemResourceKeys>true</UseSystemResourceKeys>
+  </PropertyGroup>
+  <ItemGroup><InternalsVisibleTo Include="DoViFixer.ShellExtension.Tests" /></ItemGroup>
+
+  <!-- The command titles show the app name, which Directory.Build.props sets as AssemblyTitle. A constant keeps it
+       readable without reflection, which ahead-of-time compilation may trim. -->
+  <Target Name="WriteApplicationTitle" BeforeTargets="CoreCompile" DependsOnTargets="PrepareForBuild">
+    <PropertyGroup>
+      <ApplicationTitleFile>$(IntermediateOutputPath)ApplicationTitle.g.cs</ApplicationTitleFile>
+    </PropertyGroup>
+    <WriteLinesToFile File="$(ApplicationTitleFile)"
+                      Lines="namespace DoViFixer.ShellExtension%3B;internal static class ApplicationTitle { public const string Name = &quot;$(AssemblyTitle)&quot;%3B }"
+                      Overwrite="true"
+                      WriteOnlyWhenDifferent="true" />
+    <ItemGroup>
+      <Compile Include="$(ApplicationTitleFile)" />
+      <FileWrites Include="$(ApplicationTitleFile)" />
+    </ItemGroup>
+  </Target>
+</Project>

@@ -7,7 +7,7 @@ Do any of these:
 - Drag MKV files or folders from File Explorer into the window.
 - Click **Add files** or **Add folder** on the Media page.
 - Use **File › Add files…** or **File › Add folder…**.
-- Right-click MKV files or a folder in File Explorer and select **Open in DoViFixer**. On Windows 11, select **Show more options** first.
+- Right-click MKV files or a folder in File Explorer and select **Open in DoViFixer**.
 
 A folder adds every MKV file in it, subfolders included. **Settings › Conversion › Subfolder search depth** sets how deep it looks (0 = only the folder itself, up to 100 levels).
 
@@ -22,6 +22,15 @@ Right-click MKV files or a folder and select **Convert with DoViFixer**. DoViFix
 When you select many files, DoViFixer gathers them into one batch.
 
 The File Explorer commands point to the folder DoViFixer runs from. If you move the app, start it once from the new folder. To remove the commands, turn off **Settings › General › File Explorer**.
+
+### Where the commands appear
+
+| Windows | Where |
+| --- | --- |
+| Windows 11 | In the first menu. DoViFixer registers a small package for your user account when it starts, because Windows 11 only shows packaged apps there. |
+| Windows 10 | In the right-click menu. |
+
+The Windows 11 package is not signed. If Windows does not accept it, for example on a PC whose policy blocks such packages, the commands are under **Show more options** instead, and the log in `%LOCALAPPDATA%\DoViFixer\Logs` says why.
 
 DoViFixer remembers the movies you add. They are back in the list the next time you start the app.
 

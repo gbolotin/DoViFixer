@@ -1,0 +1,69 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- A sparse package: it holds no files of its own and gives DoViFixer.App.exe, in the folder it is registered with,
+     the package identity Windows 11 requires before File Explorer's menu shows an app's commands.
+     The publisher's OID marks it as unsigned, which Windows 11 accepts with AllowUnsigned; it can never stand in for a
+     signed package. tools/package-file-explorer.ps1 sets the version and packs it. -->
+<Package xmlns="http://schemas.microsoft.com/appx/manifest/foundation/windows10"
+         xmlns:uap="http://schemas.microsoft.com/appx/manifest/uap/windows10"
+         xmlns:uap10="http://schemas.microsoft.com/appx/manifest/uap/windows10/10"
+         xmlns:rescap="http://schemas.microsoft.com/appx/manifest/foundation/windows10/restrictedcapabilities"
+         xmlns:com="http://schemas.microsoft.com/appx/manifest/com/windows10"
+         xmlns:desktop4="http://schemas.microsoft.com/appx/manifest/desktop/windows10/4"
+         xmlns:desktop5="http://schemas.microsoft.com/appx/manifest/desktop/windows10/5"
+         IgnorableNamespaces="uap uap10 rescap com desktop4 desktop5">
+  <Identity Name="gbolotin.DoViFixer.FileExplorer"
+            Publisher="CN=gbolotin, OID.2.25.311729368913984317654407730594956997722=1"
+            Version="0.0.0.0"
+            ProcessorArchitecture="x64" />
+  <Properties>
+    <DisplayName>DoViFixer</DisplayName>
+    <PublisherDisplayName>gbolotin</PublisherDisplayName>
+    <Logo>Assets\StoreLogo.png</Logo>
+    <uap10:AllowExternalContent>true</uap10:AllowExternalContent>
+  </Properties>
+  <Dependencies>
+    <TargetDeviceFamily Name="Windows.Desktop" MinVersion="10.0.22000.0" MaxVersionTested="10.0.26100.0" />
+  </Dependencies>
+  <Resources>
+    <Resource Language="en-us" />
+  </Resources>
+  <Capabilities>
+    <rescap:Capability Name="runFullTrust" />
+  </Capabilities>
+  <Applications>
+    <Application Id="DoViFixer"
+                 Executable="DoViFixer.App.exe"
+                 uap10:TrustLevel="mediumIL"
+                 uap10:RuntimeBehavior="win32App">
+      <uap:VisualElements DisplayName="DoViFixer"
+                          Description="Make Dolby Vision Profile 7 movies play on streaming boxes"
+                          BackgroundColor="transparent"
+                          Square150x150Logo="Assets\Square150x150Logo.png"
+                          Square44x44Logo="Assets\Square44x44Logo.png"
+                          AppListEntry="none" />
+      <Extensions>
+        <!-- File Explorer runs the commands in a surrogate process, so a failure there cannot stop File Explorer. -->
+        <com:Extension Category="windows.comServer">
+          <com:ComServer>
+            <com:SurrogateServer DisplayName="DoViFixer File Explorer commands">
+              <com:Class Id="a2760a01-4960-43ed-880d-7e19fbec2f5d" Path="DoViFixer.ShellExtension.dll" ThreadingModel="STA" />
+              <com:Class Id="64401690-ab1c-46c3-8512-78c0f3cbe147" Path="DoViFixer.ShellExtension.dll" ThreadingModel="STA" />
+            </com:SurrogateServer>
+          </com:ComServer>
+        </com:Extension>
+        <desktop4:Extension Category="windows.fileExplorerContextMenus">
+          <desktop4:FileExplorerContextMenus>
+            <desktop5:ItemType Type=".mkv">
+              <desktop5:Verb Id="DoViFixerOpen" Clsid="a2760a01-4960-43ed-880d-7e19fbec2f5d" />
+              <desktop5:Verb Id="DoViFixerConvert" Clsid="64401690-ab1c-46c3-8512-78c0f3cbe147" />
+            </desktop5:ItemType>
+            <desktop5:ItemType Type="Directory">
+              <desktop5:Verb Id="DoViFixerOpen" Clsid="a2760a01-4960-43ed-880d-7e19fbec2f5d" />
+              <desktop5:Verb Id="DoViFixerConvert" Clsid="64401690-ab1c-46c3-8512-78c0f3cbe147" />
+            </desktop5:ItemType>
+          </desktop4:FileExplorerContextMenus>
+        </desktop4:Extension>
+      </Extensions>
+    </Application>
+  </Applications>
+</Package>
