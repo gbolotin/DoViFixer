@@ -17,11 +17,16 @@ public sealed class ControlledBatchTests
         var releases = files.ToDictionary(file => file, _ => new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously));
         int active = 0;
         int peak = 0;
+        var gate = new Lock();
         var service = new ControlledBatchService(NullLogger<ControlledBatchService>.Instance, new ActivityFeed(TimeProvider.System));
         var run = service.ExecuteQueuedAsync(ActivityOperation.Conversion, files, 2, file => file, async (file, token) =>
         {
             int count = Interlocked.Increment(ref active);
-            peak = Math.Max(peak, count);
+            lock (gate)
+            {
+                peak = Math.Max(peak, count);
+            }
+
             started.Writer.TryWrite(file);
             await releases[file].Task.WaitAsync(token);
             Interlocked.Decrement(ref active);
@@ -35,8 +40,13 @@ public sealed class ControlledBatchTests
         Assert.AreEqual("c", await started.Reader.ReadAsync().AsTask().WaitAsync(TimeSpan.FromSeconds(5)));
         releases["b"].SetResult();
         releases["c"].SetResult();
-        Assert.AreEqual("d", await started.Reader.ReadAsync().AsTask().WaitAsync(TimeSpan.FromSeconds(5)));
-        Assert.AreEqual("e", await started.Reader.ReadAsync().AsTask().WaitAsync(TimeSpan.FromSeconds(5)));
+        // b and c end together, so their workers may start d and e in either order.
+        string[] lastTwo =
+        [
+            await started.Reader.ReadAsync().AsTask().WaitAsync(TimeSpan.FromSeconds(5)),
+            await started.Reader.ReadAsync().AsTask().WaitAsync(TimeSpan.FromSeconds(5))
+        ];
+        CollectionAssert.AreEquivalent(new[] { "d", "e" }, lastTwo);
         releases["d"].SetResult();
         releases["e"].SetResult();
 
