@@ -63,7 +63,9 @@
                                             AutomationProperties.HelpText="Buffer size for video passed between native tools. 1024 KiB equals 1 MiB. Larger buffers use more memory per active pipeline."
                                             Style="{StaticResource WfSettingRowStyle}">
                         <ComboBox ItemsSource="{Binding PipeBufferChoices}"
-                                  SelectedItem="{Binding PipeBufferKiB}"
+                                  DisplayMemberPath="Label"
+                                  SelectedValuePath="Value"
+                                  SelectedValue="{Binding PipeBufferKiB}"
                                   MinWidth="208"
                                   AutomationProperties.Name="Video pipe buffer (KiB)" />
                     </HeaderedContentControl>

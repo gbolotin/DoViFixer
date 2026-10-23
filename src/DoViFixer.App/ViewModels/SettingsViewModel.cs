@@ -309,11 +309,11 @@ public sealed partial class SettingsViewModel : OperationViewModel
 
     partial void OnCreateArchiveChanged(bool value) => TriggerAutoSave();
 
-    public sealed record WorkerChoice(int Value, string Label);
-    public WorkerChoice[] ConversionWorkerChoices => WorkerChoices(16, settings.Hardware.RecommendedConversionWorkers);
-    public WorkerChoice[] AnalysisWorkerChoices => WorkerChoices(10, settings.Hardware.RecommendedAnalysisWorkers);
-    private static WorkerChoice[] WorkerChoices(int maximum, int recommended) =>
-        Enumerable.Range(1, maximum).Select(value => new WorkerChoice(value, value == recommended ? $"{value} (Recommended)" : value.ToString())).ToArray();
+    public sealed record NumberChoice(int Value, string Label);
+    public NumberChoice[] ConversionWorkerChoices => NumberChoices(Enumerable.Range(1, 16), settings.Hardware.RecommendedConversionWorkers);
+    public NumberChoice[] AnalysisWorkerChoices => NumberChoices(Enumerable.Range(1, 10), settings.Hardware.RecommendedAnalysisWorkers);
+    private static NumberChoice[] NumberChoices(IEnumerable<int> values, int recommended) =>
+        values.Select(value => new NumberChoice(value, value == recommended ? $"{value} (Recommended)" : value.ToString())).ToArray();
     public string HardwareSummary => settings.Hardware.PhysicalCoresDetected
         ? $"{settings.Hardware.PhysicalCores} physical CPU cores; {settings.Hardware.LogicalProcessors} logical processors available."
         : $"Physical core detection unavailable. Using a conservative estimate of {settings.Hardware.PhysicalCores} cores; {settings.Hardware.LogicalProcessors} logical processors available.";
@@ -326,7 +326,8 @@ public sealed partial class SettingsViewModel : OperationViewModel
         new(ToolProcessPriority.Normal, "Normal"),
         new(ToolProcessPriority.AboveNormal, "Above normal")
     ];
-    public int[] PipeBufferChoices { get; } = [64, 128, 256, 512, 1024, 2048, 4096, 8192, 16384, 32768, 65536];
+    private const int RecommendedPipeBufferKiB = 4096;
+    public NumberChoice[] PipeBufferChoices { get; } = NumberChoices([64, 128, 256, 512, 1024, 2048, 4096, 8192, 16384, 32768, 65536], RecommendedPipeBufferKiB);
 
     [ObservableProperty]
     public partial int AnalysisWorkers { get; set; }
@@ -337,7 +338,7 @@ public sealed partial class SettingsViewModel : OperationViewModel
     partial void OnToolProcessPriorityChanged(ToolProcessPriority value) => TriggerAutoSave();
 
     [ObservableProperty]
-    public partial int PipeBufferKiB { get; set; } = 4096;
+    public partial int PipeBufferKiB { get; set; } = RecommendedPipeBufferKiB;
     partial void OnPipeBufferKiBChanged(int value) => TriggerAutoSave();
 
     [ObservableProperty]
