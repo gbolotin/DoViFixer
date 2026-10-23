@@ -38,6 +38,9 @@ public sealed class CompositionTests
         Assert.AreSame(container.GetRequiredService<IToolCatalog>(), container.GetRequiredService<IToolCatalog>());
         Assert.AreSame(container.GetRequiredService<IMediaPreview>(), container.GetRequiredService<IMediaPreview>());
         Assert.AreSame(container.GetRequiredService<IThemeService>(), container.GetRequiredService<IThemeService>());
+        // The flyout and the Media details share one session feed.
+        Assert.AreSame(container.GetRequiredService<IActivityFeed>(), container.GetRequiredService<IActivityFeed>());
+        Assert.AreSame(container.GetRequiredService<ActivityViewModel>(), container.GetRequiredService<ActivityViewModel>());
         Assert.AreNotSame(container.GetRequiredService<MediaViewModel>(), container.GetRequiredService<MediaViewModel>());
         Assert.AreNotSame(container.GetRequiredService<ConversionService>(), container.GetRequiredService<ConversionService>());
         // Media is the only page; Settings opens in a frame over it.

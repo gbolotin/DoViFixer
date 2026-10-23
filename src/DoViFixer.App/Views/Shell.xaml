@@ -135,6 +135,111 @@
                                        Style="{StaticResource WfStatusBarStyle}"
                                        AutomationProperties.Name="Page status">
                                 <StatusBar.Resources>
+                                    <!-- The Activity button opens a flyout of what happened this session, newest first. A red count
+                                         shows problems reported since it was last opened. While the flyout is open the button takes
+                                         no clicks, so clicking it closes the flyout instead of opening it again. -->
+                                    <DataTemplate DataType="{x:Type viewModels:ActivityViewModel}">
+                                        <Grid>
+                                            <Button x:Name="ActivityButton"
+                                                    Command="{Binding OpenCommand}"
+                                                    IsHitTestVisible="{Binding IsOpen, ElementName=ActivityPopup, Converter={StaticResource WfInverseBooleanConverter}}"
+                                                    ToolTip="{Binding ToolTip}"
+                                                    AutomationProperties.Name="Activity"
+                                                    AutomationProperties.HelpText="{Binding ToolTip}"
+                                                    Style="{StaticResource WfTransparentButtonStyle}"
+                                                    Padding="0"
+                                                    MinHeight="0">
+                                                <StackPanel Orientation="Horizontal">
+                                                    <TextBlock Text="&#xE81C;"
+                                                               FontFamily="{StaticResource SymbolThemeFontFamily}"
+                                                               VerticalAlignment="Center"
+                                                               Margin="0,0,8,0" />
+                                                    <TextBlock Text="Activity" VerticalAlignment="Center" />
+                                                    <Border Background="{DynamicResource SystemFillColorCriticalBrush}"
+                                                            CornerRadius="{DynamicResource ControlCornerRadius}"
+                                                            Padding="4,0"
+                                                            Margin="8,0,0,0"
+                                                            VerticalAlignment="Center"
+                                                            Visibility="{Binding HasUnseenProblems, Converter={StaticResource WfBooleanToVisibilityConverter}}">
+                                                        <TextBlock Text="{Binding UnseenProblems}"
+                                                                   Style="{StaticResource CaptionTextBlockStyle}"
+                                                                   Foreground="{DynamicResource TextOnAccentFillColorPrimaryBrush}" />
+                                                    </Border>
+                                                </StackPanel>
+                                            </Button>
+                                            <Popup x:Name="ActivityPopup"
+                                                   PlacementTarget="{Binding ElementName=ActivityButton}"
+                                                   Placement="Top"
+                                                   VerticalOffset="-8"
+                                                   IsOpen="{Binding IsOpen}"
+                                                   StaysOpen="False"
+                                                   AllowsTransparency="True"
+                                                   PopupAnimation="Fade"
+                                                   Opened="OnActivityPopupOpened">
+                                                <Border Background="{DynamicResource SolidBackgroundFillColorBaseBrush}"
+                                                        BorderBrush="{DynamicResource SurfaceStrokeColorDefaultBrush}"
+                                                        BorderThickness="1"
+                                                        CornerRadius="{DynamicResource OverlayCornerRadius}"
+                                                        Padding="16"
+                                                        Width="440"
+                                                        TextElement.Foreground="{DynamicResource TextFillColorPrimaryBrush}"
+                                                        AutomationProperties.Name="Activity">
+                                                    <Border.InputBindings>
+                                                        <KeyBinding Key="Escape" Command="{Binding CloseCommand}" />
+                                                    </Border.InputBindings>
+                                                    <DockPanel>
+                                                        <TextBlock DockPanel.Dock="Top"
+                                                                   Text="Activity"
+                                                                   Style="{StaticResource BodyStrongTextBlockStyle}"
+                                                                   Margin="0,0,0,12" />
+                                                        <TextBlock DockPanel.Dock="Top"
+                                                                   Text="Scans, inspections, conversions, restorations and cleanups you run appear here."
+                                                                   TextWrapping="Wrap"
+                                                                   Foreground="{DynamicResource TextFillColorSecondaryBrush}"
+                                                                   Visibility="{Binding IsEmpty, Converter={StaticResource WfBooleanToVisibilityConverter}}" />
+                                                        <ScrollViewer MaxHeight="480"
+                                                                      VerticalScrollBarVisibility="Auto"
+                                                                      HorizontalScrollBarVisibility="Disabled">
+                                                            <!-- The right margin keeps the overlay scroll bar off the entry times. -->
+                                                            <ItemsControl ItemsSource="{Binding Entries}"
+                                                                          Focusable="False"
+                                                                          Margin="0,0,16,0"
+                                                                          AutomationProperties.Name="Activity entries">
+                                                                <ItemsControl.ItemTemplate>
+                                                                    <DataTemplate>
+                                                                        <StackPanel Margin="0,0,0,8">
+                                                                            <ContentPresenter Content="{Binding}" ContentTemplate="{StaticResource ActivityEntryTemplate}" />
+                                                                            <StackPanel Orientation="Horizontal" Margin="16,0,0,0">
+                                                                                <TextBlock x:Name="ShowLocation"
+                                                                                           Style="{StaticResource CaptionTextBlockStyle}"
+                                                                                           Margin="0,0,12,0">
+                                                                                    <Hyperlink Command="{Binding DataContext.ShowLocationCommand, RelativeSource={RelativeSource AncestorType=ItemsControl}}"
+                                                                                               CommandParameter="{Binding}">
+                                                                                        <Run Text="Show in folder" />
+                                                                                    </Hyperlink>
+                                                                                </TextBlock>
+                                                                                <TextBlock Style="{StaticResource CaptionTextBlockStyle}">
+                                                                                    <Hyperlink Command="{Binding DataContext.CopyCommand, RelativeSource={RelativeSource AncestorType=ItemsControl}}"
+                                                                                               CommandParameter="{Binding}">
+                                                                                        <Run Text="Copy" />
+                                                                                    </Hyperlink>
+                                                                                </TextBlock>
+                                                                            </StackPanel>
+                                                                        </StackPanel>
+                                                                        <DataTemplate.Triggers>
+                                                                            <DataTrigger Binding="{Binding Location}" Value="{x:Null}">
+                                                                                <Setter TargetName="ShowLocation" Property="Visibility" Value="Collapsed" />
+                                                                            </DataTrigger>
+                                                                        </DataTemplate.Triggers>
+                                                                    </DataTemplate>
+                                                                </ItemsControl.ItemTemplate>
+                                                            </ItemsControl>
+                                                        </ScrollViewer>
+                                                    </DockPanel>
+                                                </Border>
+                                            </Popup>
+                                        </Grid>
+                                    </DataTemplate>
                                     <DataTemplate DataType="{x:Type p:DependencyReportViewModel}">
                                         <StackPanel Orientation="Horizontal"
                                                     ToolTip="{Binding WarningDetails}"

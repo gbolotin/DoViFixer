@@ -46,6 +46,8 @@ public static class AppComposition
         services.AddSingleton<IFileExplorer>(provider => new FileExplorer(configuration["DoViFixer:Logging:Directory"] ?? Path.Combine(root, "Logs"), provider.GetRequiredService<IDialogService>()));
         services.AddSingleton<ITextClipboard, TextClipboard>();
         services.AddSingleton<DependencyReportViewModel>();
+        // The status bar flyout and the Media details show the same session activity.
+        services.AddSingleton<ActivityViewModel>();
         services.AddSingleton<DependencySetup>();
         services.AddTransient<StartupDependencyCheckViewModel>();
         services.AddTransient<MediaViewModel>();

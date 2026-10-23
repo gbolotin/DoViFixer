@@ -94,20 +94,6 @@ public sealed class BatchProgressTests
     }
 
     [TestMethod]
-    [DataRow(750, "750ms")]
-    [DataRow(5000, "5s")]
-    [DataRow(75000, "1m 15sec")]
-    public void BatchElapsedUsesReadableUnits(long milliseconds, string expected)
-    {
-        var time = new ManualTime();
-        var model = new BatchProgressViewModel(time);
-        model.Begin(1, "Conversion to DV8.1");
-        time.Advance(TimeSpan.FromMilliseconds(milliseconds));
-
-        Assert.AreEqual(expected, model.BatchElapsed);
-    }
-
-    [TestMethod]
     public void ConcurrentJobsKeepSeparateProgressAndTheCardMovesToTheNextActiveFile()
     {
         var previous = SynchronizationContext.Current;

@@ -106,7 +106,7 @@ public sealed class MissingSourceFileTests
 
         Assert.AreEqual(MediaRow.MissingStatus, model.Files[1].Status);
         Assert.IsNull(model.Files[1].AnalysisError);
-        StringAssert.StartsWith(model.StatusMessage, "Scan: 1 Completed · 1 Skipped · Finished in ");
+        StringAssert.StartsWith(model.StatusMessage, "Scanned 1 of 2 files · 1 skipped · took ");
     }
 
     [TestMethod]
@@ -122,7 +122,7 @@ public sealed class MissingSourceFileTests
 
         Assert.IsTrue(model.Files[1].IsMissing);
         Assert.IsNull(model.Files[1].AnalysisError);
-        StringAssert.StartsWith(model.StatusMessage, "Scan: 1 Completed · 1 Skipped · Finished in ");
+        StringAssert.StartsWith(model.StatusMessage, "Scanned 1 of 2 files · 1 skipped · took ");
     }
 
     [TestMethod]

@@ -303,6 +303,15 @@
                                           AutomationProperties.Name="Scan samples" />
                         </Expander>
                     </StackPanel>
+                    <Expander Header="Activity this session"
+                              IsExpanded="True"
+                              Margin="0,12,0,0"
+                              Visibility="{Binding HasFocusedActivity, Converter={StaticResource WfBooleanToVisibilityConverter}, FallbackValue=Collapsed}">
+                        <ItemsControl ItemsSource="{Binding FocusedActivity}"
+                                      ItemTemplate="{StaticResource ActivityEntryTemplate}"
+                                      Focusable="False"
+                                      AutomationProperties.Name="Activity for this file" />
+                    </Expander>
                     <Expander Header="Library history"
                               Margin="0,12,0,0"
                               Visibility="{Binding Focused.HasLibraryHistory, Converter={StaticResource WfBooleanToVisibilityConverter}, FallbackValue=Collapsed}">

@@ -188,6 +188,8 @@ In the console, `settings preset list` lists presets, `settings preset apply <na
 
 ## Logging and operation history
 
+The app's **Activity** button, at the left of the status bar, lists what happened this session in plain words, newest first: each scanned, inspected, converted or restored file, a summary of each batch of several files, and backup cleanups. Entries name files rather than paths, give readable durations, and say what happened to your original after a failure or cancellation. A red count shows problems reported since you last opened the list, and each entry can show its file in File Explorer or copy its text. A file's details pane lists the same entries for that file under **Activity this session**. When an operation ends, the status bar and the Windows notification use the same words, for example "Converted 2 of 3 files · 1 failed · took 3 min 2 s". The list lives in memory and starts empty with each launch; the logs below keep the full technical record.
+
 Serilog writes local, structured JSON Lines logs to `%LOCALAPPDATA%\DoViFixer\Logs` (or `Logs` under `DoViFixer__DataDirectory`). Each line is one event in Serilog's compact JSON format (CLEF): `@t` timestamp, `@m` rendered message, `@l` level (left out for Information), `@x` full exception when present, and the structured properties as top-level fields. [Seq](https://datalust.co/seq) and [Compact Log Viewer](https://github.com/warrenbuckley/Compact-Log-Format-Viewer) open these files directly.
 
 | File | Contents | Default retention |

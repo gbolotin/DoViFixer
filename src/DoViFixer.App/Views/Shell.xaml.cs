@@ -22,6 +22,10 @@ public partial class Shell : Window
 
     private void OnExitClick(object sender, RoutedEventArgs e) => Close();
 
+    // Keyboard users land in the Activity flyout, where Escape closes it.
+    private void OnActivityPopupOpened(object? sender, EventArgs e) =>
+        (sender as System.Windows.Controls.Primitives.Popup)?.Child?.MoveFocus(new TraversalRequest(FocusNavigationDirection.First));
+
     private async void OnClosing(object? sender, CancelEventArgs e)
     {
         if (closing)
