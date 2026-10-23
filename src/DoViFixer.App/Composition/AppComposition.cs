@@ -1,5 +1,6 @@
 using DoViFixer.App.Dialogs;
 using DoViFixer.App.Presentation.Application;
+using DoViFixer.App.Startup;
 using DoViFixer.App.ViewModels;
 using DoViFixer.App.Views;
 using DoViFixer.Application;
@@ -46,6 +47,7 @@ public static class AppComposition
         services.AddSingleton<IFileExplorer>(provider => new FileExplorer(configuration["DoViFixer:Logging:Directory"] ?? Path.Combine(root, "Logs"), provider.GetRequiredService<IDialogService>()));
         services.AddSingleton<ITextClipboard, TextClipboard>();
         services.AddSingleton<IWebBrowser, DefaultBrowser>();
+        services.AddSingleton<IFileExplorerIntegration, FileExplorerIntegration>();
         services.AddSingleton<DependencyReportViewModel>();
         // The status bar flyout and the Media details show the same session activity.
         services.AddSingleton<ActivityViewModel>();

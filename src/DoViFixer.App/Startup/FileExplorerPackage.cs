@@ -20,8 +20,8 @@ internal static class FileExplorerPackage
     /// Registers the package for the app in <paramref name="folder"/> when <paramref name="show"/> is
     /// <see langword="true"/>, or removes it. Returns whether File Explorer shows the package's commands, so the
     /// classic commands can step aside. Before Windows 11, or without the package file, it registers nothing.
+    /// Package registration waits on the deployment service, so it never runs on the UI thread.
     /// </summary>
-    // Package registration waits on the deployment service, so it never runs on the UI thread.
     public static Task<bool> UpdateAsync(bool show, string folder) => Task.Run(() => UpdateCoreAsync(show, folder));
 
     private static async Task<bool> UpdateCoreAsync(bool show, string folder)
@@ -32,7 +32,6 @@ internal static class FileExplorerPackage
         }
 
         var manager = new PackageManager();
-        // By name alone: an unsigned package's publisher may read back in another form.
         var registered = manager.FindPackagesForUser("").Where(existing => existing.Id.Name == Name).ToList();
         string package = Path.Combine(folder, FileName);
         if (!show || !File.Exists(package))
@@ -58,11 +57,7 @@ internal static class FileExplorerPackage
             await manager.RemovePackageAsync(existing.Id.FullName);
         }
 
-        await manager.AddPackageByUriAsync(new Uri(package), new AddPackageOptions
-        {
-            ExternalLocationUri = new Uri(folder),
-            AllowUnsigned = true
-        });
+        await manager.AddPackageByUriAsync(new Uri(package), new AddPackageOptions { ExternalLocationUri = new Uri(folder) });
         return true;
     }
 

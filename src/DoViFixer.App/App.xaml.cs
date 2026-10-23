@@ -1,5 +1,4 @@
 using System.Reflection;
-using System.Security;
 using System.Windows;
 using System.Windows.Threading;
 using DoViFixer.App.Composition;
@@ -7,7 +6,6 @@ using DoViFixer.App.Presentation.Application;
 using DoViFixer.App.Startup;
 using DoViFixer.App.ViewModels;
 using DoViFixer.App.Views;
-using DoViFixer.Application.Abstractions;
 using DoViFixer.Application.FileExplorer;
 using DoViFixer.Application.Settings;
 using DoViFixer.Application.Updates;
@@ -26,8 +24,6 @@ public partial class App : System.Windows.Application
     private readonly List<FileExplorerRequest> fileExplorerRequests = [];
     private DispatcherTimer? fileExplorerBatch;
     private ShellViewModel? readyShell;
-    // A change of the setting waits for the update at startup, so two never change the menu at once.
-    private static readonly SemaphoreSlim fileExplorerMenuUpdate = new(1, 1);
 
     protected override async void OnStartup(StartupEventArgs e)
     {
@@ -74,7 +70,7 @@ public partial class App : System.Windows.Application
         if (MainWindow.DataContext is ShellViewModel shell)
         {
             // Registering the package can take a few seconds; the window does not wait for it.
-            var fileExplorerMenu = isAppProcess && settings is not null ? KeepFileExplorerMenuAsync(services!, shell.Settings, settings.ShowInFileExplorerMenu) : Task.CompletedTask;
+            var fileExplorerMenu = isAppProcess && settings is not null ? KeepFileExplorerMenuAsync(services!.GetRequiredService<IFileExplorerIntegration>(), shell.Settings, settings.ShowInFileExplorerMenu) : Task.CompletedTask;
 
             await shell.InitializeAsync();
             readyShell = shell;
@@ -102,59 +98,17 @@ public partial class App : System.Windows.Application
     /// Updates File Explorer's menu at every start, so its commands follow the app when its folder moves, and whenever
     /// the setting changes.
     /// </summary>
-    private static async Task KeepFileExplorerMenuAsync(IServiceProvider provider, SettingsViewModel settings, bool show)
+    private static async Task KeepFileExplorerMenuAsync(IFileExplorerIntegration fileExplorer, SettingsViewModel settings, bool show)
     {
-        string executable = Path.ChangeExtension(typeof(App).Assembly.Location, ".exe");
-        if (!File.Exists(executable))
-        {
-            return;
-        }
-
         settings.Saved += async saved =>
         {
             if (saved.ShowInFileExplorerMenu != show)
             {
                 show = saved.ShowInFileExplorerMenu;
-                await UpdateFileExplorerMenuAsync(provider, show, executable);
+                await fileExplorer.UpdateAsync(show);
             }
         };
-        await UpdateFileExplorerMenuAsync(provider, show, executable);
-    }
-
-    /// <summary>
-    /// Shows the commands in Windows 11's menu through the app's package, or, before Windows 11 or when Windows does not
-    /// register the package, as classic commands under "Show more options".
-    /// </summary>
-    private static async Task UpdateFileExplorerMenuAsync(IServiceProvider provider, bool show, string executable)
-    {
-        var logger = provider.GetRequiredService<ILogger<App>>();
-        await fileExplorerMenuUpdate.WaitAsync();
-        try
-        {
-            bool packaged = false;
-            try
-            {
-                packaged = await FileExplorerPackage.UpdateAsync(show, Path.GetDirectoryName(executable)!);
-            }
-            catch (Exception ex)
-            {
-                logger.LogWarning(ex, "Could not update the Windows 11 File Explorer menu package; using the classic File Explorer menu");
-            }
-
-            try
-            {
-                provider.GetRequiredService<IFileExplorerMenu>().Update(show && !packaged, executable);
-            }
-            catch (Exception ex) when (ex is IOException or UnauthorizedAccessException or SecurityException)
-            {
-                // The app works without the menu; files can still be added in the window.
-                logger.LogWarning(ex, "Could not update the File Explorer menu");
-            }
-        }
-        finally
-        {
-            fileExplorerMenuUpdate.Release();
-        }
+        await fileExplorer.UpdateAsync(show);
     }
 
     private void ReceiveFromFileExplorer(FileExplorerRequest request, bool bringToFront)

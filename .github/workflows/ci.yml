@@ -81,16 +81,26 @@ jobs:
           if-no-files-found: warn
 
       # Framework-dependent: the apps need the .NET 10 Desktop Runtime.
+      # The File Explorer package is signed with the self-signed certificate in the repository secrets
+      # (tools/new-file-explorer-certificate.ps1). Builds without the secrets, such as forks, ship without the package.
       - name: Publish apps
         shell: pwsh
+        env:
+          FILE_EXPLORER_CERTIFICATE: ${{ secrets.FILE_EXPLORER_CERTIFICATE }}
+          FILE_EXPLORER_CERTIFICATE_PASSWORD: ${{ secrets.FILE_EXPLORER_CERTIFICATE_PASSWORD }}
         run: |
           $version = '${{ steps.version.outputs.version }}'
+          $certificate = $null
+          if ($env:FILE_EXPLORER_CERTIFICATE) {
+            $certificate = Join-Path $env:RUNNER_TEMP 'file-explorer.pfx'
+            [IO.File]::WriteAllBytes($certificate, [Convert]::FromBase64String($env:FILE_EXPLORER_CERTIFICATE))
+          }
           foreach ($app in 'DoViFixer.App', 'DoViFixer.Console', 'DoViFixer.Mcp') {
             dotnet publish src/$app/$app.csproj -c Release --no-self-contained -p:UseLocalWpfFoundation=false ${{ steps.version.outputs.property }} -o out/$app
             if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
-            # The Windows 11 File Explorer commands: a native DLL and the sparse package the app registers.
+            # The Windows 11 File Explorer commands: a native DLL and the signed sparse package the app registers.
             if ($app -eq 'DoViFixer.App') {
-              ./tools/package-file-explorer.ps1 -AppFolder out/$app -Version $version
+              ./tools/package-file-explorer.ps1 -AppFolder out/$app -Version $version -CertificatePath $certificate -CertificatePassword $env:FILE_EXPLORER_CERTIFICATE_PASSWORD
               if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
             }
             Compress-Archive -Path out/$app/* -DestinationPath "out/$app-$version.zip"

@@ -105,6 +105,43 @@ public sealed class FileExplorerTests
     }
 
     [TestMethod]
+    public async Task SettingsOffersTheWindows11MenuUntilThePcTrustsTheCertificate()
+    {
+        using var runtime = new TestRuntime();
+        var menu = new RecordingFileExplorerIntegration { TrustSucceeds = true };
+        runtime.Services.AddSingleton<IFileExplorerIntegration>(menu);
+        var settings = runtime.Container.GetRequiredService<SettingsViewModel>();
+        await settings.LoadCommand.InvokeAsync();
+        Assert.IsTrue(settings.OffersWindows11Menu);
+
+        settings.ShowInFileExplorerMenu = false;
+        Assert.IsFalse(settings.OffersWindows11Menu, "Without the commands, there is nothing to move.");
+        settings.ShowInFileExplorerMenu = true;
+        await settings.FlushAsync();
+
+        await settings.ShowInWindows11MenuCommand.InvokeAsync();
+
+        CollectionAssert.AreEqual(new[] { true }, menu.Trusts);
+        Assert.IsFalse(settings.OffersWindows11Menu);
+        Assert.AreEqual("File Explorer shows Open and Convert in the Windows 11 menu.", settings.StatusMessage);
+    }
+
+    [TestMethod]
+    public async Task ADeclinedAdministratorPromptKeepsTheOffer()
+    {
+        using var runtime = new TestRuntime();
+        var menu = new RecordingFileExplorerIntegration { TrustSucceeds = false };
+        runtime.Services.AddSingleton<IFileExplorerIntegration>(menu);
+        var settings = runtime.Container.GetRequiredService<SettingsViewModel>();
+        await settings.LoadCommand.InvokeAsync();
+
+        await settings.ShowInWindows11MenuCommand.InvokeAsync();
+
+        Assert.IsTrue(settings.OffersWindows11Menu);
+        Assert.AreEqual("The Windows 11 menu was not changed. The commands stay under Show more options.", settings.StatusMessage);
+    }
+
+    [TestMethod]
     public async Task ALaterStartSendsItsCommandLineToTheFirstInstance()
     {
         string name = $"DoViFixer.Tests.{Guid.NewGuid():N}";
@@ -136,4 +173,20 @@ public sealed class FileExplorerTests
     private static Task<SingleInstance?> StartOnOwnThreadAsync(string name, IReadOnlyList<string> arguments, TimeSpan? timeout = null) =>
         Task.Factory.StartNew(() => SingleInstance.StartAsync(name, arguments, timeout ?? TimeSpan.FromSeconds(10)), CancellationToken.None,
             TaskCreationOptions.LongRunning, TaskScheduler.Default).Unwrap();
+
+    private sealed class RecordingFileExplorerIntegration : IFileExplorerIntegration
+    {
+        public bool NeedsCertificateTrust { get; private set; } = true;
+        public bool TrustSucceeds { get; init; }
+        public List<bool> Trusts { get; } = [];
+
+        public Task<bool> UpdateAsync(bool show) => Task.FromResult(!NeedsCertificateTrust && show);
+
+        public Task<bool> TrustCertificateAsync(bool show)
+        {
+            Trusts.Add(show);
+            NeedsCertificateTrust = !TrustSucceeds;
+            return Task.FromResult(TrustSucceeds);
+        }
+    }
 }

@@ -27,10 +27,16 @@ The File Explorer commands point to the folder DoViFixer runs from. If you move 
 
 | Windows | Where |
 | --- | --- |
-| Windows 11 | In the first menu. DoViFixer registers a small package for your user account when it starts, because Windows 11 only shows packaged apps there. |
+| Windows 11 | Under **Show more options** at first. To move them into the first menu, open **Settings › General › File Explorer** and click **Show in the Windows 11 menu…**. |
 | Windows 10 | In the right-click menu. |
 
-The Windows 11 package is not signed. If Windows does not accept it, for example on a PC whose policy blocks such packages, the commands are under **Show more options** instead, and the log in `%LOCALAPPDATA%\DoViFixer\Logs` says why.
+Windows 11 only shows packaged apps in its first menu, so DoViFixer comes with a small signed package. The package is signed with DoViFixer's own certificate, not one from a certificate authority, so Windows accepts it only after your PC trusts that certificate:
+
+1. Click **Show in the Windows 11 menu…**.
+2. Allow the administrator prompt. Windows adds the certificate to the computer's Trusted People.
+3. DoViFixer registers the package for your user account. The commands move into the first menu.
+
+You do this once per PC. If it fails, the commands stay under **Show more options**, and the log in `%LOCALAPPDATA%\DoViFixer\Logs` says why. To remove the certificate later, open `certlm.msc` as administrator and delete **gbolotin** from **Trusted People › Certificates**.
 
 DoViFixer remembers the movies you add. They are back in the list the next time you start the app.
 

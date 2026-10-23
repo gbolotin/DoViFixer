@@ -1,5 +1,6 @@
 using DoViFixer.App.Dialogs;
 using DoViFixer.App.Presentation.Application;
+using DoViFixer.App.Startup;
 using DoViFixer.Application.Dependencies;
 using DoViFixer.Application.Settings;
 using DoViFixer.Application.Abstractions;
@@ -22,6 +23,7 @@ public sealed partial class SettingsViewModel : OperationViewModel
     private readonly DiagnosticsService diagnostics;
     private readonly PresetService presets;
     private readonly IDialogService dialogs;
+    private readonly IFileExplorerIntegration fileExplorerMenu;
     public string DiagnosticContentsNotice => DiagnosticsService.ContentsNotice;
     private bool includeSimple;
     private bool forceComplex;
@@ -50,7 +52,7 @@ public sealed partial class SettingsViewModel : OperationViewModel
 
     public DependencyReportViewModel Dependencies { get; }
 
-    public SettingsViewModel(SettingsService settings, DependencySetup setup, DependencyReportViewModel dependencies, IFileDialogService files, IFileExplorer explorer, IMediaLibrary library, Application.Library.MediaLibraryService libraryService, IThemeService themeService, DiagnosticsService diagnostics, PresetService presets, IDialogService dialogs, IOperationFeedback? feedback = null)
+    public SettingsViewModel(SettingsService settings, DependencySetup setup, DependencyReportViewModel dependencies, IFileDialogService files, IFileExplorer explorer, IMediaLibrary library, Application.Library.MediaLibraryService libraryService, IThemeService themeService, DiagnosticsService diagnostics, PresetService presets, IDialogService dialogs, IFileExplorerIntegration fileExplorerMenu, IOperationFeedback? feedback = null)
         : base(feedback)
     {
         this.settings = settings;
@@ -63,6 +65,7 @@ public sealed partial class SettingsViewModel : OperationViewModel
         this.diagnostics = diagnostics;
         this.presets = presets;
         this.dialogs = dialogs;
+        this.fileExplorerMenu = fileExplorerMenu;
         Dependencies = dependencies;
         var general = new GeneralSettingsSection(this);
         Sections = new NavigationService(
@@ -268,7 +271,35 @@ public sealed partial class SettingsViewModel : OperationViewModel
 
     /// <summary>Whether File Explorer's right-click menu offers to open or convert Matroska files and folders here.</summary>
     [ObservableProperty]
+    [NotifyPropertyChangedFor(nameof(OffersWindows11Menu))]
     public partial bool ShowInFileExplorerMenu { get; set; } = true;
+
+    /// <summary>Whether Windows 11 would show the commands in its first menu once this PC trusts the app's package certificate.</summary>
+    [ObservableProperty]
+    [NotifyPropertyChangedFor(nameof(OffersWindows11Menu))]
+    public partial bool Windows11MenuNeedsTrust { get; private set; }
+
+    /// <summary>Whether the File Explorer page offers to move the commands into Windows 11's first menu.</summary>
+    public bool OffersWindows11Menu => ShowInFileExplorerMenu && Windows11MenuNeedsTrust;
+
+    /// <summary>
+    /// Trusts the certificate of the app's File Explorer package on this PC, through the administrator prompt Windows
+    /// shows, so Windows 11's first menu shows Open and Convert instead of "Show more options".
+    /// </summary>
+    [RelayCommand(CanExecute = nameof(IsIdle))]
+    private Task ShowInWindows11Menu() => RunAsync(async (_, _) =>
+    {
+        if (await fileExplorerMenu.TrustCertificateAsync(ShowInFileExplorerMenu))
+        {
+            Windows11MenuNeedsTrust = false;
+            SetStatus(ViewStatus.Result, "File Explorer shows Open and Convert in the Windows 11 menu.");
+        }
+        else
+        {
+            Windows11MenuNeedsTrust = fileExplorerMenu.NeedsCertificateTrust;
+            SetStatus(ViewStatus.Error, "The Windows 11 menu was not changed. The commands stay under Show more options.");
+        }
+    });
 
     partial void OnShowInFileExplorerMenuChanged(bool value) => TriggerAutoSave();
 
@@ -665,6 +696,7 @@ public sealed partial class SettingsViewModel : OperationViewModel
         lastAppliedPreset = lastSavedSettings.LastAppliedPreset;
         ApplyPreferences(lastSavedSettings);
         await RefreshLibrarySizeAsync(token);
+        Windows11MenuNeedsTrust = await Task.Run(() => fileExplorerMenu.NeedsCertificateTrust, token);
         SetStatus(ViewStatus.SettingsLoaded);
         await LoadPresetsAsync(token);
     });
@@ -766,6 +798,7 @@ public sealed partial class SettingsViewModel : OperationViewModel
         CheckCommand?.NotifyCanExecuteChanged();
         InstallCommand?.NotifyCanExecuteChanged();
         SetToolCommand?.NotifyCanExecuteChanged();
+        ShowInWindows11MenuCommand?.NotifyCanExecuteChanged();
         ResetToolCommand?.NotifyCanExecuteChanged();
         ExportDiagnosticsCommand?.NotifyCanExecuteChanged();
         ApplyPresetCommand?.NotifyCanExecuteChanged();
