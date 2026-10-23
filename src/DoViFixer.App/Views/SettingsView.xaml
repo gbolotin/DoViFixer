@@ -29,6 +29,9 @@
         <DataTemplate DataType="{x:Type viewModels:SafetySettingsSection}">
             <settings:SafetySettingsView DataContext="{Binding Settings}" />
         </DataTemplate>
+        <DataTemplate DataType="{x:Type viewModels:WatchFolderSettingsSection}">
+            <settings:WatchFolderSettingsView DataContext="{Binding Settings}" />
+        </DataTemplate>
         <DataTemplate DataType="{x:Type viewModels:PerformanceSettingsSection}"><settings:PerformanceSettingsView DataContext="{Binding Settings}" /></DataTemplate>
         <DataTemplate DataType="{x:Type viewModels:NativeToolsSettingsSection}">
             <settings:NativeToolsSettingsView DataContext="{Binding Settings}" />

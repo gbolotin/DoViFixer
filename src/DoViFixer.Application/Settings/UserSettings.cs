@@ -101,4 +101,16 @@ public sealed record UserSettings
     public bool ShowSelectionCheckBoxes { get; init; }
     /// <summary>The preset applied last, so changed settings can say which preset they started from.</summary>
     public string? LastAppliedPreset { get; init; }
+    /// <summary>
+    /// A folder, such as a download folder, whose new files the app scans as they finish arriving. Files the conversion
+    /// settings would convert join the media list and are converted without asking. <see langword="null"/> watches nothing.
+    /// </summary>
+    public string? WatchFolder { get; init; }
+    /// <summary>Whether files arriving in subfolders of <see cref="WatchFolder"/> count too.</summary>
+    public bool WatchSubfolders { get; init; } = true;
+    /// <summary>How long, in seconds, a new file must stay unchanged and closed before it is scanned.</summary>
+    public int WatchSettleSeconds { get; init; } = DefaultWatchSettleSeconds;
+    public const int DefaultWatchSettleSeconds = 30;
+    public const int MinimumWatchSettleSeconds = 5;
+    public const int MaximumWatchSettleSeconds = 3600;
 }

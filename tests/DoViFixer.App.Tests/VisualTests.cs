@@ -1098,7 +1098,7 @@ public sealed class VisualTests
         Assert.AreSame(window.FindResource("TextFillColorSecondaryBrush"), title.Foreground);
         Assert.AreSame(window.FindResource("ListBoxBackground"), overlay.HeaderBackground, "The title shares the section list's background.");
         var sections = Descendants<ListBox>(overlay).Single(list => ReferenceEquals(list.ItemsSource, shell.Settings.Sections.Pages));
-        Assert.HasCount(8, sections.Items);
+        Assert.HasCount(9, sections.Items);
         var host = Descendants<RetainedPageHost>(overlay).Single();
         var retained = new Dictionary<object, DependencyObject>();
         double? toolsOffset = null;
@@ -1191,6 +1191,13 @@ public sealed class VisualTests
                     Assert.IsFalse(validationLayer.GetAdorners(marginInput)?.Any(adorner => Descendants<Border>(adorner).Any()) ?? false);
                     Assert.AreEqual(string.Empty, UIElementAutomationPeer.CreatePeerForElement(marginInput).GetItemStatus());
                     SaveRender(content, "settings-analysis");
+                    break;
+                case WatchFolderSettingsSection when firstVisit:
+                    Assert.HasCount(1, Descendants<TextBox>(view).Where(box => System.Windows.Automation.AutomationProperties.GetName(box) == "Folder to watch"));
+                    var settle = Descendants<TextBox>(view).Single(box => System.Windows.Automation.AutomationProperties.GetName(box) == "Wait before acting");
+                    Assert.AreEqual("seconds", WpfFoundation.Behaviors.TextBoxAssist.GetSuffix(settle));
+                    Assert.AreEqual(Visibility.Collapsed, Descendants<Button>(view).Single(button => System.Windows.Automation.AutomationProperties.GetName(button) == "Reset wait before acting").Visibility, "Default values hide Reset.");
+                    SaveRender(content, "settings-watch-folder");
                     break;
                 case PerformanceSettingsSection when firstVisit:
                     var sectionNavigation = Descendants<ListBox>(overlay).Single();

@@ -17,6 +17,7 @@ public static class ActivityText
         ActivityOperation.Inspection => new("Inspecting", "Inspected", "inspect", "inspection", "file"),
         ActivityOperation.DeepInspection => new("Deep inspecting", "Deep inspected", "deep inspect", "deep inspection", "file"),
         ActivityOperation.Conversion => new("Converting", "Converted", "convert", "conversion", "file"),
+        ActivityOperation.AutoConversion => new("Auto-converting", "Auto-converted", "auto-convert", "automatic conversion", "file"),
         ActivityOperation.Restoration => new("Restoring", "Restored", "restore", "restoration", "file"),
         ActivityOperation.Cleanup => new("Removing", "Removed", "remove", "cleanup", "backup file"),
         _ => throw new ArgumentOutOfRangeException(nameof(operation), operation, null)
@@ -40,6 +41,10 @@ public static class ActivityText
         };
         return new(id, severity, title, result.Message.Trim(), result.Item, result.Output ?? result.Original);
     }
+
+    /// <summary>A file from the watch folder that was left as it is, with the reason.</summary>
+    public static ActivityEntry NotAutoConverted(Guid id, string path, string reason, ActivitySeverity severity = ActivitySeverity.Info) =>
+        new(id, severity, $"Didn't auto-convert {Name(path)}", reason.Trim(), path, path);
 
     public static ActivityEntry BatchStarted(Guid id, ActivityOperation operation, int count) =>
         new(id, ActivitySeverity.Info, $"{For(operation).Running} {Count(count, For(operation).Item)}…") { IsRunning = true };

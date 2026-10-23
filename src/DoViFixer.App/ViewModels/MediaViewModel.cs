@@ -15,6 +15,7 @@ using DoViFixer.Application.Operations;
 using DoViFixer.Application.Settings;
 using DoViFixer.Application.Restore;
 using DoViFixer.Application.Reports;
+using DoViFixer.Application.WatchFolder;
 using DoViFixer.Domain.Analysis;
 using DoViFixer.Domain.Conversion;
 using Microsoft.Extensions.Logging;
@@ -29,6 +30,7 @@ public sealed partial class MediaViewModel : OperationViewModel, INavigationPage
     [
         new(SelectionSummary),
         new(StatusText),
+        .. WatchFolderStatusItem is { } watch ? [watch] : Array.Empty<StatusItem>(),
         new(OutputSummary, OutputSummaryToolTip, Command: OpenSettingsCommand),
         new(RetentionSummary, IsEmphasized: IsReplaceOriginalActive),
         new(FelSummary, convertsComplexFel ? ComplexFelWarning : null, IsEmphasized: convertsComplexFel),
@@ -61,11 +63,13 @@ public sealed partial class MediaViewModel : OperationViewModel, INavigationPage
     private readonly ReportService reports;
     private readonly SynchronizationContext? uiContext;
     private readonly ActivityViewModel activity;
+    private readonly IFolderWatcher folderWatcher;
+    private readonly WatchFolderService watchFolder;
     private int availabilityCheckQueued;
 
     // The status at the end of an operation, which its notification also shows, reads the same as its activity entry.
     private static string Summary(BatchResult result) => result.Activity?.Text ?? string.Join(" · ", result.Items.GroupBy(r => r.Status).Select(g => $"{g.Count()} {g.Key}"));
-    public MediaViewModel(IFileDiscovery discovery, InspectionService inspection, ConversionService conversion, ConversionDiskBudget diskBudget, ControlledBatchService batch, SettingsService settings, DependencySetup dependencies, IDialogService dialogs, IFileDialogService files, IFileExplorer explorer, ILogger<MediaViewModel> logger, IMediaPreview mediaPreview, RestoreService restore, ISourceFileMonitor sourceFiles, ReportService reports, MediaLibraryService library, CleanupService cleanup, ITextClipboard clipboard, ActivityViewModel activity, IOperationFeedback? feedback = null)
+    public MediaViewModel(IFileDiscovery discovery, InspectionService inspection, ConversionService conversion, ConversionDiskBudget diskBudget, ControlledBatchService batch, SettingsService settings, DependencySetup dependencies, IDialogService dialogs, IFileDialogService files, IFileExplorer explorer, ILogger<MediaViewModel> logger, IMediaPreview mediaPreview, RestoreService restore, ISourceFileMonitor sourceFiles, ReportService reports, MediaLibraryService library, CleanupService cleanup, ITextClipboard clipboard, ActivityViewModel activity, IFolderWatcher folderWatcher, WatchFolderService watchFolder, IOperationFeedback? feedback = null)
         : base(feedback)
     {
         this.discovery = discovery;
@@ -90,6 +94,9 @@ public sealed partial class MediaViewModel : OperationViewModel, INavigationPage
         this.mediaPreview = mediaPreview;
         this.activity = activity;
         activity.Entries.CollectionChanged += OnActivityChanged;
+        this.folderWatcher = folderWatcher;
+        this.watchFolder = watchFolder;
+        folderWatcher.FileArrived += OnFileArrived;
 
         FilterOptions =
         [
@@ -137,6 +144,11 @@ public sealed partial class MediaViewModel : OperationViewModel, INavigationPage
             if (e.PropertyName is nameof(StatusMessage) or nameof(IsBusy))
             {
                 NotifyActiveProgress();
+            }
+
+            if (e.PropertyName == nameof(IsBusy))
+            {
+                OnBusyChangedForWatchFolder();
             }
         };
     }
@@ -420,6 +432,7 @@ public sealed partial class MediaViewModel : OperationViewModel, INavigationPage
     {
         FileSort.PropertyChanged -= OnFileSortChanged;
         sourceFiles.Changed -= OnSourceFilesChanged;
+        folderWatcher.FileArrived -= OnFileArrived;
         activity.Entries.CollectionChanged -= OnActivityChanged;
         CancelPreviews();
     }
@@ -436,6 +449,7 @@ public sealed partial class MediaViewModel : OperationViewModel, INavigationPage
     {
         WatchFiles();
         RefreshSourceAvailability();
+        RetryWatchFolder();
     }
 
     // Archives usually sit beside their media, but an output folder can hold them elsewhere.
@@ -784,6 +798,7 @@ public sealed partial class MediaViewModel : OperationViewModel, INavigationPage
             _ => "FEL: Skip"
         };
         ArchiveSummary = s.CreateElArchive ? "EL archive: On" : "EL archive: Off";
+        ApplyWatchFolder(s);
         string destination = string.IsNullOrWhiteSpace(s.OutputDirectory)
             ? "Same folder"
             : s.OutputDirectory;
@@ -965,6 +980,7 @@ public sealed partial class MediaViewModel : OperationViewModel, INavigationPage
         RemoveMissingCommand?.NotifyCanExecuteChanged();
         CleanupBackupsCommand?.NotifyCanExecuteChanged();
         OpenSettingsCommand?.NotifyCanExecuteChanged();
+        OpenWatchFolderSettingsCommand?.NotifyCanExecuteChanged();
         AddFilesCommand?.NotifyCanExecuteChanged();
         AddFolderCommand?.NotifyCanExecuteChanged();
         ExportResultsCommand?.NotifyCanExecuteChanged();
@@ -992,29 +1008,10 @@ public sealed partial class MediaViewModel : OperationViewModel, INavigationPage
                 foreach (string path in paths)
                 {
                     var remembered = await Task.Run(() => library.RememberAsync(path, token), token);
-                    var existing = Files.FirstOrDefault(row => row.LibraryFingerprint == remembered.Fingerprint || string.Equals(row.Path, path, StringComparison.OrdinalIgnoreCase));
-                    if (existing is not null && string.Equals(existing.Path, path, StringComparison.OrdinalIgnoreCase))
+                    if (AddRow(path, remembered, remembered.Analysis) is { } row)
                     {
-                        continue;
+                        added.Add(row);
                     }
-                    if (existing is not null)
-                    {
-                        existing.PropertyChanged -= OnRowPropertyChanged;
-                        Files.Remove(existing);
-                    }
-                    var row = new MediaRow(path) { LibraryFingerprint = remembered.Fingerprint };
-                    if (remembered.Analysis is not null)
-                    {
-                        row.Analysis = remembered.Analysis;
-                        row.SetScanned();
-                    }
-                    if (existing is not null && ReferenceEquals(Focused, existing))
-                    {
-                        Focused = row;
-                    }
-                    row.PropertyChanged += OnRowPropertyChanged;
-                    Files.Add(row);
-                    added.Add(row);
                 }
             }
             catch (Exception ex) when (ex is not OperationCanceledException)
@@ -1043,6 +1040,38 @@ public sealed partial class MediaViewModel : OperationViewModel, INavigationPage
             await AnalyzeRowsAsync(InDisplayOrder(added), AnalysisMethod.SampledRpu, token);
         }
     });
+
+    /// <summary>
+    /// Adds a row for <paramref name="path"/>, or returns <see langword="null"/> when the list already shows it. A row
+    /// with the same content at another path, such as a moved file, gives way to the new one.
+    /// </summary>
+    private MediaRow? AddRow(string path, LibraryFile remembered, MediaAnalysis? analysis, bool isSelected = true)
+    {
+        var existing = Files.FirstOrDefault(row => row.LibraryFingerprint == remembered.Fingerprint || string.Equals(row.Path, path, StringComparison.OrdinalIgnoreCase));
+        if (existing is not null && string.Equals(existing.Path, path, StringComparison.OrdinalIgnoreCase))
+        {
+            return null;
+        }
+        if (existing is not null)
+        {
+            existing.PropertyChanged -= OnRowPropertyChanged;
+            Files.Remove(existing);
+        }
+        var row = new MediaRow(path) { LibraryFingerprint = remembered.Fingerprint, IsSelected = isSelected };
+        if (analysis is not null)
+        {
+            row.Analysis = analysis;
+            row.SetScanned();
+        }
+        if (existing is not null && ReferenceEquals(Focused, existing))
+        {
+            Focused = row;
+        }
+        row.PropertyChanged += OnRowPropertyChanged;
+        Files.Add(row);
+        return row;
+    }
+
     private void OnRowPropertyChanged(object? sender, PropertyChangedEventArgs e)
     {
         if (sender is not MediaRow row)
@@ -1593,33 +1622,11 @@ public sealed partial class MediaViewModel : OperationViewModel, INavigationPage
 
         InvalidatePlan();
         var userSettings = await settings.ReadAsync(token);
-        var target = userSettings.RemoveDolbyVision ? ConversionTarget.Hdr10 : ConversionTarget.Profile81;
         UpdateSettingsSummary(userSettings);
-        if (!string.IsNullOrWhiteSpace(userSettings.TemporaryDirectory))
+        if (ConversionFolderProblem(userSettings) is { } problem)
         {
-            string tempPath = Path.GetFullPath(userSettings.TemporaryDirectory);
-            if (!Directory.Exists(tempPath))
-            {
-                await dialogs.ShowMessageAsync(
-                    "Temporary storage folder not found",
-                    $"The configured temporary storage folder does not exist:\n{tempPath}\n\nPlease check your Settings.");
-                return;
-            }
-        }
-
-        if (userSettings.OutputDirectory is not null && !Directory.Exists(userSettings.OutputDirectory))
-        {
-            try
-            {
-                Directory.CreateDirectory(userSettings.OutputDirectory);
-            }
-            catch (Exception ex)
-            {
-                await dialogs.ShowMessageAsync(
-                    "Output folder error",
-                    $"The configured output folder cannot be created or accessed:\n{userSettings.OutputDirectory}\n\n{ex.Message}");
-                return;
-            }
+            await dialogs.ShowMessageAsync(problem.Title, problem.Message);
+            return;
         }
 
         if (!await dependencies.EnsureAsync(progress, token))
@@ -1635,27 +1642,10 @@ public sealed partial class MediaViewModel : OperationViewModel, INavigationPage
             return;
         }
 
-        string opName = target == ConversionTarget.Profile81 ? "Conversion to DV8.1" : "Conversion to HDR10";
-        var outputs = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
-        var existingOutput = ExistingOutputHandling.Skip;
-        CandidateConversionRequest Request(MediaRow row) => new(
-            row.Path,
-            target,
-            userSettings.OutputDirectory,
-            userSettings.TemporaryDirectory,
-            userSettings.ReplaceOriginal,
-            userSettings.CreateElArchive,
-            userSettings.IncludeSimple,
-            userSettings.ForceComplex,
-            outputs)
-        {
-            ExistingOutput = existingOutput,
-            Safe = userSettings.SafeMode
-        };
-
         // A single file asks what to do with an existing output; batches keep skipping such files.
+        var existingOutput = ExistingOutputHandling.Skip;
         if (rows.Length == 1 && sourceFiles.Exists(rows[0].Path)
-            && await Task.Run(() => conversion.FindExistingOutput(Request(rows[0])), token) is { } existing)
+            && await Task.Run(() => conversion.FindExistingOutput(ConversionRequest(rows[0], userSettings, existingOutput, new HashSet<string>(StringComparer.OrdinalIgnoreCase))), token) is { } existing)
         {
             var question = new ExistingOutputDialogViewModel(existing);
             if (!await dialogs.ShowAsync(question))
@@ -1666,6 +1656,68 @@ public sealed partial class MediaViewModel : OperationViewModel, INavigationPage
 
             existingOutput = question.Choice;
         }
+
+        await ConvertRowsAsync(rows, userSettings, existingOutput, ActivityOperation.Conversion, token);
+    });
+
+    private static CandidateConversionRequest ConversionRequest(MediaRow row, UserSettings userSettings, ExistingOutputHandling existingOutput, ISet<string> outputs) => new(
+        row.Path,
+        userSettings.RemoveDolbyVision ? ConversionTarget.Hdr10 : ConversionTarget.Profile81,
+        userSettings.OutputDirectory,
+        userSettings.TemporaryDirectory,
+        userSettings.ReplaceOriginal,
+        userSettings.CreateElArchive,
+        userSettings.IncludeSimple,
+        userSettings.ForceComplex,
+        outputs)
+    {
+        ExistingOutput = existingOutput,
+        Safe = userSettings.SafeMode
+    };
+
+    /// <summary>
+    /// Checks the folders conversion writes to, creating a missing output folder. Returns what is wrong, or
+    /// <see langword="null"/> when conversion can start.
+    /// </summary>
+    private static (string Title, string Message)? ConversionFolderProblem(UserSettings userSettings)
+    {
+        if (!string.IsNullOrWhiteSpace(userSettings.TemporaryDirectory))
+        {
+            string tempPath = Path.GetFullPath(userSettings.TemporaryDirectory);
+            if (!Directory.Exists(tempPath))
+            {
+                return ("Temporary storage folder not found",
+                    $"The configured temporary storage folder does not exist:\n{tempPath}\n\nPlease check your Settings.");
+            }
+        }
+
+        if (userSettings.OutputDirectory is not null && !Directory.Exists(userSettings.OutputDirectory))
+        {
+            try
+            {
+                Directory.CreateDirectory(userSettings.OutputDirectory);
+            }
+            catch (Exception ex)
+            {
+                return ("Output folder error",
+                    $"The configured output folder cannot be created or accessed:\n{userSettings.OutputDirectory}\n\n{ex.Message}");
+            }
+        }
+
+        return null;
+    }
+
+    /// <summary>Converts <paramref name="rows"/> as one batch, which <paramref name="operation"/> names in Activity and the log.</summary>
+    private async Task ConvertRowsAsync(MediaRow[] rows, UserSettings userSettings, ExistingOutputHandling existingOutput, ActivityOperation operation, CancellationToken token)
+    {
+        string opName = userSettings.RemoveDolbyVision ? "Conversion to HDR10" : "Conversion to DV8.1";
+        if (operation == ActivityOperation.AutoConversion)
+        {
+            opName = "Automatic " + char.ToLowerInvariant(opName[0]) + opName[1..];
+        }
+
+        var outputs = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+        CandidateConversionRequest Request(MediaRow row) => ConversionRequest(row, userSettings, existingOutput, outputs);
 
         foreach (var row in rows)
         {
@@ -1679,7 +1731,7 @@ public sealed partial class MediaViewModel : OperationViewModel, INavigationPage
         BeginBatch(rows, opName);
         try
         {
-            var result = await batch.ExecuteQueuedAsync(ActivityOperation.Conversion, rows, settings.Hardware.ConversionWorkers(userSettings.ConversionWorkers), r => r.Path, async (row, itemToken) =>
+            var result = await batch.ExecuteQueuedAsync(operation, rows, settings.Hardware.ConversionWorkers(userSettings.ConversionWorkers), r => r.Path, async (row, itemToken) =>
             {
                 if (!sourceFiles.Exists(row.Path))
                 {
@@ -1772,7 +1824,7 @@ public sealed partial class MediaViewModel : OperationViewModel, INavigationPage
         {
             EndBatch();
         }
-    });
+    }
 
     private bool CanRemoveFile(MediaRow? row) => row is not null && IsIdle && Files.Contains(row);
 

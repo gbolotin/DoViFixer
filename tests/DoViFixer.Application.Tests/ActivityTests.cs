@@ -117,6 +117,21 @@ public sealed class ActivityTests
     }
 
     [TestMethod]
+    public void AutomaticConversionsSayTheyWereAutomatic()
+    {
+        var id = Guid.NewGuid();
+        Assert.AreEqual("Auto-converting Mountain.mkv…", ActivityText.Started(id, ActivityOperation.AutoConversion, "Mountain.mkv").Title);
+        Assert.AreEqual("Auto-converted Mountain.mkv in 3 min", ActivityText.Finished(id, ActivityOperation.AutoConversion, new("Mountain.mkv", OperationStatus.Completed, "Mountain - DV P8.1.mkv"), TimeSpan.FromMinutes(3)).Title);
+        Assert.AreEqual("Couldn't auto-convert Mountain.mkv", ActivityText.Finished(id, ActivityOperation.AutoConversion, new("Mountain.mkv", OperationStatus.Failed), TimeSpan.FromMinutes(3)).Title);
+        Assert.AreEqual("Auto-converted 2 files", ActivityText.BatchFinished(id, ActivityOperation.AutoConversion, 2, [new("a.mkv", OperationStatus.Completed), new("b.mkv", OperationStatus.Completed)], TimeSpan.FromMinutes(5)).Title);
+
+        var left = ActivityText.NotAutoConverted(id, "Sdr.mkv", "Only HEVC Dolby Vision Profile 7 MKV inputs are supported.");
+        Assert.AreEqual("Didn't auto-convert Sdr.mkv", left.Title);
+        Assert.AreEqual(ActivitySeverity.Info, left.Severity);
+        Assert.AreEqual("Sdr.mkv", left.Location);
+    }
+
+    [TestMethod]
     public void BatchSummariesCountWhatHappened()
     {
         OperationItemResult Result(OperationStatus status) => new("x", status);

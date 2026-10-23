@@ -46,6 +46,7 @@ public static class DependencyInjection
         services.AddTransient<IFileOperations, FileOperations>();
         services.AddTransient<IFileDiscovery, FileOperations>();
         services.AddTransient<ISourceFileMonitor, SourceFileMonitor>();
+        services.AddTransient<IFolderWatcher, FolderWatcher>();
         services.AddTransient<ITemporaryWorkspaceFactory, TemporaryWorkspaceFactory>();
         services.AddTransient<IOutputPublisher, OutputPublisher>();
         services.AddTransient<IFileLockInspector, WindowsFileLockInspector>();

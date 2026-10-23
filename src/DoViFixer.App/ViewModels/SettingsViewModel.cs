@@ -66,7 +66,7 @@ public sealed partial class SettingsViewModel : OperationViewModel
         Dependencies = dependencies;
         var general = new GeneralSettingsSection(this);
         Sections = new NavigationService(
-            [general, new PresetsSettingsSection(this), new AnalysisSettingsSection(this), new ConversionSettingsSection(this), new SafetySettingsSection(this), new PerformanceSettingsSection(this), new NativeToolsSettingsSection(this), new AboutSettingsSection(this)],
+            [general, new PresetsSettingsSection(this), new AnalysisSettingsSection(this), new ConversionSettingsSection(this), new SafetySettingsSection(this), new WatchFolderSettingsSection(this), new PerformanceSettingsSection(this), new NativeToolsSettingsSection(this), new AboutSettingsSection(this)],
             initialPage: general);
     }
 
@@ -153,6 +153,9 @@ public sealed partial class SettingsViewModel : OperationViewModel
             UseCachedResults = value.UseCachedResults;
             ShowCompletionNotifications = value.ShowCompletionNotifications;
             ShowSelectionCheckBoxes = value.ShowSelectionCheckBoxes;
+            WatchFolder = value.WatchFolder ?? "";
+            WatchSubfolders = value.WatchSubfolders;
+            WatchSettleSeconds = value.WatchSettleSeconds;
             selectedTheme = value.Theme;
             OnPropertyChanged(nameof(SelectedTheme));
             OnPropertyChanged(nameof(IsSystemTheme));
@@ -261,6 +264,35 @@ public sealed partial class SettingsViewModel : OperationViewModel
     public partial bool ShowSelectionCheckBoxes { get; set; }
 
     partial void OnShowSelectionCheckBoxesChanged(bool value) => TriggerAutoSave();
+
+    /// <summary>The folder whose new files are converted without asking; empty watches nothing.</summary>
+    [ObservableProperty]
+    [NotifyPropertyChangedFor(nameof(IsWatching))]
+    [NotifyCanExecuteChangedFor(nameof(StopWatchingCommand))]
+    public partial string WatchFolder { get; set; } = "";
+
+    partial void OnWatchFolderChanged(string value) => TriggerAutoSave();
+
+    public bool IsWatching => !string.IsNullOrWhiteSpace(WatchFolder);
+
+    [ObservableProperty]
+    public partial bool WatchSubfolders { get; set; } = true;
+
+    partial void OnWatchSubfoldersChanged(bool value) => TriggerAutoSave();
+
+    [ObservableProperty]
+    public partial int WatchSettleSeconds { get; set; } = UserSettings.DefaultWatchSettleSeconds;
+
+    partial void OnWatchSettleSecondsChanged(int value) => NumericPreferenceChanged(nameof(WatchSettleSecondsText));
+
+    [RelayCommand]
+    private void BrowseWatchFolder() => WatchFolder = files.PickFolder() ?? WatchFolder;
+
+    [RelayCommand(CanExecute = nameof(IsWatching))]
+    private void StopWatching() => WatchFolder = "";
+
+    [RelayCommand]
+    private void ResetWatchSettle() => WatchSettleSecondsText = UserSettings.DefaultWatchSettleSeconds.ToString(System.Globalization.CultureInfo.CurrentCulture);
 
     [ObservableProperty]
     public partial string Temporary { get; set; } = "";
@@ -562,6 +594,7 @@ public sealed partial class SettingsViewModel : OperationViewModel
             removeDolbyVision: snapshot.RemoveDolbyVision,
             folderSearchDepth: snapshot.FolderSearchDepth,
             showSelectionCheckBoxes: snapshot.ShowSelectionCheckBoxes), token);
+        await Task.Run(() => settings.SetWatchFolderAsync(snapshot.WatchFolder, snapshot.WatchSubfolders, snapshot.WatchSettleSeconds, token), token);
 
         lastSavedSettings = snapshot;
         SetStatus(ViewStatus.SettingsSaved);
@@ -596,7 +629,10 @@ public sealed partial class SettingsViewModel : OperationViewModel
         ShowSelectionCheckBoxes = ShowSelectionCheckBoxes,
         Theme = SelectedTheme,
         IncludeSimple = IncludeSimple,
-        ForceComplex = ForceComplex
+        ForceComplex = ForceComplex,
+        WatchFolder = string.IsNullOrWhiteSpace(WatchFolder) ? null : WatchFolder.Trim(),
+        WatchSubfolders = WatchSubfolders,
+        WatchSettleSeconds = WatchSettleSeconds
     };
 
     [ObservableProperty]

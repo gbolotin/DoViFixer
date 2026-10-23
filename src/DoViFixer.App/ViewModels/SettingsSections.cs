@@ -43,6 +43,12 @@ public sealed class SafetySettingsSection(SettingsViewModel settings) : Settings
     public override string? NavigationIcon => "\uEA18";
 }
 
+public sealed class WatchFolderSettingsSection(SettingsViewModel settings) : SettingsSection(settings)
+{
+    public override string NavigationName => "Watch folder";
+    public override string? NavigationIcon => "\uE890";
+}
+
 public sealed class PerformanceSettingsSection(SettingsViewModel settings) : SettingsSection(settings)
 {
     public override string NavigationName => "Performance";

@@ -16,7 +16,7 @@ using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
 
 namespace DoViFixer.App.Tests;
-internal sealed class TestRuntime : IFileDiscovery, IFileOperations, IMediaProbe, IMediaPreview, ISettingsStore, IDependencyDetector, IDependencyInstaller, ITemporaryWorkspaceFactory, IAnalysisCache, IMediaLibrary, IVideoProcessor, IMediaVerifier, IOutputPublisher, IBackupArchiveStore, IReportWriter, IDialogService, IFileDialogService, IFileExplorer, ITextClipboard, IThemeService, ISourceFileMonitor, IPresetStore, IDisposable
+internal sealed class TestRuntime : IFileDiscovery, IFileOperations, IMediaProbe, IMediaPreview, ISettingsStore, IDependencyDetector, IDependencyInstaller, ITemporaryWorkspaceFactory, IAnalysisCache, IMediaLibrary, IVideoProcessor, IMediaVerifier, IOutputPublisher, IBackupArchiveStore, IReportWriter, IDialogService, IFileDialogService, IFileExplorer, ITextClipboard, IThemeService, ISourceFileMonitor, IFolderWatcher, IPresetStore, IDisposable
 {
     private ServiceProvider? container;
     public IServiceCollection Services { get; } = new ServiceCollection();
@@ -84,7 +84,7 @@ internal sealed class TestRuntime : IFileDiscovery, IFileOperations, IMediaProbe
     public TestRuntime()
     {
         AppComposition.Register(Services, new ConfigurationBuilder().Build(), false);
-        Type[] contracts = [typeof(IFileDiscovery), typeof(IFileOperations), typeof(IMediaProbe), typeof(IMediaPreview), typeof(ISettingsStore), typeof(IDependencyDetector), typeof(IDependencyInstaller), typeof(ITemporaryWorkspaceFactory), typeof(IAnalysisCache), typeof(IMediaLibrary), typeof(IVideoProcessor), typeof(IMediaVerifier), typeof(IOutputPublisher), typeof(IBackupArchiveStore), typeof(IReportWriter), typeof(IDialogService), typeof(IFileDialogService), typeof(IFileExplorer), typeof(ITextClipboard), typeof(IThemeService), typeof(ISourceFileMonitor), typeof(IPresetStore)];
+        Type[] contracts = [typeof(IFileDiscovery), typeof(IFileOperations), typeof(IMediaProbe), typeof(IMediaPreview), typeof(ISettingsStore), typeof(IDependencyDetector), typeof(IDependencyInstaller), typeof(ITemporaryWorkspaceFactory), typeof(IAnalysisCache), typeof(IMediaLibrary), typeof(IVideoProcessor), typeof(IMediaVerifier), typeof(IOutputPublisher), typeof(IBackupArchiveStore), typeof(IReportWriter), typeof(IDialogService), typeof(IFileDialogService), typeof(IFileExplorer), typeof(ITextClipboard), typeof(IThemeService), typeof(ISourceFileMonitor), typeof(IFolderWatcher), typeof(IPresetStore)];
         foreach (var contract in contracts)
         {
             Services.AddSingleton(contract, this);
@@ -217,6 +217,18 @@ internal sealed class TestRuntime : IFileDiscovery, IFileOperations, IMediaProbe
     public void Watch(IEnumerable<string> paths) => WatchedPaths = [.. paths];
     public bool Exists(string path) => !MissingFiles.Contains(path) && (!path.EndsWith(".dovi", StringComparison.OrdinalIgnoreCase) || Archives.Contains(path));
     public void RaiseSourceFilesChanged() => Changed?.Invoke(this, EventArgs.Empty);
+    /// <summary>The folder the watch folder fake watches, or <see langword="null"/>.</summary>
+    public string? WatchedFolder { get; private set; }
+    /// <summary>Whether the watch folder fake can watch the folder it is given.</summary>
+    public bool WatchFolderAvailable { get; set; } = true;
+    public event EventHandler<string>? FileArrived;
+    public bool Watch(string? folder, bool includeSubfolders, TimeSpan settleTime)
+    {
+        WatchedFolder = folder;
+        return folder is not null && WatchFolderAvailable;
+    }
+    /// <summary>Reports a file that finished arriving in the watch folder.</summary>
+    public void RaiseFileArrived(string path) => FileArrived?.Invoke(this, path);
     public FileIdentity Identify(string path)
     {
         if (path.EndsWith(".dovi", StringComparison.OrdinalIgnoreCase) && !Archives.Contains(path))
