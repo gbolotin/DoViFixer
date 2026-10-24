@@ -17,7 +17,14 @@ DoViFixer needs the **.NET 10 Desktop Runtime** (x64).
 3. Allow the administrator prompt. Setup installs DoViFixer for all users in `Program Files`.
 4. Leave **Start DoViFixer** checked and click **Finish**.
 
-Setup also trusts the certificate of DoViFixer's File Explorer package. On Windows 11, **Open in DoViFixer** and **Convert with DoViFixer** are then in the first right-click menu as soon as DoViFixer has started once. To remove DoViFixer, use **Settings › Apps › Installed apps**. Uninstalling removes the File Explorer commands and the certificate too.
+Setup offers three parts: the desktop app, the **MCP server for AI assistants** and the **command-line version**. It adds the MCP server to the assistants you tick: Claude Desktop, Claude Code, Codex and Hermes Agent. It ticks the ones it finds on your PC. It can also add the command-line version to `PATH`. See [Command line and AI assistants](console.md).
+
+Setup also trusts the certificate of DoViFixer's File Explorer package. On Windows 11, **Open in DoViFixer** and **Convert with DoViFixer** are then in the first right-click menu as soon as DoViFixer has started once. To remove DoViFixer, use **Settings › Apps › Installed apps**. Uninstalling removes the File Explorer commands and the certificate too. It also asks whether to delete your media library; your settings and downloaded tools stay.
+
+If an earlier installation left settings or a media library in `%LOCALAPPDATA%\DoViFixer`, setup checks whether the new version can read them:
+
+- Setup deletes the settings or library that the new version cannot read, and tells you.
+- Setup asks whether to keep the settings and library that the new version can read. Click **No** to start with new ones.
 
 !!! note "Windows SmartScreen"
     Setup is not signed by a certificate authority, so Windows may say that it protected your PC. Click **More info**, then **Run anyway**.
@@ -61,6 +68,6 @@ You can check the tools again at any time with **Tools › Check dependencies**,
 
 ## Updates
 
-**Settings › About** shows your version. DoViFixer never updates itself. To update, download the new zip and unzip it over the old folder. Your settings and media library are kept in `%LOCALAPPDATA%\DoViFixer`.
+**Settings › About** shows your version. DoViFixer never updates itself. To update, run the new setup, or download the new zip and unzip it over the old folder. Your settings and media library are kept in `%LOCALAPPDATA%\DoViFixer`.
 
 Next: [Before you convert](before-you-convert.md).

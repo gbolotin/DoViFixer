@@ -14,7 +14,7 @@ namespace DoViFixer.Infrastructure.Library;
 internal sealed class MediaLibrary(StorageOptions options, ISettingsStore settings, TimeProvider time, ILogger<MediaLibrary> logger,
     ILogger<AnalysisCache> legacyLogger) : IMediaLibrary, IAnalysisCache, IDisposable
 {
-    private const int schemaVersion = 1;
+    internal const int SchemaVersion = 1;
     private readonly AnalysisCache legacy = new(options, legacyLogger, settings);
     private readonly SemaphoreSlim importGate = new(1);
     public void Dispose() => importGate.Dispose();
@@ -30,7 +30,7 @@ internal sealed class MediaLibrary(StorageOptions options, ISettingsStore settin
             await connection.OpenAsync(token);
             using var version = Command(connection, "PRAGMA user_version");
             int current = Convert.ToInt32(await version.ExecuteScalarAsync(token));
-            if (current > schemaVersion)
+            if (current > SchemaVersion)
             {
                 throw new InvalidDataException("The media library was created by a newer application version.");
             }

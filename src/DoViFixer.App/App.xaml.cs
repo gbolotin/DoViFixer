@@ -6,6 +6,7 @@ using DoViFixer.App.Presentation.Application;
 using DoViFixer.App.Startup;
 using DoViFixer.App.ViewModels;
 using DoViFixer.App.Views;
+using DoViFixer.Application.Abstractions;
 using DoViFixer.Application.FileExplorer;
 using DoViFixer.Application.Settings;
 using DoViFixer.Application.Updates;
@@ -28,6 +29,10 @@ public partial class App : System.Windows.Application
     /// <summary>The argument setup's uninstaller starts the app with, to remove what the app added for the user.</summary>
     private const string UninstallArgument = "--uninstall";
 
+    /// <summary>The arguments setup starts the app with, to check and remove the settings and library of a previous installation.</summary>
+    private const string CheckUserDataArgument = "--check-user-data";
+    private const string RemoveUserDataArgument = "--remove-user-data";
+
     protected override async void OnStartup(StartupEventArgs e)
     {
         base.OnStartup(e);
@@ -35,6 +40,12 @@ public partial class App : System.Windows.Application
         {
             await UninstallAsync();
             Shutdown();
+            return;
+        }
+
+        if (e.Args.Length > 0 && (e.Args[0].Equals(CheckUserDataArgument, StringComparison.OrdinalIgnoreCase) || e.Args[0].Equals(RemoveUserDataArgument, StringComparison.OrdinalIgnoreCase)))
+        {
+            Shutdown(await UserDataAsync(e.Args));
             return;
         }
 
@@ -116,6 +127,36 @@ public partial class App : System.Windows.Application
         catch (Exception ex)
         {
             logger.LogWarning(ex, "Could not remove the Windows notification registration");
+        }
+    }
+
+    /// <summary>
+    /// Answers setup without a window. <c>--check-user-data</c> exits with the parts this version can read in bits 0-1 and
+    /// those it cannot in bits 2-3, each as 1 for settings and 2 for the library. <c>--remove-user-data settings library</c>
+    /// removes the named parts and exits with 0. Any failure exits with -1, so setup keeps what is there.
+    /// </summary>
+    private static async Task<int> UserDataAsync(string[] args)
+    {
+        var registrations = new ServiceCollection();
+        AppComposition.Register(registrations, new ConfigurationBuilder().AddEnvironmentVariables().Build());
+        await using var provider = registrations.BuildServiceProvider();
+        var userData = provider.GetRequiredService<IStoredUserData>();
+        try
+        {
+            if (args[0].Equals(CheckUserDataArgument, StringComparison.OrdinalIgnoreCase))
+            {
+                var state = await userData.InspectAsync(CancellationToken.None);
+                return (int)state.Compatible | ((int)state.Incompatible << 2);
+            }
+
+            var parts = args.Skip(1).Aggregate(UserDataParts.None, (all, name) => all | Enum.Parse<UserDataParts>(name, ignoreCase: true));
+            await userData.RemoveAsync(parts, CancellationToken.None);
+            return 0;
+        }
+        catch (Exception ex)
+        {
+            provider.GetRequiredService<ILogger<App>>().LogError(ex, "Setup's {Argument} request failed", args[0]);
+            return -1;
         }
     }
 
