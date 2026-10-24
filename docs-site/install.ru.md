@@ -18,7 +18,7 @@ DoViFixer нужна **.NET 10 Desktop Runtime** (x64).
 4. Запустите `DoViFixer.App.exe`.
 
 !!! tip "Другие файлы в выпуске"
-    `DoViFixer.Console` — версия для командной строки. `DoViFixer.Mcp` позволяет ИИ-ассистенту, например Claude Desktop, работать с DoViFixer. Для настольного приложения нужен только `DoViFixer.App`. См. [Командная строка и ИИ-ассистенты](console.md).
+    `DoViFixer.Console` — версия для командной строки. `DoViFixer.Mcp` позволяет ИИ-ассистенту, например Claude Desktop, Claude Code, Codex или Hermes Agent, работать с DoViFixer. Для настольного приложения нужен только `DoViFixer.App`. См. [Командная строка](console.md) и [ИИ-ассистенты](ai-assistants.md).
 
 ## 3. Дайте приложению установить инструменты
 

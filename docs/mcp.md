@@ -1,23 +1,25 @@
 # MCP server
 
-`DoViFixer.Mcp` is a [Model Context Protocol](https://modelcontextprotocol.io) server, so an AI assistant such as Claude Desktop or Claude Code can scan, inspect, convert, back up and restore media on this PC when you ask it to. It runs the same Application and Infrastructure services as the console and WPF apps, over standard input and output, built on the official [MCP C# SDK](https://github.com/modelcontextprotocol/csharp-sdk).
+`DoViFixer.Mcp` is a [Model Context Protocol](https://modelcontextprotocol.io) server, so an AI assistant such as Claude Desktop, Claude Code, Codex or Hermes Agent can scan, inspect, convert, back up and restore media on this PC when you ask it to. It runs the same Application and Infrastructure services as the console and WPF apps, over standard input and output, built on the official [MCP C# SDK](https://github.com/modelcontextprotocol/csharp-sdk).
 
-## Install
+## Install and connect an assistant
 
-The easiest way is `DoViFixer-Setup-X.Y.Z.exe`. Keep **MCP server for AI assistants** ticked, then tick the assistants to add it to. Setup ticks the ones it finds on this PC:
+The user guide [AI assistants](https://gbolotin.github.io/DoViFixer/ai-assistants/) (source: [`docs-site/ai-assistants.md`](../docs-site/ai-assistants.md)) covers each assistant step by step: install with setup, manual configuration, how to check it works and how to remove it.
 
-| Assistant | Configuration setup edits |
-| --- | --- |
-| Claude Desktop | `%APPDATA%\Claude\claude_desktop_config.json`, and the copy inside the Microsoft Store package when that version is installed |
-| Claude Code | `%USERPROFILE%\.claude.json` (user scope) |
-| Codex app and CLI | `%CODEX_HOME%\config.toml`, by default `%USERPROFILE%\.codex\config.toml` |
-| Hermes Agent | `%HERMES_HOME%\config.yaml`, by default `%USERPROFILE%\.hermes\config.yaml` |
+| Assistant | Configuration | Setup adds it |
+| --- | --- | --- |
+| Claude Desktop | `%APPDATA%\Claude\claude_desktop_config.json` (Store version: `%LOCALAPPDATA%\Packages\Claude_*\LocalCache\Roaming\Claude`), `mcpServers` | Yes |
+| Claude Code | `claude mcp add --scope user dovifixer -- <exe>` (`%USERPROFILE%\.claude.json`) | Yes |
+| Codex app, CLI and IDE extension | `codex mcp add dovifixer -- <exe>` (`%CODEX_HOME%` or `%USERPROFILE%\.codex\config.toml`, `[mcp_servers.dovifixer]`) | Yes |
+| Hermes Agent on Windows | `%HERMES_HOME%` or `%USERPROFILE%\.hermes\config.yaml`, `mcp_servers` | Yes |
+| Hermes Agent in WSL | `~/.hermes/config.yaml` with `command: "/mnt/c/Program Files/DoViFixer/Mcp/DoViFixer.Mcp.exe"` | No |
+| ChatGPT | Not supported: ChatGPT connects only to remote MCP servers over HTTPS. Use Codex. | — |
 
-Setup changes only the `dovifixer` entry and keeps everything else in these files. Restart the assistant afterwards. Uninstalling removes the entry again. Setup installs the server to `C:\Program Files\DoViFixer\Mcp\DoViFixer.Mcp.exe`; you can also add or remove it later with `DoViFixer.Mcp.exe --register codex` or `--unregister`.
+Setup installs the server to `C:\Program Files\DoViFixer\Mcp\DoViFixer.Mcp.exe`. `DoViFixer.Mcp.exe --register <client>...` and `--unregister [<client>...]` (clients: `claude-desktop`, `claude-code`, `codex`, `hermes`) add or remove only the `dovifixer` entry; setup and the uninstaller use them. They write nothing to standard output and exit with 0 or 1.
 
-Hermes Agent running inside WSL keeps its configuration in the Linux home folder, which setup does not edit; add the server there by hand, as below.
+Agents in a container or on another machine cannot use the server: it works with this PC's Windows paths and native tools.
 
-### Without setup
+### Build from source
 
 Publish the server to a folder of your choice (CI also attaches `DoViFixer.Mcp-<version>.zip` to every run and release; it needs the .NET 10 Desktop Runtime):
 
@@ -27,35 +29,9 @@ dotnet publish src/DoViFixer.Mcp -c Release -p:UseLocalWpfFoundation=false -o C:
 
 Do not register `dotnet run` as the server command: build output on standard output corrupts the protocol stream.
 
-### Claude Desktop
-
-Open Settings > Developer > Edit Config, which opens `%APPDATA%\Claude\claude_desktop_config.json`, and add the server:
-
-```json
-{
-  "mcpServers": {
-    "dovifixer": {
-      "command": "C:\\Tools\\DoViFixer.Mcp\\DoViFixer.Mcp.exe"
-    }
-  }
-}
-```
-
-Restart Claude Desktop. The DoViFixer tools appear under the tools menu in a new chat.
-
-### Claude Code
-
-```powershell
-claude mcp add dovifixer -- C:\Tools\DoViFixer.Mcp\DoViFixer.Mcp.exe
-```
-
-### Other clients
-
-Any MCP client that launches local stdio servers on this PC can use the same command, for example OpenAI Codex (`codex mcp add dovifixer -- C:\Tools\DoViFixer.Mcp\DoViFixer.Mcp.exe`), Hermes Agent and OpenClaw. Agents running under WSL can start the Windows executable through WSL interop; agents in a container or on another machine cannot, because the server works with this PC's Windows paths and native tools. ChatGPT connects only to remote MCP servers over HTTPS, which this server does not offer.
-
 ### Configuration
 
-The server reads the same Generic Host configuration as the console app, so environment variables such as `DoViFixer__DataDirectory` work. Pass them through the client's `env` setting, for example `"env": { "DoViFixer__DataDirectory": "D:\\DoViFixerTest" }` in Claude Desktop.
+The server reads the same Generic Host configuration as the console app, so environment variables such as `DoViFixer__DataDirectory` work. Pass them through the client's `env` setting, for example `"env": { "DoViFixer__DataDirectory": "D:\\DoViFixerTest" }` in Claude Desktop or `[mcp_servers.dovifixer.env]` in Codex.
 
 ## What you can ask
 

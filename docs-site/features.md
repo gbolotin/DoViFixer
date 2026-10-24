@@ -59,9 +59,11 @@ See [Install](install.md) and [Troubleshooting](troubleshooting.md).
 ## Command line and AI assistants
 
 - **DoViFixer.Console** runs the same engine from a terminal, with a plan mode that shows what would happen and changes nothing.
-- **DoViFixer.Mcp** lets an AI assistant such as Claude Desktop or Claude Code scan, inspect and convert for you, after you approve its plan.
+- **Ask an AI assistant:** the MCP server lets Claude Desktop, Claude Code, Codex or Hermes Agent scan, inspect, convert, back up and restore your movies when you ask in your own words.
+- **You stay in control:** the assistant gets an exact plan first and changes files only after you approve it. Long conversions run in the background, and you can cancel them at any time.
+- **Connected by setup:** setup installs the MCP server and adds it to the assistants it finds on your PC. ChatGPT users can use Codex with their ChatGPT account.
 
-See [Command line and AI assistants](console.md).
+See [Command line](console.md) and [AI assistants](ai-assistants.md).
 
 ## Free and open source
 
