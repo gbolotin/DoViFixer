@@ -48,7 +48,7 @@ public sealed class PerformanceSettingsTests
             var catalog = new ToolCatalog();
             var detector = new DependencyDetector(store, options, new MediaTools.Processes.ProcessRunner(NullLogger<MediaTools.Processes.ProcessRunner>.Instance), NullLogger<DependencyDetector>.Instance);
             var service = new SettingsService(store, detector, catalog, files, NullLogger<SettingsService>.Instance);
-            await service.SetPreferencesAsync(null, null, false, false, default, folderSearchDepth: 5, conversionWorkers: 16, analysisWorkers: 10, toolProcessPriority: ToolProcessPriority.AboveNormal, pipeBufferKiB: 65536);
+            await service.SetPreferencesAsync(new PreferenceChanges { FolderSearchDepth = 5, ConversionWorkers = 16, AnalysisWorkers = 10, ToolProcessPriority = ToolProcessPriority.AboveNormal, PipeBufferKiB = 65536 }, default);
             var saved = await store.ReadAsync(default);
             Assert.AreEqual(5, saved.FolderSearchDepth);
             Assert.AreEqual(16, saved.ConversionWorkers);
@@ -56,12 +56,12 @@ public sealed class PerformanceSettingsTests
             Assert.AreEqual(ToolProcessPriority.AboveNormal, saved.ToolProcessPriority);
             Assert.AreEqual(65536, saved.PipeBufferKiB);
             string before = await File.ReadAllTextAsync(options.SettingsPath);
-            await Assert.ThrowsExactlyAsync<ArgumentOutOfRangeException>(() => service.SetPreferencesAsync(null, null, false, false, default, folderSearchDepth: -1));
-            await Assert.ThrowsExactlyAsync<ArgumentOutOfRangeException>(() => service.SetPreferencesAsync(null, null, false, false, default, folderSearchDepth: 101));
-            await Assert.ThrowsExactlyAsync<ArgumentOutOfRangeException>(() => service.SetPreferencesAsync(null, null, false, false, default, conversionWorkers: 17));
-            await Assert.ThrowsExactlyAsync<ArgumentOutOfRangeException>(() => service.SetPreferencesAsync(null, null, false, false, default, analysisWorkers: 11));
-            await Assert.ThrowsExactlyAsync<ArgumentOutOfRangeException>(() => service.SetPreferencesAsync(null, null, false, false, default, pipeBufferKiB: 63));
-            await Assert.ThrowsExactlyAsync<ArgumentOutOfRangeException>(() => service.SetPreferencesAsync(null, null, false, false, default, toolProcessPriority: (ToolProcessPriority)99));
+            await Assert.ThrowsExactlyAsync<ArgumentOutOfRangeException>(() => service.SetPreferencesAsync(new PreferenceChanges { FolderSearchDepth = -1 }, default));
+            await Assert.ThrowsExactlyAsync<ArgumentOutOfRangeException>(() => service.SetPreferencesAsync(new PreferenceChanges { FolderSearchDepth = 101 }, default));
+            await Assert.ThrowsExactlyAsync<ArgumentOutOfRangeException>(() => service.SetPreferencesAsync(new PreferenceChanges { ConversionWorkers = 17 }, default));
+            await Assert.ThrowsExactlyAsync<ArgumentOutOfRangeException>(() => service.SetPreferencesAsync(new PreferenceChanges { AnalysisWorkers = 11 }, default));
+            await Assert.ThrowsExactlyAsync<ArgumentOutOfRangeException>(() => service.SetPreferencesAsync(new PreferenceChanges { PipeBufferKiB = 63 }, default));
+            await Assert.ThrowsExactlyAsync<ArgumentOutOfRangeException>(() => service.SetPreferencesAsync(new PreferenceChanges { ToolProcessPriority = (ToolProcessPriority)99 }, default));
             Assert.AreEqual(before, await File.ReadAllTextAsync(options.SettingsPath));
             await File.WriteAllTextAsync(options.SettingsPath, "{\"ConversionWorkers\":2}");
             var legacy = await store.ReadAsync(default);

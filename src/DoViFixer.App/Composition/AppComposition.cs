@@ -49,6 +49,8 @@ public static class AppComposition
         services.AddSingleton<IWebBrowser, DefaultBrowser>();
         services.AddSingleton<IFileExplorerIntegration, FileExplorerIntegration>();
         services.AddSingleton<DependencyReportViewModel>();
+        // Settings › About and the status bar share one update check, which runs while the app does.
+        services.AddSingleton<UpdateViewModel>();
         // The status bar flyout and the Media details show the same session activity.
         services.AddSingleton<ActivityViewModel>();
         services.AddSingleton<DependencySetup>();
