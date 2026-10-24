@@ -22,13 +22,13 @@ public sealed class GeneralSettingsSection(SettingsViewModel settings) : Setting
 public sealed class PresetsSettingsSection(SettingsViewModel settings) : SettingsSection(settings)
 {
     public override string NavigationName => "Presets";
-    public override string? NavigationIcon => "";
+    public override string? NavigationIcon => "\uE8FD";
 }
 
 public sealed class ConversionSettingsSection(SettingsViewModel settings) : SettingsSection(settings)
 {
     public override string NavigationName => "Conversion";
-    public override string? NavigationIcon => "";
+    public override string? NavigationIcon => "\uE8AB";
 }
 
 public sealed class AnalysisSettingsSection(SettingsViewModel settings) : SettingsSection(settings)
@@ -52,18 +52,18 @@ public sealed class WatchFolderSettingsSection(SettingsViewModel settings) : Set
 public sealed class PerformanceSettingsSection(SettingsViewModel settings) : SettingsSection(settings)
 {
     public override string NavigationName => "Performance";
-    // The settings view supplies the vector speedometer template.
+    // The settings view shows WpfFoundation's vector gauge icon instead of a font glyph.
     public override string? NavigationIcon => null;
 }
 
 public sealed class NativeToolsSettingsSection(SettingsViewModel settings) : SettingsSection(settings)
 {
     public override string NavigationName => "Native tools";
-    public override string? NavigationIcon => "";
+    public override string? NavigationIcon => "\uE90F";
 }
 
 public sealed class AboutSettingsSection(SettingsViewModel settings) : SettingsSection(settings)
 {
     public override string NavigationName => "About";
-    public override string? NavigationIcon => "";
+    public override string? NavigationIcon => "\uE946";
 }
