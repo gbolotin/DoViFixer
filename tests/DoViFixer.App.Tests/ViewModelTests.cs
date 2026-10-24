@@ -105,11 +105,11 @@ public sealed class ViewModelTests
         Assert.AreEqual(50, reloaded.BrightnessMarginNits);
         var service = runtime.Container.GetRequiredService<DoViFixer.Application.Settings.SettingsService>();
         await Assert.ThrowsExactlyAsync<ArgumentOutOfRangeException>(() =>
-            service.SetPreferencesAsync(null, null, false, false, default, brightnessMarginNits: 1001));
+            service.SetPreferencesAsync(new DoViFixer.Application.Settings.PreferenceChanges { BrightnessMarginNits = 1001 }, default));
         await Assert.ThrowsExactlyAsync<ArgumentOutOfRangeException>(() =>
-            service.SetPreferencesAsync(null, null, false, false, default, assumedPeakBrightnessNits: 99));
+            service.SetPreferencesAsync(new DoViFixer.Application.Settings.PreferenceChanges { AssumedPeakBrightnessNits = 99 }, default));
         await Assert.ThrowsExactlyAsync<ArgumentOutOfRangeException>(() =>
-            service.SetPreferencesAsync(null, null, false, false, default, assumedPeakBrightnessNits: 10001));
+            service.SetPreferencesAsync(new DoViFixer.Application.Settings.PreferenceChanges { AssumedPeakBrightnessNits = 10001 }, default));
     }
 
     [TestMethod]
@@ -1378,19 +1378,24 @@ public sealed class ViewModelTests
     {
         using var runtime = new TestRuntime();
         var settings = runtime.Container.GetRequiredService<DoViFixer.Application.Settings.SettingsService>();
-        await settings.SetPreferencesAsync(@"C:\Scratch", @"C:\Output", true, true, default);
+        await settings.SetPreferencesAsync(new DoViFixer.Application.Settings.PreferenceChanges { TemporaryDirectory = @"C:\Scratch", OutputDirectory = @"C:\Output", ReplaceOriginal = true, CreateElArchive = true }, default);
         Assert.IsTrue(runtime.Settings.ReplaceOriginal);
+        await settings.SetPreferencesAsync(new DoViFixer.Application.Settings.PreferenceChanges { CreateElArchive = false }, default);
+        Assert.AreEqual(@"C:\Scratch", runtime.Settings.TemporaryDirectory, "Unset preferences keep their saved values.");
+        Assert.AreEqual(@"C:\Output", runtime.Settings.OutputDirectory);
+        Assert.IsTrue(runtime.Settings.ReplaceOriginal);
+        Assert.IsFalse(runtime.Settings.CreateElArchive);
         var saved = runtime.Settings;
         runtime.FailDirectoryValidation = true;
-        await Assert.ThrowsExactlyAsync<IOException>(() => settings.SetPreferencesAsync(@"C:\Broken", null, false, false, default));
+        await Assert.ThrowsExactlyAsync<IOException>(() => settings.SetPreferencesAsync(new DoViFixer.Application.Settings.PreferenceChanges { TemporaryDirectory = @"C:\Broken", ReplaceOriginal = false }, default));
         Assert.AreEqual(saved, runtime.Settings);
         runtime.FailDirectoryValidation = false;
-        await settings.SetPreferencesAsync("", "", false, false, default);
+        await settings.SetPreferencesAsync(new DoViFixer.Application.Settings.PreferenceChanges { TemporaryDirectory = "", OutputDirectory = "", ReplaceOriginal = false }, default);
         Assert.IsNull(runtime.Settings.TemporaryDirectory);
         Assert.IsNull(runtime.Settings.OutputDirectory);
         Assert.IsFalse(runtime.Settings.ReplaceOriginal);
-        await Assert.ThrowsExactlyAsync<ArgumentOutOfRangeException>(() => settings.SetPreferencesAsync(null, null, false, false, default, verificationLevel: (DoViFixer.Application.Settings.VerificationLevel)5));
-        await Assert.ThrowsExactlyAsync<ArgumentOutOfRangeException>(() => settings.SetPreferencesAsync(null, null, false, false, default, freeSpaceMarginPercent: 201));
+        await Assert.ThrowsExactlyAsync<ArgumentOutOfRangeException>(() => settings.SetPreferencesAsync(new DoViFixer.Application.Settings.PreferenceChanges { VerificationLevel = (DoViFixer.Application.Settings.VerificationLevel)5 }, default));
+        await Assert.ThrowsExactlyAsync<ArgumentOutOfRangeException>(() => settings.SetPreferencesAsync(new DoViFixer.Application.Settings.PreferenceChanges { FreeSpaceMarginPercent = 201 }, default));
     }
 
     [TestMethod]

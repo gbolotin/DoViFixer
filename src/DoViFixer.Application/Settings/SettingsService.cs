@@ -13,49 +13,13 @@ public sealed class SettingsService(ISettingsStore store, IDependencyDetector de
         store.UpdateAsync(settings => settings with { MediaListLayout = layout }, cancellationToken);
     public Task SetShowSelectionCheckBoxesAsync(bool show, CancellationToken cancellationToken) =>
         store.UpdateAsync(settings => settings with { ShowSelectionCheckBoxes = show }, cancellationToken);
-    public async Task SetPreferencesAsync(string? temporaryDirectory, string? outputDirectory, bool replaceOriginal, bool createElArchive, CancellationToken cancellationToken, bool? automaticallyScanAddedFiles = null, bool? useCachedResults = null, AppTheme? theme = null, bool? allowFel = null, bool? includeSimple = null, bool? forceComplex = null, bool? showCompletionNotifications = null, int? conversionWorkers = null, VerificationLevel? verificationLevel = null, bool? recycleDeletedOriginalsAndBackups = null, double? freeSpaceMarginPercent = null, int? analysisWorkers = null, ToolProcessPriority? toolProcessPriority = null, int? pipeBufferKiB = null, int? brightnessMarginNits = null, int? assumedPeakBrightnessNits = null, int? scanSampleCount = null, double? scanSampleSeconds = null, int? minimumScanCoveragePercent = null, double? inspectionPeakPercentile = null, bool? safeMode = null, bool? removeDolbyVision = null, int? folderSearchDepth = null, bool? showSelectionCheckBoxes = null, bool? showInFileExplorerMenu = null, bool? checkForUpdates = null)
+    public async Task SetPreferencesAsync(PreferenceChanges changes, CancellationToken cancellationToken)
     {
+        ArgumentNullException.ThrowIfNull(changes);
         cancellationToken.ThrowIfCancellationRequested();
-        if (folderSearchDepth is < 0 or > 100)
-        {
-            throw new ArgumentOutOfRangeException(nameof(folderSearchDepth), "Folder search depth must be between 0 and 100.");
-        }
-        if (conversionWorkers is < 0 or > 16)
-        {
-            throw new ArgumentOutOfRangeException(nameof(conversionWorkers), "Conversion workers must be Automatic (0) or between 1 and 16.");
-        }
-        if (analysisWorkers is < 0 or > 10)
-        {
-            throw new ArgumentOutOfRangeException(nameof(analysisWorkers));
-        }
-        if (pipeBufferKiB is < 64 or > 65536)
-        {
-            throw new ArgumentOutOfRangeException(nameof(pipeBufferKiB));
-        }
-        if (toolProcessPriority is not null && !Enum.IsDefined(toolProcessPriority.Value))
-        {
-            throw new ArgumentOutOfRangeException(nameof(toolProcessPriority));
-        }
-        if (verificationLevel is not null && !Enum.IsDefined(verificationLevel.Value))
-        {
-            throw new ArgumentOutOfRangeException(nameof(verificationLevel));
-        }
-        if (freeSpaceMarginPercent is not null && (!double.IsFinite(freeSpaceMarginPercent.Value) || freeSpaceMarginPercent is < 0 or > 200))
-        {
-            throw new ArgumentOutOfRangeException(nameof(freeSpaceMarginPercent));
-        }
-        if (brightnessMarginNits is < 0 or > 1000)
-        {
-            throw new ArgumentOutOfRangeException(nameof(brightnessMarginNits));
-        }
-        if (assumedPeakBrightnessNits is < 100 or > 10000)
-        {
-            throw new ArgumentOutOfRangeException(nameof(assumedPeakBrightnessNits));
-        }
-        new DoViFixer.Domain.Analysis.AnalysisOptions(ScanSampleCount: scanSampleCount ?? 10, ScanSampleSeconds: scanSampleSeconds ?? 1,
-            MinimumScanCoveragePercent: minimumScanCoveragePercent ?? 100, InspectionPeakPercentile: inspectionPeakPercentile ?? 100).ValidateSampling();
-        string? temporary = string.IsNullOrWhiteSpace(temporaryDirectory) ? null : Path.GetFullPath(temporaryDirectory);
-        string? full = string.IsNullOrWhiteSpace(outputDirectory) ? null : Path.GetFullPath(outputDirectory);
+        changes.Validate();
+        string? temporary = string.IsNullOrWhiteSpace(changes.TemporaryDirectory) ? null : Path.GetFullPath(changes.TemporaryDirectory);
+        string? full = string.IsNullOrWhiteSpace(changes.OutputDirectory) ? null : Path.GetFullPath(changes.OutputDirectory);
         if (temporary is not null)
         {
             files.EnsureWritableDirectory(temporary);
@@ -69,37 +33,37 @@ public sealed class SettingsService(ISettingsStore store, IDependencyDetector de
 
         await store.UpdateAsync(s => s with
         {
-            TemporaryDirectory = temporary,
-            OutputDirectory = full,
-            ReplaceOriginal = replaceOriginal,
-            CreateElArchive = createElArchive,
-            SafeMode = safeMode ?? s.SafeMode,
-            FolderSearchDepth = folderSearchDepth ?? s.FolderSearchDepth,
-            RemoveDolbyVision = removeDolbyVision ?? s.RemoveDolbyVision,
-            ScanSampleCount = scanSampleCount ?? s.ScanSampleCount,
-            ScanSampleSeconds = scanSampleSeconds ?? s.ScanSampleSeconds,
-            MinimumScanCoveragePercent = minimumScanCoveragePercent ?? s.MinimumScanCoveragePercent,
-            InspectionPeakPercentile = inspectionPeakPercentile ?? s.InspectionPeakPercentile,
-            BrightnessMarginNits = brightnessMarginNits ?? s.BrightnessMarginNits,
-            AssumedPeakBrightnessNits = assumedPeakBrightnessNits ?? s.AssumedPeakBrightnessNits,
-            ConversionWorkers = conversionWorkers ?? s.ConversionWorkers,
-            AnalysisWorkers = analysisWorkers ?? s.AnalysisWorkers,
-            ToolProcessPriority = toolProcessPriority ?? s.ToolProcessPriority,
-            PipeBufferKiB = pipeBufferKiB ?? s.PipeBufferKiB,
-            VerificationLevel = verificationLevel ?? s.VerificationLevel,
-            RecycleDeletedOriginalsAndBackups = recycleDeletedOriginalsAndBackups ?? s.RecycleDeletedOriginalsAndBackups,
-            FreeSpaceMarginPercent = freeSpaceMarginPercent ?? s.FreeSpaceMarginPercent,
-            IncludeSimple = includeSimple ?? (allowFel is not null ? allowFel.Value : s.IncludeSimple),
-            ForceComplex = forceComplex ?? (allowFel is not null ? allowFel.Value : s.ForceComplex),
-            AutomaticallyScanAddedFiles = automaticallyScanAddedFiles ?? s.AutomaticallyScanAddedFiles,
-            UseCachedResults = useCachedResults ?? s.UseCachedResults,
-            Theme = theme ?? s.Theme,
-            ShowCompletionNotifications = showCompletionNotifications ?? s.ShowCompletionNotifications,
-            ShowSelectionCheckBoxes = showSelectionCheckBoxes ?? s.ShowSelectionCheckBoxes,
-            ShowInFileExplorerMenu = showInFileExplorerMenu ?? s.ShowInFileExplorerMenu,
-            CheckForUpdates = checkForUpdates ?? s.CheckForUpdates
+            TemporaryDirectory = changes.TemporaryDirectory is null ? s.TemporaryDirectory : temporary,
+            OutputDirectory = changes.OutputDirectory is null ? s.OutputDirectory : full,
+            ReplaceOriginal = changes.ReplaceOriginal ?? s.ReplaceOriginal,
+            CreateElArchive = changes.CreateElArchive ?? s.CreateElArchive,
+            SafeMode = changes.SafeMode ?? s.SafeMode,
+            FolderSearchDepth = changes.FolderSearchDepth ?? s.FolderSearchDepth,
+            RemoveDolbyVision = changes.RemoveDolbyVision ?? s.RemoveDolbyVision,
+            ScanSampleCount = changes.ScanSampleCount ?? s.ScanSampleCount,
+            ScanSampleSeconds = changes.ScanSampleSeconds ?? s.ScanSampleSeconds,
+            MinimumScanCoveragePercent = changes.MinimumScanCoveragePercent ?? s.MinimumScanCoveragePercent,
+            InspectionPeakPercentile = changes.InspectionPeakPercentile ?? s.InspectionPeakPercentile,
+            BrightnessMarginNits = changes.BrightnessMarginNits ?? s.BrightnessMarginNits,
+            AssumedPeakBrightnessNits = changes.AssumedPeakBrightnessNits ?? s.AssumedPeakBrightnessNits,
+            ConversionWorkers = changes.ConversionWorkers ?? s.ConversionWorkers,
+            AnalysisWorkers = changes.AnalysisWorkers ?? s.AnalysisWorkers,
+            ToolProcessPriority = changes.ToolProcessPriority ?? s.ToolProcessPriority,
+            PipeBufferKiB = changes.PipeBufferKiB ?? s.PipeBufferKiB,
+            VerificationLevel = changes.VerificationLevel ?? s.VerificationLevel,
+            RecycleDeletedOriginalsAndBackups = changes.RecycleDeletedOriginalsAndBackups ?? s.RecycleDeletedOriginalsAndBackups,
+            FreeSpaceMarginPercent = changes.FreeSpaceMarginPercent ?? s.FreeSpaceMarginPercent,
+            IncludeSimple = changes.IncludeSimple ?? s.IncludeSimple,
+            ForceComplex = changes.ForceComplex ?? s.ForceComplex,
+            AutomaticallyScanAddedFiles = changes.AutomaticallyScanAddedFiles ?? s.AutomaticallyScanAddedFiles,
+            UseCachedResults = changes.UseCachedResults ?? s.UseCachedResults,
+            Theme = changes.Theme ?? s.Theme,
+            ShowCompletionNotifications = changes.ShowCompletionNotifications ?? s.ShowCompletionNotifications,
+            ShowSelectionCheckBoxes = changes.ShowSelectionCheckBoxes ?? s.ShowSelectionCheckBoxes,
+            ShowInFileExplorerMenu = changes.ShowInFileExplorerMenu ?? s.ShowInFileExplorerMenu,
+            CheckForUpdates = changes.CheckForUpdates ?? s.CheckForUpdates
         }, cancellationToken);
-        OperationLog.Audit(logger, "SetConversionDefaults", full ?? "Same folder as source", "Completed");
+        OperationLog.Audit(logger, "SetConversionDefaults", changes.OutputDirectory is null ? "Output folder unchanged" : full ?? "Same folder as source", "Completed");
     }
 
     /// <summary>
