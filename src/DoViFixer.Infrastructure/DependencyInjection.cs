@@ -25,6 +25,7 @@ public static class DependencyInjection
         services.TryAddSingleton(TimeProvider.System);
         services.AddSingleton<ISettingsStore, SettingsStore>();
         services.AddSingleton<IPresetStore, PresetStore>();
+        services.AddTransient<IStoredUserData, StoredUserData>();
         services.AddSingleton<IHardwareInfoProvider, HardwareInfoProvider>();
         services.AddSingleton<MediaLibrary>();
         services.AddSingleton<IMediaLibrary>(provider => provider.GetRequiredService<MediaLibrary>());
