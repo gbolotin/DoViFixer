@@ -303,7 +303,7 @@
                                             AutomationProperties.HelpText="{Binding ToolTip}"
                                             AutomationProperties.LiveSetting="Polite"
                                             Style="{StaticResource WfPrimaryButtonStyle}"
-                                            Padding="10,2"
+                                            Padding="12,4"
                                             MinHeight="0">
                                         <StackPanel Orientation="Horizontal">
                                             <TextBlock Text="&#xE896;"
