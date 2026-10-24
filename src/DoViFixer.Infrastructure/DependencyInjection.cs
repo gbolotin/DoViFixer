@@ -13,6 +13,7 @@ using DoViFixer.Infrastructure.Updates;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.DependencyInjection.Extensions;
+using Microsoft.Extensions.Logging;
 
 namespace DoViFixer.Infrastructure;
 public static class DependencyInjection
@@ -31,6 +32,7 @@ public static class DependencyInjection
         services.AddSingleton<IMediaLibrary>(provider => provider.GetRequiredService<MediaLibrary>());
         services.AddSingleton<IAnalysisCache>(provider => provider.GetRequiredService<MediaLibrary>());
         services.AddTransient<IUserPathRegistration, UserPathRegistration>();
+        services.AddTransient<IAssistantRegistration>(provider => new AssistantRegistration(AssistantFolders.Current(), provider.GetRequiredService<ILogger<AssistantRegistration>>()));
         services.AddTransient<IFileExplorerMenu, FileExplorerMenu>();
         services.AddSingleton<IToolCatalog, ToolCatalog>();
         services.AddSingleton(_ =>

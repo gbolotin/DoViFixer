@@ -5,6 +5,8 @@
 ; The app creates its own Start menu shortcut at start, so notifications show its name and icon; setup adds none.
 ; After copying the files, setup asks the new app which settings and media library of a previous installation it can read.
 ; It deletes those the new version cannot read and asks whether to keep the others. Uninstall asks whether to delete the library.
+; The MCP server and the command-line version are optional components in their own subfolders. Setup adds the MCP server to
+; the AI assistants the user ticks, preselecting those it finds, and can add the command-line version to the system PATH.
 
 #ifndef AppVersion
   #define AppVersion "0.0.0-dev"
@@ -15,8 +17,16 @@
 #ifndef SourceDir
   #define SourceDir "..\out\DoViFixer.App"
 #endif
+#ifndef McpDir
+  #define McpDir "..\out\DoViFixer.Mcp"
+#endif
+#ifndef ConsoleDir
+  #define ConsoleDir "..\out\DoViFixer.Console"
+#endif
 #define AppName "DoViFixer"
 #define AppExe "DoViFixer.App.exe"
+#define McpExe "DoViFixer.Mcp.exe"
+#define EnvironmentKey "SYSTEM\CurrentControlSet\Control\Session Manager\Environment"
 #define Certificate "DoViFixer.FileExplorer.cer"
 
 [Setup]
@@ -47,15 +57,46 @@ SolidCompression=yes
 WizardStyle=modern
 ; Setup and uninstall close a running DoViFixer first.
 CloseApplications=yes
+; The command-line version can go on the system PATH.
+ChangesEnvironment=yes
+
+[Types]
+Name: "full"; Description: "Desktop app, MCP server and command line"
+Name: "app"; Description: "Desktop app only"
+Name: "custom"; Description: "Custom"; Flags: iscustom
+
+[Components]
+Name: "app"; Description: "Desktop app"; Types: full app custom; Flags: fixed
+Name: "mcp"; Description: "MCP server for AI assistants"; Types: full
+Name: "console"; Description: "Command-line version"; Types: full
+
+[Tasks]
+Name: "claudedesktop"; Description: "Claude Desktop"; GroupDescription: "Add the MCP server to these AI assistants:"; Components: mcp; Flags: unchecked
+Name: "claudecode"; Description: "Claude Code"; GroupDescription: "Add the MCP server to these AI assistants:"; Components: mcp; Flags: unchecked
+Name: "codex"; Description: "Codex (app and CLI)"; GroupDescription: "Add the MCP server to these AI assistants:"; Components: mcp; Flags: unchecked
+Name: "hermes"; Description: "Hermes Agent"; GroupDescription: "Add the MCP server to these AI assistants:"; Components: mcp; Flags: unchecked
+Name: "path"; Description: "Add the command-line version to PATH"; GroupDescription: "Command line:"; Components: console
+
+[InstallDelete]
+; A component the user no longer wants goes; Inno Setup would otherwise leave its old files.
+Type: filesandordirs; Name: "{app}\Mcp"; Components: not mcp
+Type: filesandordirs; Name: "{app}\Console"; Components: not console
 
 [Files]
-Source: "{#SourceDir}\*"; DestDir: "{app}"; Flags: ignoreversion recursesubdirs createallsubdirs
+Source: "{#SourceDir}\*"; DestDir: "{app}"; Components: app; Flags: ignoreversion recursesubdirs createallsubdirs
+Source: "{#McpDir}\*"; DestDir: "{app}\Mcp"; Components: mcp; Flags: ignoreversion recursesubdirs createallsubdirs
+Source: "{#ConsoleDir}\*"; DestDir: "{app}\Console"; Components: console; Flags: ignoreversion recursesubdirs createallsubdirs
+
+[Registry]
+Root: HKLM; Subkey: "{#EnvironmentKey}"; ValueType: expandsz; ValueName: "Path"; ValueData: "{olddata};{app}\Console"; Tasks: path; Check: NeedsConsoleOnPath
 
 [Run]
 Filename: "{sys}\certutil.exe"; Parameters: "-f -addstore TrustedPeople ""{app}\{#Certificate}"""; StatusMsg: "Trusting the File Explorer package certificate..."; Flags: runhidden; Check: HasCertificate
 Filename: "{app}\{#AppExe}"; Description: "Start {#AppName}"; Flags: postinstall nowait skipifsilent runasoriginaluser
 
 [UninstallRun]
+; Removes the MCP server from every AI assistant's configuration; the rest of each configuration stays.
+Filename: "{app}\Mcp\{#McpExe}"; Parameters: "--unregister"; Flags: runhidden waituntilterminated; RunOnceId: "RemoveMcpServer"; Check: HasMcpServer
 ; Removes the File Explorer commands, the Windows 11 package and the Start menu shortcut the app added for the user.
 Filename: "{app}\{#AppExe}"; Parameters: "--uninstall"; Flags: runhidden waituntilterminated; RunOnceId: "RemoveAppRegistrations"
 Filename: "powershell.exe"; Parameters: "-NoProfile -ExecutionPolicy Bypass -Command ""$c = New-Object System.Security.Cryptography.X509Certificates.X509Certificate2('{app}\{#Certificate}'); Get-ChildItem Cert:\LocalMachine\TrustedPeople | Where-Object Thumbprint -eq $c.Thumbprint | Remove-Item"""; Flags: runhidden waituntilterminated; RunOnceId: "UntrustCertificate"; Check: HasCertificate
@@ -65,6 +106,11 @@ Filename: "powershell.exe"; Parameters: "-NoProfile -ExecutionPolicy Bypass -Com
 const
   UserDataSettings = 1;
   UserDataLibrary = 2;
+
+function HasMcpServer: Boolean;
+begin
+  Result := FileExists(ExpandConstant('{app}\Mcp\{#McpExe}'));
+end;
 
 function HasCertificate: Boolean;
 begin
@@ -158,10 +204,123 @@ begin
       RemoveUserData(Compatible);
 end;
 
-procedure CurStepChanged(CurStep: TSetupStep);
+// The system PATH as a list with a semicolon at both ends, so each entry can be found as ';entry;'.
+function SystemPath: String;
 begin
+  if not RegQueryStringValue(HKLM, '{#EnvironmentKey}', 'Path', Result) then
+    Result := '';
+  Result := ';' + Result + ';';
+end;
+
+function NeedsConsoleOnPath: Boolean;
+begin
+  Result := Pos(';' + Uppercase(ExpandConstant('{app}\Console')) + ';', Uppercase(SystemPath)) = 0;
+end;
+
+procedure RemoveConsoleFromPath;
+var
+  Value, Entry: String;
+  At: Integer;
+begin
+  Value := SystemPath;
+  Entry := ';' + ExpandConstant('{app}\Console') + ';';
+  At := Pos(Uppercase(Entry), Uppercase(Value));
+  if At = 0 then
+    Exit;
+  Delete(Value, At, Length(Entry) - 1);
+  RegWriteExpandStringValue(HKLM, '{#EnvironmentKey}', 'Path', Copy(Value, 2, Length(Value) - 2));
+end;
+
+// The assistants' names as the MCP server's --register and --unregister take them, for the ticked or unticked tasks.
+function Assistants(Ticked: Boolean): String;
+begin
+  Result := '';
+  if WizardIsTaskSelected('claudedesktop') = Ticked then
+    Result := Result + ' claude-desktop';
+  if WizardIsTaskSelected('claudecode') = Ticked then
+    Result := Result + ' claude-code';
+  if WizardIsTaskSelected('codex') = Ticked then
+    Result := Result + ' codex';
+  if WizardIsTaskSelected('hermes') = Ticked then
+    Result := Result + ' hermes';
+end;
+
+// The configurations are in the user's profile, so the MCP server runs as the user who started setup.
+procedure UpdateAssistants;
+var
+  ResultCode: Integer;
+  Ticked, Unticked: String;
+begin
+  Unticked := Assistants(False);
+  if Unticked <> '' then
+    ExecAsOriginalUser(ExpandConstant('{app}\Mcp\{#McpExe}'), '--unregister' + Unticked, '', SW_HIDE, ewWaitUntilTerminated, ResultCode);
+  Ticked := Assistants(True);
+  if (Ticked <> '') and (not ExecAsOriginalUser(ExpandConstant('{app}\Mcp\{#McpExe}'), '--register' + Ticked, '', SW_HIDE, ewWaitUntilTerminated, ResultCode) or (ResultCode <> 0)) then
+    SuppressibleMsgBox('Setup could not add the MCP server to every AI assistant you chose.' + #13#10#13#10 +
+      'Add ' + ExpandConstant('{app}\Mcp\{#McpExe}') + ' to the assistant yourself; the {#AppName} documentation shows how.', mbError, MB_OK, IDOK);
+end;
+
+function AssistantFound(const Folder: String): Boolean;
+begin
+  Result := (Folder <> '') and DirExists(Folder);
+end;
+
+function ClaudeStorePackageFound: Boolean;
+var
+  Found: TFindRec;
+begin
+  Result := FindFirst(ExpandConstant('{localappdata}\Packages\Claude_*'), Found);
+  if Result then
+    FindClose(Found);
+end;
+
+function HomeFolder(const Variable, Fallback: String): String;
+begin
+  Result := GetEnv(Variable);
+  if Result = '' then
+    Result := AddBackslash(GetEnv('USERPROFILE')) + Fallback;
+end;
+
+var
+  AssistantsPreselected: Boolean;
+
+// Ticks the assistants installed on this PC the first time setup offers them; later runs keep the user's choice.
+procedure CurPageChanged(CurPageID: Integer);
+begin
+  if (CurPageID <> wpSelectTasks) or AssistantsPreselected or (GetPreviousData('AssistantsOffered', '') <> '') then
+    Exit;
+  AssistantsPreselected := True;
+  if AssistantFound(ExpandConstant('{userappdata}\Claude')) or ClaudeStorePackageFound then
+    WizardSelectTasks('claudedesktop');
+  if FileExists(AddBackslash(GetEnv('USERPROFILE')) + '.claude.json') or AssistantFound(AddBackslash(GetEnv('USERPROFILE')) + '.claude') then
+    WizardSelectTasks('claudecode');
+  if AssistantFound(HomeFolder('CODEX_HOME', '.codex')) then
+    WizardSelectTasks('codex');
+  if AssistantFound(HomeFolder('HERMES_HOME', '.hermes')) then
+    WizardSelectTasks('hermes');
+end;
+
+procedure RegisterPreviousData(PreviousDataKey: Integer);
+begin
+  if WizardIsComponentSelected('mcp') then
+    SetPreviousData(PreviousDataKey, 'AssistantsOffered', 'yes');
+end;
+
+procedure CurStepChanged(CurStep: TSetupStep);
+var
+  ResultCode: Integer;
+begin
+  // Before [InstallDelete] removes an MCP server the user no longer wants, it leaves the assistants it was added to.
+  if (CurStep = ssInstall) and not WizardIsComponentSelected('mcp') and HasMcpServer then
+    ExecAsOriginalUser(ExpandConstant('{app}\Mcp\{#McpExe}'), '--unregister', '', SW_HIDE, ewWaitUntilTerminated, ResultCode);
   if CurStep = ssPostInstall then
+  begin
     CheckPreviousUserData;
+    if WizardIsComponentSelected('mcp') then
+      UpdateAssistants;
+    if not WizardIsTaskSelected('path') then
+      RemoveConsoleFromPath;
+  end;
 end;
 
 // Before uninstall removes the app, which deletes the library for the user. Settings and downloaded tools stay.
@@ -169,6 +328,8 @@ procedure CurUninstallStepChanged(CurUninstallStep: TUninstallStep);
 var
   ResultCode: Integer;
 begin
+  if CurUninstallStep = usPostUninstall then
+    RemoveConsoleFromPath;
   if CurUninstallStep <> usUninstall then
     Exit;
   if SuppressibleMsgBox('Also delete your {#AppName} media library?' + #13#10#13#10 +
