@@ -52,7 +52,7 @@ public sealed class WatchFolderSettingsSection(SettingsViewModel settings) : Set
 public sealed class PerformanceSettingsSection(SettingsViewModel settings) : SettingsSection(settings)
 {
     public override string NavigationName => "Performance";
-    // The settings view supplies the vector speedometer template.
+    // The settings view shows WpfFoundation's vector gauge icon instead of a font glyph.
     public override string? NavigationIcon => null;
 }
 

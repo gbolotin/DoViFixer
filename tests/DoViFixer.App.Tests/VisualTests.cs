@@ -1204,7 +1204,7 @@ public sealed class VisualTests
                     var performanceItem = (ListBoxItem)sectionNavigation.ItemContainerGenerator.ContainerFromItem(section);
                     var performanceIcon = Descendants<WpfFoundation.Controls.PathIcon>(performanceItem).Single();
                     Assert.IsTrue(performanceIcon.IsVisible);
-                    Assert.AreSame(((FrameworkElement)view).FindResource("PerformanceIconGeometry"), performanceIcon.Data);
+                    Assert.AreSame(((FrameworkElement)view).FindResource("WfIconGauge"), performanceIcon.Data);
                     AssertInside(performanceIcon, content);
                     foreach (string name in new[] { "Simultaneous conversions", "Concurrent scan clips", "Tool process priority", "Video pipe buffer (KiB)" })
                     {
