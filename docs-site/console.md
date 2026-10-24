@@ -1,10 +1,8 @@
-# Command line and AI assistants
+# Command line
 
-The desktop app is the easiest way to use DoViFixer. The same engine also runs from a terminal and from an AI assistant. All three share your settings and tool paths.
+The desktop app is the easiest way to use DoViFixer. The same engine also runs from a terminal and from an [AI assistant](ai-assistants.md). All three share your settings and tool paths.
 
-## Command line
-
-Download `DoViFixer.Console-X.Y.Z.zip` from the [latest release](https://github.com/gbolotin/DoViFixer/releases/latest) and unzip it. To run it from any folder, run this once in the app folder:
+Setup installs the command-line version when you keep **Command-line version** ticked, and adds it to `PATH` if you tick that task. Without setup, download `DoViFixer.Console-X.Y.Z.zip` from the [latest release](https://github.com/gbolotin/DoViFixer/releases/latest) and unzip it. To run it from any folder, run this once in the app folder:
 
 ```powershell
 .\DoViFixer.Console.exe settings add-to-path
@@ -25,7 +23,3 @@ DoViFixer.Console --help
 Like the app, the console shows what it will do and asks before it changes files. Simple FEL needs `--include-simple`, and complex FEL needs `--force`.
 
 The [full reference](https://github.com/gbolotin/DoViFixer#media-commands) in the README lists every command and option.
-
-## AI assistants (MCP)
-
-`DoViFixer.Mcp` lets an AI assistant such as Claude Desktop or Claude Code scan, inspect and convert for you. Anything that changes files is planned first, and runs only after you approve the plan. See [MCP server setup](https://github.com/gbolotin/DoViFixer/blob/main/docs/mcp.md).

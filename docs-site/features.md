@@ -59,9 +59,9 @@ See [Install](install.md) and [Troubleshooting](troubleshooting.md).
 ## Command line and AI assistants
 
 - **DoViFixer.Console** runs the same engine from a terminal, with a plan mode that shows what would happen and changes nothing.
-- **DoViFixer.Mcp** lets an AI assistant such as Claude Desktop or Claude Code scan, inspect and convert for you, after you approve its plan.
+- **DoViFixer.Mcp** lets an AI assistant scan, inspect and convert for you, after you approve its plan. It works with Claude Desktop, Claude Code, Codex and Hermes Agent, and setup can add it to them.
 
-See [Command line and AI assistants](console.md).
+See [Command line](console.md) and [AI assistants](ai-assistants.md).
 
 ## Free and open source
 

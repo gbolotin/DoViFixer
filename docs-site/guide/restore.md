@@ -29,4 +29,4 @@ The restored movie is saved as a new file; the converted movie and the backup st
 
 ## Other cases
 
-Backups in another folder, older backups without a manifest, and restoring to another folder work from the command line: see `backup` and `restore` in [Command line and AI assistants](../console.md).
+Backups in another folder, older backups without a manifest, and restoring to another folder work from the command line: see `backup` and `restore` in [Command line](../console.md).

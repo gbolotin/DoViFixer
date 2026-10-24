@@ -57,7 +57,7 @@ Pictures are simulated. Results depend on the player app and firmware.
 - **Automation:** a **Watch folder** converts new movies by itself, **presets** set every scan, conversion and safety setting at once, and a **media library** remembers your movies, results and history.
 - **Easy setup:** the app installs FFmpeg, MKVToolNix, MediaInfo CLI and dovi_tool for you after asking, checks every download's SHA-256 and needs no administrator rights.
 - **Native Windows app:** light and dark themes, drag and drop, File Explorer-style selection or check boxes, keyboard shortcuts, Windows notifications, taskbar progress, a plain-words **Activity** list, logs and a diagnostics ZIP.
-- **Command line and AI assistants:** the same engine runs as `DoViFixer.Console` (with a plan mode that changes nothing) and as an MCP server for Claude Desktop and Claude Code.
+- **Command line and AI assistants:** the same engine runs as `DoViFixer.Console` (with a plan mode that changes nothing) and as an MCP server for Claude Desktop, Claude Code, Codex and Hermes Agent.
 - **Documentation** in English and Russian at [gbolotin.github.io/DoViFixer](https://gbolotin.github.io/DoViFixer/).
 
 ## Which files are safe to convert?
@@ -87,7 +87,7 @@ The screenshots come from the app's automated UI tests, so they always show the 
 5. Select the movies and click **Convert** (**F5**). The app inspects each file fully, then converts only the safe ones.
 6. Press **F1** at any time to open the [documentation](https://gbolotin.github.io/DoViFixer/).
 
-Prefer a terminal or an AI assistant? The same engine runs as `DoViFixer.Console` and as an [MCP server](docs/mcp.md) for Claude Desktop and Claude Code. See [Media commands](#media-commands).
+Prefer a terminal or an AI assistant? The same engine runs as `DoViFixer.Console` and as an [MCP server](docs/mcp.md) for Claude Desktop, Claude Code, Codex and Hermes Agent. See [Media commands](#media-commands).
 
 ## Credits
 
@@ -253,7 +253,15 @@ Changes invalidate cached analysis for future operations. Existing displayed res
 
 ## AI assistants (MCP)
 
-`DoViFixer.Mcp` exposes scanning, inspection, conversion, backup, restore, cleanup, dependency and settings operations as Model Context Protocol tools. Anything that changes files is planned first and runs only after you approve the plan. See [MCP server](docs/mcp.md) to register it in Claude Desktop or Claude Code.
+`DoViFixer.Mcp` exposes scanning, inspection, conversion, backup, restore, cleanup, dependency and settings operations as Model Context Protocol tools. Anything that changes files is planned first and runs only after you approve the plan.
+
+| Assistant | How to connect |
+| --- | --- |
+| Claude Desktop, Claude Code, Codex | Setup adds it when you tick the assistant, or add it by hand |
+| Hermes Agent | Setup adds it on Windows; in WSL, add it to `~/.hermes/config.yaml` by hand |
+| ChatGPT | Not supported (it reaches only remote HTTPS servers); use Codex |
+
+Step-by-step instructions for each assistant are in the user guide: [AI assistants](https://gbolotin.github.io/DoViFixer/ai-assistants/). Technical details and the tool list are in [MCP server](docs/mcp.md).
 
 ## Archives and settings
 
