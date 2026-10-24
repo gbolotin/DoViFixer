@@ -1,6 +1,6 @@
 # Privacy policy
 
-*Last updated: October 23, 2026*
+*Last updated: October 24, 2026*
 
 DoViFixer does not collect, store or send any personal data. It has no account, no advertising, no analytics and no telemetry. Everything it does with your movies happens on your PC.
 
@@ -19,7 +19,7 @@ DoViFixer connects to the internet only in these cases:
 | --- | --- | --- |
 | You agree to install a missing tool (FFmpeg, MKVToolNix, MediaInfo or dovi_tool) | The tool's official download site, such as github.com, mkvtoolnix.download or mediaarea.net, or Microsoft's WinGet service | A normal download request with the app name and version |
 | You open the documentation (++f1++) | gbolotin.github.io, in your web browser | What your browser normally sends |
-| You run `update-check` in DoViFixer.Console, or an AI assistant asks DoViFixer.Mcp to check for updates | api.github.com | A request for the latest release, with the app name and version |
+| The app starts, then every 6 hours while it runs, unless you turn off **Settings › About › Check for updates automatically**; you click **Check for updates**; you run `update-check` in DoViFixer.Console; or an AI assistant asks DoViFixer.Mcp to check for updates | api.github.com | A request for the latest release, with the app name and version |
 
 These sites receive your IP address, as with any download, and handle it under their own privacy policies. DoViFixer adds no identifier and nothing about you or your files.
 

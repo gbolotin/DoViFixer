@@ -28,7 +28,7 @@ A preset sets every scan, conversion and safety setting at once. Folders, worker
 | **Performance** | Simultaneous conversions, concurrent scan clips, tool priority, automatic scan, reuse of saved results, media library |
 | **Watch folder** | A folder to watch and convert automatically. See [Watch folder](watch-folder.md). |
 | **Native tools** | Tool status, dependency setup, custom tool paths |
-| **About** | Version, logs, diagnostics export |
+| **About** | Version, update checks, logs, diagnostics export |
 
 ## Analysis defaults
 

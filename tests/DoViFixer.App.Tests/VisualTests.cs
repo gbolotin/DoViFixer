@@ -150,6 +150,21 @@ public sealed class VisualTests
             Assert.IsTrue(activityButton.IsVisible);
             Assert.AreEqual("Activity", AutomationProperties.GetName(activityButton));
             AssertInside(statusBar, (FrameworkElement)window.Content);
+            Assert.IsFalse(Descendants<Button>(window).Any(button => ReferenceEquals(button.Command, shell.Updates.OpenReleaseCommand) && button.IsVisible), "No update is offered before a check finds one.");
+            runtime.LatestRelease = _ => Task.FromResult<DoViFixer.Application.Updates.ReleaseInfo?>(new("v99.0.0", "https://github.com/gbolotin/DoViFixer/releases/tag/v99.0.0"));
+            await shell.Updates.CheckCommand.InvokeAsync();
+            await LayoutAsync(window);
+            // The update button ends the status bar, at the window's right edge, and does not take the page status's room.
+            var updateButton = Descendants<Button>(window).Single(button => ReferenceEquals(button.Command, shell.Updates.OpenReleaseCommand));
+            var shellContent = (FrameworkElement)window.Content;
+            AssertInside(updateButton, shellContent);
+            var updateBounds = updateButton.TransformToAncestor(shellContent).TransformBounds(new Rect(updateButton.RenderSize));
+            var statusBounds = statusBar.TransformToAncestor(shellContent).TransformBounds(new Rect(statusBar.RenderSize));
+            Assert.AreEqual(shellContent.ActualWidth, updateBounds.Right, 24, "The update button sits at the right end of the status bar.");
+            Assert.IsTrue(updateBounds.Left >= statusBounds.Right - 1 && updateBounds.Top >= statusBounds.Top && updateBounds.Bottom <= statusBounds.Bottom + 1,
+                $"The update button {updateBounds} sits beside the page status {statusBounds}.");
+            Assert.AreEqual("Update to 99.0.0", AutomationProperties.GetName(updateButton));
+            SaveRender(shellContent, "status-bar-update");
             Assert.AreSame(media.Files[1], media.Focused);
             Assert.IsFalse(media.Files[0].IsSelected);
             Assert.AreSame(list, Descendants<ListView>(mediaView).Single());

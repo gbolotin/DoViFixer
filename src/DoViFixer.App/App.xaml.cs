@@ -99,6 +99,12 @@ public partial class App : System.Windows.Application
             // The Store package declares the File Explorer commands itself.
             var fileExplorerMenu = isAppProcess && !AppPackage.IsStoreApp && settings is not null ? KeepFileExplorerMenuAsync(services!.GetRequiredService<IFileExplorerIntegration>(), shell.Settings, settings.ShowInFileExplorerMenu) : Task.CompletedTask;
 
+            // Only the app looks for updates; it checks now and every few hours while the setting allows it.
+            if (isAppProcess)
+            {
+                shell.Updates.Start();
+            }
+
             await shell.InitializeAsync();
             readyShell = shell;
             await OpenFileExplorerRequestsAsync();

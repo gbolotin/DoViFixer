@@ -9,6 +9,7 @@ using DoViFixer.Application.Operations;
 using DoViFixer.Application.Settings;
 using DoViFixer.Application.Library;
 using DoViFixer.Application.Reports;
+using DoViFixer.Application.Updates;
 using DoViFixer.Domain.Analysis;
 using DoViFixer.Domain.Conversion;
 using DoViFixer.Domain.Media;
@@ -16,7 +17,7 @@ using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
 
 namespace DoViFixer.App.Tests;
-internal sealed class TestRuntime : IFileDiscovery, IFileOperations, IMediaProbe, IMediaPreview, ISettingsStore, IDependencyDetector, IDependencyInstaller, ITemporaryWorkspaceFactory, IAnalysisCache, IMediaLibrary, IVideoProcessor, IMediaVerifier, IOutputPublisher, IBackupArchiveStore, IReportWriter, IDialogService, IFileDialogService, IFileExplorer, ITextClipboard, IThemeService, ISourceFileMonitor, IFolderWatcher, IPresetStore, IWebBrowser, IDisposable
+internal sealed class TestRuntime : IFileDiscovery, IFileOperations, IMediaProbe, IMediaPreview, ISettingsStore, IDependencyDetector, IDependencyInstaller, ITemporaryWorkspaceFactory, IAnalysisCache, IMediaLibrary, IVideoProcessor, IMediaVerifier, IOutputPublisher, IBackupArchiveStore, IReportWriter, IDialogService, IFileDialogService, IFileExplorer, ITextClipboard, IThemeService, ISourceFileMonitor, IFolderWatcher, IPresetStore, IWebBrowser, IUpdateSource, IDisposable
 {
     private ServiceProvider? container;
     public IServiceCollection Services { get; } = new ServiceCollection();
@@ -84,7 +85,7 @@ internal sealed class TestRuntime : IFileDiscovery, IFileOperations, IMediaProbe
     public TestRuntime()
     {
         AppComposition.Register(Services, new ConfigurationBuilder().Build(), false);
-        Type[] contracts = [typeof(IFileDiscovery), typeof(IFileOperations), typeof(IMediaProbe), typeof(IMediaPreview), typeof(ISettingsStore), typeof(IDependencyDetector), typeof(IDependencyInstaller), typeof(ITemporaryWorkspaceFactory), typeof(IAnalysisCache), typeof(IMediaLibrary), typeof(IVideoProcessor), typeof(IMediaVerifier), typeof(IOutputPublisher), typeof(IBackupArchiveStore), typeof(IReportWriter), typeof(IDialogService), typeof(IFileDialogService), typeof(IFileExplorer), typeof(ITextClipboard), typeof(IThemeService), typeof(ISourceFileMonitor), typeof(IFolderWatcher), typeof(IPresetStore), typeof(IWebBrowser)];
+        Type[] contracts = [typeof(IFileDiscovery), typeof(IFileOperations), typeof(IMediaProbe), typeof(IMediaPreview), typeof(ISettingsStore), typeof(IDependencyDetector), typeof(IDependencyInstaller), typeof(ITemporaryWorkspaceFactory), typeof(IAnalysisCache), typeof(IMediaLibrary), typeof(IVideoProcessor), typeof(IMediaVerifier), typeof(IOutputPublisher), typeof(IBackupArchiveStore), typeof(IReportWriter), typeof(IDialogService), typeof(IFileDialogService), typeof(IFileExplorer), typeof(ITextClipboard), typeof(IThemeService), typeof(ISourceFileMonitor), typeof(IFolderWatcher), typeof(IPresetStore), typeof(IWebBrowser), typeof(IUpdateSource)];
         foreach (var contract in contracts)
         {
             Services.AddSingleton(contract, this);
@@ -548,6 +549,15 @@ internal sealed class TestRuntime : IFileDiscovery, IFileOperations, IMediaProbe
     public void Open(Uri address)
     {
         OpenedAddress = address;
+    }
+
+    /// <summary>Answers update checks instead of GitHub; none is published unless a test says so.</summary>
+    public Func<CancellationToken, Task<ReleaseInfo?>> LatestRelease { get; set; } = _ => Task.FromResult<ReleaseInfo?>(null);
+    public int UpdateChecks { get; private set; }
+    public Task<ReleaseInfo?> GetLatestAsync(CancellationToken cancellationToken)
+    {
+        UpdateChecks++;
+        return LatestRelease(cancellationToken);
     }
 
     public string? LastApproveLabel { get; private set; }
