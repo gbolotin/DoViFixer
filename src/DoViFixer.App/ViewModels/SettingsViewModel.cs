@@ -52,7 +52,7 @@ public sealed partial class SettingsViewModel : OperationViewModel
 
     public DependencyReportViewModel Dependencies { get; }
 
-    public SettingsViewModel(SettingsService settings, DependencySetup setup, DependencyReportViewModel dependencies, IFileDialogService files, IFileExplorer explorer, IMediaLibrary library, Application.Library.MediaLibraryService libraryService, IThemeService themeService, DiagnosticsService diagnostics, PresetService presets, IDialogService dialogs, IFileExplorerIntegration fileExplorerMenu, IOperationFeedback? feedback = null)
+    public SettingsViewModel(SettingsService settings, DependencySetup setup, DependencyReportViewModel dependencies, IFileDialogService files, IFileExplorer explorer, IMediaLibrary library, Application.Library.MediaLibraryService libraryService, IThemeService themeService, DiagnosticsService diagnostics, PresetService presets, IDialogService dialogs, IFileExplorerIntegration fileExplorerMenu, UpdateViewModel updates, IOperationFeedback? feedback = null)
         : base(feedback)
     {
         this.settings = settings;
@@ -67,6 +67,7 @@ public sealed partial class SettingsViewModel : OperationViewModel
         this.dialogs = dialogs;
         this.fileExplorerMenu = fileExplorerMenu;
         Dependencies = dependencies;
+        Updates = updates;
         var general = new GeneralSettingsSection(this);
         Sections = new NavigationService(
             [general, new PresetsSettingsSection(this), new AnalysisSettingsSection(this), new ConversionSettingsSection(this), new SafetySettingsSection(this), new WatchFolderSettingsSection(this), new PerformanceSettingsSection(this), new NativeToolsSettingsSection(this), new AboutSettingsSection(this)],
@@ -77,6 +78,9 @@ public sealed partial class SettingsViewModel : OperationViewModel
     /// The pages of the settings frame. Moving between them never waits: saving, errors and progress show in the frame's footer.
     /// </summary>
     public NavigationService Sections { get; }
+
+    /// <summary>Update checks: Settings › About starts one, and the status bar offers a newer release.</summary>
+    public UpdateViewModel Updates { get; }
 
     [ObservableProperty]
     public partial int BrightnessMarginNits { get; set; } = 50;
@@ -157,6 +161,7 @@ public sealed partial class SettingsViewModel : OperationViewModel
             ShowCompletionNotifications = value.ShowCompletionNotifications;
             ShowSelectionCheckBoxes = value.ShowSelectionCheckBoxes;
             ShowInFileExplorerMenu = value.ShowInFileExplorerMenu;
+            CheckForUpdates = value.CheckForUpdates;
             WatchFolder = value.WatchFolder ?? "";
             WatchSubfolders = value.WatchSubfolders;
             WatchSettleSeconds = value.WatchSettleSeconds;
@@ -308,6 +313,12 @@ public sealed partial class SettingsViewModel : OperationViewModel
     });
 
     partial void OnShowInFileExplorerMenuChanged(bool value) => TriggerAutoSave();
+
+    /// <summary>Whether the app looks for a newer release at startup and every few hours.</summary>
+    [ObservableProperty]
+    public partial bool CheckForUpdates { get; set; } = true;
+
+    partial void OnCheckForUpdatesChanged(bool value) => TriggerAutoSave();
 
     /// <summary>The folder whose new files are converted without asking; empty watches nothing.</summary>
     [ObservableProperty]
@@ -638,7 +649,8 @@ public sealed partial class SettingsViewModel : OperationViewModel
             removeDolbyVision: snapshot.RemoveDolbyVision,
             folderSearchDepth: snapshot.FolderSearchDepth,
             showSelectionCheckBoxes: snapshot.ShowSelectionCheckBoxes,
-            showInFileExplorerMenu: snapshot.ShowInFileExplorerMenu), token);
+            showInFileExplorerMenu: snapshot.ShowInFileExplorerMenu,
+            checkForUpdates: snapshot.CheckForUpdates), token);
         await Task.Run(() => settings.SetWatchFolderAsync(snapshot.WatchFolder, snapshot.WatchSubfolders, snapshot.WatchSettleSeconds, token), token);
 
         lastSavedSettings = snapshot;
@@ -673,6 +685,7 @@ public sealed partial class SettingsViewModel : OperationViewModel
         ShowCompletionNotifications = ShowCompletionNotifications,
         ShowSelectionCheckBoxes = ShowSelectionCheckBoxes,
         ShowInFileExplorerMenu = ShowInFileExplorerMenu,
+        CheckForUpdates = CheckForUpdates,
         Theme = SelectedTheme,
         IncludeSimple = IncludeSimple,
         ForceComplex = ForceComplex,

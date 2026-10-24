@@ -30,6 +30,32 @@
                         </Hyperlink>
                     </TextBlock>
                     <Separator />
+                    <!-- The Microsoft Store updates its own installs. -->
+                    <StackPanel Visibility="{Binding Updates.IsSupported, Converter={StaticResource WfBooleanToVisibilityConverter}}">
+                        <HeaderedContentControl Header="Updates"
+                                                Style="{StaticResource WfSettingRowStyle}">
+                            <Button Content="Check for updates"
+                                    Command="{Binding Updates.CheckCommand}"
+                                    AutomationProperties.Name="Check for updates" />
+                        </HeaderedContentControl>
+                        <TextBlock Text="{Binding Updates.CheckResult}"
+                                   TextWrapping="Wrap"
+                                   AutomationProperties.LiveSetting="Polite"
+                                   Style="{StaticResource WfSettingNoteTextStyle}" />
+                        <TextBlock Margin="0,4,0,0"
+                                   Visibility="{Binding Updates.IsUpdateAvailable, Converter={StaticResource WfBooleanToVisibilityConverter}}"
+                                   Style="{StaticResource WfSettingNoteTextStyle}">
+                            <Hyperlink Command="{Binding Updates.OpenReleaseCommand}">
+                                <Run Text="Open the release page to download it" />
+                            </Hyperlink>
+                        </TextBlock>
+                        <CheckBox Content="Check for updates automatically"
+                                  AutomationProperties.HelpText="Looks for a newer release on GitHub when the app starts and every few hours while it runs. A newer release shows a button at the right of the status bar. Nothing is downloaded or installed until you choose to."
+                                  IsChecked="{Binding CheckForUpdates}"
+                                  Style="{StaticResource WfToggleSwitchStyle}"
+                                  Margin="0,8,0,12" />
+                        <Separator />
+                    </StackPanel>
                     <HeaderedContentControl Header="Diagnostic ZIP"
                                             AutomationProperties.HelpText="{Binding DiagnosticContentsNotice}"
                                             Style="{StaticResource WfSettingRowStyle}">

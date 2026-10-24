@@ -88,6 +88,9 @@ public sealed partial class ShellViewModel : ObservableObject, INavigationGuard,
     /// <summary>The session's activity, opened from the start of the status bar.</summary>
     public ActivityViewModel Activity { get; }
 
+    /// <summary>A newer release, offered at the end of the status bar.</summary>
+    public UpdateViewModel Updates => Settings.Updates;
+
     /// <summary>The Media page, whose commands the title bar menu also offers.</summary>
     public MediaViewModel Media => media;
 
@@ -309,6 +312,9 @@ public sealed partial class ShellViewModel : ObservableObject, INavigationGuard,
     [RelayCommand(CanExecute = nameof(CanOpenSettingsSection))]
     private Task ShowAbout() => OpenSettings(about);
 
+    [RelayCommand(CanExecute = nameof(CanOpenSettingsSection))]
+    private Task CheckForUpdates() => OpenSettingsAndRunAsync(about, Updates.CheckCommand);
+
     // Help stays available while Settings is open or an operation runs.
     [RelayCommand]
     private void OpenDocumentation() => browser.Open(DefaultBrowser.DocumentationAddress);
@@ -345,6 +351,7 @@ public sealed partial class ShellViewModel : ObservableObject, INavigationGuard,
         CleanLibraryCommand.NotifyCanExecuteChanged();
         ExportDiagnosticsCommand.NotifyCanExecuteChanged();
         ShowAboutCommand.NotifyCanExecuteChanged();
+        CheckForUpdatesCommand.NotifyCanExecuteChanged();
     }
 
     public event EventHandler? CanNavigateChanged;
@@ -426,6 +433,7 @@ public sealed partial class ShellViewModel : ObservableObject, INavigationGuard,
     {
         startupCancellation.Cancel();
         dependencyCheck.CancelCommand.Execute(null);
+        var updateChecks = Updates.StopAsync();
         foreach (var operation in operations)
         {
             operation.CancelCommand.Execute(null);
@@ -443,7 +451,7 @@ public sealed partial class ShellViewModel : ObservableObject, INavigationGuard,
                 // Initialization failures were already reported to the caller of InitializeAsync.
             }
         }
-        await Task.WhenAll(operations.Select(o => o.Completion).Append(dependencyCheck.Completion));
+        await Task.WhenAll(operations.Select(o => o.Completion).Append(dependencyCheck.Completion).Append(updateChecks));
         await media.CancelPreviewsAsync();
         await media.ArchivePairing;
         await media.FlushColumnLayoutAsync();
