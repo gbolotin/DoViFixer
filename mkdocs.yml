@@ -55,7 +55,8 @@ nav:
       - How Dolby Vision works: dolby-vision.md
       - Streaming boxes: devices.md
   - More:
-      - Command line and AI assistants: console.md
+      - Command line: console.md
+      - AI assistants: ai-assistants.md
       - Troubleshooting: troubleshooting.md
       - Privacy policy: privacy.md
 
@@ -96,7 +97,8 @@ plugins:
             How Dolby Vision works: Как устроен Dolby Vision
             Streaming boxes: Приставки
             More: Ещё
-            Command line and AI assistants: Командная строка и ИИ-ассистенты
+            Command line: Командная строка
+            AI assistants: ИИ-ассистенты
             Troubleshooting: Решение проблем
             Privacy policy: Политика конфиденциальности
 

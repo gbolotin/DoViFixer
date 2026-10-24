@@ -17,7 +17,7 @@ DoViFixer needs the **.NET 10 Desktop Runtime** (x64).
 3. Allow the administrator prompt. Setup installs DoViFixer for all users in `Program Files`.
 4. Leave **Start DoViFixer** checked and click **Finish**.
 
-Setup offers three parts: the desktop app, the **MCP server for AI assistants** and the **command-line version**. It adds the MCP server to the assistants you tick: Claude Desktop, Claude Code, Codex and Hermes Agent. It ticks the ones it finds on your PC. It can also add the command-line version to `PATH`. See [Command line and AI assistants](console.md).
+Setup offers three parts: the desktop app, the **MCP server for AI assistants** and the **command-line version**. It adds the MCP server to the assistants you tick: Claude Desktop, Claude Code, Codex and Hermes Agent. It ticks the ones it finds on your PC. It can also add the command-line version to `PATH`. See [AI assistants](ai-assistants.md) and [Command line](console.md).
 
 Setup also trusts the certificate of DoViFixer's File Explorer package. On Windows 11, **Open in DoViFixer** and **Convert with DoViFixer** are then in the first right-click menu as soon as DoViFixer has started once. To remove DoViFixer, use **Settings › Apps › Installed apps**. Uninstalling removes the File Explorer commands and the certificate too. It also asks whether to delete your media library; your settings and downloaded tools stay.
 
@@ -40,7 +40,7 @@ You can also use DoViFixer without installing it:
 On Windows 11, the File Explorer commands are then under **Show more options** until you click **Settings › General › File Explorer › Show in the Windows 11 menu…**.
 
 !!! tip "Other downloads in the release"
-    `DoViFixer.Console` is the command-line version. `DoViFixer.Mcp` lets an AI assistant such as Claude Desktop use DoViFixer. You only need `DoViFixer.App` for the desktop app. See [Command line and AI assistants](console.md).
+    `DoViFixer.Console` is the command-line version. `DoViFixer.Mcp` lets an AI assistant such as Claude Desktop, Claude Code, Codex or Hermes Agent use DoViFixer. You only need `DoViFixer.App` for the desktop app. See [Command line](console.md) and [AI assistants](ai-assistants.md).
 
 ## 3. Let the app set up its tools
 

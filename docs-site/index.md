@@ -50,6 +50,8 @@ A Profile 7 video has three parts. Streaming boxes cannot use the third part, th
 - The converted movie is saved next to the original as `Movie - DV P8.1.mkv`. Your original is not changed.
 - If you want, the enhancement layer goes into a small `.dovi` backup. With it, you can restore the original Profile 7 movie later.
 
+You can also run DoViFixer from a [terminal](console.md), or ask an [AI assistant](ai-assistants.md) such as Claude, Codex or Hermes to do it for you.
+
 [All features](features.md){ .md-button }
 
 ## The app
