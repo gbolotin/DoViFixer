@@ -480,7 +480,7 @@ public sealed class ViewModelTests
             sections.Pages.Select(page => page.GetType()).ToArray());
         CollectionAssert.AreEqual(new[] { "General", "Presets", "Analysis", "Conversion", "Safety", "Watch folder", "Performance", "Native tools", "About" }, sections.Pages.Select(page => page.NavigationName).ToArray());
         Assert.IsTrue(sections.Pages.Where(page => page is not PerformanceSettingsSection).All(page => page.NavigationIcon is { Length: 1 }), "Other sections retain their Segoe Fluent Icons glyphs.");
-        Assert.IsNull(sections.Pages.OfType<PerformanceSettingsSection>().Single().NavigationIcon, "Performance uses a vector speedometer.");
+        Assert.IsNull(sections.Pages.OfType<PerformanceSettingsSection>().Single().NavigationIcon, "Performance uses a vector gauge.");
         Assert.IsTrue(sections.Pages.Cast<SettingsSection>().All(section => ReferenceEquals(section.Settings, shell.Settings)), "Every section shows the same settings.");
         Assert.AreSame(sections.Pages[0], sections.CurrentPage);
     }

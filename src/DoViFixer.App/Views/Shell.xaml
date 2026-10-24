@@ -287,15 +287,14 @@
                                            Content="{Binding Settings}"
                                            IsOpen="{Binding IsSettingsOpen, Mode=OneWay}"
                                            CloseCommand="{Binding CloseSettingsCommand}"
-                                           HeaderBackground="{DynamicResource ListBoxBackground}"
+                                           HeaderBackground="{DynamicResource CardBackgroundFillColorDefaultBrush}"
                                            CardMaxWidth="1040"
                                            CardMaxHeight="760"
                                            Padding="32">
                             <wf:ContentOverlay.HeaderTemplate>
                                 <DataTemplate>
                                     <TextBlock Text="{Binding}"
-                                               Style="{StaticResource CaptionTextBlockStyle}"
-                                               Foreground="{DynamicResource TextFillColorSecondaryBrush}" />
+                                               Style="{StaticResource SubtitleTextBlockStyle}"/>
                                 </DataTemplate>
                             </wf:ContentOverlay.HeaderTemplate>
                         </wf:ContentOverlay>

@@ -829,8 +829,8 @@ public sealed class VisualTests
         Assert.AreSame(media.ConvertRowCommand, convert.Command);
         Assert.AreSame(row, inspect.CommandParameter);
         Assert.AreSame(row, convert.CommandParameter);
-        Assert.AreEqual("", inspect.Content);
-        Assert.AreEqual("", convert.Content);
+        Assert.AreEqual("\uE721", inspect.Content);
+        Assert.AreEqual("\uE8AB", convert.Content);
         Assert.AreEqual(Visibility.Hidden, inspect.Visibility, "Hover actions stay hidden until the row is hovered.");
         Assert.AreEqual(Visibility.Hidden, convert.Visibility);
         var actions = (StackPanel)remove.Parent;
@@ -1040,8 +1040,8 @@ public sealed class VisualTests
         var fileItems = fileMenu.Items.OfType<MenuItem>().ToDictionary(item => (string)item.Header);
         Assert.AreEqual("F4", fileItems["_Inspect"].InputGestureText);
         Assert.AreEqual("F5", fileItems["_Convert"].InputGestureText);
-        foreach (var (header, glyph) in new[] { ("Re_scan all files", ""), ("_Inspect", ""), ("_Deep Inspect", ""),
-            ("_Convert", ""), ("Rest_ore to DV7…", ""), ("_Remove", "") })
+        foreach (var (header, glyph) in new[] { ("Re_scan all files", "\uE72C"), ("_Inspect", "\uE721"), ("_Deep Inspect", "\uE9D9"),
+            ("_Convert", "\uE8AB"), ("Rest_ore to DV7…", "\uE7A7"), ("_Remove", "\uE74D") })
         {
             Assert.AreEqual(glyph, ((TextBlock)fileItems[header].Icon).Text, header + " shows its toolbar icon.");
         }
@@ -1094,9 +1094,8 @@ public sealed class VisualTests
         AssertInside(card, content);
         var title = Descendants<TextBlock>(card).Single(text => text.Text == "Settings");
         Assert.IsTrue(title.IsVisible, "The frame is titled Settings.");
-        Assert.AreSame(window.FindResource("CaptionTextBlockStyle"), title.Style, "The title is a small label above the sections.");
-        Assert.AreSame(window.FindResource("TextFillColorSecondaryBrush"), title.Foreground);
-        Assert.AreSame(window.FindResource("ListBoxBackground"), overlay.HeaderBackground, "The title shares the section list's background.");
+        Assert.AreSame(window.FindResource("SubtitleTextBlockStyle"), title.Style, "The title is a subtitle heading the card.");
+        Assert.AreSame(window.FindResource("CardBackgroundFillColorDefaultBrush"), overlay.HeaderBackground, "The title shares the card's background.");
         var sections = Descendants<ListBox>(overlay).Single(list => ReferenceEquals(list.ItemsSource, shell.Settings.Sections.Pages));
         Assert.HasCount(9, sections.Items);
         var host = Descendants<RetainedPageHost>(overlay).Single();
@@ -1204,7 +1203,7 @@ public sealed class VisualTests
                     var performanceItem = (ListBoxItem)sectionNavigation.ItemContainerGenerator.ContainerFromItem(section);
                     var performanceIcon = Descendants<WpfFoundation.Controls.PathIcon>(performanceItem).Single();
                     Assert.IsTrue(performanceIcon.IsVisible);
-                    Assert.AreSame(((FrameworkElement)view).FindResource("PerformanceIconGeometry"), performanceIcon.Data);
+                    Assert.AreSame(((FrameworkElement)view).FindResource("WfIconGauge"), performanceIcon.Data);
                     AssertInside(performanceIcon, content);
                     foreach (string name in new[] { "Simultaneous conversions", "Concurrent scan clips", "Tool process priority", "Video pipe buffer (KiB)" })
                     {
