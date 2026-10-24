@@ -4,6 +4,21 @@
 
 ## Install
 
+The easiest way is `DoViFixer-Setup-X.Y.Z.exe`. Keep **MCP server for AI assistants** ticked, then tick the assistants to add it to. Setup ticks the ones it finds on this PC:
+
+| Assistant | Configuration setup edits |
+| --- | --- |
+| Claude Desktop | `%APPDATA%\Claude\claude_desktop_config.json`, and the copy inside the Microsoft Store package when that version is installed |
+| Claude Code | `%USERPROFILE%\.claude.json` (user scope) |
+| Codex app and CLI | `%CODEX_HOME%\config.toml`, by default `%USERPROFILE%\.codex\config.toml` |
+| Hermes Agent | `%HERMES_HOME%\config.yaml`, by default `%USERPROFILE%\.hermes\config.yaml` |
+
+Setup changes only the `dovifixer` entry and keeps everything else in these files. Restart the assistant afterwards. Uninstalling removes the entry again. Setup installs the server to `C:\Program Files\DoViFixer\Mcp\DoViFixer.Mcp.exe`; you can also add or remove it later with `DoViFixer.Mcp.exe --register codex` or `--unregister`.
+
+Hermes Agent running inside WSL keeps its configuration in the Linux home folder, which setup does not edit; add the server there by hand, as below.
+
+### Without setup
+
 Publish the server to a folder of your choice (CI also attaches `DoViFixer.Mcp-<version>.zip` to every run and release; it needs the .NET 10 Desktop Runtime):
 
 ```powershell

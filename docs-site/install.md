@@ -17,6 +17,8 @@ DoViFixer needs the **.NET 10 Desktop Runtime** (x64).
 3. Allow the administrator prompt. Setup installs DoViFixer for all users in `Program Files`.
 4. Leave **Start DoViFixer** checked and click **Finish**.
 
+Setup offers three parts: the desktop app, the **MCP server for AI assistants** and the **command-line version**. It adds the MCP server to the assistants you tick: Claude Desktop, Claude Code, Codex and Hermes Agent. It ticks the ones it finds on your PC. It can also add the command-line version to `PATH`. See [Command line and AI assistants](console.md).
+
 Setup also trusts the certificate of DoViFixer's File Explorer package. On Windows 11, **Open in DoViFixer** and **Convert with DoViFixer** are then in the first right-click menu as soon as DoViFixer has started once. To remove DoViFixer, use **Settings › Apps › Installed apps**. Uninstalling removes the File Explorer commands and the certificate too. It also asks whether to delete your media library; your settings and downloaded tools stay.
 
 If an earlier installation left settings or a media library in `%LOCALAPPDATA%\DoViFixer`, setup checks whether the new version can read them:
