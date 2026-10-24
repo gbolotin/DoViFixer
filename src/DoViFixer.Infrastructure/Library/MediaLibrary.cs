@@ -176,7 +176,12 @@ internal sealed class MediaLibrary(StorageOptions options, ISettingsStore settin
         {
             return null;
         }
-        if (analysis is null || !Cacheable(analysis) ||
+        return analysis is null ? null : ValidAnalysis(analysis, source, options);
+    }
+
+    private static MediaAnalysis? ValidAnalysis(MediaAnalysis analysis, FileIdentity source, AnalysisOptions options)
+    {
+        if (!Cacheable(analysis) ||
             (analysis.Evidence.Method != AnalysisMethod.MetadataOnly && analysis.Evidence.Options != options))
         {
             return null;
@@ -289,6 +294,9 @@ internal sealed class MediaLibrary(StorageOptions options, ISettingsStore settin
                 return;
             }
             string directory = Path.Combine(options.CacheDirectory, "analysis");
+            // Results the library would never reuse, such as scans saved before their options were kept, are left out
+            // so the history does not claim a check the file list cannot show.
+            var analysisOptions = (await settings.ReadAsync(token)).AnalysisOptions;
             foreach (string path in Directory.Exists(directory) ? Directory.EnumerateFiles(directory, "*.json") : [])
             {
                 token.ThrowIfCancellationRequested();
@@ -298,7 +306,8 @@ internal sealed class MediaLibrary(StorageOptions options, ISettingsStore settin
                     if (json.RootElement.TryGetProperty("Version", out var version) && version.GetInt32() == 1 &&
                         json.RootElement.TryGetProperty("Analysis", out var value) && value.Deserialize<MediaAnalysis>() is { } analysis &&
                         File.Exists(analysis.Media.Source.Path) && new FileInfo(analysis.Media.Source.Path) is { } info &&
-                        info.Length == analysis.Media.Source.Length && info.LastWriteTimeUtc == analysis.Media.Source.LastWriteUtc)
+                        info.Length == analysis.Media.Source.Length && info.LastWriteTimeUtc == analysis.Media.Source.LastWriteUtc &&
+                        ValidAnalysis(analysis, analysis.Media.Source, analysisOptions) is not null)
                     {
                         await WriteAnalysisCoreAsync(analysis, token);
                     }
