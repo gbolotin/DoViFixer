@@ -3,8 +3,9 @@
 Usage:
     python make-rough-cut.py
 
-Reads the app clips from clips/, the voiceover from clips/voice/, and two
-sample movies (for the before/after stills) from MOVIES. Writes
+Reads the app clips from clips/, the voiceover from clips/voice/, and the
+frames of docs-site/assets/playback.svg from clips/svg/playback/ (made by
+render-svg-frames.py) for the streaming-box pictures. Writes
 clips/rough-cut.mp4; intermediate files go to clips/build/.
 
 Times come from the voiceover: each section file starts where the previous
@@ -23,7 +24,7 @@ CLIPS = HERE / "clips"
 VOICE = CLIPS / "voice"
 BUILD = CLIPS / "build"
 OUTPUT = CLIPS / "rough-cut.mp4"
-MOVIES = Path(os.environ.get("PROMO_MOVIES", Path.home() / "Downloads" / "DoViFixer-promo"))
+SVG_FRAMES = CLIPS / "svg" / "playback"
 FFMPEG = os.environ.get("FFMPEG", shutil.which("ffmpeg") or str(
     Path.home() / "AppData/Local/Microsoft/WinGet/Packages"
     / "Gyan.FFmpeg_Microsoft.Winget.Source_8wekyb3d8bbwe/ffmpeg-8.0.1-full_build/bin/ffmpeg.exe"))
@@ -47,6 +48,15 @@ SCAN = ([FILE, STATUS], 560, 560)    # the promo movies appearing at the end of 
 ROWS = ([FILE, STATUS], 700, 560)    # the promo movies while inspecting and converting
 RESULT = ([FILE, STATUS], 860, 460)  # originals next to their DV P8.1 outputs
 DETAILS = ([(1990, 870)], 620, 530)  # original-vs-result details panel
+
+# playback.svg regions in SVG units: (x, y, w, h). The frames are rendered at SVG_SCALE pixels
+# per unit. Boxes: 0 Apple TV, 1 NVIDIA Shield, 2 Fire TV.
+SVG_SCALE = 4
+panel = lambda box: (10 + 330 * box, 66, 320, 334)   # name, box, TV and status tag
+screen = lambda box: (10 + 330 * box, 154, 320, 204)  # just the TV
+OVERVIEW = (10, 18, 980, 445)                         # all three boxes
+BEFORE_FRAME = 30  # 1s into the loop: every box shows its Profile 7 picture.
+WIPE = 3.4  # 0.2s before the Apple TV picture starts turning into Dolby Vision; Fire TV finishes 2.2s later.
 
 # Caption phrases: (start, end, text), relative to their section.
 CAPTIONS = {
@@ -113,9 +123,14 @@ def clip_graph(crop, speed: float = 1.0) -> str:
     parts += [f"[s{i}]crop={w}:{h}:{x}:{y}[c{i}]" for i, (x, w) in enumerate(columns)]
     stack = "".join(f"[c{i}]" for i in range(len(columns)))
     parts.append(f"{stack}hstack=inputs={len(columns)}" if len(columns) > 1 else f"{stack}null")
-    return (";".join(parts) + f",scale={W}:-2,split[fg][blur];"
+    return framed(";".join(parts))
+
+
+def framed(graph: str, out: str = "v") -> str:
+    """Scale the graph's last output to the frame width and lay it over a blurred copy."""
+    return (graph + f",scale={W}:-2,split[fg][blur];"
             f"[blur]scale={W}:{H}:force_original_aspect_ratio=increase,crop={W}:{H},boxblur=40,"
-            f"eq=brightness=-0.3[bg];[bg][fg]overlay=0:(H-h)/2-60[v]")
+            f"eq=brightness=-0.3[bg];[bg][fg]overlay=0:(H-h)/2-60[{out}]")
 
 
 def clip(name: str, duration: float, source: str, start: float, crop, texts, speed: float = 1.0) -> str:
@@ -123,11 +138,22 @@ def clip(name: str, duration: float, source: str, start: float, crop, texts, spe
     return render(name, duration, inputs, clip_graph(crop, speed), texts)
 
 
-def still(name: str, duration: float, image: str, texts, zoom: float = 0.06) -> str:
-    frames = round(duration * FPS)
-    graph = (f"[0:v]scale={W * 2}:{H * 2},zoompan=z='1+{zoom}*on/{frames}':d=1"
-             f":x='iw/2-iw/zoom/2':y='ih/2-ih/zoom/2':s={W}x{H}:fps={FPS}[v]")
-    return render(name, duration, ["-loop", "1", "-i", image], graph, texts)
+def svg(name: str, duration: float, region, texts, start: float | None = None, zoom: float = 0.06) -> str:
+    """A region of playback.svg: a slowly zooming still of the Profile 7 pictures, or, with
+    start, the animation from that second of the loop."""
+    x, y, w, h = (v * SVG_SCALE for v in region)
+    crop = f"[0:v]crop={w}:{h}:{x}:{y}"
+    if start is None:
+        frames = round(duration * FPS)
+        graph = framed(crop, "still") + (
+            f";[still]scale={W * 2}:{H * 2},zoompan=z='1+{zoom}*on/{frames}':d=1"
+            f":x='iw/2-iw/zoom/2':y='ih/2-ih/zoom/2':s={W}x{H}:fps={FPS}[v]")
+        inputs = ["-loop", "1", "-i", str(SVG_FRAMES / f"{BEFORE_FRAME:04}.png")]
+    else:
+        graph = framed(crop)
+        inputs = ["-framerate", str(FPS), "-start_number", str(round(start * FPS)), "-i", str(SVG_FRAMES / "%04d.png")]
+    # Every playback.svg picture is a simulation.
+    return render(name, duration, inputs, graph, [*texts, simulated()])
 
 
 def card(name: str, duration: float, texts, logo: bool = False) -> str:
@@ -138,19 +164,6 @@ def card(name: str, duration: float, texts, logo: bool = False) -> str:
     else:
         graph = "[0:v]null[v]"
     return render(name, duration, inputs, graph, texts)
-
-
-def extract_stills() -> None:
-    portrait = f"crop=1215:2160:(iw-1215)/2:0,scale={W}:{H}"
-    for movie, at, stem in (("title_t06.mkv", 20, "t06"), ("title_t01.mkv", 30, "t01")):
-        source = str(MOVIES / movie)
-        # Untouched PQ frames look washed out on an SDR screen, which stands in for the "before".
-        run(["-ss", str(at), "-i", source, "-frames:v", "1", "-vf",
-             f"scale=in_color_matrix=bt2020:in_range=tv,{portrait},eq=saturation=0.75", f"dull-{stem}.png"])
-        run(["-ss", str(at), "-i", source, "-frames:v", "1", "-vf",
-             "zscale=t=linear:npl=100,format=gbrpf32le,zscale=p=bt709,tonemap=tonemap=hable:desat=0,"
-             f"zscale=t=bt709:m=bt709:r=tv,format=yuv420p,{portrait},eq=saturation=1.3:contrast=1.08",
-             f"vivid-{stem}.png"])
 
 
 def captions() -> str:
@@ -179,30 +192,30 @@ def main() -> int:
     shutil.copy(Path(os.environ.get("WINDIR", "C:/Windows")) / "Fonts/segoeuib.ttf", BUILD / "bold.ttf")
     shutil.copy(Path(os.environ.get("WINDIR", "C:/Windows")) / "Fonts/segoeui.ttf", BUILD / "regular.ttf")
     shutil.copy(Path(os.environ.get("WINDIR", "C:/Windows")) / "Fonts/seguisym.ttf", BUILD / "symbol.ttf")
-    extract_stills()
 
     p, s = PROBLEM, SOLUTION
-    cross = lambda y: text("\u2715", 0, None, y, 110, BAD, "symbol.ttf", "830")
+    # Shown from the start of a segment that continues the previous one, without fading in again.
+    held = lambda value, y, size, color="white": text(value, -1, None, y, size, color)
     segments = [
-        # Hook: a dull "before" picture.
-        still("01-hook", PROBLEM - HOOK, "dull-t06.png", [
+        # Hook: the flat Apple TV picture.
+        svg("01-hook", PROBLEM - HOOK, screen(0), [
             text("Dolby Vision?", 0, None, "300", 120),
-            text("NOT really.", 1.57, None, "450", 120, BAD), simulated()]),
+            text("NOT really.", 1.57, None, "450", 120, BAD)]),
         # Problem.
         clip("02-profile7", 3.67, "01-media-page.mp4", 0.5, LIST, [
             text("Most 4K Blu-rays use", 0, None, "220", 72),
             text("Dolby Vision Profile 7", 0.3, None, "320", 84, ACCENT)]),
-        card("03-boxes", (p + 8.06) - (p + 3.67), [
-            text("Can't play Profile 7 right", 0, None, "360", 76),
-            text("Apple TV", 0.0, None, "700", 100, x="780-tw"), cross("700"),
-            text("NVIDIA Shield", 1.17, None, "900", 100, x="780-tw"),
-            text("\u2715", 1.17, None, "900", 110, BAD, "symbol.ttf", "830"),
-            text("Fire TV", 2.4, None, "1100", 100, x="780-tw"),
-            text("\u2715", 2.4, None, "1100", 110, BAD, "symbol.ttf", "830")]),
-        still("04-flat", SOLUTION - (p + 8.06), "dull-t01.png", [
-            text("Flat HDR10 picture", 0, None, "300", 96),
-            text("or part of the video dropped", 2.23, None, "430", 64),
-            text("You're not seeing it.", 4.27, None, "900", 100, BAD), simulated()]),
+        # Each box as the voiceover names it.
+        svg("03-apple-tv", 1.17, panel(0), [text("Can't play Profile 7 right", 0, None, "180", 76)]),
+        svg("03-shield", 1.23, panel(1), [held("Can't play Profile 7 right", "180", 76)]),
+        svg("03-fire-tv", (p + 8.06) - (p + 6.07), panel(2), [held("Can't play Profile 7 right", "180", 76)]),
+        svg("04-flat", 2.23, screen(2), [text("Flat HDR10 picture", 0, None, "300", 96)]),
+        svg("04-dropped", 2.04, screen(1), [
+            text("or part of the video", 0, None, "300", 80),
+            text("dropped", 0, None, "410", 96, BAD)]),
+        svg("04-not-seeing", SOLUTION - (p + 12.33), OVERVIEW, [
+            text("You paid for the best picture", 0, None, "360", 68),
+            text("You're not seeing it.", 1.61, None, "1250", 100, BAD)]),
         # Solution.
         card("05-meet", 2.637, [
             text("DoViFixer", 0, None, "980", 140),
@@ -214,9 +227,13 @@ def main() -> int:
         clip("08-safe", (s + 7.71) - (s + 4.29) - 1.9, "04-convert-trimmed.mp4", 0.0, ROWS, [
             text("Checks every file first", 0, None, "300", 84),
             text("Tells you what's safe", 0, None, "420", 72, GOOD)]),
-        clip("09-convert", (s + 13.11) - (s + 7.71), "04-convert-trimmed.mp4", 1.5, ROWS, [
+        clip("09-convert", (s + 10.57) - (s + 7.71), "04-convert-trimmed.mp4", 1.5, ROWS, [
             text("One click", 0, None, "260", 96),
             text("Profile 7 \u2192 8.1", 0.4, None, "390", 96, ACCENT, "symbol.ttf")], speed=3.5),
+        # The boxes' pictures turning into Dolby Vision, one after another.
+        svg("09-dolby-vision", (s + 13.11) - (s + 10.57), OVERVIEW, [
+            text("Real Dolby Vision", 0, None, "300", 96, GOOD),
+            text("on your streaming box", 0.3, None, "420", 72)], start=WIPE),
         clip("10-bit-for-bit", (s + 17.95) - (s + 13.11), "04-convert-trimmed.mp4", 22, DETAILS, [
             text("4K picture: bit for bit", 0, None, "260", 84),
             text("Audio. Subtitles. Chapters.", 2.28, None, "380", 68, GOOD)]),
@@ -229,16 +246,12 @@ def main() -> int:
             text("Restore anytime", 0.9, None, "940", 76, ACCENT)]),
     ]
 
-    # Call to action: wipe from the dull picture to the vivid one.
-    cta = END - CTA
-    graph = (f"[0:v]scale={W}:{H},fps={FPS},trim=duration={cta}[a];[1:v]scale={W}:{H},fps={FPS},trim=duration={cta}[b];"
-             f"[a][b]xfade=transition=wiperight:duration=0.8:offset=0.3[v]")
-    segments.append(render("13-cta", cta, ["-loop", "1", "-t", f"{cta}", "-i", "dull-t06.png",
-                                            "-loop", "1", "-t", f"{cta}", "-i", "vivid-t06.png"], graph, [
+    # Call to action: the hook's flat Apple TV picture turns into Dolby Vision.
+    segments.append(svg("13-cta", END - CTA, screen(0), [
         text("You deserve", 0.3, None, "260", 96),
         text("perfect quality.", 0.6, None, "380", 110, GOOD),
-        text("DoViFixer \u00b7 Free for Windows", 2.41, None, "1180", 64),
-        text("Link in the description", 3.94, None, "1280", 64, ACCENT), simulated()]))
+        text("DoViFixer \u00b7 Free for Windows", 2.41, None, "1300", 64),
+        text("Link in the description", 3.94, None, "1400", 64, ACCENT)], start=WIPE))
 
     (BUILD / "segments.txt").write_text("".join(f"file '{name}'\n" for name in segments), encoding="utf-8")
     run(["-f", "concat", "-safe", "0", "-i", "segments.txt", "-c", "copy", "joined.mp4"])
