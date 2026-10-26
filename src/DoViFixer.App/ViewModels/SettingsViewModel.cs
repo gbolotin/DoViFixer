@@ -622,35 +622,39 @@ public sealed partial class SettingsViewModel : OperationViewModel
         // Capture one consistent UI snapshot before moving directory validation
         // and persistence onto the worker thread.
         var snapshot = CreateSnapshot();
-        await Task.Run(() => settings.SetPreferencesAsync(
-            snapshot.TemporaryDirectory,
-            snapshot.OutputDirectory,
-            snapshot.ReplaceOriginal,
-            snapshot.CreateElArchive,
-            token,
-            snapshot.AutomaticallyScanAddedFiles,
-            snapshot.UseCachedResults,
-            snapshot.Theme,
-            includeSimple: snapshot.IncludeSimple,
-            forceComplex: snapshot.ForceComplex,
-            showCompletionNotifications: snapshot.ShowCompletionNotifications,
-            conversionWorkers: snapshot.ConversionWorkers,
-            verificationLevel: snapshot.VerificationLevel,
-            recycleDeletedOriginalsAndBackups: snapshot.RecycleDeletedOriginalsAndBackups,
-            freeSpaceMarginPercent: snapshot.FreeSpaceMarginPercent,
-            analysisWorkers: snapshot.AnalysisWorkers,
-            toolProcessPriority: snapshot.ToolProcessPriority,
-            pipeBufferKiB: snapshot.PipeBufferKiB, brightnessMarginNits: snapshot.BrightnessMarginNits, assumedPeakBrightnessNits: snapshot.AssumedPeakBrightnessNits,
-            scanSampleCount: snapshot.ScanSampleCount,
-            scanSampleSeconds: snapshot.ScanSampleSeconds,
-            minimumScanCoveragePercent: snapshot.MinimumScanCoveragePercent,
-            inspectionPeakPercentile: snapshot.InspectionPeakPercentile,
-            safeMode: snapshot.SafeMode,
-            removeDolbyVision: snapshot.RemoveDolbyVision,
-            folderSearchDepth: snapshot.FolderSearchDepth,
-            showSelectionCheckBoxes: snapshot.ShowSelectionCheckBoxes,
-            showInFileExplorerMenu: snapshot.ShowInFileExplorerMenu,
-            checkForUpdates: snapshot.CheckForUpdates), token);
+        await Task.Run(() => settings.SetPreferencesAsync(new PreferenceChanges
+        {
+            // Blank, not null, so an unset folder restores its default instead of keeping the saved one.
+            TemporaryDirectory = snapshot.TemporaryDirectory ?? "",
+            OutputDirectory = snapshot.OutputDirectory ?? "",
+            ReplaceOriginal = snapshot.ReplaceOriginal,
+            CreateElArchive = snapshot.CreateElArchive,
+            AutomaticallyScanAddedFiles = snapshot.AutomaticallyScanAddedFiles,
+            UseCachedResults = snapshot.UseCachedResults,
+            Theme = snapshot.Theme,
+            IncludeSimple = snapshot.IncludeSimple,
+            ForceComplex = snapshot.ForceComplex,
+            ShowCompletionNotifications = snapshot.ShowCompletionNotifications,
+            ConversionWorkers = snapshot.ConversionWorkers,
+            VerificationLevel = snapshot.VerificationLevel,
+            RecycleDeletedOriginalsAndBackups = snapshot.RecycleDeletedOriginalsAndBackups,
+            FreeSpaceMarginPercent = snapshot.FreeSpaceMarginPercent,
+            AnalysisWorkers = snapshot.AnalysisWorkers,
+            ToolProcessPriority = snapshot.ToolProcessPriority,
+            PipeBufferKiB = snapshot.PipeBufferKiB,
+            BrightnessMarginNits = snapshot.BrightnessMarginNits,
+            AssumedPeakBrightnessNits = snapshot.AssumedPeakBrightnessNits,
+            ScanSampleCount = snapshot.ScanSampleCount,
+            ScanSampleSeconds = snapshot.ScanSampleSeconds,
+            MinimumScanCoveragePercent = snapshot.MinimumScanCoveragePercent,
+            InspectionPeakPercentile = snapshot.InspectionPeakPercentile,
+            SafeMode = snapshot.SafeMode,
+            RemoveDolbyVision = snapshot.RemoveDolbyVision,
+            FolderSearchDepth = snapshot.FolderSearchDepth,
+            ShowSelectionCheckBoxes = snapshot.ShowSelectionCheckBoxes,
+            ShowInFileExplorerMenu = snapshot.ShowInFileExplorerMenu,
+            CheckForUpdates = snapshot.CheckForUpdates
+        }, token), token);
         await Task.Run(() => settings.SetWatchFolderAsync(snapshot.WatchFolder, snapshot.WatchSubfolders, snapshot.WatchSettleSeconds, token), token);
 
         lastSavedSettings = snapshot;
