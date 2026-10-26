@@ -221,6 +221,20 @@ public sealed class MediaLibraryTests
     }
 
     [TestMethod]
+    public async Task LegacyScanSavedWithoutOptionsIsNotImportedOrRecordedAsScanned()
+    {
+        var source = await CreateAsync("Legacy.mkv", 8);
+        var legacy = new AnalysisCache(Options, NullLogger<AnalysisCache>.Instance, Settings);
+        var scan = Analysis(source, AnalysisMethod.SampledRpu);
+        await legacy.WriteAsync(scan with { Evidence = scan.Evidence with { Options = null } }, default);
+        using var library = Library();
+        Assert.HasCount(0, await library.ReadAllAsync(default));
+        var remembered = await library.RememberAsync(source, default);
+        Assert.IsNull(remembered.Analysis);
+        CollectionAssert.AreEqual(new[] { "Added" }, (await library.ReadHistoryAsync(remembered.Fingerprint, default)).Select(item => item.Action).ToArray());
+    }
+
+    [TestMethod]
     public async Task HashAndConversionResultFollowMovedSourceAndWritesRemainIndependent()
     {
         var source = await CreateAsync("Source.mkv", 9);
