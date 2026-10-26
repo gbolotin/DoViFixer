@@ -44,7 +44,10 @@ public sealed class SelectionModeTests
 
         model.SelectedRows = [];
         Assert.IsFalse(model.ConvertCommand.CanExecute(null), "Convert needs a selected file.");
-        Assert.IsFalse(model.SelectAllCommand.CanExecute(null), "Without check boxes, the list handles Ctrl+A itself.");
+
+        model.SelectAllCommand.Invoke();
+        CollectionAssert.AreEqual(new[] { Mountain, Ocean, City }, Highlighted(model), "Ctrl+A highlights every shown row.");
+        CollectionAssert.AreEqual(new[] { Mountain, Ocean, City }, Selected(model));
     }
 
     [TestMethod]

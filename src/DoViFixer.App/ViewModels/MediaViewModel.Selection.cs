@@ -139,11 +139,24 @@ public sealed partial class MediaViewModel
 
     public Task FlushSelectionModeAsync() => selectionModeSave;
 
-    private bool CanSelectAll() => ShowsCheckBoxes && CanToggleSelectAll();
+    private bool CanSelectAll() => ShowsCheckBoxes ? CanToggleSelectAll() : ShownFiles.Any();
 
-    /// <summary>Ctrl+A with check boxes checks every file shown; without them the list selects all rows itself.</summary>
+    /// <summary>
+    /// Ctrl+A with check boxes checks every file shown; without them it highlights every row shown. The list's key
+    /// binding handles Ctrl+A even when this cannot run, so the list never gets to select all rows itself.
+    /// </summary>
     [RelayCommand(CanExecute = nameof(CanSelectAll))]
-    private void SelectAll() => SetRowSelection(ShownFiles.Where(row => row.SelectionEnabled), _ => true);
+    private void SelectAll()
+    {
+        if (ShowsCheckBoxes)
+        {
+            SetRowSelection(ShownFiles.Where(row => row.SelectionEnabled), _ => true);
+        }
+        else
+        {
+            SelectedRows = [.. ShownFiles];
+        }
+    }
 
     private bool CanRemoveListSelection() => IsIdle && (ShowsCheckBoxes ? Focused is not null : ShownFiles.Any(row => row.IsSelected));
 
